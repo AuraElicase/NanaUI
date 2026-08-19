@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "virtual-tree-10k",
+  "kind": "VirtualTree",
+  "params": {
+    "items": 10000,
+    "visible": 40,
+    "overscan": 8,
+    "text_len": 32,
+    "item_extent_px": 20
+  },
+  "record": [
+    "scroll_cpu",
+    "p99_frame",
+    "allocations",
+    "live_entity_count",
+    "text_shape_count",
+    "gpu_upload",
+    "draw_batch_count"
+  ],
+  "invariants": [
+    {
+      "name": "virtual_tree_live_entities_bounded",
+      "path": "work_counters.live_ui_entities",
+      "op": "lte",
+      "value": 58,
+      "status": "required",
+      "note": "Issue #8 §3.4 forbids one retained entity per logical disclosure row. Same catalog-8 window as virtual-list-10k (800/160/20 → cap 58). Missing live_ui_entities stays not-evaluable. live_ui_entities == items is a full tree, not virtualization."
+    }
+  ]
+}
