@@ -1301,6 +1301,10 @@ pub struct UiScene {
     /// the runtime hands back the same recording. Empty unless a node has a
     /// `Painter`.
     custom_paint: NodeMap<custom_paint::BuiltPaint>,
+    /// Geometry built from each modal frame's card surface recording
+    /// ([`nana_ui_runtime::Dialog::surface_painter`]), kept apart from the
+    /// node's own painter's. Empty unless a dialog paints its own card.
+    modal_surface_paint: NodeMap<custom_paint::BuiltPaint>,
     /// Nodes that [`may_be_dest_group`] admits. Paint asks
     /// [`UiScene::opacity_groups`] once per primitive, and even the memoized
     /// walk behind it has to read a cold `ExtractedNode` and its style for the
@@ -1351,6 +1355,7 @@ impl Default for UiScene {
             compositor_projection_dirty: false,
             compositor: CompositorRegistry::default(),
             custom_paint: NodeMap::default(),
+            modal_surface_paint: NodeMap::default(),
             dest_group_candidates: 0,
             glyph_live: NodeMap::default(),
             chart_live: NodeMap::default(),
@@ -1389,6 +1394,7 @@ impl Clone for UiScene {
             compositor_projection_dirty: self.compositor_projection_dirty,
             compositor: self.compositor.clone(),
             custom_paint: self.custom_paint.clone(),
+            modal_surface_paint: self.modal_surface_paint.clone(),
             dest_group_candidates: self.dest_group_candidates,
             glyph_live: self.glyph_live.clone(),
             chart_live: self.chart_live.clone(),
@@ -1601,6 +1607,9 @@ impl UiScene {
                 self.forget_compositor_node(id);
                 if !self.custom_paint.is_empty() {
                     self.custom_paint.remove(&id);
+                }
+                if !self.modal_surface_paint.is_empty() {
+                    self.modal_surface_paint.remove(&id);
                 }
             }
         }
@@ -3158,6 +3167,9 @@ fn primitive_paint_layer(slot: u64) -> u64 {
         namespace if namespace == u64::from(TEXT_DIAGNOSTIC_LABELS) => 58,
         namespace if namespace == u64::from(TEXT_ATOM_ICONS) => 27,
         namespace if namespace == u64::from(TEXT_ATOM_LABELS) => 32,
+        // A dialog's own card, painted by its surface painter: the card
+        // quad's layer, over the scrim (10), under the title (12).
+        namespace if namespace == u64::from(custom_paint::MODAL_SURFACE_PAINT) => 11,
         _ => slot,
     }
 }

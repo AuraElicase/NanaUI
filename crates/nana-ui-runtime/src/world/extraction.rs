@@ -369,6 +369,69 @@ impl UiWorld {
         recording
     }
 
+    /// `id`'s card surface painter's output for a card `surface` divided
+    /// into `sections`, recorded only when the painter's key, the card's size
+    /// or sections, or the theme moved since the last geometry.
+    pub(super) fn modal_surface_paint(
+        &self,
+        id: StableNodeId,
+        painter: &crate::NodePainter,
+        surface: LayoutBox,
+        sections: crate::ModalSurfaceSections,
+    ) -> Arc<crate::PaintRecording> {
+        let size = [surface.width.max(0.0), surface.height.max(0.0)];
+        let key = painter.surface_cache_key(size, self.palette_epoch, &sections);
+        let base = self
+            .nodes
+            .get(id)
+            .map(|node| Arc::clone(&node.resolved.0))
+            .unwrap_or_default();
+        if let Some(held) = self.modal_surface_recordings.borrow().get(&id)
+            && held.key == key
+            && held.measured_text.as_ref().is_none_or(|(style, backend)| {
+                *backend == self.text_backend
+                    && (Arc::ptr_eq(style, &base)
+                        || !crate::text_node::classify_computed_style_change(style, &base)
+                            .intersects(
+                                crate::text_node::TextDirty::SHAPE_STYLE
+                                    .union(crate::text_node::TextDirty::CONSTRAINT),
+                            ))
+            })
+        {
+            return Arc::clone(&held.recording);
+        }
+        let engine = self.paint_text_engine.clone();
+        let measured = std::cell::Cell::new(false);
+        let measure = |text: &crate::PaintText, size: f32, max_width: Option<f32>| {
+            measured.set(true);
+            measure_paint_text(id, engine.as_ref(), &base, text, size, max_width)
+        };
+        let recording = Arc::new(crate::custom_paint::record_surface(
+            painter.painter(),
+            &self.theme,
+            size,
+            sections,
+            &measure,
+        ));
+        let mut recordings = self.modal_surface_recordings.borrow_mut();
+        // The same ops keep the same `Arc`, so the scene reuses the card's
+        // triangles by identity.
+        let recording = match recordings.get(&id) {
+            Some(held) if *held.recording == *recording => Arc::clone(&held.recording),
+            _ => recording,
+        };
+        recordings.insert(
+            id,
+            super::PaintCacheEntry {
+                key,
+                recording: Arc::clone(&recording),
+                latest: Arc::new(std::sync::RwLock::new(Arc::clone(&recording))),
+                measured_text: measured.get().then_some((base, self.text_backend)),
+            },
+        );
+        recording
+    }
+
     /// The slot holding `id`'s latest recording, recording it first if it
     /// has none that fits.
     pub(super) fn shared_recording(

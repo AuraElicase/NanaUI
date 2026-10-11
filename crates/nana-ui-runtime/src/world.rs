@@ -666,6 +666,11 @@ pub struct UiWorld {
     /// so an unchanged node is never re-recorded. Only painted nodes have an
     /// entry; despawn drops it.
     paint_recordings: RefCell<crate::NodeMap<PaintCacheEntry>>,
+    /// Last recording of each modal frame's card surface painter
+    /// ([`crate::Dialog::surface_painter`]), apart from the node's own
+    /// painter: a frame can have both. Geometry reads through it; despawn
+    /// drops it.
+    modal_surface_recordings: RefCell<crate::NodeMap<PaintCacheEntry>>,
     /// The `nana-text` engine the host last shaped with, for painters that
     /// measure text while recording. `None` until a host shapes through one;
     /// painters then measure with the em-based fallback.
@@ -941,6 +946,7 @@ impl UiWorld {
             scroll_reclamped: HashSet::default(),
             scroll_resized: HashSet::default(),
             paint_recordings: RefCell::new(crate::NodeMap::default()),
+            modal_surface_recordings: RefCell::new(crate::NodeMap::default()),
             paint_text_engine: None,
             painter_overrides: crate::NodeMap::default(),
             pending_render_removals: Vec::new(),

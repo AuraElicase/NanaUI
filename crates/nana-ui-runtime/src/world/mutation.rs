@@ -1368,6 +1368,7 @@ impl UiWorld {
                         .get_mut()
                         .remove(id, snapshot.parent);
                     self.paint_recordings.get_mut().remove(&id);
+                    self.modal_surface_recordings.get_mut().remove(&id);
                     if !self.painter_overrides.is_empty() {
                         self.painter_overrides.remove(&id);
                     }

@@ -8357,6 +8357,7 @@ fn confirm_modal_visual() -> StandardVisual {
         busy: false,
         danger: false,
         slots: crate::ModalSlots::default(),
+        surface_painter: None,
     }
 }
 

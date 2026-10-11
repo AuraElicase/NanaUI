@@ -4581,13 +4581,20 @@ impl UiWorld {
         }
         // A painter that measured text re-records against the new backend;
         // one that did not is untouched.
-        let painted = self
+        let mut painted = self
             .paint_recordings
             .get_mut()
             .iter()
             .filter(|(_, held)| held.measured_text.is_some())
             .map(|(id, _)| *id)
             .collect::<Vec<_>>();
+        painted.extend(
+            self.modal_surface_recordings
+                .get_mut()
+                .iter()
+                .filter(|(_, held)| held.measured_text.is_some())
+                .map(|(id, _)| *id),
+        );
         for id in painted {
             self.mark_repaint(id);
         }

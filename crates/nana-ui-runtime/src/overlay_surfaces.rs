@@ -95,6 +95,57 @@ pub trait ModalSurface: ComponentView {
     fn set_open(&mut self, open: bool);
 }
 
+/// Where a modal dialog card's sections lie, in the card's own coordinates
+/// (origin at its top-left, logical px): what a card surface painter
+/// ([`crate::Dialog::surface_painter`], [`ConfirmDialog::surface_painter`])
+/// reads through [`crate::PaintContext::modal_sections`] to shape the card
+/// around its header, body and footer. The boxes are the ones the card lays
+/// its text and slots in, so a shape drawn on them stays under what they
+/// hold.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ModalSurfaceSections {
+    /// The header band, the card's full width from its top: the header row
+    /// with its insets and the divider under it.
+    pub header: crate::LayoutBox,
+    /// The title block: the title and its description, as wide as the
+    /// recipe lets them run.
+    pub title: crate::LayoutBox,
+    /// The title icon's square, when the dialog has one.
+    pub icon: Option<crate::LayoutBox>,
+    /// The close button's square, when the dialog has one.
+    pub close: Option<crate::LayoutBox>,
+    /// The body's content box.
+    pub body: crate::LayoutBox,
+    /// The footer band, the card's full width down to its bottom, when the
+    /// dialog has actions or a footer slot.
+    pub footer: Option<crate::LayoutBox>,
+}
+
+impl ModalSurfaceSections {
+    /// A digest of every box, for the recording cache: two sections that
+    /// lie the same digest the same.
+    pub(crate) fn digest(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut write = |section: Option<crate::LayoutBox>| match section {
+            Some(section) => {
+                1u8.hash(&mut hasher);
+                for value in [section.x, section.y, section.width, section.height] {
+                    value.to_bits().hash(&mut hasher);
+                }
+            }
+            None => 0u8.hash(&mut hasher),
+        };
+        write(Some(self.header));
+        write(Some(self.title));
+        write(self.icon);
+        write(self.close);
+        write(Some(self.body));
+        write(self.footer);
+        hasher.finish()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfirmDialog {
     pub title: Arc<str>,
@@ -119,6 +170,9 @@ pub struct ConfirmDialog {
     /// Slots given before the first assembly (a view's `.body`, `.cancel`…);
     /// [`AppContext::assemble_confirm_dialog`] makes the buttons missing here.
     requested: RequestedConfirmSlots,
+    /// Paints the card in place of the theme's; see
+    /// [`crate::Dialog::surface_painter`].
+    pub surface_painter: Option<crate::NodePainter>,
     pub style: NodeStyle,
 }
 
@@ -188,8 +242,16 @@ impl ConfirmDialog {
             slots: ModalSlots::default(),
             confirm_slots: None,
             requested: RequestedConfirmSlots::default(),
+            surface_painter: None,
             style: modal_root_style(),
         }
+    }
+
+    /// Paint the card with `painter` in place of the theme's rounded card;
+    /// see [`crate::Dialog::surface_painter`].
+    pub fn surface_painter(mut self, painter: impl Into<crate::NodePainter>) -> Self {
+        self.surface_painter = Some(painter.into());
+        self
     }
 
     pub fn close_policy(mut self, close_policy: DialogClosePolicy) -> Self {
@@ -310,6 +372,7 @@ impl ComponentView for ConfirmDialog {
             self.busy,
             self.danger,
             &self.slots,
+            self.surface_painter.as_ref(),
         );
     }
 }
@@ -432,6 +495,7 @@ impl ComponentView for Drawer {
             false,
             false,
             &self.slots,
+            None,
         );
     }
 }
@@ -449,6 +513,7 @@ pub(crate) fn project_modal(
     busy: bool,
     danger: bool,
     slots: &ModalSlots,
+    surface_painter: Option<&crate::NodePainter>,
 ) {
     let visual = StandardVisual::ModalFrame {
         title: Arc::clone(title),
@@ -458,6 +523,7 @@ pub(crate) fn project_modal(
         busy,
         danger,
         slots: slots.clone(),
+        surface_painter: surface_painter.cloned(),
     };
     if world.standard_visual(id) != Some(visual.clone()) {
         mutations.set_standard_visual(id, Some(visual));
@@ -1722,6 +1788,108 @@ mod tests {
             surface.y + surface.height,
             footer_box.y + footer_box.height + nana_ui_core::DialogRecipe::DEFAULT.footer.bottom
         );
+    }
+
+    /// Fills the header band, and keeps the sections it was handed for the
+    /// test to read back.
+    struct BandPainter {
+        seen: Arc<Mutex<Vec<Option<ModalSurfaceSections>>>>,
+    }
+
+    impl crate::Painter for BandPainter {
+        fn paint(&self, cx: &mut crate::PaintContext<'_>) {
+            let sections = cx.modal_sections();
+            self.seen.lock().unwrap().push(sections);
+            let Some(sections) = sections else {
+                return;
+            };
+            let mut header = crate::PaintPath::new();
+            header.rounded_rect(sections.header, [0.0; 4]);
+            cx.fill_path(&header, nana_ui_core::SemanticColorRole::Accent);
+        }
+
+        fn paint_key(&self) -> u64 {
+            1
+        }
+    }
+
+    /// A dialog that paints its own card: the painter records in the card's
+    /// coordinates, reads where the header, title, body and footer lie, and
+    /// is not asked again while nothing it depends on moved. A dialog
+    /// without one keeps the theme's card.
+    #[test]
+    fn a_surface_painter_draws_the_card_from_its_sections_and_records_once() {
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let confirm = cx
+            .create_component(
+                document,
+                ConfirmDialog::new("删除场景", "场景内的模型会一并删除。").surface_painter(
+                    BandPainter {
+                        seen: Arc::clone(&seen),
+                    },
+                ),
+            )
+            .unwrap();
+        cx.assemble_confirm_dialog(confirm).unwrap();
+        let plain = cx
+            .create_component(document, crate::Dialog::new("重命名"))
+            .unwrap();
+        shaped_layout(&mut cx, document, 800.0, 600.0);
+
+        let crate::ComponentGeometry::ModalFrame {
+            surface,
+            body,
+            title,
+            surface_paint: Some(recording),
+            ..
+        } = modal_geometry(&cx, confirm.stable_id())
+        else {
+            panic!("a painted card")
+        };
+        let sections = seen
+            .lock()
+            .unwrap()
+            .last()
+            .copied()
+            .flatten()
+            .expect("recorded as a card surface");
+        assert_eq!(
+            (sections.header.x, sections.header.y, sections.header.width),
+            (0.0, 0.0, surface.width)
+        );
+        assert_eq!(
+            (sections.title.x, sections.title.y),
+            (title.bounds.x - surface.x, title.bounds.y - surface.y)
+        );
+        assert!(sections.title.y + sections.title.height <= sections.header.height + 0.01);
+        assert_eq!(sections.body.y, body.y - surface.y);
+        let footer = sections.footer.expect("a confirm has actions");
+        assert!((footer.y + footer.height - surface.height).abs() < 0.01);
+        assert!(matches!(
+            recording.behind_children.as_slice(),
+            [crate::PaintOp::FillPath { .. }]
+        ));
+        assert!(recording.over_children.is_empty());
+
+        let asked = seen.lock().unwrap().len();
+        let crate::ComponentGeometry::ModalFrame {
+            surface_paint: Some(again),
+            ..
+        } = modal_geometry(&cx, confirm.stable_id())
+        else {
+            panic!("a painted card")
+        };
+        assert!(Arc::ptr_eq(&recording, &again), "the recording is reused");
+        assert_eq!(seen.lock().unwrap().len(), asked, "and not asked again");
+
+        let crate::ComponentGeometry::ModalFrame { surface_paint, .. } =
+            modal_geometry(&cx, plain.stable_id())
+        else {
+            panic!("dialog geometry")
+        };
+        assert!(surface_paint.is_none(), "the theme's card");
     }
 
     /// A card whose header stands on a tab: the recipe sets the title's

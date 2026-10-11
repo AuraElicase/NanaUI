@@ -5020,6 +5020,7 @@ fn modal_frame_emits_distinct_scrim_surface_and_intrinsic_text_slots() {
         busy: false,
         danger: false,
         slots: nana_ui_runtime::ModalSlots::default(),
+        surface_painter: None,
     });
     let text = |content: &'static str, y, height, size, weight| ComponentTextRegion {
         bounds: LayoutBox {
@@ -5073,6 +5074,7 @@ fn modal_frame_emits_distinct_scrim_surface_and_intrinsic_text_slots() {
         scrim_color: [0.0, 0.0, 0.0, 0.45],
         scrim_blur: 0.0,
         scrim_opacity: 1.0,
+        surface_paint: None,
     }));
     let mut scene = UiScene::default();
     scene.apply_delta([modal], []);
@@ -5147,6 +5149,7 @@ fn modal_frame_paints_the_recipe_radius_and_section_dividers() {
         busy: false,
         danger: false,
         slots: nana_ui_runtime::ModalSlots::default(),
+        surface_painter: None,
     });
     let surface = LayoutBox {
         x: 140.0,
@@ -5210,6 +5213,7 @@ fn modal_frame_paints_the_recipe_radius_and_section_dividers() {
         scrim_color: [0.0, 0.0, 0.0, 0.73],
         scrim_blur: 2.0,
         scrim_opacity: 1.0,
+        surface_paint: None,
     }));
     let mut scene = UiScene::default();
     scene.apply_delta([modal], []);
@@ -5276,6 +5280,7 @@ fn a_modal_frames_layer_fades_and_turns_its_card_not_its_scrim() {
         busy: false,
         danger: false,
         slots: nana_ui_runtime::ModalSlots::default(),
+        surface_painter: None,
     });
     let surface = LayoutBox {
         x: 140.0,
@@ -5314,6 +5319,7 @@ fn a_modal_frames_layer_fades_and_turns_its_card_not_its_scrim() {
         scrim_color: [0.0, 0.0, 0.0, 0.45],
         scrim_blur: 0.0,
         scrim_opacity: 0.4,
+        surface_paint: None,
     }));
     let mut scene = UiScene::default();
     scene.apply_delta([modal], []);
@@ -5509,6 +5515,7 @@ fn docked_drawer_extends_the_flush_edge_so_clipping_squares_that_side() {
         busy: false,
         danger: false,
         slots: nana_ui_runtime::ModalSlots::default(),
+        surface_painter: None,
     });
     drawer.component_geometry = Some(Box::new(ComponentGeometry::ModalFrame {
         scrim: LayoutBox {
@@ -5561,6 +5568,7 @@ fn docked_drawer_extends_the_flush_edge_so_clipping_squares_that_side() {
         scrim_color: [0.0, 0.0, 0.0, 0.45],
         scrim_blur: 0.0,
         scrim_opacity: 1.0,
+        surface_paint: None,
     }));
     let mut scene = UiScene::default();
     scene.apply_delta([drawer], []);
