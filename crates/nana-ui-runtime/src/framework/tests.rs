@@ -4966,7 +4966,9 @@ fn an_installed_compact_height_reaches_a_dismissible_toast() {
             .min_height
     };
     let px = nana_ui_core::LengthSpec::Px;
-    let default = crate::toast::PAD_Y * 2.0 + nana_ui_core::UI_METRICS.compact_control_height;
+    let padding = nana_ui_core::ToastRecipe::DEFAULT.padding;
+    let block = padding.top + padding.bottom;
+    let default = block + nana_ui_core::UI_METRICS.compact_control_height;
     assert_eq!(min_height_of(&context), Some(px(default)));
     let mut metrics = nana_ui_core::UI_METRICS;
     metrics.compact_control_height = 40.0;
@@ -4980,10 +4982,7 @@ fn an_installed_compact_height_reaches_a_dismissible_toast() {
             )
             .unwrap()
     );
-    assert_eq!(
-        min_height_of(&context),
-        Some(px(crate::toast::PAD_Y * 2.0 + 40.0))
-    );
+    assert_eq!(min_height_of(&context), Some(px(block + 40.0)));
 }
 
 #[test]

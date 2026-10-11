@@ -558,6 +558,13 @@ impl ThemeDefinition {
         self.bump()
     }
 
+    /// Dress the toast: its surface, insets, tone mark and type, and how a
+    /// stack of toasts moves. See [`ToastRecipe`](super::ToastRecipe).
+    pub const fn with_toast(mut self, toast: super::ToastRecipe) -> Self {
+        self.components.toast = Some(toast);
+        self.bump()
+    }
+
     /// Re-derive the whole accent family from one ramp.
     ///
     /// This is the foundation layer earning its place: setting
@@ -837,12 +844,56 @@ impl ThemeDefinition {
             return Err(error);
         }
 
+        let toast = self
+            .components
+            .toast
+            .ok_or(ThemeCompileError::MissingRecipe {
+                theme: self.id.clone(),
+                component: ComponentRecipeId::Overlay,
+                slot: "toast",
+            })?;
+        let mut error = None;
+        let mut check = Check {
+            theme: self.id.clone(),
+            error: &mut error,
+        };
+        for (token, value) in toast.lengths() {
+            check.length(token, value);
+        }
+        for (size_token, weight_token, text) in toast.texts() {
+            check.font_size(size_token, text.size);
+            if let Some(weight) = text.weight {
+                check.font_weight(weight_token, weight);
+            }
+        }
+        let motion = toast.motion;
+        for (token, transition) in [
+            ("toast.motion.enter", motion.enter),
+            ("toast.motion.exit", motion.exit),
+            ("toast.motion.stack_move", motion.stack_move),
+        ] {
+            check.duration(token, transition.millis);
+        }
+        let _ = check.finite("toast.motion.enter_offset_y", motion.enter_offset_y);
+        if check.finite("toast.motion.enter_scale", motion.enter_scale) && motion.enter_scale <= 0.0
+        {
+            check.fail(ThemeCompileError::NegativeLength {
+                theme: self.id.clone(),
+                token: "toast.motion.enter_scale",
+                value: thousandths(motion.enter_scale),
+            });
+        }
+        if let Some(error) = error {
+            return Err(error);
+        }
+
         Ok(CompiledRecipes::new(
             families,
             ButtonRecipe::from_variants(variants, invalid_border),
             status,
             dialog,
             scrollbar,
+            toast,
         ))
     }
 }
@@ -1019,6 +1070,7 @@ const fn builtin_registry() -> ComponentThemeRegistry {
         status: Some(StatusRecipe::DEFAULT),
         dialog: Some(super::DialogRecipe::DEFAULT),
         scrollbar: Some(super::ScrollbarRecipe::DEFAULT),
+        toast: Some(super::ToastRecipe::DEFAULT),
     }
 }
 
@@ -1652,6 +1704,17 @@ mod tests {
             })
         ));
 
+        let mut forgot_toast = dark();
+        forgot_toast.components.toast = None;
+        assert!(matches!(
+            forgot_toast.compile(),
+            Err(ThemeCompileError::MissingRecipe {
+                component: ComponentRecipeId::Overlay,
+                slot: "toast",
+                ..
+            })
+        ));
+
         // An empty registry is rejected on its first family, not accepted with
         // defaults filled in behind the author's back.
         let mut empty = dark();
@@ -1772,6 +1835,161 @@ mod tests {
             ..ScrollbarRecipe::DEFAULT
         });
         assert!(instant.compile().is_ok(), "a bar may hide at once");
+    }
+
+    /// A theme dresses the toast; the built-ins keep the toast as it was,
+    /// and dressing it is a token change like any other.
+    #[test]
+    fn a_toast_recipe_reaches_the_compiled_theme() {
+        use super::super::{RadiusTier, RecipeText, ToastRecipe};
+        assert_eq!(
+            *dark().compile().expect("compiles").recipes().toast(),
+            ToastRecipe::DEFAULT
+        );
+        let dressed = ToastRecipe {
+            radius: RadiusTier::Xl,
+            border: Some(SemanticColorRole::BorderSoft),
+            elevation: Some(ElevationRole::Surface),
+            title: RecipeText::new(13.0, Some(500)),
+            ..ToastRecipe::DEFAULT
+        };
+        let themed = dark().with_toast(dressed);
+        assert_eq!(themed.generation, dark().generation.next());
+        assert_eq!(
+            *themed.compile().expect("compiles").recipes().toast(),
+            dressed
+        );
+    }
+
+    /// Fail-closed for the toast, one field moved per case: a length that is
+    /// not a finite non-negative size, unreadable type, a transition that
+    /// never runs and an entrance that starts from nothing are each refused.
+    #[test]
+    fn an_invalid_toast_recipe_is_rejected_rather_than_installed() {
+        use super::super::{
+            DialogInsets, DialogTransition, RecipeText, ToastIndicator, ToastMotion,
+            ToastProgressRecipe, ToastRecipe,
+        };
+        use crate::motion::Easing;
+        let refuse = |recipe: ToastRecipe| dark().with_toast(recipe).compile();
+
+        assert!(matches!(
+            refuse(ToastRecipe {
+                padding: DialogInsets::symmetric(10.0, -1.0),
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NegativeLength { token, .. }) if token == "toast.padding.inline"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                gap: f32::NAN,
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NotFinite { token, .. }) if token == "toast.gap"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                indicator: ToastIndicator::Dot { size: -6.0 },
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NegativeLength { token, .. })
+                if token == "toast.indicator.size"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                progress: ToastProgressRecipe {
+                    height: f32::INFINITY,
+                    ..ToastProgressRecipe::DEFAULT
+                },
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NotFinite { token, .. }) if token == "toast.progress.height"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                stack_gap: -8.0,
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NegativeLength { token, .. }) if token == "toast.stack_gap"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                title: RecipeText::new(0.0, Some(600)),
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::FontSizeOutOfRange { token, .. })
+                if token == "toast.title.size"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                progress: ToastProgressRecipe {
+                    percent: RecipeText::new(12.0, Some(0)),
+                    ..ToastProgressRecipe::DEFAULT
+                },
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::FontWeightOutOfRange { token, .. })
+                if token == "toast.progress.percent.weight"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                motion: ToastMotion {
+                    stack_move: DialogTransition::new(0, Easing::Linear),
+                    ..ToastMotion::DEFAULT
+                },
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::ZeroDuration { token, .. })
+                if token == "toast.motion.stack_move"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
+                motion: ToastMotion {
+                    enter_offset_y: f32::NEG_INFINITY,
+                    ..ToastMotion::DEFAULT
+                },
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NotFinite { token, .. })
+                if token == "toast.motion.enter_offset_y"
+        ));
+        for scale in [0.0, -0.5] {
+            assert!(matches!(
+                refuse(ToastRecipe {
+                    motion: ToastMotion {
+                        enter_scale: scale,
+                        ..ToastMotion::DEFAULT
+                    },
+                    ..ToastRecipe::DEFAULT
+                }),
+                Err(ThemeCompileError::NegativeLength { token, .. })
+                    if token == "toast.motion.enter_scale"
+            ));
+        }
+        assert!(matches!(
+            refuse(ToastRecipe {
+                motion: ToastMotion {
+                    enter_scale: f32::NAN,
+                    ..ToastMotion::DEFAULT
+                },
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NotFinite { token, .. }) if token == "toast.motion.enter_scale"
+        ));
+        // A moving entrance from a little smaller, and no mark at all, are
+        // designs, not mistakes.
+        assert!(
+            refuse(ToastRecipe {
+                indicator: ToastIndicator::None,
+                motion: ToastMotion {
+                    enter_offset_y: -8.0,
+                    enter_scale: 0.98,
+                    ..ToastMotion::DEFAULT
+                },
+                ..ToastRecipe::DEFAULT
+            })
+            .is_ok()
+        );
     }
 
     /// A CSS scrim's darkness in linear light: black at CSS 0.45 keeps

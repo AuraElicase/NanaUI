@@ -2232,9 +2232,11 @@ impl AppContext {
     /// exists because some geometry is derived at projection time and no
     /// layout-intent field names it. Recipe reprojection exists because a
     /// component recipe decides *which role* a component authors onto its own
-    /// node, and only the component writes that node. Keeping them apart is
-    /// what stops a palette-only switch — the common case, and the one Issue
-    /// #101 §4 measured at zero reprojections — from paying for either.
+    /// node, and only the component writes that node; a recipe that strokes
+    /// "at the theme's hairline" spends the border tokens there too, so a
+    /// border change counts as a recipe change. Keeping them apart is what
+    /// stops a palette-only switch — the common case, and the one Issue #101
+    /// §4 measured at zero reprojections — from paying for either.
     fn install_theme(
         &mut self,
         theme: Arc<nana_ui_core::CompiledTheme>,
@@ -2243,7 +2245,8 @@ impl AppContext {
             return Ok(false);
         }
         let metrics_changed = !self.world.theme_metrics().same_layout(&theme.metrics());
-        let recipes_changed = self.world.theme().recipes() != theme.recipes();
+        let recipes_changed = self.world.theme().recipes() != theme.recipes()
+            || self.world.theme().border() != theme.border();
         let mut queue = MutationQueue::new();
         queue.set_theme_tokens(theme);
         self.world.commit(queue)?;

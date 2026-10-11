@@ -55,7 +55,7 @@ Vue CSS 的单层 `box-shadow`（outset 与 inset）和 `text-shadow`（仅 outs
 可以从 `ThemeDefinition::NANA_DARK` 或 `NANA_LIGHT` 派生，只改你要改的那几档，
 再交给宿主的 `ThemeRegistry` 注册。缺一个 recipe 槽位时主题不会安装。
 
-`nana_ui::theme` 把构成一份定义的 token 结构体都导出了。其中包括 `ThemeMetrics`、`SwitchMetrics`、`TypographyTokens`、`MotionTokens`、`EffectTokens`、`SpacingTokens`、`BorderTokens`、`OpacityTokens`、`SurfaceTokens`、`AccentRamp`、`ComponentThemeRegistry`，以及 `ButtonVariantDraft` 一类的 recipe draft，还有 `ThemeId`、`ThemeSchemaVersion`、`ThemeGeneration`。节点级命名尺寸要用的 `RadiusTier`、`ControlHeight`、`ControlPadding`、`SurfacePadding`、`SquareSize` 和 `SemanticColorMix` 也在这里。
+`nana_ui::theme` 把构成一份定义的 token 结构体都导出了。其中包括 `ThemeMetrics`、`SwitchMetrics`、`TypographyTokens`、`MotionTokens`、`EffectTokens`、`SpacingTokens`、`BorderTokens`、`OpacityTokens`、`SurfaceTokens`、`AccentRamp`、`ComponentThemeRegistry`，以及 `ButtonVariantDraft` 一类的 recipe draft，`DialogRecipe`、`ToastRecipe`（连同 `ToastIndicator`、`ToastGlyphs`、`ToastProgressRecipe`、`ToastMotion`）这些组件配方，还有 `ThemeId`、`ThemeSchemaVersion`、`ThemeGeneration`。节点级命名尺寸要用的 `RadiusTier`、`ControlHeight`、`ControlPadding`、`SurfacePadding`、`SquareSize` 和 `SemanticColorMix` 也在这里。
 
 你从这里拿。不要直接依赖 `nana-ui-core`。
 

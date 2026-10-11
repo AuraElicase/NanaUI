@@ -6,6 +6,7 @@ pub mod dialog;
 pub mod recipe;
 pub mod registry;
 pub mod scrollbar;
+pub mod toast;
 pub mod tokens;
 
 pub use compiled::{CompiledTheme, builtin_theme, builtin_theme_arc};
@@ -23,6 +24,7 @@ pub use registry::{ThemeChoice, ThemeRegistry, ThemeRegistryError, ThemeResoluti
 pub use scrollbar::{
     ScrollbarMotion, ScrollbarPaint, ScrollbarPaintState, ScrollbarRecipe, ScrollbarTransition,
 };
+pub use toast::{ToastGlyphs, ToastIndicator, ToastMotion, ToastProgressRecipe, ToastRecipe};
 pub use tokens::{
     AccentRamp, BorderTokens, BorderWidth, EasingRole, EffectTokens, ElevationRole, LineRole,
     MotionRole, MotionTokens, OpacityTokens, ShadowToken, SpacingStep, SpacingTokens, StateLayer,

@@ -26,6 +26,7 @@
 
 use super::dialog::DialogRecipe;
 use super::scrollbar::ScrollbarRecipe;
+use super::toast::ToastRecipe;
 use crate::semantics::{ButtonKind, StatusTone};
 use crate::style_model::SemanticColorRole;
 
@@ -337,6 +338,8 @@ pub struct ComponentThemeRegistry {
     /// The Scrollbar family: colours, motion and the application's
     /// visibility policy. See [`ScrollbarRecipe`].
     pub scrollbar: Option<ScrollbarRecipe>,
+    /// The Overlay family's toast. See [`ToastRecipe`].
+    pub toast: Option<ToastRecipe>,
 }
 
 impl ComponentThemeRegistry {
@@ -352,6 +355,7 @@ impl ComponentThemeRegistry {
             status: None,
             dialog: None,
             scrollbar: None,
+            toast: None,
         }
     }
 
@@ -374,6 +378,7 @@ pub struct CompiledRecipes {
     status: StatusRecipe,
     dialog: DialogRecipe,
     scrollbar: ScrollbarRecipe,
+    toast: ToastRecipe,
 }
 
 impl CompiledRecipes {
@@ -383,6 +388,7 @@ impl CompiledRecipes {
         status: StatusRecipe,
         dialog: DialogRecipe,
         scrollbar: ScrollbarRecipe,
+        toast: ToastRecipe,
     ) -> Self {
         Self {
             families,
@@ -390,6 +396,7 @@ impl CompiledRecipes {
             status,
             dialog,
             scrollbar,
+            toast,
         }
     }
 
@@ -424,5 +431,9 @@ impl CompiledRecipes {
 
     pub const fn scrollbar(&self) -> &ScrollbarRecipe {
         &self.scrollbar
+    }
+
+    pub const fn toast(&self) -> &ToastRecipe {
+        &self.toast
     }
 }

@@ -2263,39 +2263,47 @@ impl UiWorld {
             StandardVisual::Toast {
                 title,
                 description,
+                tone,
                 dismissible,
-                ..
             } => {
-                // Same constants the layout side reserves; the two must not
-                // drift, and the dismiss reserve follows the themeable compact
-                // control height rather than a literal.
-                let pad_x = crate::toast::PAD_X;
-                let pad_y = crate::toast::PAD_Y;
-                let indicator = crate::toast::INDICATOR_SIZE;
-                let gap = crate::toast::INDICATOR_GAP;
+                // The recipe the layout side reserved by, so the two cannot
+                // drift; the dismiss reserve follows the themeable control
+                // height of its size rather than a literal.
+                let recipe = self.theme.recipes().toast();
+                let pad_x = recipe.padding.inline;
+                let indicator = recipe.indicator.size();
+                // No mark, no gap after it: the copy starts at the inset.
+                let gap = match recipe.indicator {
+                    nana_ui_core::ToastIndicator::None => 0.0,
+                    _ => recipe.gap,
+                };
                 let dismiss = if *dismissible {
-                    nana_ui_core::ControlSize::Small.height_in(self.style_model.metrics)
+                    recipe.control_size.height_in(self.style_model.metrics)
                 } else {
                     0.0
                 };
                 let copy_x = bounds.x + pad_x + indicator + gap;
-                let copy_right =
-                    bounds.x + bounds.width - pad_x - if *dismissible { dismiss } else { 0.0 };
+                let copy_right = bounds.x + bounds.width - pad_x - dismiss;
                 let copy_width = (copy_right - copy_x).max(0.0);
-                let title_height = nana_ui_core::type_scale::META;
-                let desc_height = nana_ui_core::type_scale::HINT;
-                let has_desc = description.is_some();
-                let title_y = if has_desc {
-                    bounds.y + pad_y
+                let title_height = recipe.title.size;
+                let desc_height = recipe.description.size;
+                let title_y = if description.is_some() {
+                    bounds.y + recipe.padding.top
                 } else {
                     bounds.y + (bounds.height - title_height) / 2.0
                 };
                 Some(crate::ComponentGeometry::Toast {
-                    indicator: LayoutBox {
+                    indicator: (indicator > 0.0).then(|| LayoutBox {
                         x: bounds.x + pad_x,
                         y: bounds.y + (bounds.height - indicator) / 2.0,
                         width: indicator,
                         height: indicator,
+                    }),
+                    glyph: match recipe.indicator {
+                        nana_ui_core::ToastIndicator::Glyph { glyphs, .. } => {
+                            Some(glyphs.get(*tone))
+                        }
+                        _ => None,
                     },
                     title: crate::ComponentTextRegion {
                         bounds: LayoutBox {
@@ -2310,21 +2318,21 @@ impl UiWorld {
                                 .color(SemanticColorRole::Text)
                                 .as_rgba_array(),
                         ),
-                        font_size: nana_ui_core::type_scale::META,
-                        font_weight: Some(nana_ui_core::type_scale::SEMIBOLD),
+                        font_size: recipe.title.size,
+                        font_weight: recipe.title.weight,
                     },
                     description: description.as_ref().map(|description| {
                         crate::ComponentTextRegion {
                             bounds: LayoutBox {
                                 x: copy_x,
-                                y: title_y + title_height + nana_ui_core::space::XXS,
+                                y: title_y + title_height + recipe.copy_gap,
                                 width: copy_width,
                                 height: desc_height,
                             },
                             content: Arc::clone(description).into(),
                             color: Some(secondary),
-                            font_size: nana_ui_core::type_scale::HINT,
-                            font_weight: None,
+                            font_size: recipe.description.size,
+                            font_weight: recipe.description.weight,
                         }
                     }),
                     dismiss: dismissible.then(|| LayoutBox {
@@ -2332,6 +2340,9 @@ impl UiWorld {
                         y: bounds.y + (bounds.height - dismiss) / 2.0,
                         width: dismiss,
                         height: dismiss,
+                    }),
+                    elevation: recipe.elevation.map(|role| {
+                        crate::ComponentElevation::from_shadow(self.theme.shadow(role))
                     }),
                 })
             }

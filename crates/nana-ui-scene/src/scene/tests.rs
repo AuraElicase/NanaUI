@@ -11020,3 +11020,106 @@ fn an_outline_is_not_painted_in_the_border_colour() {
         Some(nana_ui_core::PaintColor::srgb([0.0, 0.0, 1.0, 1.0]))
     );
 }
+
+/// A toast paints what its recipe resolved to: a glyph mark is the tone's
+/// icon in the tone colour where the dot was, a lift is the surface quad's
+/// shadow, and a recipe without a mark paints nothing in that slot.
+#[test]
+fn a_toast_paints_its_recipe_mark_and_lift() {
+    let tone = [0.25, 0.73, 0.31, 1.0];
+    let lift = ComponentElevation {
+        color: nana_ui_core::PaintColor::srgb([0.0, 0.0, 0.0, 0.3]),
+        offset_x: 0.0,
+        offset_y: 10.0,
+        blur_radius: 30.0,
+        spread_radius: -24.0,
+        inset: false,
+    };
+    let toast = |mark: Option<nana_ui_core::Icon>, indicator: bool| {
+        let mut toast = node(1, None, &[]);
+        toast.layout = LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 360.0,
+            height: 45.0,
+        };
+        toast.standard_visual = Some(StandardVisual::Toast {
+            title: Arc::from("Saved"),
+            description: None,
+            tone: nana_ui_core::ToastTone::Success,
+            dismissible: false,
+        });
+        toast.standard_visual_foreground = Some(tone);
+        toast.component_geometry = Some(Box::new(ComponentGeometry::Toast {
+            indicator: indicator.then_some(LayoutBox {
+                x: 12.0,
+                y: 14.5,
+                width: 16.0,
+                height: 16.0,
+            }),
+            glyph: mark,
+            title: ComponentTextRegion {
+                bounds: LayoutBox {
+                    x: 36.0,
+                    y: 16.5,
+                    width: 312.0,
+                    height: 12.0,
+                },
+                content: nana_ui_runtime::TextValue::from("Saved"),
+                color: Some([0.87, 0.87, 0.87, 1.0]),
+                font_size: 12.0,
+                font_weight: Some(600),
+            },
+            description: None,
+            dismiss: None,
+            elevation: Some(lift),
+        }));
+        style_mut(&mut toast).background = Some([0.13, 0.13, 0.13, 1.0]);
+        toast
+    };
+
+    let mut scene = UiScene::new();
+    scene.apply_delta([toast(Some(nana_ui_core::Icon::ShieldCheck), true)], []);
+    let mark = scene
+        .primitive(PrimitiveId {
+            node: id(1),
+            slot: 1,
+        })
+        .expect("the tone mark");
+    assert_eq!(
+        primitive_icon(&mark.kind),
+        Some(nana_ui_core::Icon::ShieldCheck)
+    );
+    match &mark.kind {
+        ScenePrimitiveKind::Icon {
+            color: Some(color), ..
+        } => assert_eq!(*color, nana_ui_core::PaintColor::Srgb { rgba: tone }),
+        other => panic!("{other:?}"),
+    }
+    match &scene
+        .primitive(PrimitiveId {
+            node: id(1),
+            slot: 0,
+        })
+        .expect("the toast's surface")
+        .kind
+    {
+        ScenePrimitiveKind::Quad {
+            shadow: Some(shadow),
+            ..
+        } => assert_eq!(*shadow, lift),
+        other => panic!("{other:?}"),
+    }
+
+    let mut scene = UiScene::new();
+    scene.apply_delta([toast(None, false)], []);
+    assert!(
+        scene
+            .primitive(PrimitiveId {
+                node: id(1),
+                slot: 1,
+            })
+            .is_none(),
+        "no mark, nothing in its slot"
+    );
+}

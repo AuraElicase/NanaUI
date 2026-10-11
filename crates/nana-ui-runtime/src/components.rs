@@ -1650,10 +1650,17 @@ pub enum ComponentGeometry {
         dark: Vec<LayoutBox>,
     },
     Toast {
-        indicator: LayoutBox,
+        /// The tone mark's square before the copy; `None` when the toast
+        /// recipe draws no mark.
+        indicator: Option<LayoutBox>,
+        /// The glyph drawn in the indicator's square in the tone colour; a
+        /// dot when there is none.
+        glyph: Option<Icon>,
         title: ComponentTextRegion,
         description: Option<ComponentTextRegion>,
         dismiss: Option<LayoutBox>,
+        /// The theme's lift under the toast, when its recipe names one.
+        elevation: Option<ComponentElevation>,
     },
     XYPad {
         pad: LayoutBox,

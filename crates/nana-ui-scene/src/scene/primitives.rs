@@ -285,7 +285,10 @@ impl UiScene {
                             .primary_box_shadow()
                             .map(ComponentElevation::from_box_shadow)
                             .or(match node.component_geometry.as_deref() {
-                                Some(ComponentGeometry::Card { elevation, .. }) => *elevation,
+                                Some(
+                                    ComponentGeometry::Card { elevation, .. }
+                                    | ComponentGeometry::Toast { elevation, .. },
+                                ) => *elevation,
                                 _ => None,
                             }),
                         surface: {
