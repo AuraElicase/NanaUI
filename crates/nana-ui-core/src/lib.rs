@@ -184,8 +184,9 @@ pub use theme::{
     SurfacePadding, SurfaceRole, SurfaceSpec, SurfaceTokens, SwitchMetrics, TextWeight,
     ThemeAppearance, ThemeChoice, ThemeCompileError, ThemeDefinition, ThemeGeneration, ThemeId,
     ThemeIdentity, ThemeMetrics, ThemeRegistry, ThemeRegistryError, ThemeResolution,
-    ThemeSchemaVersion, TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme,
-    builtin_theme_arc, linear_scrim_alpha, space, type_scale,
+    ThemeSchemaVersion, ToastGlyphs, ToastIndicator, ToastMotion, ToastProgressRecipe, ToastRecipe,
+    TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme, builtin_theme_arc,
+    linear_scrim_alpha, space, type_scale,
 };
 pub use tree::{TreeNavigation, TreeNode, TreeViewEvent, tree_navigation_event};
 pub use typography::{

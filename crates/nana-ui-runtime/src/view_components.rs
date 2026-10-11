@@ -290,7 +290,8 @@ pub trait ComponentView: Clone + PartialEq + Send + 'static {
         false
     }
 
-    /// Opt in to one reprojection when the installed component recipes change.
+    /// Opt in to one reprojection when the installed component recipes, or
+    /// the border tokens a recipe strokes with, change.
     ///
     /// A [`ComponentRecipe`](nana_ui_core::ComponentRecipe) that this component
     /// reads in `project` — deciding which `SemanticColorRole` to author onto

@@ -169,28 +169,48 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
         }
         Some(ComponentGeometry::Toast {
             indicator,
+            glyph,
             title,
             description,
             dismiss,
+            ..
         }) => {
-            emit(visual_quad(
-                &VisualPrimitiveContext {
+            // The tone mark, in the tone colour: the recipe's glyph, or a dot.
+            match (indicator, glyph) {
+                (Some(bounds), Some(icon)) => emit(ScenePrimitive {
+                    id: PrimitiveId { node: id, slot: 1 },
                     node: id,
+                    bounds: scene_rect(*bounds),
                     transform,
-                    clips,
+                    clips: clips.clone(),
                     opacity,
                     z_index: node.z_index,
                     document_order: node_order,
-                },
-                1,
-                scene_rect(*indicator),
-                VisualQuadStyle {
-                    background: node.standard_visual_foreground,
-                    border_color: None,
-                    border_width: 0.0,
-                    corner_radius: corner_radii(999.0),
-                },
-            ));
+                    kind: ScenePrimitiveKind::Icon {
+                        icon: *icon,
+                        color: crate::scene::slot_color(None, node.standard_visual_foreground),
+                    },
+                }),
+                (Some(bounds), None) => emit(visual_quad(
+                    &VisualPrimitiveContext {
+                        node: id,
+                        transform,
+                        clips,
+                        opacity,
+                        z_index: node.z_index,
+                        document_order: node_order,
+                    },
+                    1,
+                    scene_rect(*bounds),
+                    VisualQuadStyle {
+                        background: node.standard_visual_foreground,
+                        border_color: None,
+                        border_width: 0.0,
+                        corner_radius: corner_radii(999.0),
+                    },
+                )),
+                (None, _) => {}
+            }
             emit(component_text_primitive(
                 id,
                 2,
