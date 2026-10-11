@@ -2276,6 +2276,8 @@ impl UiWorld {
                 description,
                 tone,
                 dismissible,
+                assembled,
+                icon,
             } => {
                 // The recipe the layout side reserved by, so the two cannot
                 // drift; the dismiss reserve follows the themeable control
@@ -2283,6 +2285,35 @@ impl UiWorld {
                 let recipe = self.theme.recipes().toast();
                 let pad_x = recipe.padding.inline;
                 let indicator = recipe.indicator.size();
+                let glyph = match recipe.indicator {
+                    nana_ui_core::ToastIndicator::Glyph { glyphs, .. } => {
+                        Some(icon.unwrap_or_else(|| glyphs.get(*tone)))
+                    }
+                    _ => None,
+                };
+                let elevation = recipe
+                    .elevation
+                    .map(|role| crate::ComponentElevation::from_shadow(self.theme.shadow(role)));
+                if *assembled {
+                    // The copy is laid out inside the border and the padding
+                    // the toast reserves the mark's square in; the mark
+                    // stands in the title's first line, not in the middle
+                    // of a toast that wraps.
+                    let line = crate::toast::line_box(recipe.title.size);
+                    return Some(crate::ComponentGeometry::Toast {
+                        indicator: (indicator > 0.0).then(|| LayoutBox {
+                            x: bounds.x + border + pad_x,
+                            y: bounds.y + border + recipe.padding.top + (line - indicator) / 2.0,
+                            width: indicator,
+                            height: indicator,
+                        }),
+                        glyph,
+                        title: None,
+                        description: None,
+                        dismiss: None,
+                        elevation,
+                    });
+                }
                 // No mark, no gap after it: the copy starts at the inset.
                 let gap = match recipe.indicator {
                     nana_ui_core::ToastIndicator::None => 0.0,
@@ -2310,13 +2341,8 @@ impl UiWorld {
                         width: indicator,
                         height: indicator,
                     }),
-                    glyph: match recipe.indicator {
-                        nana_ui_core::ToastIndicator::Glyph { glyphs, .. } => {
-                            Some(glyphs.get(*tone))
-                        }
-                        _ => None,
-                    },
-                    title: crate::ComponentTextRegion {
+                    glyph,
+                    title: Some(crate::ComponentTextRegion {
                         bounds: LayoutBox {
                             x: copy_x,
                             y: title_y,
@@ -2331,7 +2357,7 @@ impl UiWorld {
                         ),
                         font_size: recipe.title.size,
                         font_weight: recipe.title.weight,
-                    },
+                    }),
                     description: description.as_ref().map(|description| {
                         crate::ComponentTextRegion {
                             bounds: LayoutBox {
@@ -2352,9 +2378,7 @@ impl UiWorld {
                         width: dismiss,
                         height: dismiss,
                     }),
-                    elevation: recipe.elevation.map(|role| {
-                        crate::ComponentElevation::from_shadow(self.theme.shadow(role))
-                    }),
+                    elevation,
                 })
             }
             StandardVisual::XYPad {

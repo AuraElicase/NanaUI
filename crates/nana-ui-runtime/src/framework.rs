@@ -650,12 +650,24 @@ type SecondaryPressFn = Arc<
 >;
 
 /// A toast's dismiss timer. The lifecycle clock can be stale when a toast
-/// mounts after an idle stretch, so the timer first arms with a one-frame
-/// timeline and only counts the timeout from the frame that wakes for it.
+/// mounts or resumes after an idle stretch, so the timer first arms with a
+/// one-frame timeline and only counts from the frame that wakes for it.
+///
+/// `Arming → Counting ⇄ Paused` (a pause from `Arming` keeps all of it), and
+/// `Counting → Expired` once, when [`crate::ToastDismissed`] is asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToastTimer {
-    Arming,
-    Counting,
+    /// Waiting for the frame `remaining` counts from.
+    Arming { remaining: Duration },
+    /// `remaining` left at `started` on the lifecycle clock.
+    Counting {
+        started: Duration,
+        remaining: Duration,
+    },
+    /// Held with `remaining` left.
+    Paused { remaining: Duration },
+    /// Ran out and asked for dismissal; it does not count again.
+    Expired,
 }
 
 /// Emit [`PointerHoverChanged`] on a node whose concrete component type the
@@ -3602,6 +3614,7 @@ impl AppContext {
                 reassemble: false,
             },
         );
+        staged.keep_framework_state(component);
         self.inherit_segmented_option_surface(entity.id, &mut staged);
         let mut projected = false;
         if projection == Projection::IfChanged
@@ -4001,6 +4014,7 @@ impl AppContext {
         for id in removed {
             self.component_lifecycle.tooltips.remove(id);
             self.component_lifecycle.loading.remove(id);
+            self.component_lifecycle.toast_timers.remove(id);
             self.views.remove(id);
         }
         #[cfg(feature = "charts")]

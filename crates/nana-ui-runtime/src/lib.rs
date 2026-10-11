@@ -411,7 +411,7 @@ pub use text_node::{
     RetainedTextLayout, TextDirty, TextRevisions, TextWork, apply_used_typography, nana_font_family,
 };
 pub use thumbnail::{DEFAULT_ASPECT as THUMBNAIL_DEFAULT_ASPECT, Thumbnail, ThumbnailState};
-pub use toast::{Toast, ToastDismissed, ToastTone};
+pub use toast::{Toast, ToastAction, ToastDismissed, ToastProgress, ToastTone};
 pub use tree_view::TreeView;
 pub use video::Video;
 pub use view_components::{

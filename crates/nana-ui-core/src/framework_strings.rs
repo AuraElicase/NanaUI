@@ -74,6 +74,11 @@ framework_strings! {
     media_controls = "media.controls" => "播放控制";
     media_settings = "media.settings" => "播放设置";
 
+    toast_close = "toast.close" => "关闭通知";
+    toast_region = "toast.region" => "通知";
+    /// `{percent}`: 0–100.
+    toast_percent = "toast.percent" => "{percent}%";
+
     chip_remove = "chip.remove" => "移除";
     file_tab_close = "file_tab.close" => "关闭文件";
     color_field_label = "color_field.label" => "颜色";

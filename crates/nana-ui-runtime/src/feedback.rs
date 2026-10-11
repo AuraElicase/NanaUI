@@ -715,7 +715,8 @@ impl Progress {
         style.background = Some(self.track.unwrap_or(SemanticColorRole::Subtle));
         style.border = None;
         let layout = Arc::make_mut(&mut style.layout);
-        layout.width = Some(LengthSpec::Fill);
+        // A bar fills its row unless its style says how wide it is.
+        layout.width.get_or_insert(LengthSpec::Fill);
         // Padding the caller declared is kept; only the unset edges default to
         // zero. Boxes are border-box, so the declared padding is added to the
         // content height instead of squeezing the bar.
@@ -2242,6 +2243,27 @@ mod tests {
         assert_eq!(accessibility.role, AccessibilityRole::ProgressIndicator);
         assert_eq!(accessibility.value.as_deref(), Some("40%"));
         assert_eq!(accessibility.label.as_deref(), Some("Copying"));
+    }
+
+    /// A bar fills its row; a style that says how wide it is wins, so a bar
+    /// stretched across a column does not widen what sizes to its content.
+    #[test]
+    fn a_progress_bar_fills_its_row_unless_its_style_gives_a_width() {
+        let mut context = AppContext::new();
+        let width = |context: &AppContext, id: StableNodeId| {
+            context.world().node_style(id).unwrap().layout.width
+        };
+        let filling = context
+            .create_component(document(), Progress::new(1.0, 2.0))
+            .unwrap();
+        assert_eq!(width(&context, filling.stable_id()), Some(LengthSpec::Fill));
+        let mut sized = Progress::new(1.0, 2.0);
+        Arc::make_mut(&mut sized.style.layout).width = Some(LengthSpec::Px(120.0));
+        let sized = context.create_component(document(), sized).unwrap();
+        assert_eq!(
+            width(&context, sized.stable_id()),
+            Some(LengthSpec::Px(120.0))
+        );
     }
 
     #[test]

@@ -947,6 +947,13 @@ pub enum StandardVisual {
         description: Option<Arc<str>>,
         tone: nana_ui_core::ToastTone,
         dismissible: bool,
+        /// Built by `AppContext::assemble_toast`: its copy, progress and
+        /// buttons are child nodes, so the toast paints only its surface,
+        /// hairline, lift and tone mark, the mark in the title's first line.
+        assembled: bool,
+        /// The glyph an assembled toast shows in place of its recipe's tone
+        /// glyph, when the recipe marks tones with glyphs.
+        icon: Option<Icon>,
     },
     XYPad {
         value: nana_ui_core::XYPadValue,
@@ -1662,7 +1669,8 @@ pub enum ComponentGeometry {
         /// The glyph drawn in the indicator's square in the tone colour; a
         /// dot when there is none.
         glyph: Option<Icon>,
-        title: ComponentTextRegion,
+        /// `None` on an assembled toast, whose copy is child text.
+        title: Option<ComponentTextRegion>,
         description: Option<ComponentTextRegion>,
         dismiss: Option<LayoutBox>,
         /// The theme's lift under the toast, when its recipe names one.

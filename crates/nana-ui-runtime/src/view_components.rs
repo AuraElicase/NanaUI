@@ -249,6 +249,13 @@ pub trait ComponentView: Clone + PartialEq + Send + 'static {
         *self = next;
     }
 
+    /// Carry over from `previous` what the framework keeps on the component
+    /// and an application cannot write — the nodes its assembler built — when
+    /// an update wrote a whole new value (`*toast = Toast::new(..)`), which
+    /// cannot spell those fields. Defaults to nothing.
+    #[doc(hidden)]
+    fn keep_framework_state(&mut self, _previous: &Self) {}
+
     fn node_kind(&self) -> NodeKind;
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue);
 
