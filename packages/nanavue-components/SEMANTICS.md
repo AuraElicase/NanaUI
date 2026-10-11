@@ -195,7 +195,7 @@ Issue #5 — Vue **基础组件与布局原语**经 `MessageBridge` 落到 Nana 
 | `NanaAppTitleBar` `title` / `maximized` / `windowControls` | Runtime `AppTitleBar`；槽 `leading` / `center` / `trailing` / `controls` |
 | `NanaDesktopShell` 具名槽 | Runtime `DesktopShell`（`title-bar` / `primary` / `navigation` / `inspector` / `bottom` / `overlay`） |
 | `NanaPaneChrome` | Runtime `PaneChrome`；槽 `header` / `tabs` / `body` |
-| `NanaScrollView` `scrollbars` / `axes` | Runtime `ScrollView`；`scrollbars` 为 `auto`（默认）/ `always` / `hidden` |
+| `NanaScrollView` `scrollbars` / `axes` | Runtime `ScrollView`；`scrollbars` 为 `auto`（默认，跟随应用主题的滚动条策略）/ `auto-hide` / `always` / `hidden` |
 | `NanaNumberInput` / `input[type=number]` `modelValue` / `min` / `max` / `step` | Runtime `NumberInput` |
 | `NanaDivider` `orientation` | Runtime `Divider` |
 | `NanaList` / `NanaListItem` / `<ul>` `<li>` | Runtime `List` / `ListItem`；槽 `leading` / `content` / `trailing` |

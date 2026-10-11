@@ -250,11 +250,11 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 `ScrollView` 是滚动容器。位置权威是 Runtime 的 `ScrollOffset`。尺寸权威是 `ScrollMetrics`（任何改动布局盒、子节点或样式的提交结束时由 Runtime 重新测量，偏移随之夹取；起点在右 / 下边的轴偏移为负，见 [布局](layout.md)）。滚动条不另存一份偏移。L1 `overflow: auto|scroll` 共用同一份 `ScrollOffset` 与 overflow clip（滚轮同样更新这份偏移）。但**不**再画一套 thumb。自定义滚动条铬只属于 `ScrollView`。
 
-`ScrollView::scrollbars` 选三种。`AutoHide`（默认，指针进容器才现，overlay 式不占布局）。`Always`（能滚就常驻，画轨道底）。`Hidden`（不画，滚轮与 `scroll_to` 照常）。Vue 侧用 `scrollbars="always|hidden"`。
+`ScrollView::scrollbars` 选三种：`AutoHide`（悬停或滚动时淡入，离开后保持主题的 `hide_delay` 再淡出）、`Always`（能滚就常驻，带轨道）、`Hidden`（不画，滚轮与 `scroll_to` 照常）。不写时跟随主题的策略 `ScrollbarRecipe::visibility`（内置 `AutoHide`），应用用 `ThemeDefinition::with_scrollbar_visibility` 一次改全部。Vue 侧 `scrollbars="auto"`（默认）跟随策略，`auto-hide|always|hidden` 固定成这一种。
 
-轨道与滑块几何在 `nana-ui-core` 的 `scrollbar` 模块。颜色默认取 `border_strong`（拖拽时 `muted`）与 `subtle`。`::-webkit-scrollbar` / `::-webkit-scrollbar-thumb` 可覆盖厚度和这些颜色。仍走同一份 `scrollbar_track` 与普通 Scene quad。不另做一套 thumb 几何引擎。滑块拖拽与轨道点击（按下即把滑块居中到落点）由 `AppContext::begin_scrollbar_drag` 一族处理。走指针 capture。
+滚动条是 overlay，不占布局。车道位于 padding box 边缘往内 `track_inset` 处，容器在末端留出不小于 `track_inset + thickness` 的 padding，滚动条就不碰内容。滚动条画在滚动区所有后代之上，但仍在它的裁剪与层叠上下文里。指针落在看得见的车道上时，悬停与按下都归滚动区：车道激活、滑块变粗，下面的行不显示悬停。两轴都能滚时各让出拐角，互不重叠。
 
-滚动条是 overlay。不占布局宽度。两轴都能滚时各让出末端一个轨道厚度。避免拐角重叠。
+几何在 `nana-ui-core` 的 `scrollbar` 模块（`scrollbar_layout`）。尺寸在 `ThemeMetrics::scrollbar`；颜色、动效与显隐策略在主题的 `ScrollbarRecipe`。`::-webkit-scrollbar` / `::-webkit-scrollbar-thumb` 经 `ScrollbarSkin` 覆盖单个节点的厚度和颜色，仍走同一份几何与普通 Scene quad，不另做一套 thumb 几何引擎。滑块拖拽与轨道点击（按下即把滑块居中到落点）由 `AppContext::begin_scrollbar_drag` 一族处理，走指针 capture。
 
 ## 自己加一种控件
 

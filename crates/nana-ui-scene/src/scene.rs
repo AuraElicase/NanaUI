@@ -201,6 +201,32 @@ pub(crate) const MODAL_SCRIM_SLOT: u64 = 10;
 const TRIGGERED_OVERLAY_SURFACE: u32 = 0xFFFF_FFE0;
 pub(super) const TRIGGERED_OVERLAY_SURFACE_SLOT: u64 = (TRIGGERED_OVERLAY_SURFACE as u64) << 32;
 
+/// The slot namespace a scroll view's bars live in. A scroll view whose bars
+/// can show is a stacking group, and these slots sort after everything it
+/// holds, whatever its descendants' z-index ([`order_stack`]): content never
+/// covers its bars, while the view's later siblings and viewport-fixed
+/// surfaces still paint over them. Indices 0 and 1 are the horizontal track
+/// and thumb, 2 and 3 the vertical: the vertical bar paints last, as it wins
+/// the pointer where the two meet.
+const SCROLLBAR_CHROME: u32 = 0xFFFF_FFF8;
+
+pub(super) const fn scrollbar_chrome_slot(index: u64) -> u64 {
+    ((SCROLLBAR_CHROME as u64) << 32) | index
+}
+
+fn is_scrollbar_chrome_slot(slot: u64) -> bool {
+    slot >> 32 == SCROLLBAR_CHROME as u64
+}
+
+/// A scroll view whose bars can show; it paints them over its descendants.
+fn has_scrollbar_chrome(node: &ExtractedNode) -> bool {
+    matches!(
+        node.standard_visual,
+        Some(StandardVisual::Scrollbar { visibility, .. })
+            if visibility != nana_ui_core::ScrollbarVisibility::Hidden
+    )
+}
+
 fn is_triggered_overlay_surface(id: PrimitiveId) -> bool {
     id.slot == TRIGGERED_OVERLAY_SURFACE_SLOT
 }
@@ -1831,7 +1857,7 @@ impl UiScene {
                 if let Some(key) = triggered_overlay_surface_key(primitive) {
                     return key;
                 }
-                if !self.custom_paint.is_empty() && has_custom_paint(&self.nodes, primitive.node) {
+                if self.splits_paint(primitive.node) {
                     return order_key(&self.nodes, &self.node_order, primitive);
                 }
                 let stack = stacks.entry(primitive.node).or_insert_with(|| {
@@ -2371,13 +2397,26 @@ impl UiScene {
             }
             let prefix = self.group_prefix_of(&mut scratch, primitive.node);
             let stack = order_stack(&self.nodes, &prefix, primitive);
-            // A painted node's primitives do not share one stack.
-            if self.custom_paint.is_empty() || !has_custom_paint(&self.nodes, primitive.node) {
+            // A painted node's primitives do not share one stack, nor do a
+            // scroll view's own paint and its bars.
+            if !self.splits_paint(primitive.node) {
                 scratch.order_stack = Some((primitive.node, Arc::clone(&stack)));
             }
             return SceneOrderKey::at(stack, primitive);
         }
         order_key(&self.nodes, &self.node_order, primitive)
+    }
+
+    /// Whether `node`'s primitives sort under more than one stack: a painted
+    /// node splits its paint around its children, and a scroll view puts its
+    /// bars over them. A per-node stack cache must not hand one of those
+    /// primitives' stack to another.
+    pub(super) fn splits_paint(&self, node: StableNodeId) -> bool {
+        (!self.custom_paint.is_empty() && has_custom_paint(&self.nodes, node))
+            || self
+                .nodes
+                .get(&node)
+                .is_some_and(|node| has_scrollbar_chrome(node))
     }
 
     /// A node's paint-order prefix: what it inherits from the chain above it,
@@ -2652,6 +2691,8 @@ struct PaintOrderFacts {
     mix_blend: MixBlendMode,
     stacking_context: bool,
     custom_paint: bool,
+    /// A scroll view whose bars can show opens a group for them.
+    scrollbar_chrome: bool,
 }
 
 fn paint_order_facts(node: &ExtractedNode) -> PaintOrderFacts {
@@ -2663,6 +2704,7 @@ fn paint_order_facts(node: &ExtractedNode) -> PaintOrderFacts {
         mix_blend: paint.mix_blend,
         stacking_context: node.source_style.layout.creates_paint_stacking_context(),
         custom_paint: node.custom_paint.is_some(),
+        scrollbar_chrome: has_scrollbar_chrome(node),
     }
 }
 
@@ -2753,7 +2795,11 @@ fn is_stacking_group(nodes: &SceneNodes, node: &ExtractedNode) -> bool {
     node.custom_paint.is_some()
         || is_opacity_group(nodes, node)
         || (has_extracted_child(nodes, node)
-            && node.source_style.layout.creates_paint_stacking_context())
+            && (node.source_style.layout.creates_paint_stacking_context()
+                // Its bars paint over everything it holds: see
+                // `SCROLLBAR_CHROME`. Whether they show right now does not
+                // matter, so revealing them never re-sorts the subtree.
+                || has_scrollbar_chrome(node)))
 }
 
 fn is_filter_group(nodes: &SceneNodes, node: &ExtractedNode) -> bool {
@@ -3139,6 +3185,13 @@ pub(super) fn order_stack(
     if let Some(node) = nodes.get(&primitive.node)
         && is_stacking_group(nodes, node)
     {
+        // A scroll view's bars sit past every child of its group.
+        if is_scrollbar_chrome_slot(primitive.id.slot) {
+            let mut stack = Vec::with_capacity(prefix.len() + 1);
+            stack.extend_from_slice(prefix);
+            stack.push((i32::MAX, usize::MAX));
+            return Arc::from(stack);
+        }
         // A painted node splits its own paint around its children.
         if let Some(entry) = node
             .custom_paint

@@ -65,6 +65,98 @@ impl UiWorld {
         self.reduced_motion = reduced;
     }
 
+    /// Whether motion is reduced: animated chrome lands at once.
+    pub(crate) fn reduced_motion(&self) -> bool {
+        self.reduced_motion
+    }
+
+    /// Start, retarget or cancel a scroll view's fade and thumb tracks as a
+    /// projection moves where its bars are heading. The projection already
+    /// carries the bars' current values, or their targets where they snap: on
+    /// the first projection, under reduced motion, and for a fade that only an
+    /// auto-hiding bar plays.
+    pub(super) fn sync_scrollbar_motion(
+        &mut self,
+        id: StableNodeId,
+        previous: Option<crate::components::ScrollbarTargets>,
+        next: &StandardVisual,
+    ) {
+        use crate::component_animation_kinds::{
+            SCROLLBAR_EXPAND_X, SCROLLBAR_EXPAND_Y, SCROLLBAR_FADE,
+        };
+        use nana_ui_core::ScrollbarVisibility;
+        let StandardVisual::Scrollbar {
+            visibility,
+            presence,
+            expand,
+            ..
+        } = next
+        else {
+            return;
+        };
+        let Some(targets) = crate::components::ScrollbarTargets::of(next) else {
+            return;
+        };
+        let motion = self.theme.recipes().scrollbar().motion;
+        let fades = matches!(visibility, ScrollbarVisibility::AutoHide) && !self.reduced_motion;
+        let grows = !matches!(visibility, ScrollbarVisibility::Hidden) && !self.reduced_motion;
+        let tracks = [
+            (
+                SCROLLBAR_FADE,
+                fades,
+                *presence,
+                targets.presence,
+                previous.map(|previous| previous.presence),
+            ),
+            (
+                SCROLLBAR_EXPAND_X,
+                grows,
+                expand[0],
+                targets.expand[0],
+                previous.map(|previous| previous.expand[0]),
+            ),
+            (
+                SCROLLBAR_EXPAND_Y,
+                grows,
+                expand[1],
+                targets.expand[1],
+                previous.map(|previous| previous.expand[1]),
+            ),
+        ];
+        for (kind, animates, current, target, previous_target) in tracks {
+            let Some(animation) = crate::component_animation_id(kind, id) else {
+                continue;
+            };
+            if !animates {
+                self.cancel_animation(animation);
+                continue;
+            }
+            if previous_target == Some(target) {
+                continue;
+            }
+            if current == target {
+                self.cancel_animation(animation);
+                continue;
+            }
+            let transition = match kind {
+                SCROLLBAR_FADE if target > current => motion.fade_in,
+                SCROLLBAR_FADE => motion.fade_out,
+                _ => motion.expand,
+            };
+            self.start_component_track(
+                id,
+                kind,
+                transition.duration(),
+                transition.easing,
+                crate::AnimatableProperty::Progress,
+                crate::MotionValue::Scalar(current),
+                crate::MotionValue::Scalar(target),
+                crate::MotionInterrupt::Retarget,
+                None,
+            );
+        }
+    }
+
     /// How much of a modal frame's scrim shows: 1 at rest, less while it
     /// fades in or out.
     pub fn scrim_presence(&self, id: StableNodeId) -> f32 {

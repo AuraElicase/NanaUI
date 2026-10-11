@@ -76,6 +76,40 @@ impl UiWorld {
                 self.account_animation_dirty(DirtyMask::RENDER);
                 component_updates.push(sample.target);
             }
+            for (kind, axis) in [
+                (crate::component_animation_kinds::SCROLLBAR_FADE, None),
+                (
+                    crate::component_animation_kinds::SCROLLBAR_EXPAND_X,
+                    Some(0),
+                ),
+                (
+                    crate::component_animation_kinds::SCROLLBAR_EXPAND_Y,
+                    Some(1),
+                ),
+            ] {
+                if crate::component_animation_id(kind, sample.target) == Some(sample.id)
+                    && let Some(mut visual @ StandardVisual::Scrollbar { .. }) =
+                        self.standard_visual(sample.target)
+                {
+                    let value = match sample.value {
+                        crate::MotionValue::Scalar(value) => value.clamp(0.0, 1.0),
+                        _ => sample.progress,
+                    };
+                    if let StandardVisual::Scrollbar {
+                        presence, expand, ..
+                    } = &mut visual
+                    {
+                        match axis {
+                            None => *presence = value,
+                            Some(index) => expand[index] = value,
+                        }
+                    }
+                    self.nodes.set_visual(sample.target, Some(visual));
+                    self.mark(sample.target, DirtyMask::RENDER);
+                    self.account_animation_dirty(DirtyMask::RENDER);
+                    component_updates.push(sample.target);
+                }
+            }
             if crate::component_animation_id(crate::component_animation_kinds::HOVER, sample.target)
                 == Some(sample.id)
             {

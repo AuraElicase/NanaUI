@@ -4405,10 +4405,20 @@ fn auto_hiding_scrollbars_appear_on_hover_and_follow_the_scroll_offset() {
             std::time::Duration::ZERO,
         )
         .unwrap();
-    let bar = vertical_bar(&context, scroll).expect("hover reveals the bar");
-    // 120 of 200 content is visible, so the thumb takes 60% of the track.
     assert!(
-        (bar.thumb.height - 72.0).abs() < 0.01,
+        vertical_bar(&context, scroll).is_none(),
+        "the bar fades in from nothing rather than appearing at once"
+    );
+    context.advance_animations(std::time::Duration::from_millis(60));
+    let fading = vertical_bar(&context, scroll).expect("half way in");
+    assert!(fading.thumb_background[3] > 0.0 && fading.thumb_background[3] < 1.0);
+    context.advance_animations(std::time::Duration::from_millis(200));
+    let bar = vertical_bar(&context, scroll).expect("hover reveals the bar");
+    assert_eq!(bar.thumb_background[3], 1.0);
+    // The lane runs `track_inset` inside the edges: 116 of the 120. 120 of
+    // 200 content is visible, so the thumb takes 60% of it.
+    assert!(
+        (bar.thumb.height - 116.0 * 0.6).abs() < 0.01,
         "thumb {:?}",
         bar.thumb
     );
@@ -4432,11 +4442,29 @@ fn auto_hiding_scrollbars_appear_on_hover_and_follow_the_scroll_offset() {
     );
 
     context
-        .set_pointer_hover_at(document, 1, None, std::time::Duration::ZERO)
+        .set_pointer_hover_at(document, 1, None, std::time::Duration::from_millis(300))
         .unwrap();
+    let delay = nana_ui_core::ScrollbarMotion::DEFAULT.hide_delay();
+    assert_eq!(
+        context.next_animation_deadline(),
+        Some(std::time::Duration::from_millis(300) + delay),
+        "the bar waits out the hide delay without polling"
+    );
+    context.advance_animations(std::time::Duration::from_millis(300) + delay / 2);
+    assert!(
+        vertical_bar(&context, scroll).is_some(),
+        "a bar the pointer just left stays a moment"
+    );
+    context.advance_animations(std::time::Duration::from_millis(300) + delay);
+    context.advance_animations(std::time::Duration::from_millis(2000));
     assert!(
         vertical_bar(&context, scroll).is_none(),
-        "leaving the container hides the bar again"
+        "leaving the container fades the bar out again"
+    );
+    assert_eq!(
+        context.next_animation_deadline(),
+        None,
+        "a bar at rest leaves nothing to wake for"
     );
 }
 
@@ -4450,12 +4478,16 @@ fn resident_scrollbars_draw_a_track_without_hover() {
         nana_ui_core::ScrollbarVisibility::Always,
     );
     let bar = vertical_bar(&context, scroll).expect("resident bars need no hover");
+    let metrics = nana_ui_core::SCROLLBAR_METRICS;
     assert!(bar.track_background.is_some());
-    assert!((bar.track.width - nana_ui_core::SCROLLBAR_METRICS.thickness).abs() < 0.01);
+    assert!((bar.lane.width - metrics.thickness).abs() < 0.01);
     assert!(
-        (bar.track.x + bar.track.width - 200.0).abs() < 0.01,
-        "bar hugs the right edge"
+        (bar.lane.x + bar.lane.width - (200.0 - metrics.track_inset)).abs() < 0.01,
+        "the lane runs track_inset inside the right edge"
     );
+    assert!((bar.track.width - metrics.thumb_active_thickness).abs() < 0.01);
+    assert!((bar.thumb.width - metrics.thumb_thickness).abs() < 0.01);
+    assert_eq!(context.next_animation_deadline(), None);
 }
 
 /// Issue #101 F1: a control's **height** follows the installed theme.
@@ -5650,7 +5682,7 @@ fn a_thicker_scrollbar_in_the_installed_theme_reaches_the_bar() {
     );
     let default_width = vertical_bar(&context, scroll)
         .expect("resident bars need no hover")
-        .track
+        .lane
         .width;
     assert!((default_width - nana_ui_core::SCROLLBAR_METRICS.thickness).abs() < 0.01);
 
@@ -5671,7 +5703,7 @@ fn a_thicker_scrollbar_in_the_installed_theme_reaches_the_bar() {
 
     let widened = vertical_bar(&context, scroll)
         .expect("the bar survives a theme install")
-        .track
+        .lane
         .width;
     assert!(
         (widened - default_width * 2.0).abs() < 0.01,
@@ -5745,10 +5777,13 @@ fn dragging_the_thumb_moves_the_authoritative_scroll_offset() {
         "grabbing the thumb must not jump the content"
     );
 
-    // Travel is 48px for 80px of content, so half the travel is 40px.
+    // Half the thumb's travel down the lane is half the 80px of content.
+    let travel = bar
+        .track_geometry(nana_ui_core::ScrollbarAxis::Vertical)
+        .travel();
     assert!(
         context
-            .update_scrollbar_drag(document, 7, grab_x, grab_y + 24.0)
+            .update_scrollbar_drag(document, 7, grab_x, grab_y + travel / 2.0)
             .unwrap()
     );
     let offset = context.world().scroll_offset(scroll.stable_id()).unwrap();

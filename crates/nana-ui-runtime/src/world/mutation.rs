@@ -399,6 +399,11 @@ impl<'a> ValidationPlan<'a> {
                         | Some(StandardVisual::LevelMeter {
                             value_ratio: ratio, ..
                         }) => !ratio.is_finite() || !(0.0..=1.0).contains(ratio),
+                        Some(StandardVisual::Scrollbar {
+                            presence, expand, ..
+                        }) => std::iter::once(presence)
+                            .chain(expand)
+                            .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value)),
                         _ => false,
                     };
                     if invalid_ratio {
@@ -1669,6 +1674,13 @@ impl UiWorld {
                         crate::MotionInterrupt::Retarget,
                         None,
                     );
+                }
+                if let Some(next @ StandardVisual::Scrollbar { .. }) = visual.as_ref() {
+                    let previous = self
+                        .nodes
+                        .visual(*id)
+                        .and_then(crate::components::ScrollbarTargets::of);
+                    self.sync_scrollbar_motion(*id, previous, next);
                 }
 
                 let button_layout_changed = match (self.nodes.visual(*id), visual.as_ref()) {

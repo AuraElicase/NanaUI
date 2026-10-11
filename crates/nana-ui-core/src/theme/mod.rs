@@ -5,6 +5,7 @@ pub mod definition;
 pub mod dialog;
 pub mod recipe;
 pub mod registry;
+pub mod scrollbar;
 pub mod tokens;
 
 pub use compiled::{CompiledTheme, builtin_theme, builtin_theme_arc};
@@ -18,6 +19,9 @@ pub use recipe::{
     ComponentRecipe, ComponentRecipeDraft, ComponentRecipeId, ComponentThemeRegistry, StatusRecipe,
 };
 pub use registry::{ThemeChoice, ThemeRegistry, ThemeRegistryError, ThemeResolution};
+pub use scrollbar::{
+    ScrollbarMotion, ScrollbarPaint, ScrollbarPaintState, ScrollbarRecipe, ScrollbarTransition,
+};
 pub use tokens::{
     AccentRamp, BorderTokens, BorderWidth, EasingRole, EffectTokens, ElevationRole, LineRole,
     MotionRole, MotionTokens, OpacityTokens, ShadowToken, SpacingStep, SpacingTokens, StateLayer,
@@ -180,9 +184,11 @@ pub struct ThemeMetrics {
     /// the value the Large step used when it was a spacing constant.
     #[serde(default = "default_large_control_padding_x")]
     pub large_control_padding_x: f32,
-    /// Scrollbar chrome geometry.
+    /// Scrollbar chrome geometry: the lane, the resting and active thumb,
+    /// the inset. Colours, motion and the visibility policy are the
+    /// [`ScrollbarRecipe`].
     ///
-    /// Composed rather than flattened: five scrollbar-shaped numbers do not
+    /// Composed rather than flattened: scrollbar-shaped numbers do not
     /// belong beside `control_height`, but they do belong to the *installed*
     /// theme. Before this they lived only as the
     /// [`crate::SCROLLBAR_METRICS`] constant, which meant a density or theme
@@ -555,10 +561,12 @@ impl ThemeMetrics {
     }
 
     /// Whether `other` lays a document out the same: it differs from these
-    /// metrics in [`Self::corner_shape`] at most, which only paints.
+    /// metrics in [`Self::corner_shape`] and [`Self::scrollbar`] at most,
+    /// which only paint — a bar overlays and never takes layout space.
     pub fn same_layout(&self, other: &Self) -> bool {
         Self {
             corner_shape: other.corner_shape,
+            scrollbar: other.scrollbar,
             ..*self
         } == *other
     }

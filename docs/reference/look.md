@@ -85,7 +85,7 @@ CSS `font-family`（以及 weight 和 style）会映射到刚载入的 face。�
 
 ## 控件尺寸
 
-单行控件的三档高度和内边距在 `ThemeMetrics` 里。switch 的轨道在 `ThemeMetrics::switch`（`SwitchMetrics`：30×16 轨道，加上 8 的标签间距）。scrollbar 的在 `ThemeMetrics::scrollbar`。
+单行控件的三档高度和内边距在 `ThemeMetrics` 里。switch 的轨道在 `ThemeMetrics::switch`（`SwitchMetrics`：30×16 轨道，加上 8 的标签间距）。scrollbar 的在 `ThemeMetrics::scrollbar`（车道、静止与激活滑块、内缩）；它的颜色、动效和显隐策略在 `ScrollbarRecipe`。
 
 两者都是组合进来的子结构。理由一样：某控件专属的几个数字不该和 `control_height` 并排，但它们确实属于已经安装的主题。
 

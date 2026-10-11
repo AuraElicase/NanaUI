@@ -1393,10 +1393,19 @@ impl UiWorld {
             StandardVisual::Scrollbar {
                 axes,
                 visibility,
-                revealed,
                 dragging,
+                presence,
+                expand,
+                ..
             } => {
-                if !revealed || matches!(visibility, nana_ui_core::ScrollbarVisibility::Hidden) {
+                let presence = match visibility {
+                    nana_ui_core::ScrollbarVisibility::AutoHide => *presence,
+                    nana_ui_core::ScrollbarVisibility::Always => 1.0,
+                    nana_ui_core::ScrollbarVisibility::Hidden => return None,
+                };
+                // A bar that has faded out is gone: it neither paints nor
+                // takes the pointer from the content under it.
+                if presence.is_nan() || presence <= 0.0 {
                     return None;
                 }
                 let metrics = self.scroll_metrics(id)?;
@@ -1407,11 +1416,17 @@ impl UiWorld {
                 // has to arrive here or it never reaches a scrollbar.
                 let base = self.style_model.metrics.scrollbar;
                 let chrome = skin.map(|skin| skin.metrics(base)).unwrap_or(base);
-                let palette = self.style_model;
-                let track_background = skin.and_then(|skin| skin.track_color).or_else(|| {
-                    matches!(visibility, nana_ui_core::ScrollbarVisibility::Always)
-                        .then(|| palette.color(SemanticColorRole::Subtle).as_rgba_array())
-                });
+                let recipe = self.theme.recipes().scrollbar();
+                // The lane runs inside the border, over the padding: a
+                // container that leaves end padding keeps its bar off its
+                // content without the bar taking any layout.
+                let edges = source.layout.resolved_border_edges();
+                let padding_box = nana_ui_core::ScrollbarRect {
+                    x: bounds.x + edges.left,
+                    y: bounds.y + edges.top,
+                    width: (bounds.width - edges.left - edges.right).max(0.0),
+                    height: (bounds.height - edges.top - edges.bottom).max(0.0),
+                };
                 let scrolls = |axis: nana_ui_core::ScrollbarAxis| match axis {
                     nana_ui_core::ScrollbarAxis::Horizontal => {
                         axes.horizontal() && metrics.content_width > metrics.viewport_width
@@ -1420,6 +1435,12 @@ impl UiWorld {
                         axes.vertical() && metrics.content_height > metrics.viewport_height
                     }
                 };
+                let layout_box = |rect: nana_ui_core::ScrollbarRect| LayoutBox {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                };
                 let bar = |axis: nana_ui_core::ScrollbarAxis| {
                     if !scrolls(axis) {
                         return None;
@@ -1427,97 +1448,58 @@ impl UiWorld {
                     let horizontal = matches!(axis, nana_ui_core::ScrollbarAxis::Horizontal);
                     // Give up the far corner only when the other axis also has
                     // a bar, so the two never overlap.
-                    let corner = if scrolls(match axis {
-                        nana_ui_core::ScrollbarAxis::Horizontal => {
-                            nana_ui_core::ScrollbarAxis::Vertical
-                        }
-                        nana_ui_core::ScrollbarAxis::Vertical => {
-                            nana_ui_core::ScrollbarAxis::Horizontal
-                        }
-                    }) {
-                        chrome.thickness
+                    let corner = scrolls(if horizontal {
+                        nana_ui_core::ScrollbarAxis::Vertical
                     } else {
-                        0.0
-                    };
-                    let along = if horizontal {
-                        (bounds.width - corner).max(0.0)
+                        nana_ui_core::ScrollbarAxis::Horizontal
+                    });
+                    let extent = if horizontal {
+                        nana_ui_core::ScrollbarExtent {
+                            viewport: metrics.viewport_width,
+                            content: metrics.content_width,
+                            offset: offset.x,
+                            min_offset: metrics.origin_x,
+                        }
                     } else {
-                        (bounds.height - corner).max(0.0)
+                        nana_ui_core::ScrollbarExtent {
+                            viewport: metrics.viewport_height,
+                            content: metrics.content_height,
+                            offset: offset.y,
+                            min_offset: metrics.origin_y,
+                        }
                     };
-                    let track = nana_ui_core::scrollbar_track(
-                        if horizontal {
-                            metrics.viewport_width
-                        } else {
-                            metrics.viewport_height
-                        },
-                        if horizontal {
-                            metrics.content_width
-                        } else {
-                            metrics.content_height
-                        },
-                        if horizontal { offset.x } else { offset.y },
-                        if horizontal {
-                            metrics.origin_x
-                        } else {
-                            metrics.origin_y
-                        },
-                        if horizontal { bounds.x } else { bounds.y },
-                        along,
+                    let grown = expand[usize::from(!horizontal)];
+                    let layout = nana_ui_core::scrollbar_layout(
+                        axis,
+                        padding_box,
+                        corner,
+                        extent,
+                        grown,
                         chrome,
                     )?;
-                    let active = *dragging == Some(axis);
-                    let thumb_inset = ((chrome.thickness - chrome.thumb_thickness) / 2.0).max(0.0);
-                    let (track_box, thumb_box) = if horizontal {
-                        let track_y = bounds.y + bounds.height - chrome.thickness;
-                        (
-                            LayoutBox {
-                                x: track.origin,
-                                y: track_y,
-                                width: track.length,
-                                height: chrome.thickness,
-                            },
-                            LayoutBox {
-                                x: track.thumb_origin,
-                                y: track_y + thumb_inset,
-                                width: track.thumb_length,
-                                height: chrome.thumb_thickness,
-                            },
-                        )
-                    } else {
-                        let track_x = bounds.x + bounds.width - chrome.thickness;
-                        (
-                            LayoutBox {
-                                x: track_x,
-                                y: track.origin,
-                                width: chrome.thickness,
-                                height: track.length,
-                            },
-                            LayoutBox {
-                                x: track_x + thumb_inset,
-                                y: track.thumb_origin,
-                                width: chrome.thumb_thickness,
-                                height: track.thumb_length,
-                            },
-                        )
-                    };
+                    let paint = recipe.paint(
+                        self.style_model,
+                        skin,
+                        nana_ui_core::ScrollbarPaintState {
+                            presence,
+                            expand: grown,
+                            dragging: *dragging == Some(axis),
+                            resident: matches!(
+                                visibility,
+                                nana_ui_core::ScrollbarVisibility::Always
+                            ),
+                        },
+                    );
                     Some(crate::ScrollbarBar {
-                        track: track_box,
-                        thumb: thumb_box,
-                        track_background,
-                        thumb_background: skin.and_then(|skin| skin.thumb_color).unwrap_or_else(
-                            || {
-                                if active {
-                                    palette.color(SemanticColorRole::Muted).as_rgba_array()
-                                } else {
-                                    palette
-                                        .color(SemanticColorRole::BorderStrong)
-                                        .as_rgba_array()
-                                }
-                            },
-                        ),
-                        thumb_radius: chrome.thumb_radius(),
-                        min_offset: track.min_offset,
-                        max_offset: track.max_offset,
+                        lane: layout_box(layout.lane),
+                        track: layout_box(layout.track),
+                        thumb: layout_box(layout.thumb),
+                        track_background: paint.track,
+                        thumb_background: paint.thumb,
+                        track_radius: layout.track_radius,
+                        thumb_radius: layout.thumb_radius,
+                        min_offset: layout.axis.min_offset,
+                        max_offset: layout.axis.max_offset,
                     })
                 };
                 let horizontal = bar(nana_ui_core::ScrollbarAxis::Horizontal);

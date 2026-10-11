@@ -4613,9 +4613,17 @@ pub struct ScrollView {
     pub(crate) pending_anchor: Option<ScrollAnchor>,
     pub axes: ScrollAxes,
     pub label: Option<Arc<str>>,
-    pub scrollbars: nana_ui_core::ScrollbarVisibility,
+    /// This view's own scrollbar visibility. `None` follows the installed
+    /// theme's policy ([`nana_ui_core::ScrollbarRecipe::visibility`]).
+    pub scrollbars: Option<nana_ui_core::ScrollbarVisibility>,
     /// Pointer is inside the container, so auto-hiding bars show.
     pub hovered: bool,
+    /// The axis whose lane the pointer is on: its thumb grows and its track
+    /// shows.
+    pub hot: Option<nana_ui_core::ScrollbarAxis>,
+    /// A scroll, a drag ending or the pointer leaving keeps auto-hiding bars
+    /// shown until the theme's hide delay runs out.
+    pub held: bool,
     pub dragging: Option<ScrollbarDragState>,
     pub style: NodeStyle,
 }
@@ -4645,8 +4653,10 @@ impl ScrollView {
             pending_anchor: None,
             axes,
             label: None,
-            scrollbars: nana_ui_core::ScrollbarVisibility::default(),
+            scrollbars: None,
             hovered: false,
+            hot: None,
+            held: false,
             dragging: None,
             style: NodeStyle::default(),
         }
@@ -4663,9 +4673,10 @@ impl ScrollView {
         self
     }
 
-    /// Choose overlay auto-hide, resident, or no bars at all.
+    /// Choose overlay auto-hide, resident, or no bars at all for this view,
+    /// whatever the theme's policy says.
     pub fn scrollbars(mut self, visibility: nana_ui_core::ScrollbarVisibility) -> Self {
-        self.scrollbars = visibility;
+        self.scrollbars = Some(visibility);
         self
     }
 
@@ -4674,13 +4685,18 @@ impl ScrollView {
         self
     }
 
-    /// Bars are drawn when resident, or while hovered or dragged.
+    /// Whether this view asks its auto-hiding bars to show: the pointer is
+    /// inside it, a lane is hot, a thumb is dragged, or a hold after a scroll
+    /// or a leave has not run out. Resident and hidden bars do not ask; what
+    /// is actually drawn is [`crate::AppContext::scrollbars_visible`].
     pub fn scrollbars_revealed(&self) -> bool {
-        match self.scrollbars {
-            nana_ui_core::ScrollbarVisibility::Always => true,
-            nana_ui_core::ScrollbarVisibility::AutoHide => self.hovered || self.dragging.is_some(),
-            nana_ui_core::ScrollbarVisibility::Hidden => false,
-        }
+        self.hovered || self.hot.is_some() || self.dragging.is_some() || self.held
+    }
+
+    /// This view's visibility, else the installed theme's policy.
+    pub fn scrollbar_visibility(&self, world: &UiWorld) -> nana_ui_core::ScrollbarVisibility {
+        self.scrollbars
+            .unwrap_or_else(|| world.theme().recipes().scrollbar().visibility)
     }
 
     fn projected_style(&self) -> NodeStyle {
@@ -4734,13 +4750,40 @@ impl ScrollView {
         world: &UiWorld,
         mutations: &mut MutationQueue,
     ) {
+        let visibility = self.scrollbar_visibility(world);
+        let shown = self.scrollbars_revealed();
+        let dragging = self.dragging.map(|drag| drag.axis);
+        let targets =
+            crate::components::ScrollbarTargets::new(visibility, shown, self.hot, dragging);
+        // The bars carry on from where their tracks have them; the world
+        // starts, turns or cancels the tracks as this visual moves their
+        // targets. They land at once on the first projection and under
+        // reduced motion, and only an auto-hiding bar fades.
+        let stored = world.standard_visual(id);
+        let (presence, expand) = match &stored {
+            Some(crate::StandardVisual::Scrollbar {
+                presence, expand, ..
+            }) if !world.reduced_motion() => (*presence, *expand),
+            _ => (targets.presence, targets.expand),
+        };
         let visual = crate::StandardVisual::Scrollbar {
             axes: self.axes,
-            visibility: self.scrollbars,
-            revealed: self.scrollbars_revealed(),
-            dragging: self.dragging.map(|drag| drag.axis),
+            visibility,
+            shown,
+            hot: self.hot,
+            dragging,
+            presence: if visibility == nana_ui_core::ScrollbarVisibility::AutoHide {
+                presence
+            } else {
+                targets.presence
+            },
+            expand: if visibility == nana_ui_core::ScrollbarVisibility::Hidden {
+                targets.expand
+            } else {
+                expand
+            },
         };
-        if world.standard_visual(id) != Some(visual.clone()) {
+        if stored.as_ref() != Some(&visual) {
             mutations.set_standard_visual(id, Some(visual));
         }
     }
@@ -4761,9 +4804,17 @@ impl ComponentView for ScrollView {
 
     fn reconcile(&mut self, mut next: Self) {
         next.hovered = self.hovered;
+        next.hot = self.hot;
+        next.held = self.held;
         next.dragging = self.dragging;
         next.pending_anchor = self.pending_anchor;
         *self = next;
+    }
+
+    /// The theme's scrollbar policy decides what views that follow it show,
+    /// so installing a theme reprojects them.
+    fn wants_recipe_reproject() -> bool {
+        true
     }
 
     fn node_kind(&self) -> NodeKind {

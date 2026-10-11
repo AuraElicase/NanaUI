@@ -68,6 +68,12 @@ pub mod component_animation_kinds {
     pub const SURFACE_SCRIM: u64 = 11;
     /// A toast's auto-dismiss timer.
     pub const TOAST: u64 = 12;
+    /// A scroll view's bars fading in and out.
+    pub const SCROLLBAR_FADE: u64 = 13;
+    /// A scroll view's horizontal thumb growing on its hot lane.
+    pub const SCROLLBAR_EXPAND_X: u64 = 14;
+    /// A scroll view's vertical thumb growing on its hot lane.
+    pub const SCROLLBAR_EXPAND_Y: u64 = 15;
 }
 
 /// Derives the animation ID for one component-owned timeline from the
@@ -85,7 +91,7 @@ pub fn component_animation_id(kind_tag: u64, target: StableNodeId) -> Option<Ani
 /// Whether `id` is one of the built-in component timelines of `target`
 /// ([`component_animation_kinds`]).
 pub(crate) fn is_component_animation(id: AnimationId, target: StableNodeId) -> bool {
-    (component_animation_kinds::SKELETON..=component_animation_kinds::TOAST)
+    (component_animation_kinds::SKELETON..=component_animation_kinds::SCROLLBAR_EXPAND_Y)
         .any(|kind| component_animation_id(kind, target) == Some(id))
 }
 

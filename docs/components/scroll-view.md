@@ -53,15 +53,39 @@ widget(
 
 ## 滚动条
 
-`.scrollbars` 有三种，类型是 `nana_ui_core::ScrollbarVisibility`：
+滚动条是 overlay：哪种模式都不占布局，也不改变任何盒子。
 
-- `AutoHide` 是默认。指针进入容器，或正在拖拽滑块时，滚动条以 overlay 出现，不占布局。
-- `Always` 在这一轴能滚时一直画着，并带轨道底。
-- `Hidden` 不画滚动条。滚轮和 `scroll_to` 照常。
+### 显隐
+
+`.scrollbars` 不写时跟随主题的策略（`ScrollbarRecipe::visibility`，内置是 `AutoHide`）；写了就是这个滚动区自己的，主题策略不覆盖它。类型是 `nana_ui_core::ScrollbarVisibility`：
+
+- `AutoHide`：指针在容器里（也包括在它里面嵌套的滚动区里）、用户刚滚动过（滚轮、拖动、触控、键盘焦点滚入、无障碍滚动）、车道激活或正在拖动时显示。这些都结束后，再保持主题的 `hide_delay`，然后淡出。程序调用 `scroll_to` 和 `follow_end` 不会让它出现。
+- `Always`：这一轴能滚就一直画着，带常驻轨道。
+- `Hidden`：不画滚动条。滚轮和 `scroll_to` 照常。
+
+应用要让所有跟随策略的滚动区常驻，用 `ThemeDefinition::with_scrollbar_visibility(ScrollbarVisibility::Always)`。
+
+### 几何
+
+车道是悬停与按下的范围，宽 `thickness`，位于 padding box 边缘（扣掉 border）往内 `track_inset` 处：竖条在右，横条在底，两端各内缩 `track_inset`。两轴都有条时，各自让出拐角，互不重叠。滑块居中于车道，平时宽 `thumb_thickness`，车道激活或拖动时对称地长到 `thumb_active_thickness`；轨道是与激活滑块同宽的胶囊。
+
+容器在末端留出不小于 `track_inset + thickness` 的 padding，滚动条就完全落在留白里、不碰内容。框架不替你留这块空。
+
+### 层级与指针
+
+滚动条画在这个滚动区所有后代之上，不论后代的 z-index；它仍在自己的祖先裁剪与层叠上下文里，后面的兄弟节点和 viewport-fixed 浮层照样能盖住它。能显示滚动条的滚动区因此是一个层叠组。
+
+只有看得见的车道接收指针，淡入中的也算。指针落在车道上时，悬停目标是滚动区本身：下面的行不显示悬停底色或 tooltip，车道激活、滑块变粗。在车道上按下即抓住滑块；按在空轨道上，先把滑块居中到落点。
+
+### 动效与样式
+
+淡入、淡出和变粗按主题的 `ScrollbarRecipe::motion` 播放；减少动态效果时直接到终点。空闲时不留任何 deadline。
+
+尺寸在 `ThemeMetrics::scrollbar`；颜色、动效与显隐策略在 `ScrollbarRecipe`，用 `ThemeDefinition::with_scrollbar` 安装。单个节点可以用 `PaintStyle::scrollbar`（`ScrollbarSkin`）改尺寸或颜色。CSS 的 `::-webkit-scrollbar` 与 `::-webkit-scrollbar-thumb` 写的就是它；CSS 指定的滑块宽度在悬停时不变粗。
 
 `overflow: auto` 和 `overflow: scroll` 共用同一份 `ScrollOffset` 和裁剪，不再另画一套滑块。自定义滚动条铬只属于 `ScrollView`。
 
-拖拽时只有抓取锚点记在 `ScrollbarDragState` 里，偏移仍在世界上。`scrollbars_revealed` 回答当前要不要把滑块画出来。
+拖拽时只有抓取锚点记在 `ScrollbarDragState` 里，偏移仍在世界上。`scrollbars_revealed` 回答这个滚动区是否请求显示自动隐藏的滚动条；实际画没画出来，看 `AppContext::scrollbars_visible`。
 
 ## 借出滚动口
 
@@ -80,7 +104,7 @@ widget(
 | `axes` | `ScrollAxes` | `Horizontal`、`Vertical` 或 `Both`。`ScrollView::new(axes)`。对应轴的溢出写成 `Scroll` |
 | `.label` | — | 可访问名 |
 | `.follow_end` | — | `true` 时，布局公布新的滚动几何之后竖向停在最新内容；读旧内容时关掉 |
-| `.scrollbars` | `nana_ui_core::ScrollbarVisibility` | `AutoHide` 是默认；`Always` 在能滚时一直画着并带轨道底；`Hidden` 不画，滚轮和 `scroll_to` 照常 |
+| `.scrollbars` | `nana_ui_core::ScrollbarVisibility` | 不写时跟随主题策略（内置 `AutoHide`）；`AutoHide` 悬停或滚动时出现、离开后延迟淡出；`Always` 在能滚时一直画着并带轨道；`Hidden` 不画，滚轮和 `scroll_to` 照常 |
 
 ## 事件
 

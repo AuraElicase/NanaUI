@@ -142,6 +142,9 @@ fn borrowed_workspace_scrollport_preserves_region_surface_through_hover_and_drag
         cx.world().layout_box(content.stable_id())
     );
     assert_eq!(cx.world().node_style(scroll.stable_id()), Some(&style));
+    // The bar fades in rather than appearing at once.
+    cx.advance_animations(std::time::Duration::from_millis(300));
+    assert!(cx.scrollbars_visible(scroll));
     let ComponentGeometry::Scrollbar {
         vertical: Some(bar),
         ..
@@ -167,7 +170,14 @@ fn borrowed_workspace_scrollport_preserves_region_surface_through_hover_and_drag
     adapter
         .route(&mut cx, pointer(PointerPhase::Move, -20.0, -20.0))
         .unwrap();
+    assert!(
+        cx.read(scroll, |view| view.scrollbars_revealed()).unwrap(),
+        "a bar the pointer just left stays for the hide delay"
+    );
+    cx.advance_animations(std::time::Duration::from_secs(5));
+    cx.advance_animations(std::time::Duration::from_secs(6));
     assert!(!cx.read(scroll, |view| view.scrollbars_revealed()).unwrap());
+    assert!(!cx.scrollbars_visible(scroll));
     assert_eq!(cx.world().node_style(scroll.stable_id()), Some(&style));
     assert_eq!(
         cx.world().accessibility(scroll.stable_id()),

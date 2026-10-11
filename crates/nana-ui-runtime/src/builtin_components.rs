@@ -1735,9 +1735,8 @@ impl RegisterableComponent for ScrollView {
     const TYPE_ID: &'static str = crate::component_descriptors::SCROLL_VIEW.type_id;
     const TAGS: &'static [&'static str] = crate::component_descriptors::SCROLL_VIEW.tags;
     fn from_semantic(spec: &SemanticSpec<'_>) -> Self {
-        let mut component = ScrollView::new(parse_scroll_axes(spec))
-            .scrollbars(parse_scrollbar_visibility(spec))
-            .style(layout_only_style(spec));
+        let mut component = ScrollView::new(parse_scroll_axes(spec)).style(layout_only_style(spec));
+        component.scrollbars = parse_scrollbar_visibility(spec);
         if !spec.display_label().is_empty() {
             component = component.label(Arc::<str>::from(spec.display_label()));
         }
@@ -1994,7 +1993,11 @@ fn parse_flag(raw: Option<&str>) -> bool {
     }
 }
 
-fn parse_scrollbar_visibility(spec: &SemanticSpec<'_>) -> nana_ui_core::ScrollbarVisibility {
+/// A view's own scrollbar visibility; `None` (`auto`, nothing, or a value
+/// it does not know) follows the application's policy.
+fn parse_scrollbar_visibility(
+    spec: &SemanticSpec<'_>,
+) -> Option<nana_ui_core::ScrollbarVisibility> {
     match spec
         .attr("scrollbars")
         .or_else(|| spec.attr("scrollbar"))
@@ -2003,9 +2006,10 @@ fn parse_scrollbar_visibility(spec: &SemanticSpec<'_>) -> nana_ui_core::Scrollba
         .to_ascii_lowercase()
         .as_str()
     {
-        "always" | "visible" | "persistent" => nana_ui_core::ScrollbarVisibility::Always,
-        "hidden" | "none" | "off" => nana_ui_core::ScrollbarVisibility::Hidden,
-        _ => nana_ui_core::ScrollbarVisibility::AutoHide,
+        "always" | "visible" | "persistent" => Some(nana_ui_core::ScrollbarVisibility::Always),
+        "hidden" | "none" | "off" => Some(nana_ui_core::ScrollbarVisibility::Hidden),
+        "auto-hide" | "autohide" | "overlay" => Some(nana_ui_core::ScrollbarVisibility::AutoHide),
+        _ => None,
     }
 }
 

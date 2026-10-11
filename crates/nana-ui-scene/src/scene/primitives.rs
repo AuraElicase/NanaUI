@@ -703,7 +703,8 @@ impl UiScene {
                     controls_base::build(&context, &mut emit)
                 }
                 // Scrollbar chrome is emitted with the StandardVisual slots
-                // below so it draws over the node's own content.
+                // below, in its own slot namespace, so it draws over
+                // everything the scroll view holds.
                 Some(ComponentGeometry::Scrollbar { .. }) | None => {}
                 #[cfg(not(feature = "calendar"))]
                 Some(ComponentGeometry::CalendarHeatmap { .. }) => {}
@@ -1936,21 +1937,28 @@ impl UiScene {
                         vertical,
                     }) = node.component_geometry.as_deref()
                     {
-                        for (slot, bar) in [(3, vertical), (5, horizontal)] {
+                        // Track then thumb, the horizontal bar first: the
+                        // vertical one paints last, as it wins the pointer.
+                        for (first, bar) in [(0, horizontal), (2, vertical)] {
                             let Some(bar) = bar else {
                                 continue;
                             };
                             if let Some(background) = bar.track_background {
                                 self.insert_primitive(visual_quad(
                                     &visual_context,
-                                    slot,
+                                    super::scrollbar_chrome_slot(first),
                                     scene_rect(bar.track),
-                                    VisualQuadStyle::solid(background),
+                                    VisualQuadStyle {
+                                        background: Some(background),
+                                        border_color: None,
+                                        border_width: 0.0,
+                                        corner_radius: corner_radii(bar.track_radius),
+                                    },
                                 ));
                             }
                             self.insert_primitive(visual_quad(
                                 &visual_context,
-                                slot + 1,
+                                super::scrollbar_chrome_slot(first + 1),
                                 scene_rect(bar.thumb),
                                 VisualQuadStyle {
                                     background: Some(bar.thumb_background),
