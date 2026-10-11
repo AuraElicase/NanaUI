@@ -57,7 +57,7 @@ widget(Dialog::new("重命名"))
 
 宽度由对话框自己说。`.size` 收 `nana_ui::DialogSize`：五档预设 `Compact` 420、`Default` 520、`Medium` 600、`Wide` 680、`Workspace` 1080，或者 `DialogSize::Width(长度)` 给一个自己的宽度。长度按 CSS 理解：`LengthSpec::Px(560.0)` 就是 560；`DialogSize::capped(560.0, 92.0)` 是 CSS 的 `min(560px, 92vw)`，窗口窄了就让给窗口。`%` 和 `vw` / `vh` 相对遮罩，遮罩铺满窗口。无论哪种，卡片都不会超出遮罩留出的 16px 边距。
 
-卡片站在哪、最高多高是设计系统的事，归主题：`ThemeDefinition::with_dialog(DialogRecipe { top, max_height })`。内置主题是距顶 90px、最高为遮罩高度的 76%。照 `margin-top: 12vh; max-height: 72vh` 写的设计，写成 `LengthSpec::Viewport { axis: ViewportAxis::Height, value: 12.0 }` 和 `value: 72.0`。卡片太高、站不下时往上挪，但不越过边距。装上新的配方，已经打开的对话框连同插槽一起重新摆放。
+卡片站在哪、最高多高是设计系统的事，归主题：`ThemeDefinition::with_dialog(DialogRecipe { top, max_height })`。内置主题是距顶 90px、最高为遮罩高度的 76%。照 `margin-top: 12vh; max-height: 72vh` 写的设计，写成 `LengthSpec::Viewport { axis: ViewportAxis::Height, value: 12.0 }` 和 `value: 72.0`。卡片太高、站不下时往上挪，但不越过边距。要卡片在遮罩里上下居中（遮罩是 `justify-content: center` 的纵向 flex），写 `align: DialogAlign::Center`：卡片离遮罩顶和底一样远，随内容往上下两边长，`top` 不再起作用；内置是 `DialogAlign::Top`。装上新的配方，已经打开的对话框连同插槽一起重新摆放。
 
 ```rust
 use nana_ui::DialogSize;

@@ -136,12 +136,29 @@ pub enum DialogDividerInset {
     Content,
 }
 
+/// Where a dialog card stands in its scrim, up and down.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum DialogAlign {
+    /// [`DialogRecipe::top`] from the scrim's top: the card grows downward
+    /// as its content does.
+    #[default]
+    Top,
+    /// Midway down the scrim, as far from its top as from its bottom (a
+    /// flex column with `justify-content: center`): the card grows both
+    /// ways as its content does.
+    Center,
+}
+
 /// The dialog card's placement in its scrim and how it is divided.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DialogRecipe {
-    /// Distance from the top of the scrim to the card. A card too tall to
-    /// stand there moves up, never above the scrim's margin.
+    /// Distance from the top of the scrim to the card, when [`Self::align`]
+    /// is [`DialogAlign::Top`]. A card too tall to stand there moves up,
+    /// never above the scrim's margin.
     pub top: LengthSpec,
+    /// Where the card stands, up and down: [`Self::top`] from the scrim's
+    /// top, or centred in it. Either way it stays inside the scrim's margin.
+    pub align: DialogAlign,
     /// Tallest the card grows; content beyond it is clipped to the body.
     pub max_height: LengthSpec,
     /// The square the title's icon slot is placed in, before the title.
@@ -196,6 +213,7 @@ impl DialogRecipe {
     /// danger tone on a danger dialog and runs to the close button.
     pub const DEFAULT: Self = Self {
         top: LengthSpec::Px(90.0),
+        align: DialogAlign::Top,
         max_height: LengthSpec::Percent(76.0),
         icon_size: 16.0,
         close_size: 28.0,
@@ -305,6 +323,7 @@ mod tests {
     #[test]
     fn the_default_recipe_is_the_placement_dialogs_always_had() {
         let recipe = DialogRecipe::DEFAULT;
+        assert_eq!(recipe.align, DialogAlign::Top);
         assert_eq!(recipe.top_in(800.0, 600.0), 90.0);
         assert!((recipe.max_height_in(800.0, 600.0) - 456.0).abs() < 1e-3);
     }
