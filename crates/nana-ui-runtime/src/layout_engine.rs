@@ -1262,13 +1262,14 @@ struct PlannedOverlay {
     /// The used box reads the containing block's size (percentage, fill,
     /// or both insets). A fixed child reads the viewport instead.
     tracks_containing_block: bool,
-    #[allow(dead_code)]
     base: Size,
     #[allow(dead_code)]
     base_origin: Point,
-    #[allow(dead_code)]
+    /// What the insets add to `base_origin`, as placement added it: a
+    /// container that only moved puts the child at its new content origin
+    /// plus this (see [`ContainerPlan::moved_to`]).
+    inset: Point,
     origin: Point,
-    #[allow(dead_code)]
     size: Size,
 }
 
@@ -1288,6 +1289,13 @@ struct PlannedChild {
     /// the line's input, and an edit can change it while the intrinsic stays.
     at_main: Option<(f32, Size)>,
     origin: Point,
+    /// What placement added to the content origin to get `origin`: a
+    /// container that only moved puts the child at its new content origin
+    /// plus this, the sum a fresh pass computes there (see
+    /// [`ContainerPlan::moved_to`]). `None` once a replay moved the child by
+    /// a difference instead -- the far edge of a reversed axis, a wrap line
+    /// before it -- which a fresh pass need not reproduce to the bit.
+    offset: Option<Point>,
     size: Size,
     /// Main-axis cursor before this child, i.e. the prefix sum of every
     /// preceding child's outer main extent plus gaps. Lets a suffix replay
@@ -1650,6 +1658,61 @@ impl ContainerPlan {
                 style,
                 writing,
             ) && self.flow_stable_under_own_size(content_origin))
+    }
+
+    /// This plan for the container at `origin`, its content box at
+    /// `content_origin`. Every child keeps its place in the content box and
+    /// moves with it, as does every positioned child but a fixed one, which
+    /// hangs off the viewport: it sits at the new content origin plus its
+    /// recorded offset, the sum a fresh pass computes there. `None` when an
+    /// entry's offset is not known (see [`PlannedChild::offset`]), or a grid
+    /// item is not the one the track record holds at its index or inherits
+    /// the tracks it spans as a subgrid.
+    fn moved_to(&self, origin: Point, content_origin: Point) -> Option<Self> {
+        if let Some(grid) = &self.grid {
+            let entries = self.entries.borrow();
+            if grid.items.len() != entries.len()
+                || grid.items.iter().zip(entries.iter()).any(|(item, entry)| {
+                    item.child != entry.child
+                        || entry.style.is_subgrid_columns()
+                        || entry.style.is_subgrid_rows()
+                })
+            {
+                return None;
+            }
+        }
+        let at = |offset: Point| Point {
+            x: content_origin.x + offset.x,
+            y: content_origin.y + offset.y,
+        };
+        let mut moved = self.clone();
+        for entry in moved.entries.get_mut() {
+            entry.origin = at(entry.offset?);
+        }
+        for entry in &mut moved.overlay {
+            if !entry.fixed {
+                entry.base_origin = content_origin;
+                entry.origin = at(entry.inset);
+            }
+        }
+        moved.origin = origin;
+        moved.content_origin = content_origin;
+        Some(moved)
+    }
+
+    /// The containing block the child at `index` in `entries` was placed in:
+    /// its cell, in a grid, and the content box otherwise. A grid's items line
+    /// up with its entries on a plan [`Self::moved_to`] gave.
+    fn entry_containing(&self, index: usize) -> Size {
+        let Some(grid) = &self.grid else {
+            return self.content;
+        };
+        let (inline, block) = grid.cell(&grid.items[index]);
+        if self.writing.is_vertical() {
+            Size::new(block, inline)
+        } else {
+            Size::new(inline, block)
+        }
     }
 
     /// A sequential plan places from the start edge. Its main size can grow
