@@ -11048,6 +11048,8 @@ fn a_toast_paints_its_recipe_mark_and_lift() {
             description: None,
             tone: nana_ui_core::ToastTone::Success,
             dismissible: false,
+            assembled: false,
+            icon: None,
         });
         toast.standard_visual_foreground = Some(tone);
         toast.component_geometry = Some(Box::new(ComponentGeometry::Toast {
@@ -11058,7 +11060,7 @@ fn a_toast_paints_its_recipe_mark_and_lift() {
                 height: 16.0,
             }),
             glyph: mark,
-            title: ComponentTextRegion {
+            title: Some(ComponentTextRegion {
                 bounds: LayoutBox {
                     x: 36.0,
                     y: 16.5,
@@ -11069,7 +11071,7 @@ fn a_toast_paints_its_recipe_mark_and_lift() {
                 color: Some([0.87, 0.87, 0.87, 1.0]),
                 font_size: 12.0,
                 font_weight: Some(600),
-            },
+            }),
             description: None,
             dismiss: None,
             elevation: Some(lift),
@@ -11121,5 +11123,61 @@ fn a_toast_paints_its_recipe_mark_and_lift() {
             })
             .is_none(),
         "no mark, nothing in its slot"
+    );
+}
+
+/// An assembled toast's copy, progress and buttons are child nodes: the
+/// toast itself paints its surface and its tone mark and no text of its
+/// own, not even the dismiss box a leaf draws.
+#[test]
+fn an_assembled_toast_paints_no_text_regions_of_its_own() {
+    let tone = [0.25, 0.73, 0.31, 1.0];
+    let mut toast = node(1, None, &[]);
+    toast.layout = LayoutBox {
+        x: 0.0,
+        y: 0.0,
+        width: 280.0,
+        height: 38.0,
+    };
+    toast.standard_visual = Some(StandardVisual::Toast {
+        title: Arc::from("Optimizing models"),
+        description: Some(Arc::from("2 of 5")),
+        tone: nana_ui_core::ToastTone::Success,
+        dismissible: true,
+        assembled: true,
+        icon: None,
+    });
+    toast.standard_visual_foreground = Some(tone);
+    toast.component_geometry = Some(Box::new(ComponentGeometry::Toast {
+        indicator: Some(LayoutBox {
+            x: 13.0,
+            y: 16.0,
+            width: 6.0,
+            height: 6.0,
+        }),
+        glyph: None,
+        title: None,
+        description: None,
+        dismiss: None,
+        elevation: None,
+    }));
+    style_mut(&mut toast).background = Some([0.13, 0.13, 0.13, 1.0]);
+
+    let mut scene = UiScene::new();
+    scene.apply_delta([toast], []);
+    let primitive = |slot| scene.primitive(PrimitiveId { node: id(1), slot });
+    assert!(primitive(0).is_some(), "the surface");
+    assert!(primitive(1).is_some(), "the tone mark");
+    for slot in [2, 3, 4] {
+        assert!(
+            primitive(slot).is_none(),
+            "slot {slot}: the copy and the close button are child nodes"
+        );
+    }
+    assert!(
+        scene
+            .primitives()
+            .all(|primitive| !matches!(primitive.kind, ScenePrimitiveKind::Text { .. })),
+        "no text at all on the toast node"
     );
 }

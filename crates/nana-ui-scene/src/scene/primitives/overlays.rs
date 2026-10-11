@@ -211,18 +211,21 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                 )),
                 (None, _) => {}
             }
-            emit(component_text_primitive(
-                id,
-                2,
-                title,
-                TextHorizontalAlignment::Start,
-                true,
-                node,
-                transform,
-                clips.clone(),
-                opacity,
-                node_order,
-            ));
+            // An assembled toast's copy is child text: it paints none here.
+            if let Some(title) = title {
+                emit(component_text_primitive(
+                    id,
+                    2,
+                    title,
+                    TextHorizontalAlignment::Start,
+                    true,
+                    node,
+                    transform,
+                    clips.clone(),
+                    opacity,
+                    node_order,
+                ));
+            }
             if let Some(description) = description {
                 emit(component_text_primitive(
                     id,

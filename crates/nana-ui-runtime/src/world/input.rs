@@ -126,6 +126,18 @@ impl UiWorld {
             .get(&(document, pointer_id))
             .copied()
     }
+
+    /// The nodes the pointers of `document` are over, one per pointer.
+    pub(crate) fn pointer_hover_targets(
+        &self,
+        document: DocumentId,
+    ) -> impl Iterator<Item = StableNodeId> + '_ {
+        self.input
+            .pointer_hover
+            .iter()
+            .filter(move |((owner, _), _)| *owner == document)
+            .map(|(_, target)| *target)
+    }
 }
 
 impl UiWorld {

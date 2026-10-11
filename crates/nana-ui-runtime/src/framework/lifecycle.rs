@@ -870,17 +870,26 @@ impl AppContext {
 
     /// Arms a mounted toast's dismiss timer, once per mount.
     fn start_toast_timer(&mut self, id: StableNodeId) -> Result<(), FrameworkError> {
-        let timed = self
+        let timeout = self
             .views
             .get(&id)
             .and_then(|view| view.downcast_ref::<crate::Toast>())
-            .is_some_and(|toast| toast.timeout.is_some());
-        if !timed
-            || !self.world.is_mounted(id)
-            || self.component_lifecycle.toast_timers.contains_key(&id)
-        {
+            .and_then(|toast| toast.timeout);
+        let Some(timeout) = timeout else {
+            return Ok(());
+        };
+        if !self.world.is_mounted(id) || self.component_lifecycle.toast_timers.contains_key(&id) {
             return Ok(());
         }
+        self.arm_toast_timer(id, timeout)
+    }
+
+    /// Wake the next frame and count `remaining` from it.
+    fn arm_toast_timer(
+        &mut self,
+        id: StableNodeId,
+        remaining: Duration,
+    ) -> Result<(), FrameworkError> {
         if let Some(spec) =
             crate::toast_timeout_animation(id, self.component_lifecycle.now, Duration::ZERO)
         {
@@ -889,7 +898,7 @@ impl AppContext {
             self.world.commit(mutations)?;
             self.component_lifecycle
                 .toast_timers
-                .insert(id, super::ToastTimer::Arming);
+                .insert(id, super::ToastTimer::Arming { remaining });
         }
         Ok(())
     }
@@ -902,27 +911,97 @@ impl AppContext {
         now: Duration,
     ) -> Result<bool, FrameworkError> {
         match self.component_lifecycle.toast_timers.get(&id).copied() {
-            Some(super::ToastTimer::Arming) => {
-                let timeout = self
-                    .views
-                    .get(&id)
-                    .and_then(|view| view.downcast_ref::<crate::Toast>())
-                    .and_then(|toast| toast.timeout);
-                if let Some(spec) =
-                    timeout.and_then(|timeout| crate::toast_timeout_animation(id, now, timeout))
-                {
+            Some(super::ToastTimer::Arming { remaining }) => {
+                if let Some(spec) = crate::toast_timeout_animation(id, now, remaining) {
                     let mut mutations = MutationQueue::new();
                     mutations.start_animation(spec);
                     self.world.commit(mutations)?;
-                    self.component_lifecycle
-                        .toast_timers
-                        .insert(id, super::ToastTimer::Counting);
+                    self.component_lifecycle.toast_timers.insert(
+                        id,
+                        super::ToastTimer::Counting {
+                            started: now,
+                            remaining,
+                        },
+                    );
                 }
                 Ok(false)
             }
-            Some(super::ToastTimer::Counting) => Ok(true),
-            None => Ok(false),
+            Some(super::ToastTimer::Counting { .. }) => {
+                self.component_lifecycle
+                    .toast_timers
+                    .insert(id, super::ToastTimer::Expired);
+                Ok(true)
+            }
+            Some(super::ToastTimer::Paused { .. } | super::ToastTimer::Expired) | None => Ok(false),
         }
+    }
+
+    /// Hold a toast's dismiss timer, keeping the time it has left. Nothing to
+    /// hold for a toast without a running timer.
+    pub(crate) fn pause_toast_timer(&mut self, id: StableNodeId) -> Result<(), FrameworkError> {
+        let remaining = match self.component_lifecycle.toast_timers.get(&id).copied() {
+            Some(super::ToastTimer::Arming { remaining }) => remaining,
+            Some(super::ToastTimer::Counting { started, remaining }) => {
+                remaining.saturating_sub(self.component_lifecycle.now.saturating_sub(started))
+            }
+            Some(super::ToastTimer::Paused { .. } | super::ToastTimer::Expired) | None => {
+                return Ok(());
+            }
+        };
+        self.stop_toast_timer(id)?;
+        self.component_lifecycle
+            .toast_timers
+            .insert(id, super::ToastTimer::Paused { remaining });
+        Ok(())
+    }
+
+    /// Let a held dismiss timer count on with the time it had left, from the
+    /// next frame. Nothing for one that is not held, or a toast off screen.
+    pub(crate) fn resume_toast_timer(&mut self, id: StableNodeId) -> Result<(), FrameworkError> {
+        let Some(super::ToastTimer::Paused { remaining }) =
+            self.component_lifecycle.toast_timers.get(&id).copied()
+        else {
+            return Ok(());
+        };
+        if !self.world.is_mounted(id) {
+            return Ok(());
+        }
+        self.arm_toast_timer(id, remaining)
+    }
+
+    /// Run or hold `id`'s dismiss timer as the toast's place says: an
+    /// assembled toast holds it while a pointer is over it or focus is
+    /// inside it.
+    pub(crate) fn sync_toast_timer(&mut self, id: StableNodeId) -> Result<(), FrameworkError> {
+        if self.toast_timer_runs(id) {
+            self.resume_toast_timer(id)
+        } else {
+            self.pause_toast_timer(id)
+        }
+    }
+
+    fn toast_timer_runs(&self, id: StableNodeId) -> bool {
+        !(self.pointer_within(id) || self.focus_inside(id))
+    }
+
+    /// Whether a pointer of `root`'s document is over it or a node inside it.
+    pub(crate) fn pointer_within(&self, root: StableNodeId) -> bool {
+        let Some(document) = self.world.document_of(root) else {
+            return false;
+        };
+        self.world
+            .pointer_hover_targets(document)
+            .any(|target| self.world.is_descendant_or_self(target, root))
+    }
+
+    /// Whether `root`'s document has focus on it or inside it.
+    pub(crate) fn focus_inside(&self, root: StableNodeId) -> bool {
+        let Some(document) = self.world.document_of(root) else {
+            return false;
+        };
+        self.world
+            .focused(document)
+            .is_some_and(|focused| self.world.is_descendant_or_self(focused, root))
     }
 
     fn stop_toast_timer(&mut self, id: StableNodeId) -> Result<(), FrameworkError> {

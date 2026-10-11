@@ -8,12 +8,14 @@
 //! its title and description are set are design decisions, so a theme
 //! states them and a toast only names its tone and its copy.
 //!
-//! The rest of the recipe is for the notices an application builds out of
-//! toasts: the progress row a long task shows under its copy, the kind and
-//! size of its action buttons, how a toast comes and goes, and how a stack
-//! closes up behind one that leaves. The leaf `Toast` sets its title and its
+//! The rest of the recipe is for notices: the progress row a long task shows
+//! under its copy, the kind and size of its action buttons, how many lines
+//! the copy wraps to, how a toast comes and goes, and how a stack closes up
+//! behind one that leaves. The leaf `Toast` sets its title and its
 //! description on one line each and plays no motion of its own, so it reads
-//! the look and leaves those to whatever stacks it.
+//! only the look; an assembled toast (`AppContext::assemble_toast`) reads
+//! the copy, progress and action rows, and a `ToastStack` the motion and the
+//! stack gap.
 
 use super::dialog::{DialogInsets, DialogTransition};
 use super::recipe::RecipeText;
@@ -88,11 +90,15 @@ pub struct ToastProgressRecipe {
     pub percent: RecipeText,
     /// The percentage's colour.
     pub percent_role: SemanticColorRole,
+    /// The narrowest a toast showing progress gets, so its bar keeps its
+    /// length while the copy beside it changes.
+    pub min_width: f32,
 }
 
 impl ToastProgressRecipe {
     /// A 3px accent bar on the soft border colour, 6 under the copy, with a
-    /// 12px medium percentage in the muted colour.
+    /// 12px medium percentage in the muted colour, in a toast at least 240
+    /// wide.
     pub const DEFAULT: Self = Self {
         height: 3.0,
         track: SemanticColorRole::BorderSoft,
@@ -101,6 +107,7 @@ impl ToastProgressRecipe {
         show_percent: true,
         percent: RecipeText::new(type_scale::META, Some(type_scale::MEDIUM)),
         percent_role: SemanticColorRole::Muted,
+        min_width: 240.0,
     };
 }
 
@@ -220,7 +227,7 @@ impl ToastRecipe {
     };
 
     /// The recipe's plain lengths with their token names, for validation.
-    pub(super) const fn lengths(&self) -> [(&'static str, f32); 9] {
+    pub(super) const fn lengths(&self) -> [(&'static str, f32); 10] {
         [
             ("toast.padding.top", self.padding.top),
             ("toast.padding.bottom", self.padding.bottom),
@@ -230,6 +237,7 @@ impl ToastRecipe {
             ("toast.copy_gap", self.copy_gap),
             ("toast.progress.height", self.progress.height),
             ("toast.progress.top_gap", self.progress.top_gap),
+            ("toast.progress.min_width", self.progress.min_width),
             ("toast.stack_gap", self.stack_gap),
         ]
     }
@@ -294,6 +302,7 @@ mod tests {
         assert!(progress.show_percent);
         assert_eq!(progress.percent, RecipeText::new(12.0, Some(500)));
         assert_eq!(progress.percent_role, SemanticColorRole::Muted);
+        assert_eq!(progress.min_width, 240.0);
 
         let motion = recipe.motion;
         assert_eq!(

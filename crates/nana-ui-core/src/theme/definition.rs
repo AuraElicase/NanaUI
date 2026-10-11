@@ -1907,6 +1907,17 @@ mod tests {
         ));
         assert!(matches!(
             refuse(ToastRecipe {
+                progress: ToastProgressRecipe {
+                    min_width: -240.0,
+                    ..ToastProgressRecipe::DEFAULT
+                },
+                ..ToastRecipe::DEFAULT
+            }),
+            Err(ThemeCompileError::NegativeLength { token, .. })
+                if token == "toast.progress.min_width"
+        ));
+        assert!(matches!(
+            refuse(ToastRecipe {
                 stack_gap: -8.0,
                 ..ToastRecipe::DEFAULT
             }),
