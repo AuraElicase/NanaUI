@@ -51,6 +51,10 @@ settings_row("静音").control(switch(""))
 
 `settings_row` 没有模板标签。分组里哪一行是首行、末行，由你按数据算好再绑定。
 
+## 播报变化
+
+一摞提示、一条会自己走的进度，读屏要在它们变的时候念出来，这就是 `aria-live`。由放它们的组合控件设：`MutationQueue::set_live(节点, Some(AccessibilityLive::Polite))`。`Polite` 等用户空下来再念，`Assertive` 立刻打断正在念的，`Off` 不念；`None` 去掉这项设置，回到平台按角色给的默认。和行标签一样，设置放在 `UiWorld` 里，不是节点自己的 `AccessibilityState`，节点重新投影自己的状态不会把它冲掉，节点销毁时一起去掉。`visibility: hidden` 的容器和网页上一样不算播报区，显示出来又是。AccessKit 宿主把它投成节点的 `live`。
+
 ## 隐藏的还在不在树上
 
 `UiWorld::project_accessibility` 保留连接可见控件所需的结构祖先。`visibility: hidden` 的容器输出中性的 Generic：它自己的标签、值、描述、原来的角色和交互状态都不对外提供。显式 `visibility: visible` 的孩子继续有完整的父子链和语义。隐藏的叶子，以及不生成布局盒的子树，不进入投影。重新可见之后，恢复的是当前业务状态里的语义。

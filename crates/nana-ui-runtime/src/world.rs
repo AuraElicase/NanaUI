@@ -47,13 +47,13 @@ use nana_ui_core::TooltipConfig;
 use nana_ui_core::{GraphPoint, GraphPortKind, GraphPortSide, GraphRect, GraphSize, cubic_point};
 
 use crate::{
-    AccessibilityDelta, AccessibilityNode, AccessibilityRole, AccessibilityState, AnimationFrame,
-    AnimationId, AnimationSpec, ComponentTypeId, ComputedStyle, CustomRenderNode, EventListeners,
-    EventRoute, ExtractedNode, ExtractedTextSpan, HighlightRequest, ImeComposition,
-    InteractionState, LayoutBox, LayoutInput, MotionWorkCounters, MountState, MutationQueue,
-    NodeStyle, OverlayHostState, PointerCaptureChange, ScrollMetrics, ScrollOffset, StandardVisual,
-    TextContent, TextMetrics, TextPresentation, TextPresenter, TextShaper, TextVerticalAlignment,
-    UiMutation, WorkCounters,
+    AccessibilityDelta, AccessibilityLive, AccessibilityNode, AccessibilityRole,
+    AccessibilityState, AnimationFrame, AnimationId, AnimationSpec, ComponentTypeId, ComputedStyle,
+    CustomRenderNode, EventListeners, EventRoute, ExtractedNode, ExtractedTextSpan,
+    HighlightRequest, ImeComposition, InteractionState, LayoutBox, LayoutInput, MotionWorkCounters,
+    MountState, MutationQueue, NodeStyle, OverlayHostState, PointerCaptureChange, ScrollMetrics,
+    ScrollOffset, StandardVisual, TextContent, TextMetrics, TextPresentation, TextPresenter,
+    TextShaper, TextVerticalAlignment, UiMutation, WorkCounters,
     animation::ActiveAnimation,
     components::{
         EmptyStateTextPresentation, ModalTextPresentation, TextColorSwatchSpan,
@@ -892,6 +892,9 @@ pub struct UiWorld {
     /// `label -> controls` it names: projected again when its text changes,
     /// and let go of with it.
     labels: HashMap<StableNodeId, HashSet<StableNodeId>, BuildIdHasher>,
+    /// Live regions and how they announce, as the composites that own them
+    /// set them ([`MutationQueue::set_live`]).
+    live_regions: HashMap<StableNodeId, AccessibilityLive, BuildIdHasher>,
     /// Nodes visited by mutation validation since the last drain, summed over
     /// every commit the next frame will consume. Validation must scale with the
     /// batch, not the retained world; this is the sentinel for that invariant.
@@ -1034,6 +1037,7 @@ impl UiWorld {
             overlay_dependents: HashMap::default(),
             labelled_by: HashMap::default(),
             labels: HashMap::default(),
+            live_regions: HashMap::default(),
             validation_nodes_scanned: 0,
             palette_epoch: 1,
             structural_change_parents: Vec::new(),
@@ -3065,6 +3069,24 @@ impl UiWorld {
                 if self.nodes.contains(control) {
                     self.mark(control, DirtyMask::ACCESSIBILITY);
                 }
+            }
+        }
+    }
+
+    /// How changes inside `id` are announced, when a composite made it a
+    /// live region; see [`MutationQueue::set_live`].
+    pub fn live(&self, id: StableNodeId) -> Option<AccessibilityLive> {
+        self.live_regions.get(&id).copied()
+    }
+
+    /// Make `id` a live region, or stop it being one.
+    fn set_live(&mut self, id: StableNodeId, live: Option<AccessibilityLive>) {
+        match live {
+            Some(live) => {
+                self.live_regions.insert(id, live);
+            }
+            None => {
+                self.live_regions.remove(&id);
             }
         }
     }

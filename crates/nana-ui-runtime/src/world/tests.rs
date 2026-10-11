@@ -9982,6 +9982,143 @@ fn accessibility_state_hidden_removes_and_restores_descendants() {
     assert_eq!(visible.updated[0].children, vec![node(2)]);
 }
 
+/// A live region is the composite's setting, not the node's state: it
+/// reaches the projection, outlives the node projecting its own state,
+/// re-projects only that node, is dropped by `None`, and goes with the node.
+#[test]
+fn a_live_region_belongs_to_its_composite_and_goes_with_its_node() {
+    use crate::AccessibilityLive::{Assertive, Off, Polite};
+    let mut world = UiWorld::new();
+    let mut queue = MutationQueue::new();
+    queue.create(node(1), document(1), NodeKind::Document);
+    queue.create(
+        node(2),
+        document(1),
+        NodeKind::Element { tag: "div".into() },
+    );
+    queue.insert(node(1), node(2), None);
+    world.commit(queue).unwrap();
+    let work = world.take_system_work();
+    world.resolve_styles(&work.style).unwrap();
+    let live_of = |world: &UiWorld| {
+        world
+            .project_accessibility_nodes(&[node(2)])
+            .pop()
+            .expect("projected")
+            .live
+    };
+    assert_eq!(live_of(&world), None);
+
+    let mut announce = MutationQueue::new();
+    announce.set_live(node(2), Some(Polite));
+    world.commit(announce).unwrap();
+    assert_eq!(world.take_system_work().accessibility, vec![node(2)]);
+    assert_eq!(world.live(node(2)), Some(Polite));
+    assert_eq!(live_of(&world), Some(Polite));
+
+    let mut own_state = MutationQueue::new();
+    own_state.set_accessibility(
+        node(2),
+        AccessibilityState {
+            role: AccessibilityRole::Status,
+            label: Some(Arc::from("Saved")),
+            ..AccessibilityState::default()
+        },
+    );
+    world.commit(own_state).unwrap();
+    assert_eq!(
+        live_of(&world),
+        Some(Polite),
+        "the node's own state does not clear the composite's setting"
+    );
+
+    let _ = world.take_system_work();
+    let mut same = MutationQueue::new();
+    same.set_live(node(2), Some(Polite));
+    world.commit(same).unwrap();
+    assert!(world.take_system_work().accessibility.is_empty());
+
+    let mut louder = MutationQueue::new();
+    louder.set_live(node(2), Some(Assertive));
+    world.commit(louder).unwrap();
+    assert_eq!(live_of(&world), Some(Assertive));
+
+    let mut quiet = MutationQueue::new();
+    quiet.set_live(node(2), None);
+    world.commit(quiet).unwrap();
+    assert_eq!(world.live(node(2)), None);
+    assert_eq!(live_of(&world), None);
+
+    let mut again = MutationQueue::new();
+    again.set_live(node(2), Some(Off));
+    world.commit(again).unwrap();
+    assert_eq!(live_of(&world), Some(Off));
+    let mut gone = MutationQueue::new();
+    gone.despawn_subtree(node(2));
+    world.commit(gone).unwrap();
+    assert_eq!(world.live(node(2)), None);
+    assert!(
+        world.live_regions.is_empty(),
+        "the setting went with the node"
+    );
+
+    let mut missing = MutationQueue::new();
+    missing.set_live(node(9), Some(Polite));
+    assert!(world.commit(missing).is_err(), "only a node can be live");
+}
+
+/// A `visibility: hidden` container kept only to hold a visible child is
+/// neutral: it is no live region while hidden, and is one again when shown,
+/// because the setting stayed with the composite.
+#[test]
+fn a_hidden_container_is_no_live_region() {
+    use nana_ui_core::VisibilitySpec;
+    let mut world = UiWorld::new();
+    let mut create = MutationQueue::new();
+    create.create(node(1), document(1), NodeKind::Document);
+    create.create(
+        node(2),
+        document(1),
+        NodeKind::Element {
+            tag: "notices".into(),
+        },
+    );
+    create.create(
+        node(3),
+        document(1),
+        NodeKind::Element {
+            tag: "notice".into(),
+        },
+    );
+    create.insert(node(1), node(2), None);
+    create.insert(node(2), node(3), None);
+    let mut hidden = NodeStyle::default();
+    Arc::make_mut(&mut hidden.layout).paint.visibility = Some(VisibilitySpec::Hidden);
+    create.set_style(node(2), hidden);
+    let mut shown = NodeStyle::default();
+    Arc::make_mut(&mut shown.layout).paint.visibility = Some(VisibilitySpec::Visible);
+    create.set_style(node(3), shown);
+    create.set_live(node(2), Some(crate::AccessibilityLive::Polite));
+    world.commit(create).unwrap();
+    let work = world.take_system_work();
+    world.resolve_styles(&work.style).unwrap();
+    let live_of = |world: &UiWorld| {
+        world
+            .project_accessibility_nodes(&[node(2)])
+            .pop()
+            .expect("kept as structure for its visible child")
+            .live
+    };
+    assert_eq!(live_of(&world), None);
+
+    let mut show = MutationQueue::new();
+    show.set_style(node(2), NodeStyle::default());
+    world.commit(show).unwrap();
+    let work = world.take_system_work();
+    world.resolve_styles(&work.style).unwrap();
+    assert_eq!(live_of(&world), Some(crate::AccessibilityLive::Polite));
+}
+
 /// #59: an ancestor's writing mode reaches its text's accessibility node, so
 /// assistive technology walks a column top to bottom. The text itself does
 /// not change or move, so only the inherited writing context can say so.
