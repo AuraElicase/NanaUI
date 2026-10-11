@@ -146,22 +146,35 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                 node_order,
             ));
         }
-        Some(ComponentGeometry::ListItem {
-            detail: Some(region),
-            ..
-        }) => {
-            emit(component_text_primitive(
-                id,
-                3,
-                region,
-                TextHorizontalAlignment::End,
-                true,
-                node,
-                transform,
-                clips.clone(),
-                opacity,
-                node_order,
-            ));
+        Some(ComponentGeometry::ListItem { note, detail, .. }) => {
+            if let Some(region) = note {
+                emit(component_text_primitive(
+                    id,
+                    4,
+                    region,
+                    TextHorizontalAlignment::Start,
+                    true,
+                    node,
+                    transform,
+                    clips.clone(),
+                    opacity,
+                    node_order,
+                ));
+            }
+            if let Some(region) = detail {
+                emit(component_text_primitive(
+                    id,
+                    3,
+                    region,
+                    TextHorizontalAlignment::End,
+                    true,
+                    node,
+                    transform,
+                    clips.clone(),
+                    opacity,
+                    node_order,
+                ));
+            }
         }
         Some(ComponentGeometry::SelectionOption {
             icon,
@@ -553,6 +566,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
         }
         Some(ComponentGeometry::Select {
             label,
+            hint,
             handle,
             handle_color,
             menu,
@@ -570,6 +584,21 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                 opacity,
                 node_order,
             ));
+            if let Some(hint) = hint {
+                // Slots 3..=6 are the handle's strokes.
+                emit(component_text_primitive(
+                    id,
+                    7,
+                    hint,
+                    TextHorizontalAlignment::Start,
+                    true,
+                    node,
+                    transform,
+                    clips.clone(),
+                    opacity,
+                    node_order,
+                ));
+            }
             paint_select_handle(
                 emit,
                 id,
@@ -611,11 +640,10 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                     },
                 });
                 for (index, option) in menu.options.iter().enumerate() {
-                    let index = u64::try_from(index).unwrap_or(u64::MAX);
                     if option.checked {
                         let mut mark = component_text_primitive(
                             id,
-                            70u64.saturating_add(index),
+                            collection_slot(SELECT_MENU_MARKS, index),
                             &nana_ui_runtime::ComponentTextRegion {
                                 bounds: nana_ui_runtime::LayoutBox {
                                     x: option.bounds.x,
@@ -649,7 +677,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                                 z_index: menu_z,
                                 document_order: node_order,
                             },
-                            10u64.saturating_add(index),
+                            collection_slot(SELECT_MENU_BACKGROUNDS, index),
                             scene_rect(option.bounds),
                             VisualQuadStyle {
                                 background: Some(background),
@@ -666,7 +694,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                     }
                     let mut label = component_text_primitive(
                         id,
-                        40u64.saturating_add(index),
+                        collection_slot(SELECT_MENU_LABELS, index),
                         &option.label,
                         TextHorizontalAlignment::Start,
                         true,
@@ -678,6 +706,22 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                     );
                     label.z_index = menu_z;
                     emit(label);
+                    if let Some(hint) = &option.hint {
+                        let mut hint = component_text_primitive(
+                            id,
+                            collection_slot(SELECT_MENU_HINTS, index),
+                            hint,
+                            TextHorizontalAlignment::End,
+                            true,
+                            node,
+                            transform,
+                            Arc::clone(parent_clips),
+                            opacity,
+                            node_order,
+                        );
+                        hint.z_index = menu_z;
+                        emit(hint);
+                    }
                 }
             }
         }

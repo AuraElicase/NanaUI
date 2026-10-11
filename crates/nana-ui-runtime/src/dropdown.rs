@@ -437,6 +437,7 @@ impl ComponentView for Dropdown {
         let (label, placeholder) = self.display_label();
         let visual = StandardVisual::Select {
             label: Arc::clone(&label),
+            hint: None,
             placeholder,
             size: self.size,
             opened: self.opened && !self.inactive(),

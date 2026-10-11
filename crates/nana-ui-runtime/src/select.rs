@@ -17,12 +17,17 @@ const MENU_PAD: f32 = crate::popover::MENU_SURFACE_PADDING;
 use crate::popover::MENU_ITEM_GAP;
 /// Width of the leading check lane in a drop-down menu row.
 const MENU_CHECK_RESERVE: f32 = nana_ui_core::type_scale::LINE;
+/// Between a label and its hint, in the field and in a menu row.
+pub(crate) const HINT_GAP: f32 = nana_ui_core::space::MD;
 
 /// Option identity stays application-owned. Disabled options remain visible.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectOption {
     pub value: Arc<str>,
     pub label: Arc<str>,
+    /// Quieter text that goes with the label — the original beside a
+    /// translated name. See [`Self::hint`].
+    pub hint: Option<Arc<str>>,
     pub disabled: bool,
 }
 
@@ -31,8 +36,19 @@ impl SelectOption {
         Self {
             value: value.into(),
             label: label.into(),
+            hint: None,
             disabled: false,
         }
+    }
+
+    /// Quieter text drawn after the label, in the menu row at its end and in
+    /// the field after the label of the option it shows, and said after the
+    /// label. It gives way first when the width runs out. An empty hint is
+    /// none.
+    pub fn hint(mut self, hint: impl Into<Arc<str>>) -> Self {
+        let hint = hint.into();
+        self.hint = (!hint.is_empty()).then_some(hint);
+        self
     }
 
     pub fn disabled(mut self, disabled: bool) -> Self {
@@ -178,6 +194,12 @@ impl Select {
             self.placeholder.clone().unwrap_or_else(|| Arc::from("")),
             true,
         )
+    }
+
+    /// The hint of the option the field shows; none over a placeholder.
+    pub fn display_hint(&self) -> Option<Arc<str>> {
+        self.selected_index()
+            .and_then(|index| self.options[index].hint.clone())
     }
 
     pub fn toggle_open(&mut self) -> bool {
@@ -362,8 +384,10 @@ impl crate::ComponentView for Select {
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let (label, placeholder) = self.display_label();
+        let hint = self.display_hint();
         let visual = StandardVisual::Select {
             label: Arc::clone(&label),
+            hint: hint.clone(),
             placeholder,
             size: self.size,
             opened: self.opened && !self.inactive(),
@@ -375,7 +399,7 @@ impl crate::ComponentView for Select {
                 .map(|option| SelectOptionData {
                     key: None,
                     label: Arc::clone(&option.label),
-                    hint: None,
+                    hint: option.hint.clone(),
                     disabled: option.disabled,
                     checked: false,
                     icon: None,
@@ -412,9 +436,13 @@ impl crate::ComponentView for Select {
                 // Its own name first; else named by its field (a settings
                 // row's label, see `MutationQueue::set_labelled_by`), or by
                 // the option it shows through its text when nothing names
-                // it. The option shown is its value either way.
+                // it. The option shown is its value either way, its hint
+                // said after it even when the field has no room to draw it.
                 label: self.label.clone(),
-                value: (!placeholder).then_some(label),
+                value: (!placeholder).then(|| match &hint {
+                    Some(hint) => Arc::from(format!("{label} {hint}")),
+                    None => label,
+                }),
                 disabled: self.inactive(),
                 busy: self.loading,
                 invalid: self.invalid,
@@ -436,6 +464,7 @@ impl crate::ComponentView for Select {
 pub(crate) fn select_geometry(
     bounds: LayoutBox,
     label: &Arc<str>,
+    hint: Option<&Arc<str>>,
     placeholder: bool,
     size: ControlSize,
     opened: bool,
@@ -448,6 +477,7 @@ pub(crate) fn select_geometry(
     viewport: Option<crate::LayoutViewport>,
     checkable: bool,
     padding: nana_ui_core::PaddingSpec,
+    measure: crate::text_width::ChromeTextMeasure<'_>,
 ) -> ComponentGeometry {
     let border = source.layout.resolved_border_width();
     let content = LayoutBox {
@@ -474,21 +504,57 @@ pub(crate) fn select_geometry(
             metrics,
             viewport,
             checkable,
+            measure,
         )
     });
+    let mut label_box = LayoutBox {
+        x: content.x,
+        y: content.y,
+        width: label_width,
+        height: content.height,
+    };
+    // The shown option's hint follows its label, as quiet as a menu row's,
+    // and gives way first: it takes only what the label leaves.
+    let hint = hint
+        .filter(|hint| !placeholder && !hint.is_empty())
+        .and_then(|hint| {
+            let hint_size = size.caption_size();
+            let label_natural = measure.width(label, size.text_size(), None);
+            let hint_natural = measure.width(hint, hint_size, None);
+            let label_width = label_natural.min(label_box.width);
+            let x = label_box.x + label_width + HINT_GAP;
+            let room = label_box.x + label_box.width - x;
+            if room < hint_natural.min(nana_ui_core::space::XXXL) {
+                return None;
+            }
+            label_box.width = label_width;
+            Some(ComponentTextRegion {
+                bounds: LayoutBox {
+                    x,
+                    y: content.y,
+                    width: hint_natural.min(room),
+                    height: content.height,
+                },
+                content: Arc::clone(hint).into(),
+                // A field that has gone faint takes its hint with it.
+                color: Some(if text_color == palette.faint.as_rgba_array() {
+                    text_color
+                } else {
+                    palette.muted.as_rgba_array()
+                }),
+                font_size: hint_size,
+                font_weight: None,
+            })
+        });
     ComponentGeometry::Select {
         label: ComponentTextRegion {
-            bounds: LayoutBox {
-                x: content.x,
-                y: content.y,
-                width: label_width,
-                height: content.height,
-            },
+            bounds: label_box,
             content: Arc::clone(label).into(),
             color: Some(text_color),
             font_size: size.text_size(),
             font_weight: None,
         },
+        hint,
         handle: LayoutBox {
             x: content.x + label_width,
             y: content.y,
@@ -512,6 +578,7 @@ fn select_menu_geometry(
     metrics: nana_ui_core::ThemeMetrics,
     viewport: Option<crate::LayoutViewport>,
     checkable: bool,
+    measure: crate::text_width::ChromeTextMeasure<'_>,
 ) -> crate::SelectMenuGeometry {
     let item_height = size.height_in(metrics);
     let count = options.len().max(1) as f32;
@@ -541,17 +608,18 @@ fn select_menu_geometry(
                 width: (surface.width - MENU_PAD * 2.0).max(0.0),
                 height: item_height,
             };
+            let mut label_box = LayoutBox {
+                x: bounds.x + size.padding_x_in(metrics) + check_reserve,
+                y: bounds.y,
+                width: (bounds.width - size.padding_x_in(metrics) * 2.0 - check_reserve).max(0.0),
+                height: bounds.height,
+            };
+            let hint = menu_option_hint(option, &mut label_box, size, palette, measure);
             crate::SelectOptionGeometry {
                 bounds,
                 label: ComponentTextRegion {
-                    bounds: LayoutBox {
-                        x: bounds.x + size.padding_x_in(metrics) + check_reserve,
-                        y: bounds.y,
-                        width: (bounds.width - size.padding_x_in(metrics) * 2.0 - check_reserve)
-                            .max(0.0),
-                        height: bounds.height,
-                    },
-                    content: menu_option_label(option).into(),
+                    bounds: label_box,
+                    content: Arc::clone(&option.label).into(),
                     color: Some(if option.disabled {
                         palette.faint.as_rgba_array()
                     } else {
@@ -560,6 +628,7 @@ fn select_menu_geometry(
                     font_size: size.text_size(),
                     font_weight: None,
                 },
+                hint,
                 selected,
                 checked: option.checked,
                 disabled: option.disabled,
@@ -589,6 +658,48 @@ fn select_menu_geometry(
     }
 }
 
+/// A menu row's hint at its end, a step smaller and quieter than the label,
+/// as an action menu draws its own. The label keeps its natural width first;
+/// the hint takes what is left and ellipsizes, and under the smallest
+/// readable width it is not drawn. `label_box` gives up the hint's share.
+fn menu_option_hint(
+    option: &SelectOptionData,
+    label_box: &mut LayoutBox,
+    size: ControlSize,
+    palette: &SemanticPalette,
+    measure: crate::text_width::ChromeTextMeasure<'_>,
+) -> Option<ComponentTextRegion> {
+    let hint = option.hint.as_ref().filter(|hint| !hint.is_empty())?;
+    let hint_size = size.caption_size();
+    let label_natural = measure.width(&option.label, size.text_size(), None);
+    let hint_natural = measure.width(hint, hint_size, None);
+    let room = label_box.width - label_natural.min(label_box.width) - HINT_GAP;
+    if room < hint_natural.min(nana_ui_core::space::XXXL) {
+        return None;
+    }
+    let width = hint_natural.min(room);
+    let right = label_box.x + label_box.width;
+    label_box.width = (label_box.width - width - HINT_GAP).max(0.0);
+    Some(ComponentTextRegion {
+        bounds: LayoutBox {
+            x: right - width,
+            y: label_box.y,
+            width,
+            height: label_box.height,
+        },
+        content: Arc::clone(hint).into(),
+        color: Some(if option.disabled {
+            palette.faint.as_rgba_array()
+        } else {
+            palette.muted.as_rgba_array()
+        }),
+        font_size: hint_size,
+        font_weight: None,
+    })
+}
+
+/// A label and its hint as one line, where only one text fits: a searchable
+/// field showing its choice.
 pub(crate) fn menu_option_label(option: &SelectOptionData) -> Arc<str> {
     match option.hint.as_ref() {
         Some(hint) if !hint.is_empty() => Arc::from(format!("{}  ·  {hint}", option.label)),
@@ -905,6 +1016,41 @@ mod tests {
     }
 
     #[test]
+    fn a_hint_goes_with_its_option_into_the_visual_and_the_value() {
+        let mut context = AppContext::new();
+        let select = context
+            .create_component(
+                document(),
+                Select::new(Some("x")).options([
+                    SelectOption::new("x", "头部左右转").hint("FaceAngleX"),
+                    SelectOption::new("none", "不绑定").hint(""),
+                ]),
+            )
+            .unwrap();
+        let id = select.stable_id();
+        let Some(StandardVisual::Select { hint, options, .. }) =
+            context.world().standard_visual(id)
+        else {
+            panic!("select visual");
+        };
+        assert_eq!(hint.as_deref(), Some("FaceAngleX"), "the shown option's");
+        assert_eq!(options[0].hint.as_deref(), Some("FaceAngleX"));
+        assert_eq!(options[1].hint, None, "an empty hint is none");
+        // Said after the label, whether or not the field has room to draw it.
+        assert_eq!(
+            context.world().accessibility(id).unwrap().value.as_deref(),
+            Some("头部左右转 FaceAngleX")
+        );
+        context
+            .update_component(select, |select, _| select.value = Some("none".into()))
+            .unwrap();
+        assert_eq!(
+            context.world().accessibility(id).unwrap().value.as_deref(),
+            Some("不绑定")
+        );
+    }
+
+    #[test]
     fn select_toggle_and_commit_skip_disabled_options() {
         let mut select = sample();
         assert!(select.toggle_open());
@@ -1114,6 +1260,58 @@ mod tests {
         assert_eq!(label.bounds.width, widest_label);
         assert_eq!(handle.width, HANDLE_WIDTH);
         assert_eq!(handle.x, label.bounds.x + label.bounds.width);
+    }
+
+    #[test]
+    fn a_hint_follows_the_field_label_and_ends_its_menu_row_quieter() {
+        let mut narrow = Select::new(Some("x")).options([
+            SelectOption::new("x", "Head").hint("FaceAngleX"),
+            SelectOption::new("y", "Tilt"),
+        ]);
+        Arc::make_mut(&mut narrow.style.layout).width = Some(LengthSpec::Px(72.0));
+        let (context, selects, _) = stacked(vec![
+            Select::new(Some("x"))
+                .options([
+                    SelectOption::new("x", "Head").hint("FaceAngleX"),
+                    SelectOption::new("y", "Tilt"),
+                ])
+                .opened(true),
+            narrow,
+        ]);
+        let muted = Some(nana_ui_core::SemanticPalette::dark().muted.as_rgba_array());
+        let Some(ComponentGeometry::Select {
+            label, hint, menu, ..
+        }) = context.world().component_geometry(selects[0].stable_id())
+        else {
+            panic!("select geometry");
+        };
+        let hint = hint
+            .as_ref()
+            .expect("the field draws the shown option's hint");
+        assert!(
+            label.bounds.x + label.bounds.width < hint.bounds.x,
+            "after its label"
+        );
+        assert!(hint.font_size < label.font_size, "a step smaller");
+        assert_eq!(hint.color, muted);
+        let menu = menu.as_ref().expect("an open select draws its menu");
+        let row = &menu.options[0];
+        let row_hint = row.hint.as_ref().expect("a row with room draws its hint");
+        assert!(row.label.bounds.x + row.label.bounds.width < row_hint.bounds.x);
+        assert!(row_hint.bounds.x + row_hint.bounds.width <= row.bounds.x + row.bounds.width);
+        assert_eq!(row_hint.color, muted);
+        assert_eq!(
+            &*row.label.content, "Head",
+            "the label no longer carries it"
+        );
+        assert!(menu.options[1].hint.is_none());
+        // A field with no room left for the hint leaves it out.
+        let Some(ComponentGeometry::Select { hint, .. }) =
+            context.world().component_geometry(selects[1].stable_id())
+        else {
+            panic!("select geometry");
+        };
+        assert!(hint.is_none());
     }
 
     #[test]

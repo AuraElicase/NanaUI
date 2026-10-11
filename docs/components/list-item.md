@@ -32,6 +32,14 @@ list_item("设置").detail("外观").selected(current).on_activate(open)
 
 `detail` 空字符串表示不画行尾补充。它不增加行高。
 
+## 紧跟主文本的次要文字
+
+`note` 画在主文本后面，和 `detail` 同字号、同取色（随行的状态变，键盘聚焦时跟着主文本换色），同样不改变行高。适合主文本是译名、`note` 写原文这类成对的名字：`list_item("角度X").note("ParamAngleX")`。
+
+宽度先给主文本和行尾的 `detail`，`note` 只用两者之间剩下的地方，放不下时省略；剩下的连一小段都不够时不画。挂了 content 槽时和 `detail` 一样不画。
+
+无障碍名依次是 `label`、`note`、`detail`，画不下的 `note` 也照样读出。
+
 ## 选中
 
 `selected` 由应用写。激活只报告点了这一行，不改选中。无障碍角色是 ListItem，`selected` 映射选中，`disabled` 映射禁用。
@@ -52,11 +60,12 @@ list_item("设置").detail("外观").selected(current).on_activate(open)
 
 ## 属性
 
-字段是 `label: String`、`detail: String`、`selected: bool`、`disabled: bool`、`role: ListItemRole`、`has_popup: bool`。没有 `model`。选中不由控件自己翻。
+字段是 `label: String`、`note: String`、`detail: String`、`selected: bool`、`disabled: bool`、`role: ListItemRole`、`has_popup: bool`。没有 `model`。选中不由控件自己翻。
 
 | 属性 | 类型 | 说明 |
 | --- | --- | --- |
 | `label` | `String` | 构造参数，也是可读的主文本。子文本写入同一字段 |
+| `note` | `String` | 空字符串表示没有。非空、又没有 content 槽时紧跟主文本画成次要文字，放不下时省略或不画，无障碍名照样带上 |
 | `detail` | `String` | 空字符串表示不画行尾补充，不增加行高。非空、又没有 content 槽时画在行尾 |
 | `selected` | `bool` | 由应用写。选中不由控件自己翻。无障碍映射选中 |
 | `disabled` | `bool` | 为真时不发 `Activate`。无障碍映射禁用 |

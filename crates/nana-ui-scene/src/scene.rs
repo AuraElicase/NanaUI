@@ -168,6 +168,14 @@ const TEXT_ATOM_LABELS: u32 = 5;
 const TEXT_INLINE_OBJECTS: u32 = 7;
 /// A rich text editor's caret, over its glyphs.
 const TEXT_EDITOR_CARET: u32 = 8;
+/// An open select menu's rows, one slot per option in each namespace. A
+/// long menu outgrew fixed slots: the highlight of its 31st row took the
+/// first row's label slot. The namespaces paint in this order, so a row's
+/// highlight stays under its texts.
+const SELECT_MENU_BACKGROUNDS: u32 = 9;
+const SELECT_MENU_MARKS: u32 = 10;
+const SELECT_MENU_LABELS: u32 = 11;
+const SELECT_MENU_HINTS: u32 = 12;
 /// A rich text editor's selection rectangles share the document selection's
 /// paint layer (under the glyphs) from this index on.
 const RICH_EDITOR_SELECTION_BASE: usize = 1 << 16;

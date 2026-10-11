@@ -951,6 +951,7 @@ pub(crate) fn context_menu_geometry(
                     font_size: size.text_size(),
                     font_weight: Some(500),
                 },
+                hint: None,
                 selected,
                 checked: option.checked,
                 disabled: option.disabled,

@@ -362,7 +362,9 @@ impl ComponentView for SearchDropdown {
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let (label, placeholder) = self.display_label();
         let visual = StandardVisual::Select {
+            // The field shows what it searches, label and hint as one line.
             label: Arc::clone(&label),
+            hint: None,
             placeholder,
             size: self.size,
             opened: self.opened && !self.inactive(),

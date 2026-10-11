@@ -30,6 +30,8 @@ select().placeholder("语言").options(options).model(language)
 
 选项用 `SelectOption::new(value, label)`，两个参数都进 `Arc<str>`。禁用某一项是 `SelectOption::new("rust", "Rust").disabled(true)`。禁用的选项仍留在打开的菜单里。
 
+`.hint(text)` 给选项配一段次要文字，例如译名后面的原文：`SelectOption::new("x", "头部左右转").hint("FaceAngleX")`。菜单里它在这一行的末尾，比标签小一号、用次要色；收起的框里跟在所选项的标签后面。宽度先给标签，提示放不下时省略，连一小段都放不下就不画。读屏把它读在标签之后，画不下时也读。空字符串就是没有。
+
 `options` 可以是 `Vec<SelectOption>`，也可以是这个类型的信号。这是单值字段，不是多选。
 
 ## 加载、禁用和名字
@@ -95,7 +97,7 @@ select().fit_options(true).options(repos).model(repo)
 
 :::
 
-这时框里的内容宽取所有选项里最宽的一项（没有选中、显示占位文字时，还有占位文字），再加上箭头位；框宽是它加上内边距和边框。换一个选项框宽不变，选项增删时跟着变。
+这时框里的内容宽取所有选项里最宽的一项（没有选中、显示占位文字时，还有占位文字），再加上箭头位；框宽是它加上内边距和边框。带提示的选项连提示一起量，量时按标签的字号算，宁宽勿窄。换一个选项框宽不变，选项增删时跟着变。
 
 `fit_options` 只决定下拉框自己的内容宽，宽度由内容决定时才用得上：样式里写 `width: max-content`（函数 API 是 `.css(css! { width: max-content; })`），直接改 `Select` 的样式时是 `LengthSpec::Shrink`。默认的宽度照旧占满一行，写了确定的宽度时照旧按那个宽度；`min_width`、`max_width` 照常生效，例如再写 `min_width` 保住一个最小宽度。不写 `fit_options` 时和原来一样，内容宽只看当前显示的那一项，也不给箭头留位。
 
@@ -119,7 +121,7 @@ layout.min_width = Some(LengthSpec::Px(122.0));
 | 属性 | 类型 | 说明 |
 | --- | --- | --- |
 | `value` | `Option<Arc<str>>` | 当前选中。`model` 在选中后写成 `Some(event.value)` |
-| `options` | `Vec<SelectOption>` | 也可以是这个类型的信号 |
+| `options` | `Vec<SelectOption>` | 也可以是这个类型的信号。选项可带 `.hint`，见上文 |
 | `label` | `Option<Arc<str>>` | 读屏名字，不画出来。不写时由 `labelled_by` 或设置行起名，再没有就读显示的选项 |
 | `placeholder` | `Option<Arc<str>>` | 不写就是 `None` |
 | `disabled` | `bool` | 常量、信号或闭包 |
