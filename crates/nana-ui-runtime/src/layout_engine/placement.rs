@@ -102,6 +102,62 @@ fn place_unvisited_reaching(
     Ok(())
 }
 
+/// Place the children of a container that only moved from `moved`, its plan
+/// where it now stands (see [`ContainerPlan::moved_to`]): each child in flow
+/// at its offset in the content box, at the size the plan holds and in the
+/// containing block it was placed in, and each positioned child that moved
+/// with the box. A child that holds a plan of its own moves the same way, so
+/// the whole subtree is written -- every box in it moved -- and none of it is
+/// measured. A positioned child whose box reads a containing block that
+/// changed size is the overlay's to place again.
+#[allow(clippy::too_many_arguments)]
+fn place_moved_children(
+    moved: &ContainerPlan,
+    content_origin: Point,
+    content: Size,
+    viewport: LayoutViewport,
+    nodes: &mut LayoutInputMap<'_>,
+    intrinsic: &mut PassIntrinsicCache,
+    output: &mut HashMap<StableNodeId, LayoutBox>,
+    scope: &ScopeContext<'_>,
+) -> Result<(), UiWorldError> {
+    for (index, entry) in moved.entries.borrow().iter().enumerate() {
+        place_node_scoped(
+            entry.child,
+            entry.origin,
+            entry.size,
+            moved.entry_containing(index),
+            viewport,
+            moved.child_font_px,
+            nodes,
+            intrinsic,
+            output,
+            Some(scope),
+            None,
+        )?;
+    }
+    for entry in &moved.overlay {
+        if entry.fixed || overlay_depends_on_block(entry, moved, content_origin, content, viewport)
+        {
+            continue;
+        }
+        place_node_scoped(
+            entry.child,
+            entry.origin,
+            entry.size,
+            entry.base,
+            viewport,
+            moved.child_font_px,
+            nodes,
+            intrinsic,
+            output,
+            Some(scope),
+            None,
+        )?;
+    }
+    Ok(())
+}
+
 /// Re-check only the children the change closure reaches.
 ///
 /// Everything outside it is unchanged by construction: a layout-affecting
@@ -293,6 +349,8 @@ fn replay_sequential_suffix(
     let mut entries = plan.entries.borrow_mut();
     for (index, origin) in shifted {
         entries[index].origin = origin;
+        // Moved by a difference: see `PlannedChild::offset`.
+        entries[index].offset = None;
     }
     for (slot, entry) in entries[from..].iter_mut().zip(replayed) {
         *slot = entry;
@@ -432,15 +490,19 @@ fn replay_sequential_run(
         } else {
             flow_main
         };
-        let child_origin = match direction {
+        let child_offset = match direction {
             FlexDirection::Row => Point {
-                x: plan.content_origin.x + main_start,
-                y: plan.content_origin.y + cross_offset,
+                x: main_start,
+                y: cross_offset,
             },
             FlexDirection::Column => Point {
-                x: plan.content_origin.x + cross_offset,
-                y: plan.content_origin.y + main_start,
+                x: cross_offset,
+                y: main_start,
             },
+        };
+        let child_origin = Point {
+            x: plan.content_origin.x + child_offset.x,
+            y: plan.content_origin.y + child_offset.y,
         };
         let cursor_before = cursor;
         cursor += main_extent(child_size, direction) + main_lead + main_trail + plan.gap;
@@ -475,6 +537,7 @@ fn replay_sequential_run(
             // Nothing redistributes main sizes on the sequential path.
             at_main: None,
             origin: child_origin,
+            offset: Some(child_offset),
             size: child_size,
             cursor_before,
             // A sequential line aligns nothing by baseline.
@@ -732,6 +795,7 @@ fn replay_child_list_edit(
     let mut entries = prefix;
     for (index, origin) in shifted {
         entries[index].origin = origin;
+        entries[index].offset = None;
     }
     entries.extend(replayed);
     // The children before the edit keep their index, the ones after it move
@@ -956,6 +1020,10 @@ fn replay_wrapped_flex_line(
     for (child, origin, size, index) in jobs {
         let entry = &mut entries[index];
         entry.child = child;
+        // Carried by the lines before it: see `PlannedChild::offset`.
+        if entry.origin != origin {
+            entry.offset = None;
+        }
         entry.origin = origin;
         entry.size = size;
         entry.intrinsic = size;
@@ -1198,15 +1266,19 @@ pub(super) fn place_node_scoped(
         intrinsic.note_origin_only();
     }
     intrinsic.note_placement_node();
-    output.insert(
-        id,
-        LayoutBox {
-            x: origin.x,
-            y: origin.y,
-            width: size.width,
-            height: size.height,
-        },
-    );
+    // Placed already this pass, as an island laid out on its own: its plan
+    // from the last pass may no longer be what that placement left.
+    let placed_before = output
+        .insert(
+            id,
+            LayoutBox {
+                x: origin.x,
+                y: origin.y,
+                width: size.width,
+                height: size.height,
+            },
+        )
+        .is_some();
 
     let containing_inline = containing_writing.inline_size(containing.width, containing.height);
     let padding = style.resolved_padding_against_fonts(Some(containing_inline), fonts);
@@ -1255,6 +1327,81 @@ pub(super) fn place_node_scoped(
         size.width - padding.left - padding.right - border.left - border.right,
         size.height - padding.top - padding.bottom - border.top - border.bottom,
     );
+    // A container that only moved: its plan holds where the box stood, and
+    // nothing in it is on the frontier. Every box under it moves with it --
+    // the output -- and none is measured, nor a plan recorded again, to place
+    // them. See `ContainerPlan::moved_to`.
+    if let Some(scope) = scope
+        && !placed_before
+        && inherited_grid.is_none()
+        && let Some(plan) = scope.retained.container_plans.get(&id)
+        && plan.origin != origin
+        && Arc::ptr_eq(&plan.children, &child_ids)
+        && plan.can_reuse_flow(
+            plan.origin,
+            size,
+            containing,
+            // Where this pass's border and padding put the content box in the
+            // box where it stood: the box moved, not its content box in it.
+            Point {
+                x: plan.origin.x + border.left + padding.left,
+                y: plan.origin.y + border.top + padding.top,
+            },
+            parent_font_px,
+            viewport,
+            &style_arc,
+            writing,
+        )
+        // A grid solves its tracks again for a box of another size, and a
+        // reversed sequential axis whose main size moved places every child
+        // again from its far edge: neither only moves.
+        && (plan.grid.is_none() || (plan.size == size && plan.content == content))
+        && !(plan.sequential
+            && plan.main_reversed
+            && main_extent(content, plan.main_direction).to_bits()
+                != plan.placed_main.get().to_bits())
+        && scope.reach.children(id).is_empty()
+        // An island among the children is affected without the index above
+        // leading to it.
+        && !child_ids.iter().any(|child| scope.affected.contains(child))
+        && nodes.world.children_layout_style_is_local(id)
+        && triggered_menu_overlay(nodes.world, id).is_none()
+        && let Some(moved) = plan.moved_to(origin, content_origin)
+    {
+        place_moved_children(
+            &moved,
+            content_origin,
+            content,
+            viewport,
+            nodes,
+            intrinsic,
+            output,
+            scope,
+        )?;
+        if moved.overlay.is_empty() {
+            nodes.container_plans.insert(id, Some(moved));
+        } else {
+            finish_positioned_overlay(
+                id,
+                &moved,
+                origin,
+                size,
+                content_origin,
+                content,
+                viewport,
+                child_font_px,
+                writing,
+                nodes,
+                intrinsic,
+                output,
+                scope,
+            )?;
+            // Unless the overlay recorded it with what it placed again.
+            nodes.container_plans.entry(id).or_insert(Some(moved));
+        }
+        intrinsic.note_placement_plan_reused();
+        return Ok(());
+    }
     // A container whose own inputs and whose children's styles and intrinsic
     // sizes are all unchanged places its children exactly where it did last
     // pass. Reuse that and touch only the children the change closure reaches;
@@ -2111,15 +2258,19 @@ pub(super) fn place_node_scoped(
                 } else {
                     cross_offset
                 };
-                let child_origin = match direction {
+                let child_offset = match direction {
                     FlexDirection::Row => Point {
-                        x: content_origin.x + main_start,
-                        y: content_origin.y + cross_offset,
+                        x: main_start,
+                        y: cross_offset,
                     },
                     FlexDirection::Column => Point {
-                        x: content_origin.x + cross_offset,
-                        y: content_origin.y + main_start,
+                        x: cross_offset,
+                        y: main_start,
                     },
+                };
+                let child_origin = Point {
+                    x: content_origin.x + child_offset.x,
+                    y: content_origin.y + child_offset.y,
                 };
                 if let Some(entries) = plan_entries.as_mut()
                     && let Some(intrinsics) = plan_intrinsics.as_ref()
@@ -2156,6 +2307,7 @@ pub(super) fn place_node_scoped(
                         intrinsic: child_intrinsic,
                         at_main: hypothetical.get(&child).copied(),
                         origin: child_origin,
+                        offset: Some(child_offset),
                         size: child_size,
                         cursor_before: cursor,
                         baseline: aligned_baseline,
@@ -2502,15 +2654,14 @@ fn place_positioned_child(
     if let Some(max) = child_style.resolved_max_height_fonts(Some(base.height), vp, child_fonts) {
         child_size.height = child_size.height.min(max);
     }
+    let inset = Point {
+        x: left.unwrap_or_else(|| right.map_or(0.0, |value| base.width - value - child_size.width)),
+        y: top
+            .unwrap_or_else(|| bottom.map_or(0.0, |value| base.height - value - child_size.height)),
+    };
     let child_origin = Point {
-        x: base_origin.x
-            + left.unwrap_or_else(|| {
-                right.map_or(0.0, |value| base.width - value - child_size.width)
-            }),
-        y: base_origin.y
-            + top.unwrap_or_else(|| {
-                bottom.map_or(0.0, |value| base.height - value - child_size.height)
-            }),
+        x: base_origin.x + inset.x,
+        y: base_origin.y + inset.y,
     };
     if !subtree_unchanged(
         child,
@@ -2544,6 +2695,7 @@ fn place_positioned_child(
         tracks_containing_block,
         base,
         base_origin,
+        inset,
         origin: child_origin,
         size: child_size,
     }))
