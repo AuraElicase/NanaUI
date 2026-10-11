@@ -1882,13 +1882,26 @@ impl UiScene {
             "retained paint order disagrees with a fresh sort"
         );
         // Painted geometry lives only for painted nodes, and every painted
-        // primitive has the geometry it was cut from (Issue #217).
+        // primitive has the geometry it was cut from (Issue #217): a node
+        // painter's, or the card a dialog's surface painter recorded.
         assert!(
             self.custom_paint.keys().all(|id| self
                 .nodes
                 .get(id)
                 .is_some_and(|node| node.custom_paint.is_some())),
             "painted geometry held for a node that no longer paints"
+        );
+        assert!(
+            self.modal_surface_paint
+                .keys()
+                .all(|id| self.nodes.get(id).is_some_and(|node| matches!(
+                    node.component_geometry.as_deref(),
+                    Some(ComponentGeometry::ModalFrame {
+                        surface_paint: Some(_),
+                        ..
+                    })
+                ))),
+            "a painted card held for a dialog that no longer paints it"
         );
         assert!(
             self.primitives.values().all(|held| !matches!(
@@ -1898,7 +1911,8 @@ impl UiScene {
                     | ScenePrimitiveKind::LayerEnd { .. }
             ) || self
                 .custom_paint
-                .contains_key(&held.primitive.node)),
+                .contains_key(&held.primitive.node)
+                || self.modal_surface_paint.contains_key(&held.primitive.node)),
             "a painted primitive without its geometry"
         );
         assert!(

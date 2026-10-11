@@ -174,3 +174,77 @@ fn draw_default_keeps_the_themed_card_under_the_painted_one() {
         "and only once: {slots:x?}"
     );
 }
+
+/// A card shaped by a real path: a tab rising from the card's left part
+/// and sloping down to its top edge, the way a tabbed card is drawn.
+struct SlopedTab;
+
+impl Painter for SlopedTab {
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let [width, height] = cx.size();
+        let rise = cx
+            .modal_sections()
+            .map_or(24.0, |sections| sections.header.height);
+        let mut card = PaintPath::new();
+        card.move_to(0.0, 0.0)
+            .line_to(width * 0.55, 0.0)
+            .line_to(width * 0.55 + 30.0, rise)
+            .line_to(width, rise)
+            .line_to(width, height)
+            .line_to(0.0, height)
+            .close();
+        cx.fill_path(&card, SemanticColorRole::Surface);
+    }
+
+    fn paint_key(&self) -> u64 {
+        2
+    }
+}
+
+/// An edit after a path-shaped card is painted is a delta, not a rebuild,
+/// and the scene's own audit of every delta (debug builds) holds: each
+/// painted primitive keeps the recording it was cut from, whether a node
+/// painter or a dialog's card painter recorded it.
+#[test]
+fn a_path_shaped_card_survives_a_delta() {
+    let document = DocumentId::new(1).unwrap();
+    let mut runtime = RuntimeDocument::new(document);
+    let cx = runtime.context_mut();
+    let host = cx.create_component(document, OverlayHost::new()).unwrap();
+    let dialog = cx
+        .create_detached_component(
+            document,
+            ConfirmDialog::new("删除场景", "无法恢复。").surface_painter(SlopedTab),
+        )
+        .unwrap();
+    cx.assemble_confirm_dialog(dialog).unwrap();
+    cx.append_child(host, dialog).unwrap();
+    cx.set_reduced_motion(true);
+    let viewport = LayoutViewport::new(800.0, 600.0);
+    runtime.flush(viewport, &mut NoText).unwrap();
+    assert!(
+        runtime
+            .context_mut()
+            .activate_overlay(host, dialog)
+            .unwrap()
+    );
+    for step in 1..=3 {
+        runtime
+            .context_mut()
+            .advance_animations(Duration::from_millis(500 * step));
+        runtime.flush(viewport, &mut NoText).unwrap();
+    }
+    runtime
+        .context_mut()
+        .update_component(dialog, |dialog, _| {
+            dialog.message = "场景内的模型会一并删除。".into();
+        })
+        .unwrap();
+    runtime.flush(viewport, &mut NoText).unwrap();
+    assert!(
+        frame_slots(&runtime, dialog.stable_id())
+            .iter()
+            .any(|slot| *slot >> 32 == MODAL_SURFACE_PAINT),
+        "still painted after the delta"
+    );
+}
