@@ -147,6 +147,10 @@ macro_rules! for_each_control {
             Progress => progress(max: f64) for Progress {
                 value: f64 = set,
                 label: Option<Arc<str>> = set,
+                indeterminate: bool = set,
+                thickness: Option<f32> = set,
+                track: Option<SemanticColorRole> = set,
+                fill: Option<SemanticColorRole> = set,
             };
             Spinner => spinner() for Spinner {
                 label: Arc<str> = set,

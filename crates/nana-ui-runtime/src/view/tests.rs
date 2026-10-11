@@ -895,6 +895,42 @@ fn table_controls_bind_their_fields_and_model_both_ways() {
     assert_eq!(activated.get_untracked(), 1);
 }
 
+/// The progress element sets its rail and turns indeterminate like any
+/// other field: a bare literal for the thickness, roles for the track and
+/// the fill, and a signal that makes the bar indeterminate and back.
+#[test]
+fn a_progress_element_binds_its_rail_and_whether_it_is_indeterminate() {
+    use nana_ui_core::SemanticColorRole::{Accent, BorderSoft};
+    let (mut cx, _, parent) = setup();
+    let unknown = std::cell::Cell::new(None);
+    let view = cx
+        .mount_view(parent, || {
+            let busy = signal(true);
+            unknown.set(Some(busy));
+            column().children(
+                progress(1.0)
+                    .indeterminate(move || busy.get())
+                    .thickness(3.0)
+                    .track(BorderSoft)
+                    .fill(Accent)
+                    .key("progress"),
+            )
+        })
+        .unwrap();
+    let bar = node::<crate::Progress>(&cx, view.roots()[0], "progress");
+    let read = |cx: &AppContext| {
+        cx.read(bar, |bar| {
+            (bar.indeterminate, bar.thickness, bar.track, bar.fill)
+        })
+        .unwrap()
+    };
+    assert_eq!(read(&cx), (true, Some(3.0), Some(BorderSoft), Some(Accent)));
+
+    unknown.get().unwrap().set(false);
+    cx.flush_reactive().unwrap();
+    assert!(!read(&cx).0);
+}
+
 #[test]
 fn value_events_hand_their_handler_the_event_without_annotation() {
     use crate::{Switch, ToggleChanged};

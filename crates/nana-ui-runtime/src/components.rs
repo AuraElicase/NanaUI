@@ -914,6 +914,12 @@ pub enum StandardVisual {
         value_ratio: f32,
         label: Option<Arc<str>>,
         cancellable: bool,
+        /// What the fill shows: the value, a sweep, or a still fill.
+        mode: crate::ProgressMode,
+        /// The track's thickness.
+        thickness: f32,
+        /// The fill's colour; `None` is the Indicator recipe's.
+        fill: Option<nana_ui_core::SemanticColorRole>,
     },
     Spinner {
         label: Arc<str>,

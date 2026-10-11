@@ -210,6 +210,10 @@ impl AppContext {
             self.recipe_reproject_views
                 .insert(id, super::reproject_typed::<C>);
         }
+        if C::wants_reduced_motion_reproject() {
+            self.reduced_motion_reproject_views
+                .insert(id, super::reproject_typed::<C>);
+        }
         if C::wants_text_backend_reproject() {
             self.text_backend_reproject_views
                 .insert(id, super::reproject_typed::<C>);

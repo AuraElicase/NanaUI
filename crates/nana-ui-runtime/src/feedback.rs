@@ -522,6 +522,9 @@ const PROGRESS_GIRTH: f32 = nana_ui_core::space::SM;
 const PROGRESS_LABEL_SIZE: f32 = nana_ui_core::type_scale::META;
 const PROGRESS_GAP: f32 = nana_ui_core::space::SM;
 const PROGRESS_CANCEL_SIZE: f32 = nana_ui_core::space::PAGE;
+/// How much of its colour a still indeterminate fill keeps: faint enough
+/// that a full track cannot be read as "done".
+pub(crate) const PROGRESS_STILL_ALPHA: f32 = 0.35;
 const SPINNER_DEFAULT_SIZE: f32 = nana_ui_core::space::XXL;
 const SPINNER_LABEL_SIZE: f32 = nana_ui_core::type_scale::META;
 const SPINNER_GAP: f32 = nana_ui_core::space::SM;
@@ -546,7 +549,21 @@ fn sanitize_spinner_size(size: f32) -> f32 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProgressCancelled;
 
-/// Determinate progress track (Subtle rail, Accent fill, 6px girth).
+/// What a progress bar's fill shows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ProgressMode {
+    /// `value / max` of the track, from its start.
+    Value,
+    /// The extent is unknown: a segment sweeps along the track, `phase` of
+    /// the way through one pass (`0.0..=1.0`).
+    Sweep { phase: f32 },
+    /// The extent is unknown and motion is reduced: a faint fill across the
+    /// whole track, which cannot be read as an amount.
+    Still,
+}
+
+/// Progress track (Subtle rail, Accent fill, 6px girth): determinate, or
+/// indeterminate while the task's extent is unknown.
 ///
 /// Optional cancel is a real hit target.
 #[derive(Debug, Clone, PartialEq)]
@@ -555,16 +572,59 @@ pub struct Progress {
     pub max: f64,
     pub label: Option<Arc<str>>,
     pub cancellable: bool,
+    /// The extent is unknown: a segment sweeps along the track instead of a
+    /// fill standing for `value`, and assistive technology hears a busy bar
+    /// with no amount. Under reduced motion the sweep holds still as a faint
+    /// fill across the track.
+    pub indeterminate: bool,
+    /// The track's thickness; `None`, or one that is not a positive number,
+    /// keeps the 6px rail.
+    pub thickness: Option<f32>,
+    /// The track's colour; `None` is Subtle.
+    pub track: Option<SemanticColorRole>,
+    /// The fill's colour; `None` is the theme's Indicator recipe.
+    pub fill: Option<SemanticColorRole>,
     pub style: NodeStyle,
 }
 
 impl Progress {
+    /// Playback longhands of the indeterminate sweep: pass after pass.
+    pub(crate) const SWEEP_PLAYBACK: AnimationPlayback = AnimationPlayback {
+        iteration_count: AnimationIteration::INFINITE,
+        direction: AnimationDirection::Normal,
+        fill_mode: AnimationFillMode::None,
+        play_state: AnimationPlayState::Running,
+        paused_at: None,
+    };
+
+    /// The sweep's timeline anchored at `start`, one pass every `pass`, or
+    /// `None` when its hashed animation ID would be zero.
+    pub(crate) fn sweep_animation(
+        id: StableNodeId,
+        start: Duration,
+        pass: Duration,
+    ) -> Option<AnimationSpec> {
+        let animation = component_animation_id(component_animation_kinds::PROGRESS, id)?;
+        Some(AnimationSpec::new(
+            animation,
+            id,
+            start,
+            pass,
+            crate::framework::COMPONENT_FRAME_INTERVAL,
+            Easing::Linear,
+        ))
+    }
+
     pub fn new(value: f64, max: f64) -> Self {
         Self {
             value,
             max: sanitize_progress_max(max),
             label: None,
             cancellable: false,
+            indeterminate: false,
+            thickness: None,
+            track: None,
+            fill: None,
             style: NodeStyle::default(),
         }
     }
@@ -579,6 +639,31 @@ impl Progress {
         self
     }
 
+    /// Whether the task's extent is unknown: a sweep, and a busy bar with no
+    /// amount, instead of the value.
+    pub fn indeterminate(mut self, indeterminate: bool) -> Self {
+        self.indeterminate = indeterminate;
+        self
+    }
+
+    /// The track's thickness.
+    pub fn thickness(mut self, thickness: f32) -> Self {
+        self.thickness = Some(thickness);
+        self
+    }
+
+    /// The track's colour.
+    pub fn track(mut self, track: SemanticColorRole) -> Self {
+        self.track = Some(track);
+        self
+    }
+
+    /// The fill's colour.
+    pub fn fill(mut self, fill: SemanticColorRole) -> Self {
+        self.fill = Some(fill);
+        self
+    }
+
     pub fn style(mut self, style: NodeStyle) -> Self {
         self.style = style;
         self
@@ -586,6 +671,12 @@ impl Progress {
 
     fn resolved_max(&self) -> f64 {
         sanitize_progress_max(self.max)
+    }
+
+    fn resolved_thickness(&self) -> f32 {
+        self.thickness
+            .filter(|thickness| thickness.is_finite() && *thickness > 0.0)
+            .unwrap_or(PROGRESS_GIRTH)
     }
 
     fn displayed_value(&self) -> f64 {
@@ -621,7 +712,7 @@ impl Progress {
     fn effective_style(&self) -> NodeStyle {
         let mut style = self.style.clone();
         style.foreground = Some(SemanticColorRole::Text);
-        style.background = Some(SemanticColorRole::Subtle);
+        style.background = Some(self.track.unwrap_or(SemanticColorRole::Subtle));
         style.border = None;
         let layout = Arc::make_mut(&mut style.layout);
         layout.width = Some(LengthSpec::Fill);
@@ -640,10 +731,11 @@ impl Progress {
         }
         let padding = layout.resolved_padding();
         let heading = self.heading_height();
+        let thickness = self.resolved_thickness();
         let content = if heading > 0.0 {
-            heading + PROGRESS_GAP + PROGRESS_GIRTH
+            heading + PROGRESS_GAP + thickness
         } else {
-            PROGRESS_GIRTH
+            thickness
         };
         layout.height = Some(LengthSpec::Px(content + padding.top + padding.bottom));
         layout.direction = Some(FlexDirection::Column);
@@ -676,11 +768,70 @@ impl ComponentView for Progress {
         }
     }
 
+    /// The sweep runs only while motion is not reduced: turning the
+    /// preference either way starts or stops it, and changes what the fill
+    /// shows.
+    fn wants_reduced_motion_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
-        let value = self.displayed_value();
-        let max = self.resolved_max();
-        let ratio = self.value_ratio();
-        let percent = (f64::from(ratio) * 100.0).round();
+        // An indeterminate bar sweeps on its own, as a spinner turns: start
+        // the timeline once for a freshly created or mounted node and never
+        // restart a running one, so repeated projections cannot reset it. A
+        // hidden bar generates no box and stops it, as does a determinate one
+        // or reduced motion.
+        let sweeping = self.indeterminate && !world.reduced_motion();
+        let pass = world
+            .theme()
+            .duration(nana_ui_core::MotionRole::SkeletonPulse);
+        if let Some(spec) = Self::sweep_animation(id, Duration::ZERO, pass) {
+            let running = world.animation_is_active(spec.id);
+            if sweeping && !self.style.layout.hidden {
+                let startable = !world.contains(id) || world.is_mounted(id);
+                if startable && !running {
+                    mutations.start_animation_with_playback(spec, Self::SWEEP_PLAYBACK);
+                }
+            } else if running {
+                mutations.stop_animation(spec.id);
+            }
+        }
+        let mode = if !self.indeterminate {
+            ProgressMode::Value
+        } else if !sweeping {
+            ProgressMode::Still
+        } else {
+            // The timeline writes the phase straight into the visual; a
+            // projection carries it on rather than restarting the pass.
+            match world.standard_visual_ref(id) {
+                Some(StandardVisual::Progress {
+                    mode: ProgressMode::Sweep { phase },
+                    ..
+                }) => ProgressMode::Sweep { phase: *phase },
+                _ => ProgressMode::Sweep { phase: 0.0 },
+            }
+        };
+        let accessibility = if self.indeterminate {
+            // No amount to report: a busy bar, as `<progress>` without a
+            // value reads.
+            AccessibilityState {
+                role: AccessibilityRole::ProgressIndicator,
+                label: self.label.clone(),
+                busy: true,
+                ..AccessibilityState::default()
+            }
+        } else {
+            let percent = (f64::from(self.value_ratio()) * 100.0).round();
+            AccessibilityState {
+                role: AccessibilityRole::ProgressIndicator,
+                label: self.label.clone(),
+                value: Some(Arc::from(format!("{percent:.0}%"))),
+                numeric_minimum: Some(0.0),
+                numeric_maximum: Some(self.resolved_max()),
+                numeric_value: Some(self.displayed_value()),
+                ..AccessibilityState::default()
+            }
+        };
         project_visual(
             id,
             world,
@@ -688,19 +839,14 @@ impl ComponentView for Progress {
             "",
             self.effective_style(),
             StandardVisual::Progress {
-                value_ratio: ratio,
+                value_ratio: self.value_ratio(),
                 label: self.label.clone(),
                 cancellable: self.cancellable,
+                mode,
+                thickness: self.resolved_thickness(),
+                fill: self.fill,
             },
-            AccessibilityState {
-                role: AccessibilityRole::ProgressIndicator,
-                label: self.label.clone(),
-                value: Some(Arc::from(format!("{percent:.0}%"))),
-                numeric_minimum: Some(0.0),
-                numeric_maximum: Some(max),
-                numeric_value: Some(value),
-                ..AccessibilityState::default()
-            },
+            accessibility,
         );
         let interaction = InteractionState {
             pointer_events: self.cancellable,
@@ -2182,5 +2328,287 @@ mod tests {
             context.next_animation_deadline().is_some(),
             "showing it again resumes the turn"
         );
+    }
+
+    fn progress_boxes(
+        context: &AppContext,
+        id: StableNodeId,
+    ) -> (crate::LayoutBox, crate::LayoutBox) {
+        let crate::ComponentGeometry::Progress { track, fill, .. } =
+            context.world().component_geometry(id).unwrap()
+        else {
+            panic!("progress geometry")
+        };
+        (track, fill)
+    }
+
+    fn progress_mode(context: &AppContext, id: StableNodeId) -> ProgressMode {
+        match context.world().standard_visual(id) {
+            Some(StandardVisual::Progress { mode, .. }) => mode,
+            other => panic!("progress visual: {other:?}"),
+        }
+    }
+
+    /// A bar may name its own rail: the track is the node's surface, the
+    /// fill the visual's colour, and the box is as tall as the thickness.
+    /// Without them it is the bar it always was.
+    #[test]
+    fn a_progress_bar_takes_its_own_thickness_track_and_fill() {
+        let palette = nana_ui_core::SemanticPalette::dark();
+        let mut context = AppContext::new();
+        let progress = context
+            .create_component(
+                document(),
+                Progress::new(25.0, 100.0)
+                    .thickness(3.0)
+                    .track(SemanticColorRole::BorderSoft)
+                    .fill(SemanticColorRole::Warning),
+            )
+            .unwrap();
+        let id = progress.stable_id();
+        let style = context.world().node_style(id).unwrap();
+        assert_eq!(style.background, Some(SemanticColorRole::BorderSoft));
+        assert_eq!(style.layout.height, Some(LengthSpec::Px(3.0)));
+        layout(&mut context, id, 100.0, 3.0);
+        let crate::ComponentGeometry::Progress {
+            track,
+            fill,
+            corner_radius,
+            ..
+        } = context.world().component_geometry(id).unwrap()
+        else {
+            panic!("progress geometry")
+        };
+        assert_eq!(track.height, 3.0);
+        assert_eq!(corner_radius, 1.5, "still a pill");
+        assert!((fill.width - 25.0).abs() < 0.01);
+        assert_eq!(
+            context.world().extract_nodes(&[id])[0].standard_visual_foreground,
+            Some(palette.warning.as_rgba_array())
+        );
+
+        context
+            .update_component(progress, |progress, _| {
+                progress.thickness = Some(f32::NAN);
+            })
+            .unwrap();
+        assert_eq!(
+            context.world().node_style(id).unwrap().layout.height,
+            Some(LengthSpec::Px(PROGRESS_GIRTH)),
+            "a thickness that is not a positive number keeps the rail"
+        );
+
+        let plain = context
+            .create_component(document(), Progress::new(25.0, 100.0))
+            .unwrap();
+        let style = context.world().node_style(plain.stable_id()).unwrap();
+        assert_eq!(style.background, Some(SemanticColorRole::Subtle));
+        assert_eq!(style.layout.height, Some(LengthSpec::Px(6.0)));
+        assert_eq!(
+            context.world().extract_nodes(&[plain.stable_id()])[0].standard_visual_foreground,
+            Some(palette.accent.as_rgba_array())
+        );
+    }
+
+    /// An indeterminate bar has no amount to report: assistive technology
+    /// hears a busy progress indicator with no value. Made determinate, it
+    /// reports its percentage again.
+    #[test]
+    fn an_indeterminate_bar_is_busy_and_reports_no_amount() {
+        let mut context = AppContext::new();
+        let progress = context
+            .create_component(
+                document(),
+                Progress::new(40.0, 100.0)
+                    .label("Exporting")
+                    .indeterminate(true),
+            )
+            .unwrap();
+        let id = progress.stable_id();
+        let accessibility = context.world().accessibility(id).unwrap();
+        assert_eq!(accessibility.role, AccessibilityRole::ProgressIndicator);
+        assert!(accessibility.busy);
+        assert_eq!(accessibility.label.as_deref(), Some("Exporting"));
+        assert_eq!(accessibility.value, None);
+        assert_eq!(
+            (
+                accessibility.numeric_minimum,
+                accessibility.numeric_maximum,
+                accessibility.numeric_value
+            ),
+            (None, None, None)
+        );
+
+        context
+            .update_component(progress, |progress, _| progress.indeterminate = false)
+            .unwrap();
+        let accessibility = context.world().accessibility(id).unwrap();
+        assert!(!accessibility.busy);
+        assert_eq!(accessibility.value.as_deref(), Some("40%"));
+        assert_eq!(accessibility.numeric_maximum, Some(100.0));
+        assert_eq!(accessibility.numeric_value, Some(40.0));
+    }
+
+    /// The sweep is a loop the bar starts itself: its segment comes in at
+    /// the start of the track and goes out past the end over one pass, and
+    /// a projection carries the pass on. Reduced motion stops the loop and
+    /// holds a faint fill across the whole track; letting motion back starts
+    /// it again, and a determinate bar stops it for good.
+    #[test]
+    fn an_indeterminate_bar_sweeps_until_motion_is_reduced() {
+        let mut context = AppContext::new();
+        let progress = context
+            .create_component(document(), Progress::new(0.0, 1.0).indeterminate(true))
+            .unwrap();
+        let id = progress.stable_id();
+        let pass = context
+            .world()
+            .theme()
+            .duration(nana_ui_core::MotionRole::SkeletonPulse);
+        let sweep = Progress::sweep_animation(id, Duration::ZERO, pass)
+            .unwrap()
+            .id;
+        assert!(context.world().animation_is_active(sweep));
+        assert_eq!(
+            progress_mode(&context, id),
+            ProgressMode::Sweep { phase: 0.0 }
+        );
+
+        context.advance_animations(Duration::ZERO);
+        context.advance_animations(pass / 2);
+        let ProgressMode::Sweep { phase } = progress_mode(&context, id) else {
+            panic!("a sweeping bar");
+        };
+        assert!((phase - 0.5).abs() < 1e-3, "half a pass at half the period");
+        layout(&mut context, id, 200.0, 6.0);
+        let (track, fill) = progress_boxes(&context, id);
+        assert!(
+            (fill.width - 70.0).abs() < 0.01 && (fill.x - (track.x + 65.0)).abs() < 0.01,
+            "half way, a segment 35% of the track sits in its middle: {fill:?}"
+        );
+        context.reproject_component(progress).unwrap();
+        assert_eq!(progress_mode(&context, id), ProgressMode::Sweep { phase });
+        assert!(
+            context.next_animation_deadline().is_some(),
+            "an indeterminate bar never settles"
+        );
+
+        context.set_reduced_motion(true);
+        assert!(!context.world().animation_is_active(sweep));
+        assert_eq!(progress_mode(&context, id), ProgressMode::Still);
+        let (track, fill) = progress_boxes(&context, id);
+        assert_eq!(fill, track, "a still bar fills the whole track");
+        let accent = nana_ui_core::SemanticPalette::dark().accent;
+        let still = context.world().extract_nodes(&[id])[0]
+            .standard_visual_foreground
+            .unwrap();
+        assert!(
+            still
+                .iter()
+                .zip(accent.as_rgba_array())
+                .take(3)
+                .all(|(still, accent)| (still - accent).abs() < 1e-4),
+            "the fill's own hue: {still:?}"
+        );
+        assert!(
+            (still[3] - accent.a * PROGRESS_STILL_ALPHA).abs() < 1e-3,
+            "too faint to read as done: {still:?}"
+        );
+        assert_eq!(context.next_animation_deadline(), None);
+
+        context.set_reduced_motion(false);
+        assert!(context.world().animation_is_active(sweep));
+        assert!(matches!(
+            progress_mode(&context, id),
+            ProgressMode::Sweep { .. }
+        ));
+
+        context
+            .update_component(progress, |progress, _| progress.indeterminate = false)
+            .unwrap();
+        assert!(!context.world().animation_is_active(sweep));
+        assert_eq!(progress_mode(&context, id), ProgressMode::Value);
+    }
+
+    /// Parked, a bar's sweep stops with the rest of what the node animates;
+    /// mounted again, it sweeps again without the application asking.
+    #[test]
+    fn a_remounted_indeterminate_bar_sweeps_again() {
+        let mut context = AppContext::new();
+        let host = context
+            .create_component(document(), crate::Stack::column(0.0))
+            .unwrap();
+        let parent = context
+            .create_component(document(), crate::Stack::column(0.0))
+            .unwrap();
+        let progress = context
+            .create_detached_component(document(), Progress::new(0.0, 1.0).indeterminate(true))
+            .unwrap();
+        context.append_child(parent, progress).unwrap();
+        let pass = context
+            .world()
+            .theme()
+            .duration(nana_ui_core::MotionRole::SkeletonPulse);
+        let sweep = Progress::sweep_animation(progress.stable_id(), Duration::ZERO, pass)
+            .unwrap()
+            .id;
+        assert!(context.world().animation_is_active(sweep));
+
+        let mut park = MutationQueue::new();
+        park.park_subtree(parent.stable_id());
+        context.commit_mutations(park).unwrap();
+        assert!(!context.world().animation_is_active(sweep));
+
+        let mut remount = MutationQueue::new();
+        remount.insert(host.stable_id(), parent.stable_id(), None);
+        context.commit_mutations(remount).unwrap();
+        assert!(context.world().animation_is_active(sweep));
+    }
+
+    /// The sweep's segment slides in from the start and out past the end,
+    /// cut to the track: nothing shows at either end of a pass.
+    #[test]
+    fn the_sweep_segment_enters_and_leaves_the_track() {
+        let mut context = AppContext::new();
+        let progress = context
+            .create_component(document(), Progress::new(0.0, 1.0).indeterminate(true))
+            .unwrap();
+        let id = progress.stable_id();
+        layout(&mut context, id, 100.0, 6.0);
+        // At a fifth of the pass the segment's lead is 8% short of the
+        // start, so 27 of its 35 show.
+        for (phase, x, width) in [(0.0, 0.0, 0.0), (0.2, 0.0, 27.0), (1.0, 100.0, 0.0)] {
+            let mut sample = MutationQueue::new();
+            sample.set_standard_visual(
+                id,
+                Some(StandardVisual::Progress {
+                    value_ratio: 0.0,
+                    label: None,
+                    cancellable: false,
+                    mode: ProgressMode::Sweep { phase },
+                    thickness: PROGRESS_GIRTH,
+                    fill: None,
+                }),
+            );
+            context.commit_mutations(sample).unwrap();
+            let (track, fill) = progress_boxes(&context, id);
+            assert!(
+                (fill.x - (track.x + x)).abs() < 0.01 && (fill.width - width).abs() < 0.01,
+                "phase {phase}: {fill:?}"
+            );
+        }
+        let mut broken = MutationQueue::new();
+        broken.set_standard_visual(
+            id,
+            Some(StandardVisual::Progress {
+                value_ratio: 0.0,
+                label: None,
+                cancellable: false,
+                mode: ProgressMode::Sweep { phase: f32::NAN },
+                thickness: PROGRESS_GIRTH,
+                fill: None,
+            }),
+        );
+        assert!(context.commit_mutations(broken).is_err());
     }
 }

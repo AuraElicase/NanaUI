@@ -138,6 +138,29 @@ impl UiWorld {
                 self.account_animation_dirty(DirtyMask::RENDER);
                 component_updates.push(sample.target);
             }
+            // An indeterminate bar's sweep moves its segment and nothing
+            // else: the bar's own projection carries the phase on.
+            if crate::component_animation_id(
+                crate::component_animation_kinds::PROGRESS,
+                sample.target,
+            ) == Some(sample.id)
+                && let Some(
+                    mut visual @ StandardVisual::Progress {
+                        mode: crate::ProgressMode::Sweep { .. },
+                        ..
+                    },
+                ) = self.standard_visual(sample.target)
+            {
+                if let StandardVisual::Progress { mode, .. } = &mut visual {
+                    *mode = crate::ProgressMode::Sweep {
+                        phase: sample.progress,
+                    };
+                }
+                self.nodes.set_visual(sample.target, Some(visual));
+                self.mark(sample.target, DirtyMask::RENDER);
+                self.account_animation_dirty(DirtyMask::RENDER);
+                component_updates.push(sample.target);
+            }
             if crate::component_animation_id(
                 crate::component_animation_kinds::SURFACE_SCRIM,
                 sample.target,

@@ -309,6 +309,20 @@ pub trait ComponentView: Clone + PartialEq + Send + 'static {
         false
     }
 
+    /// Opt in to one reprojection when the reduce-motion preference
+    /// ([`crate::AppContext::reduced_motion`]) changes.
+    ///
+    /// For a component whose projection starts or stops a timeline of its
+    /// own by it, or draws differently while motion is reduced: nothing
+    /// else about it changed, so nothing else would project it again.
+    /// Defaults to `false`.
+    fn wants_reduced_motion_reproject() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+
     /// Opt in to one reprojection when the host's text backend changes — the
     /// first engine a world is shaped through included.
     ///

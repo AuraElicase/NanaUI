@@ -829,6 +829,30 @@ impl FieldText for Option<f64> {
     }
 }
 
+impl FieldText for Option<f32> {
+    /// Empty text is `None`.
+    fn parse(text: &str) -> Result<Self, String> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Ok(None);
+        }
+        f32::parse(text).map(Some)
+    }
+}
+
+impl FieldText for Option<SemanticColorRole> {
+    /// A palette role by its token name (`accent`, `border-soft`); empty
+    /// text is `None`.
+    fn parse(text: &str) -> Result<Self, String> {
+        if text.trim().is_empty() {
+            return Ok(None);
+        }
+        SemanticColorRole::from_css_token_name(text)
+            .map(Some)
+            .ok_or_else(|| format!("`{text}` is not a palette role"))
+    }
+}
+
 impl FieldText for (f64, f64) {
     /// Two numbers separated by a comma: `0.2, 0.8`.
     fn parse(text: &str) -> Result<Self, String> {
