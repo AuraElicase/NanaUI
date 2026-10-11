@@ -873,7 +873,8 @@ pub(crate) fn drawer_width(viewport_width: f32) -> f32 {
 
 /// Where a modal surface sits in its scrim `bounds`. A dialog card is as
 /// wide as its size asks and stands where the theme's [`DialogRecipe`] puts
-/// it; both give way to the scrim's margin, so the card stays inside it.
+/// it, at its `top` or centred; both give way to the scrim's margin, so the
+/// card stays inside it.
 ///
 /// [`DialogRecipe`]: nana_ui_core::DialogRecipe
 pub(crate) fn modal_surface_bounds(
@@ -894,10 +895,12 @@ pub(crate) fn modal_surface_bounds(
                 .max_height_in(bounds.width, bounds.height)
                 .min(available_height);
             let height = intrinsic_height.unwrap_or(max_height).min(max_height);
-            let top = recipe
-                .top_in(bounds.width, bounds.height)
-                .min((bounds.height - margin - height).max(0.0))
-                .max(margin);
+            let top = match recipe.align {
+                nana_ui_core::DialogAlign::Top => recipe.top_in(bounds.width, bounds.height),
+                nana_ui_core::DialogAlign::Center => (bounds.height - height) / 2.0,
+            }
+            .min((bounds.height - margin - height).max(0.0))
+            .max(margin);
             crate::LayoutBox {
                 x: bounds.x + (bounds.width - width) / 2.0,
                 y: bounds.y + top,
@@ -1312,6 +1315,96 @@ mod tests {
         assert!(surface.x + surface.width <= scrim.x + scrim.width);
         assert!(surface.y + surface.height <= scrim.y + scrim.height);
         assert!(surface.contains(150.0, 150.0));
+    }
+
+    /// A centred recipe stands the card midway down the scrim whatever its
+    /// height, a card past the recipe's tallest included, and never past
+    /// the scrim's margin; the built-in recipe keeps it at its top.
+    #[test]
+    fn a_centred_recipe_stands_the_card_midway_down_the_scrim() {
+        use nana_ui_core::{DialogAlign, DialogRecipe};
+        let scrim = crate::LayoutBox {
+            x: 0.0,
+            y: 40.0,
+            width: 1200.0,
+            height: 800.0,
+        };
+        let centred = DialogRecipe {
+            align: DialogAlign::Center,
+            ..DialogRecipe::DEFAULT
+        };
+        let confirm = ModalSurfaceKind::Confirm(DialogSize::Compact);
+        for height in [120.0, 300.0] {
+            let surface = modal_surface_bounds(scrim, confirm, Some(height), &centred);
+            assert_eq!(surface.height, height);
+            assert!(
+                (surface.y - (scrim.y + (scrim.height - height) / 2.0)).abs() < 0.01,
+                "{surface:?}"
+            );
+        }
+        let tall = modal_surface_bounds(scrim, confirm, Some(2000.0), &centred);
+        assert!((tall.height - 800.0 * 0.76).abs() < 0.01, "{tall:?}");
+        assert!((tall.y - (scrim.y + 96.0)).abs() < 0.01, "{tall:?}");
+
+        let cramped = crate::LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 300.0,
+            height: 100.0,
+        };
+        let inside = modal_surface_bounds(cramped, confirm, Some(90.0), &centred);
+        assert!(inside.y >= 16.0 - 0.01, "{inside:?}");
+        assert!(inside.y + inside.height <= cramped.height - 16.0 + 0.01);
+
+        let top = modal_surface_bounds(scrim, confirm, Some(120.0), &DialogRecipe::DEFAULT);
+        assert_eq!(top.y, scrim.y + 90.0);
+    }
+
+    /// Laid out, a centred card carries its slots: the body stands where
+    /// the card's body is, midway down the window.
+    #[test]
+    fn a_centred_card_carries_its_slots() {
+        use nana_ui_core::{DialogAlign, DialogRecipe, LengthSpec};
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        cx.set_theme_definition(&nana_ui_core::ThemeDefinition::NANA_DARK.with_dialog(
+            DialogRecipe {
+                align: DialogAlign::Center,
+                ..DialogRecipe::DEFAULT
+            },
+        ))
+        .unwrap();
+        let host = cx
+            .create_component(document, crate::OverlayHost::new())
+            .unwrap();
+        let dialog = cx
+            .create_detached_component(document, crate::Dialog::new("Export"))
+            .unwrap();
+        cx.append_child(host, dialog).unwrap();
+        let body = cx
+            .create_detached_component(
+                document,
+                crate::Stack::column(0.0).height(LengthSpec::Px(200.0)),
+            )
+            .unwrap();
+        cx.set_modal_slots(
+            dialog,
+            ModalSlots {
+                body: Some(body.stable_id()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(cx.activate_overlay(host, dialog).unwrap());
+        cx.layout_document(document, crate::LayoutViewport::new(1200.0, 800.0))
+            .unwrap();
+        let (surface, body_region) = dialog_frame(&cx, dialog.stable_id());
+        let above = surface.y;
+        let below = 800.0 - (surface.y + surface.height);
+        assert!((above - below).abs() < 0.01, "{surface:?}");
+        let body_box = cx.world().canonical_layout_box(body.stable_id()).unwrap();
+        assert_eq!(body_box.y, body_region.y, "the body slot is in the card");
+        assert!(body_box.y + body_box.height <= surface.y + surface.height);
     }
 
     fn dialog_frame(cx: &AppContext, dialog: StableNodeId) -> (crate::LayoutBox, crate::LayoutBox) {
