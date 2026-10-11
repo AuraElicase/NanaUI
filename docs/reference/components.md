@@ -43,6 +43,10 @@ import "@nanaui/nanavue-components/controls.css";
 
 `Toast::timeout(Duration)` 让提示挂载满这么久后发一次 `ToastDismissed`，与按下关闭按钮的事件相同。计时器每个提示只启动一次，只在到期时唤醒宿主一次，不逐帧推进。不传则一直等用户关闭。框架不会自己移除提示，收到事件后由应用从列表里删掉。
 
+`AppContext::assemble_toast(toast)` 把提示永久换成由子节点组成的复合形式：标题与描述按配方的行数折行，多出进度条（`Toast::progress`，确定或不确定）、一个动作按钮（`Toast::action`，发 `ToastAction`）、可按的关闭按钮（`dismissible` 时，发 `ToastDismissed`）和替换色调字形的 `Toast::icon`。这几样只在装配后出现，裸 `Toast` 仍是原来那个绘制好的叶子。复合提示宽度随内容，显示进度时至少为配方的 `progress.min_width`；指针悬停或焦点在内时计时器暂停，离开后按剩余时间继续。见 [Toast](../components/toast.md)。
+
+通知角用 [ToastStack](../components/toast-stack.md)。`push_toast` 装配并放进最新的一条，先量高度、再按 `max_visible` 和高度决定显示哪些，其余排队；`remove_toast` 让在屏上的那条在原位播完退场再拿掉，其余收拢；`clear_toasts` 全部拿掉。`ToastStack::place_in` 与 `Toast::place_in` 同一个预留合同，多一个 `max_height`。栈本身不命中，空隙落到下面的舞台。应用把栈放在模态层之上（模态卡片的 `z_index` 是 1000）时，模态打开期间栈里的提示照常可按，不算点在模态外面，焦点和 Tab 留在模态里。
+
 `Spinner` 自己转。挂载后由 Motion IR 无限 timeline 驱动旋转相位。宿主不逐帧喂 phase。停用改为卸载或停放该节点。
 
 `Panel` 是非模态任务面板。挂到独立 `OverlayHost` 的直接子节点。通过同一份 `activate_overlay` / `dismiss_overlay` 管理显示和退出动画。面板使用 Card 表面和具名 Region 无障碍语义。只有卡面命中。外部舞台和普通 Tab 顺序保持可用。不能用 Menu 或 Dialog 冒充非模态面板。可见标题、返回/关闭按钮和内容由应用装配为普通子节点。长内容使用 `ScrollView`。关闭按钮调用 `dismiss_overlay`。不直接删除节点。

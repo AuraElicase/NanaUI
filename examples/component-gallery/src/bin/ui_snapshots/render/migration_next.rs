@@ -66,7 +66,8 @@ use nana_ui::runtime::{
     TabOption as RuntimeTabOption, Tabs as RuntimeTabs, Text as RuntimeText,
     TextArea as RuntimeTextArea, TextDiagnosticSeverity, TextDiagnosticSpan,
     TextHorizontalAlignment, TextInput as RuntimeTextInput, TextSelection, TextSignatureHelp,
-    TextVerticalAlignment, Thumbnail as RuntimeThumbnail, Toast as RuntimeToast, TreeNode,
+    TextVerticalAlignment, Thumbnail as RuntimeThumbnail, Toast as RuntimeToast,
+    ToastProgress as RuntimeToastProgress, ToastStack as RuntimeToastStack, TreeNode,
     TreeView as RuntimeTreeView, ValidationMessage as RuntimeValidationMessage, ValueEmphasis,
     Workspace as RuntimeWorkspace, XYPad as RuntimeXYPad,
 };
@@ -128,6 +129,7 @@ enum Component {
     ConfirmDialog,
     Drawer,
     Toast,
+    ToastStack,
     XYPad,
     QrCode,
     Select,
@@ -208,6 +210,7 @@ impl Component {
             Self::ConfirmDialog => component_ids::CONFIRM_DIALOG,
             Self::Drawer => component_ids::DRAWER,
             Self::Toast => component_ids::TOAST,
+            Self::ToastStack => component_ids::TOAST_STACK,
             Self::XYPad => component_ids::XY_PAD,
             Self::QrCode => component_ids::QR_CODE,
             Self::Select => component_ids::SELECT,
@@ -439,6 +442,8 @@ fn fixture_size(fixture: Fixture) -> Size<u32> {
         (Component::ConfirmDialog, _) => Size::new(560, 260),
         (Component::Drawer, _) => Size::new(420, 240),
         (Component::Toast, _) => Size::new(420, 88),
+        (Component::ToastStack, "stacked") => Size::new(420, 240),
+        (Component::ToastStack, _) => Size::new(420, 140),
         (Component::XYPad, _) => Size::new(420, 88),
         (Component::QrCode, _) => Size::new(280, 280),
         (Component::Select, "opened") => Size::new(420, 220),
@@ -1173,6 +1178,7 @@ fn runtime_fixture(
                 .dismissible(fixture.state == "dismissible"),
             )?
             .stable_id(),
+        Component::ToastStack => toast_stack_fixture(&mut document, fixture)?,
         Component::XYPad => document
             .context_mut()
             .create_component(
@@ -1544,6 +1550,57 @@ fn runtime_fixture(
     })
 }
 
+/// A stack of assembled toasts on the row's end edge, pushed oldest first:
+/// one with a known share done, one with an unknown one, one with an action,
+/// or all three kinds at once.
+fn toast_stack_fixture(
+    document: &mut RuntimeDocument,
+    fixture: Fixture,
+) -> Result<StableNodeId, Box<dyn std::error::Error>> {
+    let document_id = document.document();
+    let context = document.context_mut();
+    let mut style = NodeStyle::default();
+    {
+        let layout = Arc::make_mut(&mut style.layout);
+        layout.width = Some(LengthSpec::Percent(100.0));
+        layout.align_items = nana_ui_core::AlignSpec::End;
+    }
+    let stack = context.create_component(document_id, RuntimeToastStack::new().style(style))?;
+    let progress = || {
+        RuntimeToast::new("Optimizing models", ToastTone::Info)
+            .description("2 of 5 models")
+            .progress(RuntimeToastProgress::Determinate(0.4))
+            .dismissible(true)
+    };
+    let indeterminate = || {
+        RuntimeToast::new("Preparing models", ToastTone::Info)
+            .progress(RuntimeToastProgress::Indeterminate)
+            .dismissible(true)
+    };
+    let action = || {
+        RuntimeToast::new("Models optimized", ToastTone::Success)
+            .description("Loading is faster now.")
+            .action("View")
+            .dismissible(true)
+    };
+    let toasts = match fixture.state {
+        "progress" => vec![progress()],
+        "indeterminate" => vec![indeterminate()],
+        "action" => vec![action()],
+        _ => vec![
+            RuntimeToast::new("Sync failed", ToastTone::Danger)
+                .description("Network offline")
+                .dismissible(true),
+            progress(),
+            action(),
+        ],
+    };
+    for toast in toasts {
+        context.push_toast(stack, toast)?;
+    }
+    Ok(stack.stable_id())
+}
+
 /// Mount `view`, one element, as a document root; its node.
 fn mount_root<V: IntoView>(
     document: &mut RuntimeDocument,
@@ -1866,6 +1923,12 @@ fn apply_runtime_state(
                 ),
             },
         )?),
+        // A stack's toasts fade in once they are measured; the state is
+        // what they settle to.
+        _ if fixture.component == Component::ToastStack => {
+            context.advance_animations(Duration::from_secs(1));
+            Ok(true)
+        }
         _ => Ok(false),
     }
 }
