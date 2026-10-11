@@ -105,7 +105,8 @@ pub trait ModalSurface: ComponentView {
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ModalSurfaceSections {
     /// The header band, the card's full width from its top: the header row
-    /// with its insets and the divider under it.
+    /// with its insets, down to the header divider when the recipe draws
+    /// one (the divider itself lies just under the band).
     pub header: crate::LayoutBox,
     /// The title block: the title and its description, as wide as the
     /// recipe lets them run.
@@ -1895,7 +1896,8 @@ mod tests {
     /// A card whose header stands on a tab: the recipe sets the title's
     /// type, keeps a danger title in the text colour, holds the title inside
     /// the tab's share of the card and starts the rule where the heading
-    /// does. A drawer under the same theme keeps its own title.
+    /// does. The header band a surface painter reads ends where the rule
+    /// starts. A drawer under the same theme keeps its own title.
     #[test]
     fn a_tab_headed_recipe_sets_the_title_and_keeps_it_and_the_rule_inside() {
         use nana_ui_core::{
@@ -1913,6 +1915,7 @@ mod tests {
         };
         cx.set_theme_definition(&nana_ui_core::ThemeDefinition::NANA_DARK.with_dialog(recipe))
             .unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
         let confirm = cx
             .create_component(
                 document,
@@ -1920,7 +1923,10 @@ mod tests {
                     "删除这个场景以及它里面的全部模型和挂件",
                     "场景内的模型、挂件与画布设置会一并删除。",
                 )
-                .danger(true),
+                .danger(true)
+                .surface_painter(BandPainter {
+                    seen: Arc::clone(&seen),
+                }),
             )
             .unwrap();
         cx.assemble_confirm_dialog(confirm).unwrap();
@@ -1954,6 +1960,14 @@ mod tests {
             (rule.x, rule.width),
             (surface.x + inline, surface.width - inline * 2.0)
         );
+        let sections = seen
+            .lock()
+            .unwrap()
+            .last()
+            .copied()
+            .flatten()
+            .expect("recorded as a card surface");
+        assert_eq!(sections.header.height, rule.y - surface.y);
 
         let crate::ComponentGeometry::ModalFrame { title, .. } =
             modal_geometry(&cx, drawer.stable_id())
