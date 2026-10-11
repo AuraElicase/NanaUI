@@ -775,10 +775,11 @@ impl ThemeDefinition {
                 slot: "dialog",
             })?;
         for (token, length) in [
-            ("dialog.top", dialog.top),
-            ("dialog.max_height", dialog.max_height),
+            ("dialog.top", Some(dialog.top)),
+            ("dialog.max_height", Some(dialog.max_height)),
+            ("dialog.title_max_width", dialog.title_max_width),
         ] {
-            if !super::dialog::is_dialog_length(length) {
+            if length.is_some_and(|length| !super::dialog::is_dialog_length(length)) {
                 return Err(ThemeCompileError::NotFinite {
                     theme: self.id.clone(),
                     token,
@@ -792,6 +793,10 @@ impl ThemeDefinition {
         };
         for (token, value) in dialog.lengths() {
             check.length(token, value);
+        }
+        check.font_size("dialog.title.size", dialog.title.size);
+        if let Some(weight) = dialog.title.weight {
+            check.font_weight("dialog.title.weight", weight);
         }
         let motion = dialog.motion;
         for (token, transition) in [
@@ -1542,6 +1547,35 @@ mod tests {
         assert!(matches!(
             shrunk.compile(),
             Err(ThemeCompileError::NegativeLength { token, .. }) if token == "dialog.close_size"
+        ));
+
+        let mut runaway = dark();
+        runaway.components.dialog = Some(super::super::DialogRecipe {
+            title_max_width: Some(crate::box_layout::LengthSpec::Auto),
+            ..super::super::DialogRecipe::DEFAULT
+        });
+        assert!(matches!(
+            runaway.compile(),
+            Err(ThemeCompileError::NotFinite { token, .. }) if token == "dialog.title_max_width"
+        ));
+        let mut unreadable = dark();
+        unreadable.components.dialog = Some(super::super::DialogRecipe {
+            title: super::super::RecipeText::new(0.0, None),
+            ..super::super::DialogRecipe::DEFAULT
+        });
+        assert!(matches!(
+            unreadable.compile(),
+            Err(ThemeCompileError::FontSizeOutOfRange { token, .. }) if token == "dialog.title.size"
+        ));
+        let mut weightless = dark();
+        weightless.components.dialog = Some(super::super::DialogRecipe {
+            title: super::super::RecipeText::new(15.0, Some(0)),
+            ..super::super::DialogRecipe::DEFAULT
+        });
+        assert!(matches!(
+            weightless.compile(),
+            Err(ThemeCompileError::FontWeightOutOfRange { token, .. })
+                if token == "dialog.title.weight"
         ));
 
         let mut ancient = dark();

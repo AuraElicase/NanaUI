@@ -190,12 +190,14 @@ impl UiWorld {
                     Some(intrinsic_height),
                     recipe,
                 );
-                let text_width = chrome.text_width(surface.width);
+                let text_width = chrome.text_width(surface, bounds);
+                let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe);
                 let body = chrome.body_box(surface);
                 let (title_x, title_y) = chrome.title_origin(surface);
                 // A danger dialog speaks in the status recipe's danger tone,
-                // over whatever colour the node's text would take.
-                let title_color = if *danger {
+                // over whatever colour the node's text would take, unless
+                // the recipe marks danger some other way.
+                let title_color = if *danger && recipe.danger_title {
                     self.style_model
                         .color(
                             self.theme
@@ -256,8 +258,8 @@ impl UiWorld {
                             },
                             Arc::clone(title),
                             false,
-                            14.0,
-                            Some(600),
+                            title_type.size,
+                            title_type.weight,
                         )
                     },
                     description: description.as_ref().map(|description| {

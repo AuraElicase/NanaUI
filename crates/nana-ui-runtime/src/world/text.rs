@@ -516,6 +516,7 @@ pub(super) fn shape_modal_text(
     id: StableNodeId,
     visual: &StandardVisual,
     inherited: &ComputedStyle,
+    recipe: &nana_ui_core::DialogRecipe,
     max_width: Option<f32>,
     shaper: &mut impl TextShaper,
 ) -> ModalTextPresentation {
@@ -523,6 +524,7 @@ pub(super) fn shape_modal_text(
         title,
         description,
         body_text,
+        kind,
         ..
     } = visual
     else {
@@ -534,9 +536,12 @@ pub(super) fn shape_modal_text(
         shaping: crate::TextShaping::Auto,
         ..Default::default()
     };
+    let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe);
     let mut title_style = inherited.clone();
-    title_style.font_size = nana_ui_core::type_scale::SECTION;
-    title_style.font_weight = Some(nana_ui_core::type_scale::SEMIBOLD);
+    title_style.font_size = title_type.size;
+    if let Some(weight) = title_type.weight {
+        title_style.font_weight = Some(weight);
+    }
     title_style.line_height = None;
     let mut description_style = inherited.clone();
     description_style.font_size = nana_ui_core::type_scale::META;
@@ -3870,10 +3875,16 @@ impl UiWorld {
                             self.theme.recipes().dialog(),
                             self.theme.border().hairline,
                         );
-                        let wrap_width = chrome.text_width(surface.width);
+                        let wrap_width = chrome.text_width(surface, root);
                         let runs = shaper.runs;
-                        let intrinsic =
-                            shape_modal_text(id, visual, computed, Some(wrap_width), &mut shaper);
+                        let intrinsic = shape_modal_text(
+                            id,
+                            visual,
+                            computed,
+                            self.theme.recipes().dialog(),
+                            Some(wrap_width),
+                            &mut shaper,
+                        );
                         work.record_text_pass(1, usize::from(shaper.runs > runs));
                         validate_text_metrics(id, intrinsic.title)?;
                         if let Some(description) = intrinsic.description {
@@ -4876,7 +4887,14 @@ impl UiWorld {
                 if let Some(visual @ StandardVisual::ModalFrame { .. }) = visual {
                     stampable = false;
                     let runs = shaper.runs;
-                    let intrinsic = shape_modal_text(id, visual, &style, None, &mut shaper);
+                    let intrinsic = shape_modal_text(
+                        id,
+                        visual,
+                        &style,
+                        self.theme.recipes().dialog(),
+                        None,
+                        &mut shaper,
+                    );
                     work.record_text_pass(1, usize::from(shaper.runs > runs));
                     validate_text_metrics(id, intrinsic.title)?;
                     if let Some(description) = intrinsic.description {

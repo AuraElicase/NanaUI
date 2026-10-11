@@ -26,8 +26,16 @@
 //! `margin-top: 12vh; max-height: 72vh` on its card writes
 //! `top: Viewport { Height, 12.0 }` and `max_height: Viewport { Height, 72.0 }`
 //! here.
+//!
+//! The title is the recipe's too: its type, whether a danger dialog speaks
+//! it in the danger tone, and how far it may run. A design whose header
+//! stands on a narrower shape than the card — a tab rising over the body —
+//! keeps the title inside that shape with [`DialogRecipe::title_max_width`]
+//! and starts its rule where the heading does with
+//! [`DialogDividerInset::Content`].
 
 use super::RadiusTier;
+use super::recipe::RecipeText;
 use crate::box_layout::LengthSpec;
 use crate::motion::Easing;
 use crate::style_model::SemanticColorRole;
@@ -116,6 +124,18 @@ impl DialogInsets {
     }
 }
 
+/// Where a dialog card's dividers start and end.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum DialogDividerInset {
+    /// Edge to edge of the card.
+    #[default]
+    Edge,
+    /// Inside the section's inline inset — the header's under the header,
+    /// the footer's over the footer — the way a rule under a heading starts
+    /// where the heading's text does.
+    Content,
+}
+
 /// The dialog card's placement in its scrim and how it is divided.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DialogRecipe {
@@ -152,6 +172,18 @@ pub struct DialogRecipe {
     pub header_divider: Option<SemanticColorRole>,
     /// A hairline over the footer, in this palette role; `None` draws none.
     pub footer_divider: Option<SemanticColorRole>,
+    /// Where the two hairlines start and end.
+    pub divider_inset: DialogDividerInset,
+    /// The title's type. A drawer keeps its own.
+    pub title: RecipeText,
+    /// Whether a danger dialog speaks its title in the status recipe's
+    /// danger tone. A design that marks danger with the title's icon and the
+    /// confirm button keeps the title in the overlay's text colour.
+    pub danger_title: bool,
+    /// Widest the header's text — the title and its description — may run,
+    /// as a CSS length: `%` of the card's width, `vw` / `vh` of the scrim.
+    /// `None` lets it run to the close button.
+    pub title_max_width: Option<LengthSpec>,
     /// How the dialog comes and goes.
     pub motion: DialogMotion,
 }
@@ -160,7 +192,8 @@ impl DialogRecipe {
     /// What both built-in themes use: 90px from the top, at most 76% of the
     /// scrim's height; a 16px icon, a 28px close button, 12px apart; the
     /// card's sections inset by the spacing steps they always were, with no
-    /// dividers, at the card radius.
+    /// dividers, at the card radius; a 14px semibold title that turns to the
+    /// danger tone on a danger dialog and runs to the close button.
     pub const DEFAULT: Self = Self {
         top: LengthSpec::Px(90.0),
         max_height: LengthSpec::Percent(76.0),
@@ -176,6 +209,13 @@ impl DialogRecipe {
         action_gap: super::space::MD,
         header_divider: None,
         footer_divider: None,
+        divider_inset: DialogDividerInset::Edge,
+        title: RecipeText::new(
+            super::type_scale::SECTION,
+            Some(super::type_scale::SEMIBOLD),
+        ),
+        danger_title: true,
+        title_max_width: None,
         motion: DialogMotion::DEFAULT,
     };
 
@@ -222,6 +262,15 @@ impl DialogRecipe {
     /// [`Self::max_height`] over a scrim of `width` × `height`.
     pub fn max_height_in(&self, width: f32, height: f32) -> f32 {
         resolve(self.max_height, width, height).unwrap_or(height)
+    }
+
+    /// [`Self::title_max_width`] for a card `card_width` wide over a scrim
+    /// of `width` × `height`: `%` reads the card, viewport units the scrim.
+    pub fn title_max_width_in(&self, card_width: f32, width: f32, height: f32) -> Option<f32> {
+        self.title_max_width?
+            .resolve_with(Some(card_width), Some((width, height)))
+            .filter(|value| value.is_finite())
+            .map(|value| value.max(0.0))
     }
 }
 
@@ -275,6 +324,43 @@ mod tests {
         };
         assert!((recipe.top_in(1000.0, 500.0) - 60.0).abs() < 1e-3);
         assert!((recipe.max_height_in(1000.0, 500.0) - 360.0).abs() < 1e-3);
+    }
+
+    /// The title is the one built-in dialogs always drew, and nothing
+    /// narrows it until a theme says so.
+    #[test]
+    fn the_default_title_is_the_semibold_section_title_dialogs_always_had() {
+        let recipe = DialogRecipe::DEFAULT;
+        assert_eq!(
+            recipe.title,
+            RecipeText::new(super::super::type_scale::SECTION, Some(600))
+        );
+        assert!(recipe.danger_title);
+        assert_eq!(recipe.divider_inset, DialogDividerInset::Edge);
+        assert_eq!(recipe.title_max_width_in(420.0, 1280.0, 800.0), None);
+    }
+
+    /// `%` reads the card, so a tab drawn at a share of the card's width
+    /// and the title kept inside it scale together; viewport units read
+    /// the scrim like every other dialog length.
+    #[test]
+    fn the_title_width_reads_the_card_for_percent_and_the_scrim_for_viewport_units() {
+        let tabbed = DialogRecipe {
+            title_max_width: Some(LengthSpec::Percent(50.0)),
+            ..DialogRecipe::DEFAULT
+        };
+        assert_eq!(tabbed.title_max_width_in(420.0, 1280.0, 800.0), Some(210.0));
+        let viewport = DialogRecipe {
+            title_max_width: Some(LengthSpec::Viewport {
+                axis: ViewportAxis::Width,
+                value: 10.0,
+            }),
+            ..DialogRecipe::DEFAULT
+        };
+        assert_eq!(
+            viewport.title_max_width_in(420.0, 1280.0, 800.0),
+            Some(128.0)
+        );
     }
 
     /// Without a footer the body keeps its own inset, unless the recipe
