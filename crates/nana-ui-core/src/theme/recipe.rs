@@ -312,6 +312,20 @@ impl StatusRecipe {
     }
 }
 
+/// One run of a component's own copy, as a recipe states it: CSS
+/// `font-size` and `font-weight`. `weight: None` keeps the node's own.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RecipeText {
+    pub size: f32,
+    pub weight: Option<u16>,
+}
+
+impl RecipeText {
+    pub const fn new(size: f32, weight: Option<u16>) -> Self {
+        Self { size, weight }
+    }
+}
+
 /// Authoring form of the whole registry.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ComponentThemeRegistry {

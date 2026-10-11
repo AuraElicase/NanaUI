@@ -13,10 +13,11 @@ pub use definition::{
     DesignTokens, FoundationTokens, ThemeCompileError, ThemeDefinition, ThemeGeneration, ThemeId,
     ThemeIdentity, ThemeSchemaVersion,
 };
-pub use dialog::{DialogInsets, DialogMotion, DialogRecipe, DialogTransition};
+pub use dialog::{DialogDividerInset, DialogInsets, DialogMotion, DialogRecipe, DialogTransition};
 pub use recipe::{
     ButtonRecipe, ButtonRecipeDraft, ButtonVariantDraft, ButtonVariantRecipe, CompiledRecipes,
-    ComponentRecipe, ComponentRecipeDraft, ComponentRecipeId, ComponentThemeRegistry, StatusRecipe,
+    ComponentRecipe, ComponentRecipeDraft, ComponentRecipeId, ComponentThemeRegistry, RecipeText,
+    StatusRecipe,
 };
 pub use registry::{ThemeChoice, ThemeRegistry, ThemeRegistryError, ThemeResolution};
 pub use scrollbar::{

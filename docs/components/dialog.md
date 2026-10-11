@@ -73,11 +73,15 @@ let export = Dialog::new("导出资源库").size(DialogSize::capped(560.0, 92.0)
 
 ## 口气与标题图标
 
-`.danger(true)` 让对话框用危险口气说话：标题取主题 status 配方里危险的那个语义色（内置主题是 `Danger`），压过节点自己的文字色。正文、说明不变。[ConfirmDialog](confirm-dialog.md) 的 `danger` 是同一个口气，除了确认按钮走危险色，标题也一样变色。
+`.danger(true)` 让对话框用危险口气说话：标题取主题 status 配方里危险的那个语义色（内置主题是 `Danger`），压过节点自己的文字色。正文、说明不变。[ConfirmDialog](confirm-dialog.md) 的 `danger` 是同一个口气，除了确认按钮走危险色，标题也一样变色。用标题图标和确认按钮表达危险的设计，在配方里写 `danger_title: false`，标题保持正文色，确认按钮照旧走危险色。
 
 `.title_icon(视图)` 在标题前放一个图标。标题行照 CSS 的 `display: flex; align-items: center` 排：`[图标] 标题 [关闭位]`，三者各占一格、在行里竖直居中，标题从图标后面开始，折行宽度让出图标和关闭位。行高取标题块和图标里高的那个；关闭位不撑高这一行，所以确认框忙碌时藏起关闭位，正文也不会跳。
 
 行里的尺寸归主题的 `DialogRecipe`：`icon_size`（图标格，内置 16）、`close_size`（关闭位格，内置 28）、`header_gap`（三者之间的间距，内置 12）和 `header_min_height`（行的最小高度，内置 0）。照 `.dialog-card__header { align-items: center; gap: 8px }` 加一个 24px 关闭钮写的设计，写 `close_size: 24.0, header_gap: 8.0, header_min_height: 24.0`。
+
+标题的字型也归配方：`title: RecipeText { size, weight }`，内置 14 / 600，就是 CSS 的 `font-size` 和 `font-weight`；`weight: None` 沿用节点自己的字重。测量和绘制读同一份，量出来的标题就是画出来的标题。抽屉保留自己的标题。
+
+`title_max_width: Option<LengthSpec>` 限制标题块（标题和说明）最宽能走多远：`%` 按卡片宽度算，`vw` / `vh` 按遮罩算，`None`（内置）一直走到关闭位。标题行站在比卡片窄的形状上时用它，比如卡面自己画了一个高出卡身的标签页、标题要留在标签里：写 `title_max_width: Some(LengthSpec::Percent(50.0))`，标题在卡宽的一半处折行或截断，无障碍名仍是完整标题。
 
 :::api
 
@@ -116,6 +120,7 @@ widget(Dialog::new("删除资源库").danger(true))
 | `footer: DialogInsets` | 0 / 14 / 16 | 底栏的 `padding`；底栏的内容盒是一个按钮的高度 |
 | `action_gap` | 8 | 底栏按钮之间的 `gap` |
 | `header_divider` / `footer_divider: Option<SemanticColorRole>` | `None` | 标题行的 `border-bottom`、底栏的 `border-top`，粗细是主题的 `border.hairline`，算进所在那一段的高度 |
+| `divider_inset: DialogDividerInset` | `Edge` | 分隔线从卡片边到边（`Edge`），或缩进到所在那一段的左右内边距里（`Content`）：标题行下的线从标题文字的起点开始，像标题下的一条细线 |
 | `radius: RadiusTier` | `Md` | 卡片的 `border-radius` |
 
 `.footer` 槽和确认框的按钮都放在底栏的内容盒里：分隔线和上下内边距之内，高一个按钮。抽屉不读这份配方，保留自己的排法。

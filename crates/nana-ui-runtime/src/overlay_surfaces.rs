@@ -554,6 +554,12 @@ pub(crate) struct ModalChrome {
     action_top: f32,
     header_divider: f32,
     footer_divider: f32,
+    /// Whether the hairlines keep inside the header's and the footer's
+    /// inline insets rather than running edge to edge.
+    inset_dividers: bool,
+    /// The recipe's widest header text, unresolved: it reads the card and
+    /// the scrim, which the measure does not know yet.
+    title_max_width: Option<LengthSpec>,
     drawer: bool,
 }
 
@@ -609,6 +615,8 @@ impl ModalChrome {
                 action_top: DRAWER_FOOTER_PAD_Y,
                 header_divider: 0.0,
                 footer_divider: 0.0,
+                inset_dividers: false,
+                title_max_width: None,
                 drawer,
             };
         }
@@ -642,16 +650,26 @@ impl ModalChrome {
             action_top: footer_top,
             header_divider,
             footer_divider,
+            inset_dividers: recipe.divider_inset == nana_ui_core::DialogDividerInset::Content,
+            title_max_width: recipe.title_max_width,
             drawer,
         }
     }
 
     /// How wide the title and its description may run: the header row less
-    /// the icon and the close button with their gaps.
-    pub fn text_width(self, surface_width: f32) -> f32 {
+    /// the icon and the close button with their gaps, and no wider than the
+    /// recipe's title width over a card `surface` in its `scrim`.
+    pub fn text_width(self, surface: crate::LayoutBox, scrim: crate::LayoutBox) -> f32 {
         let icon = self.icon.map_or(0.0, |size| size + self.gap);
         let close = self.close.map_or(0.0, |size| self.gap + size);
-        (surface_width - self.header_x * 2.0 - icon - close).max(0.0)
+        let row = (surface.width - self.header_x * 2.0 - icon - close).max(0.0);
+        let cap = self
+            .title_max_width
+            .and_then(|length| {
+                length.resolve_with(Some(surface.width), Some((scrim.width, scrim.height)))
+            })
+            .filter(|width| width.is_finite());
+        cap.map_or(row, |cap| row.min(cap.max(0.0)))
     }
 
     /// Where the title block starts: after the icon, centred in the row.
@@ -731,22 +749,54 @@ impl ModalChrome {
 
     /// The hairline under the header, when the recipe draws one.
     pub fn header_divider_box(self, surface: crate::LayoutBox) -> Option<crate::LayoutBox> {
-        (self.header_divider > 0.0).then_some(crate::LayoutBox {
-            x: surface.x,
-            y: surface.y + self.header_height - self.header_divider,
-            width: surface.width,
-            height: self.header_divider,
+        (self.header_divider > 0.0).then(|| {
+            let (x, width) = self.divider_span(surface, self.header_x);
+            crate::LayoutBox {
+                x,
+                y: surface.y + self.header_height - self.header_divider,
+                width,
+                height: self.header_divider,
+            }
         })
     }
 
     /// The hairline over the footer, when the recipe draws one.
     pub fn footer_divider_box(self, surface: crate::LayoutBox) -> Option<crate::LayoutBox> {
-        (self.footer_divider > 0.0).then_some(crate::LayoutBox {
-            x: surface.x,
-            y: surface.y + surface.height - self.footer_height,
-            width: surface.width,
-            height: self.footer_divider,
+        (self.footer_divider > 0.0).then(|| {
+            let (x, width) = self.divider_span(surface, self.footer_x);
+            crate::LayoutBox {
+                x,
+                y: surface.y + surface.height - self.footer_height,
+                width,
+                height: self.footer_divider,
+            }
         })
+    }
+
+    /// Where a hairline runs across the card: edge to edge, or inside the
+    /// section's `inline` inset.
+    fn divider_span(self, surface: crate::LayoutBox, inline: f32) -> (f32, f32) {
+        if self.inset_dividers {
+            (surface.x + inline, (surface.width - inline * 2.0).max(0.0))
+        } else {
+            (surface.x, surface.width)
+        }
+    }
+}
+
+/// The type a modal frame's title is set in: the recipe's for a dialog
+/// card, the fixed section title for a drawer, which keeps its own chrome.
+/// Shaping and paint both read it, so the measured title is the drawn one.
+pub(crate) fn modal_title_type(
+    kind: ModalSurfaceKind,
+    recipe: &nana_ui_core::DialogRecipe,
+) -> nana_ui_core::RecipeText {
+    match kind {
+        ModalSurfaceKind::Drawer(_) => nana_ui_core::RecipeText::new(
+            nana_ui_core::type_scale::SECTION,
+            Some(nana_ui_core::type_scale::SEMIBOLD),
+        ),
+        ModalSurfaceKind::Dialog(_) | ModalSurfaceKind::Confirm(_) => recipe.title,
     }
 }
 
@@ -1671,6 +1721,83 @@ mod tests {
         assert_eq!(
             surface.y + surface.height,
             footer_box.y + footer_box.height + nana_ui_core::DialogRecipe::DEFAULT.footer.bottom
+        );
+    }
+
+    /// A card whose header stands on a tab: the recipe sets the title's
+    /// type, keeps a danger title in the text colour, holds the title inside
+    /// the tab's share of the card and starts the rule where the heading
+    /// does. A drawer under the same theme keeps its own title.
+    #[test]
+    fn a_tab_headed_recipe_sets_the_title_and_keeps_it_and_the_rule_inside() {
+        use nana_ui_core::{
+            DialogDividerInset, DialogRecipe, LengthSpec, RecipeText, SemanticColorRole, StatusTone,
+        };
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let recipe = DialogRecipe {
+            title: RecipeText::new(15.0, Some(700)),
+            danger_title: false,
+            title_max_width: Some(LengthSpec::Percent(40.0)),
+            header_divider: Some(SemanticColorRole::BorderSoft),
+            divider_inset: DialogDividerInset::Content,
+            ..DialogRecipe::DEFAULT
+        };
+        cx.set_theme_definition(&nana_ui_core::ThemeDefinition::NANA_DARK.with_dialog(recipe))
+            .unwrap();
+        let confirm = cx
+            .create_component(
+                document,
+                ConfirmDialog::new(
+                    "删除这个场景以及它里面的全部模型和挂件",
+                    "场景内的模型、挂件与画布设置会一并删除。",
+                )
+                .danger(true),
+            )
+            .unwrap();
+        cx.assemble_confirm_dialog(confirm).unwrap();
+        let drawer = cx
+            .create_component(document, Drawer::new("检查器"))
+            .unwrap();
+        shaped_layout(&mut cx, document, 800.0, 600.0);
+
+        let theme = cx.world().theme();
+        let danger = theme
+            .style_model()
+            .color(theme.recipes().status().role(StatusTone::Danger))
+            .as_rgba_array();
+        let crate::ComponentGeometry::ModalFrame {
+            surface,
+            title,
+            header_divider: Some((rule, _)),
+            ..
+        } = modal_geometry(&cx, confirm.stable_id())
+        else {
+            panic!("a tab-headed confirm")
+        };
+        assert_eq!((title.font_size, title.font_weight), (15.0, Some(700)));
+        assert_ne!(title.color, Some(danger), "danger shows elsewhere");
+        assert!(
+            title.bounds.width <= surface.width * 0.4 + 0.01,
+            "{title:?} runs past the tab of {surface:?}"
+        );
+        let inline = recipe.header.inline;
+        assert_eq!(
+            (rule.x, rule.width),
+            (surface.x + inline, surface.width - inline * 2.0)
+        );
+
+        let crate::ComponentGeometry::ModalFrame { title, .. } =
+            modal_geometry(&cx, drawer.stable_id())
+        else {
+            panic!("drawer geometry")
+        };
+        assert_eq!(
+            (title.font_size, title.font_weight),
+            (
+                nana_ui_core::type_scale::SECTION,
+                Some(nana_ui_core::type_scale::SEMIBOLD)
+            )
         );
     }
 
