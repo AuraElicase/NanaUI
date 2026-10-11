@@ -366,9 +366,9 @@ fn a_run_names_the_instance_its_glyphs_were_shaped_at() {
 
 #[test]
 fn the_language_hint_reaches_opentype_locl() {
-    // Noto Sans SC substitutes its digit glyphs through `locl` under the
-    // `ZHS` language system of real scripts (`latn`, `hani`, ...), so the digit
-    // follows a Latin letter to inherit a script.
+    // Noto Sans SC's `latn` script has its own `locl` for each language
+    // system: the default one swaps the digits for shorter forms, `ZHS`
+    // keeps them. The digit follows a Latin letter to inherit that script.
     let (mut fonts, _) = system(&["noto-sans-sc"]);
     let mut shaper = Shaper::default();
     let source = TextSource::new("a0");

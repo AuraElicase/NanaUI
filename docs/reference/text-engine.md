@@ -416,7 +416,7 @@ ShapeRequest { source: &TextSource, style, direction, language, scale }
   第一个。标点、空格、数字不单独开 run。
 - **BiDi**：`unicode-bidi`。段落 level 由 `direction` 固定（CSS 语义。不做首强字符探测）。
   `unicode-bidi: bidi-override` 这类方向覆盖没有 CSS 输入可接。本阶段不提供。
-- `language` 进 HarfRust（`locl` 等）。也进 #90 的 fallback 语言提示。
+- `language` 进 HarfRust（`locl` 等）：每个 item 按自己的 script 选字体里这个语言的 OpenType 语言系统，拉丁 item 也一样。浏览器把 `lang` 交给 HarfBuzz 也是这样（CSS `font-language-override: normal`）。它也进 #90 的 fallback 语言提示，只决定同一 script 规则里的先后（平台默认只对汉字按语言排）。primary 覆盖的字直接用 primary、不进候选表，语言动不了它们的字体，拉丁字母和数字通常就是这样。
 
 ### Fallback 重试
 

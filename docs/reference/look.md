@@ -77,6 +77,8 @@ Vue CSS 的单层 `box-shadow`（outset 与 inset）和 `text-shadow`（仅 outs
 
 `word-break: break-all|break-word` 和 `line-break: anywhere` 会改 wrap。`keep-all` 不支持，声明了也会被跳过。`line-break: strict|loose` 按中日文规则裁剪断点。中文、日文（`lang` 为 zh / ja，含继承的）默认挤压行首行尾与相邻的标点；`text-spacing-trim: space-all` 关掉，`auto` 让放不下的行先挤标点再断行。`text-autospace`、`text-align: justify` + `text-justify`、`text-wrap-style: pretty` 按需打开。
 
+语言相当于 HTML 的 `lang`：整个应用用 `AppContext::set_default_language` 声明，一棵子树用 `MutationQueue::set_language`。哪里都没声明、文本引擎也没有兜底语言时，文字没有语言，也就不挤压标点。语言和浏览器里的 `lang` 一样，还按每段文字的 script 选字体自己的 OpenType 语言系统（`locl` 等），拉丁字母和数字也一样，只是不换字体。捆绑的 Noto Sans SC 就有这样的差别：没有语言，或者字体里没有这个语言的语言系统（`en`、`ja` 都是）时，拉丁文字里的数字 0–9 和 `…` 换成矮一些的字形；声明 `zh-CN`（或 `zh-Hans`）以后数字保持原样，直引号 `"` `'` 升高。Chrome 用这份字体画 `lang="zh-CN"` 也是这样。
+
 `writing-mode: vertical-rl | vertical-lr` 下，文字按列排。CJK 直立，拉丁侧卧。编辑器也在列里编辑。
 
 `@font-face` 在 stylesheet 解析时只收集规则。`url(...)` 的加载和字体注册发生在 `inject_stylesheet`。那是宿主适配器，`scene-view`，不在 CSS parse 里。
