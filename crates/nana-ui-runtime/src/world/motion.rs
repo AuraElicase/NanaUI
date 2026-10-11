@@ -65,8 +65,9 @@ impl UiWorld {
         self.reduced_motion = reduced;
     }
 
-    /// Whether motion is reduced: animated chrome lands at once.
-    pub(crate) fn reduced_motion(&self) -> bool {
+    /// Whether the application's reduce-motion preference holds: a
+    /// component that runs a timeline of its own leaves it still.
+    pub fn reduced_motion(&self) -> bool {
         self.reduced_motion
     }
 

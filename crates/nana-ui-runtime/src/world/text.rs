@@ -583,10 +583,14 @@ pub(super) fn shape_modal_text(
     }
 }
 
+/// The share of the track an indeterminate sweep's segment covers.
+const PROGRESS_SWEEP_SEGMENT: f32 = 0.35;
+
 pub(super) fn progress_geometry(
     bounds: LayoutBox,
     style: &ComputedStyle,
     value_ratio: f32,
+    mode: crate::ProgressMode,
     girth: f32,
     corner_radius: f32,
     label: Option<&Arc<str>>,
@@ -642,11 +646,32 @@ pub(super) fn progress_geometry(
             height: girth.min(bounds.height),
         }
     };
-    Some(crate::ComponentGeometry::Progress {
-        fill: LayoutBox {
+    let fill = match mode {
+        crate::ProgressMode::Value => LayoutBox {
             width: track.width * ratio,
             ..track
         },
+        // The segment comes in at the start and goes out past the end over
+        // one pass, cut to the track on the way.
+        crate::ProgressMode::Sweep { phase } => {
+            let phase = if phase.is_finite() {
+                phase.clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let lead = (1.0 + PROGRESS_SWEEP_SEGMENT) * phase - PROGRESS_SWEEP_SEGMENT;
+            let start = lead.clamp(0.0, 1.0);
+            let end = (lead + PROGRESS_SWEEP_SEGMENT).clamp(0.0, 1.0);
+            LayoutBox {
+                x: track.x + track.width * start,
+                width: track.width * (end - start),
+                ..track
+            }
+        }
+        crate::ProgressMode::Still => track,
+    };
+    Some(crate::ComponentGeometry::Progress {
+        fill,
         track,
         label: label_region,
         cancel,

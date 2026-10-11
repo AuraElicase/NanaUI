@@ -1065,6 +1065,9 @@ pub struct AppContext {
     /// Opt-in reproject when the installed component recipes change,
     /// registered from [`ComponentView::wants_recipe_reproject`].
     recipe_reproject_views: HashMap<StableNodeId, ChildReprojectFn, crate::BuildIdHasher>,
+    /// Opt-in reproject when the reduce-motion preference changes,
+    /// registered from [`ComponentView::wants_reduced_motion_reproject`].
+    reduced_motion_reproject_views: HashMap<StableNodeId, ChildReprojectFn, crate::BuildIdHasher>,
     /// Opt-in reproject when the host's text backend changes, registered from
     /// [`ComponentView::wants_text_backend_reproject`].
     text_backend_reproject_views: HashMap<StableNodeId, ChildReprojectFn, crate::BuildIdHasher>,
@@ -1475,6 +1478,7 @@ impl AppContext {
             child_reproject_views: HashMap::default(),
             metrics_reproject_views: HashMap::default(),
             recipe_reproject_views: HashMap::default(),
+            reduced_motion_reproject_views: HashMap::default(),
             text_backend_reproject_views: HashMap::default(),
             child_structure_owners: HashMap::default(),
             pending_child_reprojects: Vec::new(),
@@ -1600,13 +1604,13 @@ impl AppContext {
     /// drops it.
     pub fn set_reduced_motion(&mut self, reduced: bool) {
         self.reduced_motion_override = Some(reduced);
-        self.world.set_reduced_motion(self.reduced_motion());
+        self.apply_reduced_motion();
     }
 
     /// Follow the system preference again.
     pub fn follow_system_reduced_motion(&mut self) {
         self.reduced_motion_override = None;
-        self.world.set_reduced_motion(self.reduced_motion());
+        self.apply_reduced_motion();
     }
 
     /// The system's reduce-motion preference. The hosted runtime reports it
@@ -1614,7 +1618,31 @@ impl AppContext {
     /// embedding host calls this itself.
     pub fn set_system_reduced_motion(&mut self, reduced: bool) {
         self.system_reduced_motion = reduced;
-        self.world.set_reduced_motion(self.reduced_motion());
+        self.apply_reduced_motion();
+    }
+
+    /// Hand the effective preference to the world and, when it moved, to
+    /// the views that start or stop a timeline by it
+    /// ([`ComponentView::wants_reduced_motion_reproject`]).
+    fn apply_reduced_motion(&mut self) {
+        let reduced = self.reduced_motion();
+        if self.world.reduced_motion() == reduced {
+            return;
+        }
+        self.world.set_reduced_motion(reduced);
+        let ids: Vec<_> = self
+            .reduced_motion_reproject_views
+            .keys()
+            .copied()
+            .collect();
+        for id in ids {
+            let Some(reproject) = self.reduced_motion_reproject_views.get(&id).copied() else {
+                continue;
+            };
+            // A view that cannot project now (one mid-update) reads the
+            // preference on its next projection.
+            let _ = reproject(self, id);
+        }
     }
 
     /// Whether the last layout pass dropped lines of this text to honour its
@@ -3985,6 +4013,8 @@ impl AppContext {
             .retain(|id, _| !removed.contains(id));
         self.recipe_reproject_views
             .retain(|id, _| !removed.contains(id));
+        self.reduced_motion_reproject_views
+            .retain(|id, _| !removed.contains(id));
         self.text_backend_reproject_views
             .retain(|id, _| !removed.contains(id));
         self.pending_child_reprojects
@@ -4181,5 +4211,7 @@ pub(super) fn is_menu_surface(type_id: TypeId) -> bool {
 /// Types whose projection only starts timelines or surface motion for a
 /// mounted node, so a remount has to project them again.
 pub(super) fn reprojects_on_mount(type_id: TypeId) -> bool {
-    type_id == TypeId::of::<TextArea>() || is_menu_surface(type_id)
+    type_id == TypeId::of::<TextArea>()
+        || type_id == TypeId::of::<crate::Progress>()
+        || is_menu_surface(type_id)
 }

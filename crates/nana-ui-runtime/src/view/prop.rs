@@ -290,6 +290,10 @@ const_props! {
     crate::RangeSpanOrientation => crate::RangeSpanOrientation, |v| v;
     Option<f64> => Option<f64>, |v| v;
     f64 => Option<f64>, |v| Some(v);
+    Option<f32> => Option<f32>, |v| v;
+    f32 => Option<f32>, |v| Some(v);
+    // An unsuffixed literal settles on `f64`: `.thickness(3.0)`.
+    f64 => Option<f32>, |v| Some(v as f32);
     (f64, f64) => (f64, f64), |v| v;
     [f32; 4] => [f32; 4], |v| v;
     Vec<nana_ui_core::TreeNode<Arc<str>>> => Vec<nana_ui_core::TreeNode<Arc<str>>>, |v| v;

@@ -2210,15 +2210,19 @@ impl UiWorld {
                 value_ratio,
                 label,
                 cancellable,
+                mode,
+                thickness,
+                ..
             } => progress_geometry(
                 bounds,
                 style,
                 *value_ratio,
-                PROGRESS_GIRTH,
+                *mode,
+                *thickness,
                 // A pill, derived — not the literal `3.0` it used to be. The
                 // two were equal and free to drift, and only `LevelMeter`
                 // right below said so in code.
-                PROGRESS_GIRTH / 2.0,
+                *thickness / 2.0,
                 label.as_ref(),
                 *cancellable,
                 self.style_model
@@ -2237,6 +2241,7 @@ impl UiWorld {
                     bounds,
                     style,
                     *value_ratio,
+                    crate::ProgressMode::Value,
                     girth,
                     girth / 2.0,
                     None,

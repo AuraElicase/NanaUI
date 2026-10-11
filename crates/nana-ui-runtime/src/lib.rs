@@ -231,8 +231,8 @@ pub use dock::{
 pub use dropdown::{Dropdown, DropdownOption};
 pub use dynamic_form::{DynamicForm, DynamicFormEvent, DynamicFormField, DynamicFormOption};
 pub use feedback::{
-    EmptyState, LabeledValue, Progress, ProgressCancelled, Spinner, StatusBadge, ValidationMessage,
-    ValueEmphasis,
+    EmptyState, LabeledValue, Progress, ProgressCancelled, ProgressMode, Spinner, StatusBadge,
+    ValidationMessage, ValueEmphasis,
 };
 pub use file_tab::{FileTab, FileTabEvent};
 pub use find_replace::{FindReplaceBar, FindReplaceEvent, TextSearchBar};

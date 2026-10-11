@@ -723,11 +723,24 @@ impl UiWorld {
             StandardVisual::Range { .. } => paint(role(ComponentRecipeId::Range, false)),
             StandardVisual::Card { .. } => paint(role(ComponentRecipeId::Card, false)),
             StandardVisual::ListItem { .. } => paint(role(ComponentRecipeId::ListItem, false)),
+            // A bar may name its own fill; a still indeterminate one keeps
+            // only a trace of it, so the full track reads as no amount.
+            StandardVisual::Progress { mode, fill, .. } => {
+                let fill = fill.unwrap_or_else(|| role(ComponentRecipeId::Indicator, false));
+                match mode {
+                    crate::ProgressMode::Still => nana_ui_core::SemanticColorMix::alpha(
+                        fill,
+                        crate::feedback::PROGRESS_STILL_ALPHA,
+                    )
+                    .resolve(self.style_model)
+                    .as_rgba_array(),
+                    _ => paint(fill),
+                }
+            }
             StandardVisual::StatusBadge { .. }
             | StandardVisual::ValidationMessage { .. }
             | StandardVisual::EmptyState { .. }
             | StandardVisual::LabeledValue { .. }
-            | StandardVisual::Progress { .. }
             | StandardVisual::Spinner { .. }
             | StandardVisual::FormField { .. } => paint(role(ComponentRecipeId::Indicator, false)),
             StandardVisual::Select { .. }

@@ -394,9 +394,22 @@ impl<'a> ValidationPlan<'a> {
                                 })
                         }
                         Some(StandardVisual::Progress {
-                            value_ratio: ratio, ..
-                        })
-                        | Some(StandardVisual::LevelMeter {
+                            value_ratio: ratio,
+                            mode,
+                            thickness,
+                            ..
+                        }) => {
+                            let phase = match mode {
+                                crate::ProgressMode::Sweep { phase } => *phase,
+                                _ => 0.0,
+                            };
+                            [*ratio, phase]
+                                .iter()
+                                .any(|share| !share.is_finite() || !(0.0..=1.0).contains(share))
+                                || !thickness.is_finite()
+                                || *thickness <= 0.0
+                        }
+                        Some(StandardVisual::LevelMeter {
                             value_ratio: ratio, ..
                         }) => !ratio.is_finite() || !(0.0..=1.0).contains(ratio),
                         Some(StandardVisual::Scrollbar {
