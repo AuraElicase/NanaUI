@@ -205,12 +205,18 @@ impl UiWorld {
                         + presentation.description.map_or(0.0, |description| {
                             crate::overlay_surfaces::MODAL_TITLE_DESC_GAP + description.height
                         });
+                    // The header band stops where its divider starts, so a
+                    // shape drawn to its height meets the rule, not its far
+                    // edge.
+                    let header_height = chrome
+                        .header_divider_box(surface)
+                        .map_or(chrome.header_height, |rule| rule.y - surface.y);
                     let sections = crate::ModalSurfaceSections {
                         header: LayoutBox {
                             x: 0.0,
                             y: 0.0,
                             width: surface.width,
-                            height: chrome.header_height,
+                            height: header_height,
                         },
                         title: local(LayoutBox {
                             x: title_x,
