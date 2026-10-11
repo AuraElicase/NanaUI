@@ -969,8 +969,10 @@ impl AppContext {
         self.arm_toast_timer(id, remaining)
     }
 
-    /// Run or hold `id`'s dismiss timer as the toast's place says: an
-    /// assembled toast holds it while a pointer is over it or focus is
+    /// Run or hold `id`'s dismiss timer as the toast's place says: a toast in
+    /// a stack counts while the stack shows it and nothing holds the stack
+    /// (a pointer over any of its toasts, focus inside it); an assembled
+    /// toast elsewhere holds it while a pointer is over it or focus is
     /// inside it.
     pub(crate) fn sync_toast_timer(&mut self, id: StableNodeId) -> Result<(), FrameworkError> {
         if self.toast_timer_runs(id) {
@@ -981,6 +983,10 @@ impl AppContext {
     }
 
     fn toast_timer_runs(&self, id: StableNodeId) -> bool {
+        if let Some((stack, slot)) = self.toast_stack_place(id) {
+            return slot == crate::toast_stack::Slot::Shown
+                && !(self.pointer_within(stack) || self.focus_inside(stack));
+        }
         !(self.pointer_within(id) || self.focus_inside(id))
     }
 

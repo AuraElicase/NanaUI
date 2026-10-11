@@ -606,6 +606,8 @@ struct ComponentLifecycle {
     loading: HashMap<StableNodeId, LoadingComponent, crate::BuildIdHasher>,
     /// Toasts whose dismiss timer has started; a timer runs once per mount.
     toast_timers: HashMap<StableNodeId, ToastTimer, crate::BuildIdHasher>,
+    /// Per `ToastStack` that was pushed to, the toasts it holds.
+    toast_stacks: HashMap<StableNodeId, crate::toast_stack::StackState, crate::BuildIdHasher>,
     overlay_pointer_sequences: HashSet<(DocumentId, u64), crate::BuildIdHasher>,
     overlay_outside_presses: HashMap<(DocumentId, u64), (StableNodeId, u64), crate::BuildIdHasher>,
     overlay_activation_tokens: HashMap<StableNodeId, u64, crate::BuildIdHasher>,
@@ -4050,6 +4052,22 @@ impl AppContext {
             .retain(|child, (parent, _)| !removed.contains(child) && !removed.contains(parent));
         self.placed_assembled.retain(|id| !removed.contains(id));
         self.forget_reactive(removed);
+        if !self.component_lifecycle.toast_stacks.is_empty() {
+            self.forget_toast_stack_nodes(removed);
+        }
+    }
+
+    /// What each `ToastStack` pushed to holds.
+    pub(crate) fn toast_stacks(
+        &self,
+    ) -> &HashMap<StableNodeId, crate::toast_stack::StackState, crate::BuildIdHasher> {
+        &self.component_lifecycle.toast_stacks
+    }
+
+    pub(crate) fn toast_stacks_mut(
+        &mut self,
+    ) -> &mut HashMap<StableNodeId, crate::toast_stack::StackState, crate::BuildIdHasher> {
+        &mut self.component_lifecycle.toast_stacks
     }
 }
 

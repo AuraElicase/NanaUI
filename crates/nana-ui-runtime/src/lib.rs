@@ -137,6 +137,7 @@ pub mod text_shape_stats;
 mod text_width;
 mod thumbnail;
 mod toast;
+mod toast_stack;
 mod tree_view;
 mod video;
 pub mod view;
@@ -412,6 +413,7 @@ pub use text_node::{
 };
 pub use thumbnail::{DEFAULT_ASPECT as THUMBNAIL_DEFAULT_ASPECT, Thumbnail, ThumbnailState};
 pub use toast::{Toast, ToastAction, ToastDismissed, ToastProgress, ToastTone};
+pub use toast_stack::ToastStack;
 pub use tree_view::TreeView;
 pub use video::Video;
 pub use view_components::{
