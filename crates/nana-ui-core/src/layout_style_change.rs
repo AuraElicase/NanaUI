@@ -213,6 +213,12 @@ macro_rules! layout_style_fields {
                         changed = changed.union(LayoutStyleChange::$kind);
                     }
                 )*
+                // A box that leaves its parent's flow or joins it changes
+                // what the parent measures, as `display` does; insets, and a
+                // scheme that stays on one side, only place it.
+                if self.position.is_out_of_flow() != other.position.is_out_of_flow() {
+                    changed = changed.union(LayoutStyleChange::FLOW_STRUCTURE);
+                }
                 changed
             }
 
@@ -444,6 +450,48 @@ mod tests {
         assert_eq!(
             base.changed_fields(&growing),
             LayoutStyleChange::FLEX_SIZING
+        );
+    }
+
+    /// Leaving the flow or joining it is a change of the flow, which the
+    /// parent measures; moving between schemes on one side of it, or only
+    /// the insets, places the box.
+    #[test]
+    fn leaving_or_joining_the_flow_is_a_flow_change() {
+        use crate::PositionSpec;
+        let at = |position| LayoutStyle {
+            position,
+            ..LayoutStyle::default()
+        };
+        for (from, to) in [
+            (PositionSpec::Static, PositionSpec::Absolute),
+            (PositionSpec::Absolute, PositionSpec::Static),
+            (PositionSpec::Relative, PositionSpec::Fixed),
+        ] {
+            let changed = at(from).changed_fields(&at(to));
+            assert!(
+                changed.contains(LayoutStyleChange::FLOW_STRUCTURE),
+                "{from:?} -> {to:?}"
+            );
+            assert!(changed.intersects(LayoutStyleChange::POSITION));
+        }
+        for (from, to) in [
+            (PositionSpec::Static, PositionSpec::Relative),
+            (PositionSpec::Absolute, PositionSpec::Fixed),
+        ] {
+            assert_eq!(
+                at(from).changed_fields(&at(to)),
+                LayoutStyleChange::POSITION,
+                "{from:?} -> {to:?}"
+            );
+        }
+        let placed = LayoutStyle {
+            offset_top: Some(LengthSpec::Px(4.0)),
+            ..at(PositionSpec::Absolute)
+        };
+        assert_eq!(
+            at(PositionSpec::Absolute).changed_fields(&placed),
+            LayoutStyleChange::POSITION
         );
     }
 

@@ -782,6 +782,55 @@ mod tests {
         context.rebuild_hit_test(document());
     }
 
+    /// A host's frame as `RuntimeDocument::flush` drives it: the first
+    /// layout for the viewport, then incremental passes from the seeds each
+    /// batch of work left, until nothing is left to do.
+    fn host_frame(context: &mut AppContext, first: bool) {
+        let viewport = LayoutViewport::new(WINDOW.width, WINDOW.height);
+        let mut shaper = crate::MeasureTextShaper;
+        let mut force = first;
+        for _ in 0..8 {
+            let work = context.take_system_work();
+            if work.is_empty() && !force {
+                break;
+            }
+            context.resolve_styles(&work.style).unwrap();
+            context.shape_text(&work.text, &mut shaper).unwrap();
+            let mut seeds = work.layout_frontier_seeds.clone();
+            seeds.extend(context.take_layout_frontier_seeds(document()));
+            if force || !seeds.is_empty() {
+                if force {
+                    context
+                        .layout_document_for_viewport(document(), viewport, &seeds)
+                        .unwrap();
+                } else {
+                    context
+                        .layout_document_with_frontier(document(), viewport, &seeds)
+                        .unwrap();
+                }
+                let mut scope = context.take_last_layout_scope();
+                for _ in 0..4 {
+                    if !context
+                        .shape_text_for_layout_scoped(&scope, &mut shaper)
+                        .unwrap()
+                    {
+                        break;
+                    }
+                    let seeds = context.take_layout_frontier_seeds(document());
+                    if seeds.is_empty() {
+                        break;
+                    }
+                    context
+                        .layout_document_with_frontier(document(), viewport, &seeds)
+                        .unwrap();
+                    scope = context.take_last_layout_scope();
+                }
+            }
+            force = false;
+        }
+        context.rebuild_hit_test(document());
+    }
+
     fn slot_of(context: &AppContext, toast: Entity<Toast>) -> StableNodeId {
         context.world().parent_id(toast.stable_id()).unwrap()
     }
@@ -939,6 +988,75 @@ mod tests {
             Some(button.stable_id()),
             "a notice never takes focus"
         );
+    }
+
+    /// A host lays out incrementally. A stack in flow in a padded list —
+    /// the shape the gallery mounts — stays as tall as the toasts it shows
+    /// while they are measured, shown, queued, brought back, removed and
+    /// cleared, and the layout verifier finds every incremental pass equal to
+    /// a full layout: a slot leaving or joining the flow re-measures the
+    /// stack.
+    #[test]
+    fn incremental_host_frames_keep_a_stack_in_flow_as_tall_as_its_toasts() {
+        let mut context = AppContext::new();
+        let mut root_style = NodeStyle::default();
+        {
+            let layout = Arc::make_mut(&mut root_style.layout);
+            layout.width = Some(LengthSpec::Percent(100.0));
+            layout.height = Some(LengthSpec::Percent(100.0));
+            layout.padding_left = Some(LengthSpec::Px(20.0));
+            layout.padding_right = Some(LengthSpec::Px(20.0));
+            layout.padding_top = Some(LengthSpec::Px(20.0));
+            layout.padding_bottom = Some(LengthSpec::Px(20.0));
+        }
+        let root = context
+            .create_component(document(), crate::List::new().style(root_style))
+            .unwrap();
+        let mut style = NodeStyle::default();
+        {
+            let layout = Arc::make_mut(&mut style.layout);
+            layout.width = Some(LengthSpec::Percent(100.0));
+            layout.align_items = AlignSpec::End;
+        }
+        let stack = context
+            .create_component(document(), ToastStack::new().max_visible(2).style(style))
+            .unwrap();
+        let toasts = ["First", "Second", "Third"]
+            .map(|title| context.push_toast(stack, notice(title)).unwrap());
+        let mut hierarchy = MutationQueue::new();
+        hierarchy.insert(root.stable_id(), stack.stable_id(), None);
+        context.commit_mutations(hierarchy).unwrap();
+        host_frame(&mut context, true);
+
+        let gap = ToastRecipe::DEFAULT.stack_gap;
+        let as_tall_as_its_toasts = |context: &AppContext| {
+            let shown = context.shown_toasts(stack);
+            let heights: f32 = shown
+                .iter()
+                .map(|toast| bounds(context, slot_of(context, *toast)).height)
+                .sum();
+            let expected = heights + gap * shown.len().saturating_sub(1) as f32;
+            let height = bounds(context, stack.stable_id()).height;
+            assert!(
+                (height - expected).abs() < 0.01,
+                "{height} for {} toasts, {expected} expected",
+                shown.len()
+            );
+            shown
+        };
+        assert_eq!(as_tall_as_its_toasts(&context), vec![toasts[2], toasts[1]]);
+
+        context.remove_toast(stack, toasts[2]).unwrap();
+        host_frame(&mut context, false);
+        context.advance_animations(Duration::from_secs(1));
+        host_frame(&mut context, false);
+        assert_eq!(as_tall_as_its_toasts(&context), vec![toasts[1], toasts[0]]);
+
+        context.clear_toasts(stack).unwrap();
+        host_frame(&mut context, false);
+        context.advance_animations(Duration::from_secs(2));
+        host_frame(&mut context, false);
+        assert!(as_tall_as_its_toasts(&context).is_empty());
     }
 
     /// Newer toasts stand below older ones, a stack gap apart.
