@@ -16,22 +16,25 @@
 //!   and 100k nodes;
 //! - sequential: a frame places the boxes that moved and the way down to the
 //!   edit, and measures the same subtrees at every size. Only the edited
-//!   containers replay a suffix, and no more plans are recorded again than
-//!   boxes moved. At the flow end whose growth moves nothing after it, all of
-//!   that is a constant;
+//!   containers replay a suffix, or miss and record their plans again, the
+//!   same number at every size and no more than boxes moved: a container that
+//!   only moves takes its plan along. At the flow end whose growth moves
+//!   nothing after it, all of that is a constant;
 //! - text: a label at the head of a page, in a column it does not fill,
 //!   takes a longer string that still fits: the frame lays out once, as for
 //!   a label that cannot wrap, and nothing below the label moves, at 1k and
 //!   10k nodes. With the page's groups directly after the column, the frame
 //!   builds, walks and places the same at both sizes; a string that wraps
-//!   grows the column and moves every group after it, and the frontier that
-//!   found them is still the same;
+//!   grows the column and moves every group after it. Each group takes its
+//!   cards along at their offsets in it: the frontier that found them, the
+//!   children walked and the plans missed are still the same;
 //! - child list: a box arrives in that column, or in the page before it, and
 //!   leaves again. Every box after it moves once each way, none of them on
-//!   the frontier, found by the same frontier at 1k and 10k nodes; in a
-//!   column of a fixed height the whole frame costs the same. A box at
-//!   either end of the page itself leaves and arrives without a subtree
-//!   walked to measure it, the page's included; at the tail the frame costs
+//!   the frontier, found by the same frontier, with the same children walked
+//!   and plans missed, at 1k and 10k nodes; in a column of a fixed height
+//!   the whole frame costs the same. A box at either end of the page itself
+//!   leaves and arrives without a subtree walked to measure it, the page's
+//!   included, nor a group walked to move it; at the tail the frame costs
 //!   the same at both sizes but for the page's own result;
 //! - batch: a hundred seeds walk each edge of their union closure at most
 //!   twice and cost no more than a hundred single edits;
@@ -749,9 +752,17 @@ fn check_case(
             small_cost.suffixes_replayed, large_cost.suffixes_replayed,
             "{label}"
         );
-        // A plan is recorded again only for a container whose boxes moved:
-        // boxes are placed in page coordinates, so a group that moves walks
-        // its children to place them again. Nothing before the edit does.
+        // Boxes are placed in page coordinates, so every box in a group that
+        // moves is written again; but the group takes its plans along, and
+        // only the edited containers miss or record theirs again: the same
+        // number at every size, and never more than boxes moved. (A context
+        // that records no plan, the inline one, still walks its children
+        // when it moves.)
+        assert_eq!(
+            (small_cost.plan_misses, small_cost.plan_rebuilds),
+            (large_cost.plan_misses, large_cost.plan_rebuilds),
+            "{label}"
+        );
         for case in [small, large] {
             assert!(
                 case.cost.plan_rebuilds <= case.moved,
@@ -1534,7 +1545,9 @@ fn issue259_a_longer_label_moves_nothing_below_it() {
 /// frame builds, walks and places the same at both sizes, and only the label
 /// moves. One that wraps in a narrow column grows it: every group after it
 /// moves down once -- real output, which grows with the page -- while what
-/// was built, walked and measured to find them does not.
+/// was built, walked and measured to find them does not. Each group takes
+/// its cards along at their offsets in it: the children walked, the plans
+/// missed and the sizes looked up do not grow with the page either.
 #[test]
 fn issue259_a_label_costs_its_column_not_the_groups_after_it() {
     use super::reflow_oracle::{self, Builder, FILLER_GROUP_NODES};
@@ -1571,6 +1584,7 @@ fn issue259_a_label_costs_its_column_not_the_groups_after_it() {
     ] {
         let mut found = Vec::new();
         let mut costs = Vec::new();
+        let mut lookups = Vec::new();
         for nodes in [1_000, 10_000] {
             let _unguarded = (nodes > 1_000).then(skip_layout_verify);
             let label_case = format!("{case}, {nodes} nodes");
@@ -1630,12 +1644,23 @@ fn issue259_a_label_costs_its_column_not_the_groups_after_it() {
                 passes,
                 cost.frontier(),
                 cost.full_subtrees,
+                // A group that moved took its cards along: none of them was
+                // walked to place it, nor its plan missed.
+                (cost.children_walked, cost.plan_misses, cost.plan_rebuilds),
                 context.layout_frontier_stats(document),
             ));
             costs.push(cost);
+            lookups.push(counters.layout_measure_cache_hits);
         }
-        // What was built, walked and measured to find what moved.
+        // What was built, walked and measured to find what moved, and walked
+        // to move it.
         assert_eq!(found[0], found[1], "{case}");
+        assert!(
+            lookups[1] <= 2 * lookups[0] + 8,
+            "{case}: {} sizes looked up at 1k, {} at 10k",
+            lookups[0],
+            lookups[1]
+        );
         if !grows {
             assert_eq!(costs[0].structural(), costs[1].structural(), "{case}");
         }
@@ -1654,8 +1679,10 @@ fn issue259_a_label_costs_its_column_not_the_groups_after_it() {
 /// what it holds grows and shrinks back, as does the page, and every box
 /// after the new one moves once each way -- real output -- while what was
 /// built, walked and measured to find them does not grow: none of them is
-/// on the frontier. A column of a fixed height keeps its box, and the frame
-/// costs the same at both sizes.
+/// on the frontier. Nor does what moves them: each group takes its cards
+/// along at their offsets in it, so the children walked, the plans missed
+/// and the sizes looked up stay the same. A column of a fixed height keeps
+/// its box, and the frame costs the same at both sizes.
 #[test]
 fn issue259_a_child_list_edit_costs_its_parent_not_the_groups_after_it() {
     use super::reflow_oracle::{self, Builder, FILLER_GROUP_NODES};
@@ -1699,6 +1726,7 @@ fn issue259_a_child_list_edit_costs_its_parent_not_the_groups_after_it() {
         let grows = height.is_none();
         let mut found = Vec::new();
         let mut costs = Vec::new();
+        let mut lookups = Vec::new();
         for nodes in [1_000, 10_000] {
             let _unguarded = (nodes > 1_000).then(skip_layout_verify);
             let (mut context, document, at, still, mut shaper) =
@@ -1755,15 +1783,23 @@ fn issue259_a_child_list_edit_costs_its_parent_not_the_groups_after_it() {
                 found.push((
                     cost.frontier(),
                     cost.full_subtrees,
+                    // A group that moved took its cards along: none of them
+                    // was walked to place it, nor its plan missed.
+                    (cost.children_walked, cost.plan_misses, cost.plan_rebuilds),
                     context.layout_frontier_stats(document),
                 ));
                 costs.push(cost);
+                lookups.push(counters.layout_measure_cache_hits);
             }
         }
-        // What was built, walked and measured to find them: the insertion
-        // and the removal, at 1k and at 10k.
+        // What was built, walked and measured to find them, and walked to
+        // move them: the insertion and the removal, at 1k and at 10k.
         assert_eq!(found[..2], found[2..], "{case}");
-        for (small, large) in costs[..2].iter().zip(&costs[2..]) {
+        for ((small, large), (small_lookups, large_lookups)) in costs[..2]
+            .iter()
+            .zip(&costs[2..])
+            .zip(lookups[..2].iter().zip(&lookups[2..]))
+        {
             if !grows {
                 assert_eq!(small.structural(), large.structural(), "{case}");
             }
@@ -1772,6 +1808,10 @@ fn issue259_a_child_list_edit_costs_its_parent_not_the_groups_after_it() {
                 "{case}: {} nodes measured at 1k, {} at 10k",
                 small.measured,
                 large.measured
+            );
+            assert!(
+                *large_lookups <= 2 * small_lookups + 8,
+                "{case}: {small_lookups} sizes looked up at 1k, {large_lookups} at 10k"
             );
         }
     }
@@ -1785,8 +1825,9 @@ fn issue259_a_child_list_edit_costs_its_parent_not_the_groups_after_it() {
 /// they recorded, and the groups it kept are not measured again. At the tail
 /// nothing else moves, and the frame costs the same at both sizes but for
 /// the page's own result, which holds a placement for every group. At the
-/// head every box after the edit moves once -- real output -- and the only
-/// children walked are those of boxes that moved, placed again with them.
+/// head every box after the edit moves once -- real output -- and each group
+/// takes its cards along at their offsets in it: the children walked, the
+/// plans missed and the sizes looked up are the same at both sizes.
 #[test]
 fn issue259_a_child_list_edit_in_the_page_measures_the_edit_not_the_page() {
     use super::reflow_oracle::{self, Builder, FILLER_GROUP_NODES};
@@ -1820,6 +1861,7 @@ fn issue259_a_child_list_edit_in_the_page_measures_the_edit_not_the_page() {
         let case = if head { "head" } else { "tail" };
         let mut found = Vec::new();
         let mut costs = Vec::new();
+        let mut lookups = Vec::new();
         for nodes in [1_000, 10_000] {
             let _unguarded = (nodes > 1_000).then(skip_layout_verify);
             let (mut context, document, page, before, mut shaper) =
@@ -1878,27 +1920,31 @@ fn issue259_a_child_list_edit_in_the_page_measures_the_edit_not_the_page() {
                     "{label}: {moved} boxes moved, {} placed: {cost:?}",
                     cost.placed
                 );
-                // Nothing walked a subtree to measure it, and every child a
-                // container walked was a box that moved.
+                // Nothing walked a subtree to measure it.
                 assert_eq!(cost.full_subtrees, 0, "{label}: {cost:?}");
-                assert!(
-                    cost.children_walked <= shifted,
-                    "{label}: {} children walked, {shifted} boxes moved: {cost:?}",
-                    cost.children_walked
-                );
                 let (mut cold, ..) = build(nodes, head, (!leaves).then_some(arriving));
                 assert_matches_cold(&mut context, &mut cold, document);
                 found.push((
                     cost.frontier(),
                     cost.measured,
+                    // A group that moved took its cards along: none of them
+                    // was walked to place it, nor its plan missed.
+                    (cost.children_walked, cost.plan_misses, cost.plan_rebuilds),
                     context.layout_frontier_stats(document),
                 ));
                 costs.push(cost);
+                lookups.push(counters.layout_measure_cache_hits);
             }
         }
-        // What was built, walked and measured: the leaving and the arriving,
-        // at 1k and at 10k.
+        // What was built, walked and measured, and walked to move the groups:
+        // the leaving and the arriving, at 1k and at 10k.
         assert_eq!(found[..2], found[2..], "{case}");
+        for (small, large) in lookups[..2].iter().zip(&lookups[2..]) {
+            assert!(
+                *large <= 2 * small + 8,
+                "{case}: {small} sizes looked up at 1k, {large} at 10k"
+            );
+        }
         if !head {
             for (small, large) in costs[..2].iter().zip(&costs[2..]) {
                 assert_eq!(

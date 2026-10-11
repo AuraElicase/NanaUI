@@ -1022,6 +1022,7 @@ pub(super) fn place_grid_2d_items(
                 intrinsic: item.intrinsic,
                 at_main: None,
                 origin: child_origin,
+                offset: Some(offset),
                 size: child_size,
                 cursor_before: 0.0,
                 // A grid aligns baseline items to the start of their area.

@@ -5081,6 +5081,8 @@ struct ScopedStep {
     children_measured: usize,
     measure_plans_reused: usize,
     plans_reused: usize,
+    plan_misses: usize,
+    plan_rebuilds: usize,
     suffixes_replayed: usize,
     full_document_fallbacks: usize,
 }
@@ -5112,6 +5114,8 @@ fn scoped_step_matches_full(
         children_measured: execution.children_measured,
         measure_plans_reused: execution.measure_plans_reused,
         plans_reused: execution.placement_plans_reused,
+        plan_misses: execution.plan_misses,
+        plan_rebuilds: execution.plan_rebuilds,
         suffixes_replayed: execution.suffixes_replayed,
         full_document_fallbacks: retained.frontier_stats(document).full_document_fallbacks,
     };
@@ -5949,16 +5953,167 @@ fn content_growth_under_a_child_moves_its_siblings_with(container_height: Option
              this test exists to guard is never consulted"
         );
     } else {
-        // The container's own height moved, so the measure plan must have been
-        // REJECTED -- and rejecting it is the whole point. What has to be true
-        // is that it was consulted and said no, which shows up as the container
-        // re-measuring its children.
+        // The container's own height moved, so its measure plan must not hand
+        // back the old one -- the full recompute above would catch that. It is
+        // consulted, and takes the row's growth from the sum it recorded rather
+        // than measuring every row again; the rows after the grown one only
+        // move, taking their labels along. What has to be true is that the plan
+        // was reached at all.
         assert!(
-            step.children_measured >= ROWS as usize,
-            "a hugging container whose child grew must re-measure its children; \
-             it measured {}",
-            step.children_measured
+            step.measure_plans_reused > 0,
+            "a hugging container whose child grew must consult its measure plan, \
+             or the check this test exists to guard is never reached"
         );
+    }
+}
+
+/// A container that only moves takes its children along (see
+/// `ContainerPlan::moved_to`). The box before it grows and shrinks back, and
+/// everything in it lands where a full layout puts it -- a row in flow
+/// shifted relatively, the cells of a grid, a child placed against its content
+/// box from the top left and one from the bottom right -- while a child fixed
+/// to the viewport stays. Nothing in it misses or records its plan again: the
+/// container is padded and bordered, so its content box moves with it.
+#[test]
+fn a_container_that_only_moves_takes_its_children_along() {
+    let viewport = LayoutViewport::new(320.0, 400.0);
+    let document = DocumentId::new(1).unwrap();
+    let mut world = UiWorld::new();
+    let mut queue = MutationQueue::new();
+    let style = |queue: &mut MutationQueue, node: u64, layout: LayoutStyle| {
+        queue.set_style(
+            id(node),
+            NodeStyle {
+                layout: Arc::new(layout),
+                ..NodeStyle::default()
+            },
+        );
+    };
+    let fixed = |width: f32, height: f32| LayoutStyle {
+        width: Some(LengthSpec::Px(width)),
+        height: Some(LengthSpec::Px(height)),
+        ..LayoutStyle::default()
+    };
+    queue.create(id(1), document, NodeKind::Document);
+    // The page column (2), the box that grows (3) and the container that only
+    // moves (4): a row (5), a grid (6) of three cells (7-9), two children
+    // positioned in its content box (10, 11) and one fixed (12).
+    for (node, parent) in [
+        (2, 1),
+        (3, 2),
+        (4, 2),
+        (5, 4),
+        (6, 4),
+        (7, 6),
+        (8, 6),
+        (9, 6),
+        (10, 4),
+        (11, 4),
+        (12, 4),
+    ] {
+        queue.create(id(node), document, NodeKind::Element { tag: "div".into() });
+        queue.insert(id(parent), id(node), None);
+    }
+    style(
+        &mut queue,
+        2,
+        LayoutStyle {
+            width: Some(LengthSpec::Px(300.0)),
+            direction: Some(FlexDirection::Column),
+            ..LayoutStyle::default()
+        },
+    );
+    style(&mut queue, 3, fixed(60.0, 20.0));
+    style(
+        &mut queue,
+        4,
+        LayoutStyle {
+            width: Some(LengthSpec::Px(200.0)),
+            direction: Some(FlexDirection::Column),
+            padding: Some(LengthSpec::Px(5.0)),
+            border_width: Some(2.0),
+            gap: Some(LengthSpec::Px(3.0)),
+            ..LayoutStyle::default()
+        },
+    );
+    style(
+        &mut queue,
+        5,
+        LayoutStyle {
+            position: PositionSpec::Relative,
+            offset_left: Some(LengthSpec::Px(7.0)),
+            ..fixed(60.0, 12.0)
+        },
+    );
+    style(
+        &mut queue,
+        6,
+        LayoutStyle {
+            display: Some(DisplaySpec::Grid),
+            width: Some(LengthSpec::Px(100.0)),
+            grid_columns: Some(vec![GridTrack::Px(40.0), GridTrack::Px(60.0)]),
+            ..LayoutStyle::default()
+        },
+    );
+    for cell in [7, 8, 9] {
+        style(&mut queue, cell, fixed(30.0, 10.0));
+    }
+    style(
+        &mut queue,
+        10,
+        LayoutStyle {
+            position: PositionSpec::Absolute,
+            offset_top: Some(LengthSpec::Px(4.0)),
+            offset_left: Some(LengthSpec::Px(8.0)),
+            ..fixed(30.0, 10.0)
+        },
+    );
+    style(
+        &mut queue,
+        11,
+        LayoutStyle {
+            position: PositionSpec::Absolute,
+            offset_bottom: Some(LengthSpec::Px(3.0)),
+            offset_right: Some(LengthSpec::Px(6.0)),
+            ..fixed(20.0, 10.0)
+        },
+    );
+    style(
+        &mut queue,
+        12,
+        LayoutStyle {
+            position: PositionSpec::Fixed,
+            offset_top: Some(LengthSpec::Px(10.0)),
+            offset_left: Some(LengthSpec::Px(10.0)),
+            ..fixed(20.0, 20.0)
+        },
+    );
+    world.commit(queue).unwrap();
+    let work = world.take_system_work();
+    world.resolve_styles(&work.style).unwrap();
+    let mut retained = RetainedLayoutCache::default();
+    let emitted = RuntimeLayoutEngine
+        .layout_document_with_frontier(&world, document, viewport, &[], &mut retained, true)
+        .unwrap();
+    write_changed_boxes(&mut world, &emitted);
+    let _ = world.take_system_work();
+
+    let fixed_box = world.layout_box(id(12));
+    for height in [35.0, 20.0, 35.0] {
+        let mut queue = MutationQueue::new();
+        style(&mut queue, 3, fixed(60.0, height));
+        world.commit(queue).unwrap();
+        let before = world.layout_box(id(4)).unwrap();
+        let label = format!("the box before it {height} px tall");
+        let step = scoped_step_matches_full(&mut world, document, viewport, &mut retained, &label);
+        let after = world.layout_box(id(4)).unwrap();
+        assert_ne!(before.y, after.y, "{label}: the container moved");
+        assert_eq!(
+            (step.plan_misses, step.plan_rebuilds),
+            (0, 0),
+            "{label}: what moved took its plans along"
+        );
+        assert_eq!(world.layout_box(id(12)), fixed_box, "{label}");
     }
 }
 
