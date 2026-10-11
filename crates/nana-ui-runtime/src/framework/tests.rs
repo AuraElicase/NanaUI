@@ -10500,3 +10500,30 @@ fn hover_listeners_hear_entry_and_exit_of_their_subtree_once() {
     }
     assert_eq!(*heard.lock().unwrap(), [true, false, true, false]);
 }
+
+/// A composite makes a component it holds a live region; the component
+/// projecting its own accessibility state again keeps the setting.
+#[test]
+fn a_live_region_survives_its_component_projecting_its_own_state() {
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let toast = context
+        .create_component(
+            document,
+            crate::Toast::new("Saved", crate::ToastTone::Success),
+        )
+        .unwrap();
+    let mut live = MutationQueue::new();
+    live.set_live(toast.stable_id(), Some(crate::AccessibilityLive::Polite));
+    context.commit_mutations(live).unwrap();
+    context
+        .update_component(toast, |toast, _| toast.title = Arc::from("Exported"))
+        .unwrap();
+    let projected = context
+        .world()
+        .project_accessibility_nodes(&[toast.stable_id()])
+        .pop()
+        .expect("projected");
+    assert_eq!(projected.label.as_deref(), Some("Exported"));
+    assert_eq!(projected.live, Some(crate::AccessibilityLive::Polite));
+}

@@ -490,6 +490,11 @@ impl UiWorld {
             modal: state.modal,
             busy: state.busy,
             invalid: state.invalid,
+            // A hidden container stays neutral: it is no live region either,
+            // as a `visibility: hidden` element is none on the web.
+            live: (visible && !self.live_regions.is_empty())
+                .then(|| self.live(id))
+                .flatten(),
             numeric_minimum: state.numeric_minimum,
             numeric_maximum: state.numeric_maximum,
             numeric_step: state.numeric_step,
@@ -578,6 +583,7 @@ impl UiWorld {
                     modal: false,
                     busy: false,
                     invalid: false,
+                    live: None,
                     numeric_minimum: None,
                     numeric_maximum: None,
                     numeric_step: None,

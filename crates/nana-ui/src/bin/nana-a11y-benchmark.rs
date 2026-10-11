@@ -28,6 +28,7 @@ fn node(value: u64) -> AccessibilityNode {
         modal: false,
         busy: false,
         invalid: false,
+        live: None,
         numeric_minimum: None,
         numeric_maximum: None,
         numeric_step: None,

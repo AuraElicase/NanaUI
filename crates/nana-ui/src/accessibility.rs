@@ -5,14 +5,15 @@ use std::collections::VecDeque;
 
 use accesskit::ActionData;
 use accesskit::{
-    Action, HasPopup, Invalid, Node, NodeId, Orientation, Rect, Role, ScrollUnit, TextDirection,
-    TextPosition, TextSelection as AccessKitTextSelection, Toggled, TreeId, TreeInfo, TreeUpdate,
+    Action, HasPopup, Invalid, Live, Node, NodeId, Orientation, Rect, Role, ScrollUnit,
+    TextDirection, TextPosition, TextSelection as AccessKitTextSelection, Toggled, TreeId,
+    TreeInfo, TreeUpdate,
 };
 #[cfg(all(feature = "hosted", not(target_os = "android")))]
 use nana_ui_runtime::AccessibilityUpdate;
 use nana_ui_runtime::{
-    AccessibilityDelta, AccessibilityNode, AccessibilityRole, AccessibilityScrollDirection,
-    SelectionOrientation, StableNodeId,
+    AccessibilityDelta, AccessibilityLive, AccessibilityNode, AccessibilityRole,
+    AccessibilityScrollDirection, SelectionOrientation, StableNodeId,
 };
 
 use accesskit::ActionRequest;
@@ -1039,6 +1040,13 @@ fn project_node(
     if node.invalid {
         projected.set_invalid(Invalid::True);
     }
+    if let Some(live) = node.live {
+        projected.set_live(match live {
+            AccessibilityLive::Off => Live::Off,
+            AccessibilityLive::Polite => Live::Polite,
+            AccessibilityLive::Assertive => Live::Assertive,
+        });
+    }
     if let Some(value) = node.numeric_value {
         projected.set_numeric_value(value);
     }
@@ -1436,6 +1444,7 @@ mod tests {
             modal: false,
             busy: false,
             invalid: false,
+            live: None,
             numeric_minimum: None,
             numeric_maximum: None,
             numeric_step: None,
@@ -2046,6 +2055,51 @@ mod tests {
         };
         assert_eq!(project(entry.stable_id()).has_popup(), Some(HasPopup::Menu));
         assert_eq!(project(plain.stable_id()).has_popup(), None);
+    }
+
+    /// A live region carries its politeness to AccessKit as `aria-live`
+    /// does; a node no composite made live says nothing, so the platform's
+    /// default for its role stands.
+    #[test]
+    fn a_live_region_projects_its_politeness() {
+        for (live, expected) in [
+            (AccessibilityLive::Off, Live::Off),
+            (AccessibilityLive::Polite, Live::Polite),
+            (AccessibilityLive::Assertive, Live::Assertive),
+        ] {
+            let mut region = node(1, None, &[]);
+            region.live = Some(live);
+            let (_, projected) = project_node(&region, None, true, 1.0)
+                .into_iter()
+                .next()
+                .unwrap();
+            assert_eq!(projected.live(), Some(expected));
+        }
+        let (_, unset) = project_node(&node(1, None, &[]), None, true, 1.0)
+            .into_iter()
+            .next()
+            .unwrap();
+        assert_eq!(unset.live(), None);
+
+        use nana_ui_runtime::{AppContext, DocumentId, MutationQueue, Toast, ToastTone};
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let toast = cx
+            .create_component(document, Toast::new("Saved", ToastTone::Success))
+            .unwrap();
+        let mut live = MutationQueue::new();
+        live.set_live(toast.stable_id(), Some(AccessibilityLive::Assertive));
+        cx.commit_mutations(live).unwrap();
+        let node = cx
+            .world()
+            .project_accessibility_nodes(&[toast.stable_id()])
+            .pop()
+            .expect("projected");
+        let (_, projected) = project_node(&node, None, true, 1.0)
+            .into_iter()
+            .next()
+            .unwrap();
+        assert_eq!(projected.live(), Some(Live::Assertive));
     }
 
     #[test]

@@ -1,9 +1,10 @@
 use crate::{
-    AccessibilityState, AnimationId, AnimationPlayback, AnimationSpec, ComponentTypeId,
-    CustomRenderNode, DocumentId, HighlightRequest, ImeComposition, InteractionState, LayoutBox,
-    NodeKind, NodeStyle, OverlayHostState, ScrollMetrics, ScrollOffset, StableNodeId,
-    StandardVisual, TextCodeFold, TextCompletion, TextContent, TextHover, TextInlay,
-    TextInputState, TextSelection, TextSignatureHelp, components::TextSnippetSession,
+    AccessibilityLive, AccessibilityState, AnimationId, AnimationPlayback, AnimationSpec,
+    ComponentTypeId, CustomRenderNode, DocumentId, HighlightRequest, ImeComposition,
+    InteractionState, LayoutBox, NodeKind, NodeStyle, OverlayHostState, ScrollMetrics,
+    ScrollOffset, StableNodeId, StandardVisual, TextCodeFold, TextCompletion, TextContent,
+    TextHover, TextInlay, TextInputState, TextSelection, TextSignatureHelp,
+    components::TextSnippetSession,
 };
 use nana_ui_core::ThemeAppearance;
 use std::{sync::Arc, time::Duration};
@@ -167,6 +168,12 @@ pub enum UiMutation {
     SetLabelledBy {
         id: StableNodeId,
         label: Option<StableNodeId>,
+    },
+    /// Announce changes inside `id` as `live` says (`aria-live`); `None`
+    /// removes the setting.
+    SetLive {
+        id: StableNodeId,
+        live: Option<AccessibilityLive>,
     },
     SetSurfaceOpen {
         id: StableNodeId,
@@ -557,6 +564,16 @@ impl MutationQueue {
     /// its state keeps it.
     pub fn set_labelled_by(&mut self, id: StableNodeId, label: Option<StableNodeId>) {
         self.mutations.push(UiMutation::SetLabelledBy { id, label });
+    }
+
+    /// Make `id` a live region: assistive technology announces what changes
+    /// inside it as `live` says, `None` removes the setting. A composite
+    /// whose notices come and go (a stack of toasts) sets it on the node
+    /// that holds them. Like [`Self::set_labelled_by`] it belongs to the
+    /// composite, not to the node's own [`AccessibilityState`], so the node
+    /// re-projecting its state keeps it.
+    pub fn set_live(&mut self, id: StableNodeId, live: Option<AccessibilityLive>) {
+        self.mutations.push(UiMutation::SetLive { id, live });
     }
 
     pub fn set_overlay_host(&mut self, host: StableNodeId, state: OverlayHostState) {

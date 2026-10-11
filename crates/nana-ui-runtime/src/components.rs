@@ -3107,6 +3107,19 @@ pub enum AccessibilityRole {
     Generic,
 }
 
+/// How assistive technology announces what changes inside a live region:
+/// `aria-live`. The composite that owns the region sets it with
+/// [`crate::MutationQueue::set_live`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AccessibilityLive {
+    /// Changes are not announced.
+    Off,
+    /// Changes are announced when the user is idle.
+    Polite,
+    /// Changes are announced at once, interrupting what is being read.
+    Assertive,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AccessibilityState {
     pub role: AccessibilityRole,
@@ -3168,6 +3181,10 @@ pub struct AccessibilityNode {
     pub modal: bool,
     pub busy: bool,
     pub invalid: bool,
+    /// How changes inside this node are announced, as the composite that
+    /// owns it set it ([`crate::MutationQueue::set_live`]); `None` leaves
+    /// it to the platform's default for the role.
+    pub live: Option<AccessibilityLive>,
     pub numeric_minimum: Option<f64>,
     pub numeric_maximum: Option<f64>,
     pub numeric_step: Option<f64>,

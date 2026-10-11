@@ -422,6 +422,9 @@ impl<'a> ValidationPlan<'a> {
                         self.require_exists(*label)?;
                     }
                 }
+                UiMutation::SetLive { id, .. } => {
+                    self.require_exists(*id)?;
+                }
                 UiMutation::SetSurfaceOpen { id, open, .. } => {
                     self.require_exists(*id)?;
                     self.surface_open.insert(*id, *open);
@@ -1375,6 +1378,7 @@ impl UiWorld {
                     self.write_overlay_host(id, None);
                     self.reindex_component(id, None);
                     self.forget_labelled_by(id);
+                    self.set_live(id, None);
                     let _removed = self.nodes.remove(id);
                     self.input.focus_scopes.retain(|root, target| {
                         if *target == Some(id) {
@@ -1883,6 +1887,12 @@ impl UiWorld {
             UiMutation::SetLabelledBy { id, label } => {
                 if self.labelled_by(*id) != *label {
                     self.set_labelled_by(*id, *label);
+                    self.mark(*id, DirtyMask::ACCESSIBILITY);
+                }
+            }
+            UiMutation::SetLive { id, live } => {
+                if self.live(*id) != *live {
+                    self.set_live(*id, *live);
                     self.mark(*id, DirtyMask::ACCESSIBILITY);
                 }
             }

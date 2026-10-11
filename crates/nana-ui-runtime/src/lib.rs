@@ -189,8 +189,8 @@ pub use component_registry::{
     RegisterableComponent, SemanticOption, SemanticSpec, normalize_tag,
 };
 pub use components::{
-    AccessibilityAction, AccessibilityActionRequest, AccessibilityDelta, AccessibilityNode,
-    AccessibilityRole, AccessibilityScrollAxis, AccessibilityScrollDirection,
+    AccessibilityAction, AccessibilityActionRequest, AccessibilityDelta, AccessibilityLive,
+    AccessibilityNode, AccessibilityRole, AccessibilityScrollAxis, AccessibilityScrollDirection,
     AccessibilityScrollUnit, AccessibilityState, AccessibilityUpdate, CalendarHoverGeometry,
     ComponentElevation, ComponentGeometry, ComponentTextRegion, ComponentTriggerSurface,
     ComputedStyle, ContrastRing, CustomRenderNode, DocumentTextSelection, DropHoverOverlay,
