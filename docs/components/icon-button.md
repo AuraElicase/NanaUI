@@ -52,6 +52,8 @@ icon_button(Icon::Search, "搜索")
 
 构造时的种类是 `ButtonKind::Ghost`。`selected` 为真，或种类本身是 Selected，绘制都走选中色。要改种类用 `IconButton::kind`。`colors_from_style` 让这一颗按钮改用自己 `style` 里的颜色，不再被种类盖掉；只影响设了它的那一颗。
 
+停用的样子跟着颜色走。按种类配色的按钮停用时整枚降到 50% 不透明度：种类给的图标平时颜色和停用色很接近，淡出才看得出哪枚不能点。`colors_from_style` 的按钮停用时照写的 `style.interaction.disabled` 画，不再淡，节点上写的不透明度也照写的来；要淡就在那里写，例如 `SemanticColorMix::alpha` 或按底色混好的 `SemanticColorMix::new`。用自绘（`Painter`）按 `PaintState::disabled` 画停用态的按钮同样设 `colors_from_style`，否则框架会在画好的停用色上再淡一层。
+
 ## 属性
 
 字段是 `icon: Icon`、`label: Arc<str>`、`selected: bool`、`disabled: bool`、`has_popup: bool`。没有 `model`。激活不自己改 `selected`。
@@ -61,7 +63,7 @@ icon_button(Icon::Search, "搜索")
 | `icon` | `Icon` | 必须写成属性。指向静态几何的 `Copy` 身份 |
 | `label` | `Arc<str>` | 可访问名。用属性或这一条子文本 |
 | `selected` | `bool` | 由应用写。激活不自己改 `selected`。选中时字形和底色走选中态 |
-| `disabled` | `bool` | 为真时不发 `Activate`，整枚按钮降到 50% 不透明度：图标平时的颜色和停用色很接近，淡出才看得出哪枚不能点 |
+| `disabled` | `bool` | 为真时不发 `Activate`。按种类配色的按钮整枚降到 50% 不透明度，`colors_from_style` 的按钮照 `style.interaction.disabled` 画、不淡，见上文「种类」 |
 | `has_popup` | `bool` | 弹出菜单的按钮（`aria-haspopup="menu"`）：读屏报成菜单按钮；焦点在它上面时，ArrowUp / ArrowDown 和 `ContextMenu` 键一样发 `keyboard: true` 的 `SecondaryPress`，由你打开菜单。见 [控件](../reference/components.md) 的菜单按钮 |
 
 ## 事件

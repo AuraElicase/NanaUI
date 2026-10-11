@@ -861,7 +861,8 @@ pub struct IconButton {
     pub tooltip: Option<IconButtonTooltip>,
     pub(crate) tooltip_open: bool,
     /// Take every colour from [`Self::style`] as written instead of from
-    /// [`Self::kind`]. Off by default; see [`IconButton::colors_from_style`].
+    /// [`Self::kind`], the disabled look included. Off by default; see
+    /// [`IconButton::colors_from_style`].
     pub colors_from_style: bool,
     /// Opens a menu (`aria-haspopup="menu"`): announced as a menu button,
     /// and ArrowUp / ArrowDown on it raise [`SecondaryPress`] with
@@ -977,6 +978,15 @@ impl IconButton {
     /// on-accent glyph. This switch hands that one button's colours to its
     /// style, verbatim: `background: None` there means no fill, not "use the
     /// kind's". It only affects the button it is set on.
+    ///
+    /// The disabled look goes with the colours. A button in its kind's
+    /// colours also fades to half opacity when disabled, because the kind's
+    /// resting and disabled glyph inks sit close together; this one paints
+    /// `style.interaction.disabled` as written and does not fade, so an ink
+    /// already mixed for the disabled state is not dimmed again. A
+    /// [`Painter`](crate::Painter) that draws the button from
+    /// [`PaintState::disabled`](crate::PaintState) sets this for the same
+    /// reason.
     pub fn colors_from_style(mut self) -> Self {
         self.colors_from_style = true;
         self
@@ -1045,13 +1055,13 @@ impl ComponentView for IconButton {
         let mut effective_style = self.style.clone();
         if !self.colors_from_style {
             kind_colors(self.kind, selected, &mut effective_style);
-        }
-        if self.disabled {
-            // A quiet icon's resting ink and the faint disabled ink sit close
-            // together, closest on dark themes: a disabled icon also fades,
-            // so a row of tools shows at a glance which can act.
-            let layout = Arc::make_mut(&mut effective_style.layout);
-            layout.opacity = Some(layout.opacity.unwrap_or(1.0) * ICON_BUTTON_DISABLED_OPACITY);
+            if self.disabled {
+                // A quiet icon's resting ink and the faint disabled ink sit
+                // close together, closest on dark themes: a disabled icon also
+                // fades, so a row of tools shows at a glance which can act.
+                let layout = Arc::make_mut(&mut effective_style.layout);
+                layout.opacity = Some(layout.opacity.unwrap_or(1.0) * ICON_BUTTON_DISABLED_OPACITY);
+            }
         }
         project_common(
             id,
@@ -1074,7 +1084,8 @@ impl ComponentView for IconButton {
     }
 }
 
-/// How far a disabled [`IconButton`] fades, over its disabled ink.
+/// How far a disabled [`IconButton`] in its kind's colours fades, over its
+/// disabled ink.
 const ICON_BUTTON_DISABLED_OPACITY: f32 = 0.5;
 
 /// The colours an [`IconButton`] of `kind` paints with, written over `style`.
@@ -3171,7 +3182,10 @@ mod hosted_textarea_tests {
                 .and_then(|style| style.layout.opacity)
         };
         let button = context
-            .create_component(document, IconButton::new(nana_ui_core::Icon::Close, "关闭"))
+            .create_component(
+                document,
+                IconButton::new(nana_ui_core::Icon::Close, "Close"),
+            )
             .unwrap();
         assert_eq!(opacity(&context, button.stable_id()), None);
         context
@@ -3181,6 +3195,38 @@ mod hosted_textarea_tests {
             opacity(&context, button.stable_id()),
             Some(ICON_BUTTON_DISABLED_OPACITY)
         );
+    }
+
+    /// A button in its own colours takes its disabled look from its style
+    /// too: the ink it mixed for the disabled state is not faded again, and
+    /// an opacity it was given stays as written.
+    #[test]
+    fn a_disabled_icon_button_in_its_own_colors_does_not_fade() {
+        let mut context = crate::AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let opacity = |context: &crate::AppContext, id| {
+            context
+                .world()
+                .node_style(id)
+                .and_then(|style| style.layout.opacity)
+        };
+        let mut own = IconButton::new(nana_ui_core::Icon::Close, "Close").colors_from_style();
+        own.style.interaction.disabled.foreground_mix = Some(nana_ui_core::SemanticColorMix::new(
+            nana_ui_core::SemanticColorRole::Text,
+            nana_ui_core::SemanticColorRole::Surface,
+            0.45,
+        ));
+        let button = context.create_component(document, own).unwrap();
+        context
+            .update_component(button, |button, _| button.disabled = true)
+            .unwrap();
+        assert_eq!(opacity(&context, button.stable_id()), None);
+        context
+            .update_component(button, |button, _| {
+                Arc::make_mut(&mut button.style.layout).opacity = Some(0.8);
+            })
+            .unwrap();
+        assert_eq!(opacity(&context, button.stable_id()), Some(0.8));
     }
 
     #[test]
