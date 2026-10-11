@@ -86,6 +86,8 @@
 - [ActionMenu](action-menu.md) — 动作菜单。对齐改成起始边。
 - [ContextMenu](context-menu.md) — 上下文菜单。角色是菜单。
 - [CommandPalette](command-palette.md) — 命令面板。真正的 dispatch 和快捷键存盘由你做。
+- [Toast](toast.md) — 被动通知。装配后带进度、一个动作和关闭按钮；移除由你做。
+- [ToastStack](toast-stack.md) — 通知角。先量后显、排队、进退场；放在模态层之上时模态打开也可按。
 
 浮层由框架放在窗口里。打开、关闭、锚点和焦点归还见 [控件](../reference/components.md)。
 

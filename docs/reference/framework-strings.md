@@ -29,7 +29,7 @@ const unknown = __nanaHost.call("setFrameworkStrings", [{ "window.close": "Close
 
 ## 模板
 
-带参数的条目在花括号里写参数名，例如 `diff.reject_hunk` 默认是 `拒绝块{hunk}`，`calendar.month` 默认是 `{month}月`。换的时候保留这些参数名：`"Reject hunk {hunk}"`。
+带参数的条目在花括号里写参数名，例如 `diff.reject_hunk` 默认是 `拒绝块{hunk}`，`calendar.month` 默认是 `{month}月`，`toast.percent` 默认是 `{percent}%`。换的时候保留这些参数名：`"Reject hunk {hunk}"`。
 
 ## 键
 
@@ -39,6 +39,7 @@ const unknown = __nanaHost.call("setFrameworkStrings", [{ "window.close": "Close
 |---|---|
 | `window.*` | 标题栏的最小化、最大化、还原、关闭 |
 | `dialog.*` | 确认框的确认、取消 |
+| `toast.*` | 装配后提示的关闭按钮名（`toast.close`）、进度旁的百分比（`toast.percent`）、通知栈的区域名（`toast.region`） |
 | `image_viewer.*` | 图片查看器的关闭、上一张、下一张 |
 | `media.*` | 媒体条的播放、暂停、音量、全屏、进度、设置 |
 | `find.*` | 查找替换条 |

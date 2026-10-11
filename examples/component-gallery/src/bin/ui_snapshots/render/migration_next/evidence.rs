@@ -601,6 +601,10 @@ pub(super) fn write_evidence(
         // A chart answers hover with emphasis and a tooltip, so the pointer
         // has to reach it.
         hit == Some(runtime.target)
+    } else if fixture.component == Component::ToastStack {
+        // A stack takes no pointer of its own: its centre resolves to a toast
+        // or to whatever lies under the stack, never to the stack.
+        hit != Some(runtime.target)
     } else if matches!(
         fixture.component,
         // Leaf decorations: nothing inside them to reach, so being the hit
@@ -755,6 +759,7 @@ pub(super) fn write_evidence(
             | Component::SidebarFooter
             | Component::SidebarSection
             | Component::OverlayHost
+            | Component::ToastStack
     ) || geometry.is_some();
     let layout_ok = bounds.is_some_and(|bounds| match fixture.component {
         Component::Text if matches!(fixture.state, "wrap" | "ellipsis") => {

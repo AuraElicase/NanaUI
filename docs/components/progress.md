@@ -68,6 +68,8 @@ progress(1.0).indeterminate(true).label("正在连接")
 
 轨道默认厚 6，是 Subtle 底；填充走主题的 Indicator 配方，默认是 Accent。三者都能换：`thickness` 给厚度（不是正数时仍按 6），`track` 和 `fill` 给语义色。圆角始终是厚度的一半。
 
+进度条默认铺满所在行；样式里写了宽度（`style` 的 `layout.width`）就照写的来。装配后的提示就是这样让进度条横跨文案列，而不是把提示撑到所在区域的全宽。
+
 :::api
 
 ```rust view

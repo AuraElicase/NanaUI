@@ -132,6 +132,7 @@ component_catalog! {
     STATUS_BADGE => { id: "status-badge", name: "StatusBadge", family: Feedback, feature: None, compiled: true, capabilities: [Render, Accessibility] },
     VALIDATION_MESSAGE => { id: "validation-message", name: "ValidationMessage", family: Feedback, feature: None, compiled: true, capabilities: [Render, Accessibility] },
     TOAST => { id: "toast", name: "Toast", family: Feedback, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility, Overlay] },
+    TOAST_STACK => { id: "toast-stack", name: "ToastStack", family: Feedback, feature: None, compiled: true, capabilities: [Render, Pointer, Accessibility, Animation, Overlay] },
     COMMAND_PALETTE => { id: "command-palette", name: "CommandPalette", family: Overlay, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Ime, Accessibility, Overlay] },
     DIALOG => { id: "dialog", name: "Dialog", family: Overlay, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility, Overlay] },
     CONFIRM_DIALOG => { id: "confirm-dialog", name: "ConfirmDialog", family: Overlay, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility, Overlay] },
@@ -288,6 +289,7 @@ mod tests {
             component_ids::CONFIRM_DIALOG,
             component_ids::DRAWER,
             component_ids::TOAST,
+            component_ids::TOAST_STACK,
             component_ids::XY_PAD,
             component_ids::QR_CODE,
             component_ids::SELECT,
@@ -454,6 +456,7 @@ mod tests {
         let _: nana_ui_runtime::Drawer = crate::runtime::Drawer::new("Inspector");
         let _: nana_ui_runtime::Toast =
             crate::runtime::Toast::new("Saved", nana_ui_runtime::ToastTone::Info);
+        let _: nana_ui_runtime::ToastStack = crate::runtime::ToastStack::new();
         let _: nana_ui_runtime::XYPad =
             crate::runtime::XYPad::new(nana_ui_core::XYPadValue::new(0.5, 0.5));
         let _: nana_ui_runtime::QrCode = crate::runtime::QrCode::from_modules(vec![false], 1, 64.0)
@@ -480,6 +483,7 @@ mod tests {
         let _: nana_ui_runtime::Drawer = crate::components::Drawer::new("Inspector");
         let _: nana_ui_runtime::Toast =
             crate::components::Toast::new("Saved", nana_ui_runtime::ToastTone::Info);
+        let _: nana_ui_runtime::ToastStack = crate::components::ToastStack::new();
         let _: nana_ui_runtime::XYPad =
             crate::components::XYPad::new(nana_ui_core::XYPadValue::new(0.5, 0.5));
         let _: nana_ui_runtime::QrCode =

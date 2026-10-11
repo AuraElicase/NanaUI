@@ -1000,6 +1000,26 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "dismissible toast keeps a real dismiss affordance",
     ),
     f(
+        Component::ToastStack,
+        "progress",
+        "an assembled toast shows its share done as a bar under the copy and a percentage beside the title",
+    ),
+    f(
+        Component::ToastStack,
+        "indeterminate",
+        "an assembled toast with an unknown share sweeps its bar and spells no percentage",
+    ),
+    f(
+        Component::ToastStack,
+        "action",
+        "an assembled toast offers one action button beside its copy and a close button",
+    ),
+    f(
+        Component::ToastStack,
+        "stacked",
+        "newer toasts stand below older ones a stack gap apart on the end edge",
+    ),
+    f(
         Component::XYPad,
         "rest",
         "xy pad shows the two-axis value inside a field border",

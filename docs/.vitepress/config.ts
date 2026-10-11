@@ -187,6 +187,8 @@ export default defineConfig({
             { text: "ActionMenu", link: "/components/action-menu" },
             { text: "ContextMenu", link: "/components/context-menu" },
             { text: "CommandPalette", link: "/components/command-palette" },
+            { text: "Toast", link: "/components/toast" },
+            { text: "ToastStack", link: "/components/toast-stack" },
           ],
         },
         {
