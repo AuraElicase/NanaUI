@@ -617,6 +617,19 @@ impl UiScene {
                     self.insert_primitive(caret);
                 }
             }
+            // Only a dialog whose card a surface painter draws holds a
+            // painted card; a node that stopped being one drops it.
+            if !self.modal_surface_paint.is_empty()
+                && !matches!(
+                    node.component_geometry.as_deref(),
+                    Some(ComponentGeometry::ModalFrame {
+                        surface_paint: Some(_),
+                        ..
+                    })
+                )
+            {
+                self.modal_surface_paint.remove(&id);
+            }
             let context = GeometryPaintContext {
                 node: &node,
                 bounds,
@@ -636,17 +649,11 @@ impl UiScene {
                     ..
                 }) => {
                     overlays::build(&context, &mut emit);
-                    match surface_paint {
-                        Some(recording) => {
-                            let built = self.prepare_modal_surface_paint(id, recording);
-                            self.emit_modal_surface_paint(
-                                &node, *surface, &built, transform, &clips, opacity, node_order,
-                            );
-                        }
-                        None if !self.modal_surface_paint.is_empty() => {
-                            self.modal_surface_paint.remove(&id);
-                        }
-                        None => {}
+                    if let Some(recording) = surface_paint {
+                        let built = self.prepare_modal_surface_paint(id, recording);
+                        self.emit_modal_surface_paint(
+                            &node, *surface, &built, transform, &clips, opacity, node_order,
+                        );
                     }
                 }
                 Some(ComponentGeometry::Button { .. }) => controls_base::build(&context, &mut emit),
