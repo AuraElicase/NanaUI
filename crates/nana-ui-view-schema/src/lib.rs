@@ -137,6 +137,7 @@ macro_rules! for_each_control {
             model value: Option<Arc<str>> => SelectChanged |event| Some(event.value.clone());
             ListItem => list_item(label: text) for ListItem {
                 label: String = set,
+                note: String = set,
                 detail: String = set,
                 selected: bool = set,
                 disabled: bool = set,

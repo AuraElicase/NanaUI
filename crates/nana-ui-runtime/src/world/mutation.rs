@@ -1207,8 +1207,8 @@ fn select_fitted_options_changed(
         (None, None) => false,
         (Some(previous), Some(next)) => !previous
             .iter()
-            .map(|option| &option.label)
-            .eq(next.iter().map(|option| &option.label)),
+            .map(|option| (&option.label, &option.hint))
+            .eq(next.iter().map(|option| (&option.label, &option.hint))),
         _ => true,
     }
 }

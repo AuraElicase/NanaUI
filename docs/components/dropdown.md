@@ -29,7 +29,7 @@ widget(Dropdown::single(value))
 
 :::
 
-选项用 `DropdownOption::new(value, label)`，还可以接 `.hint` 和 `.disabled`。
+选项用 `DropdownOption::new(value, label)`，还可以接 `.hint` 和 `.disabled`。`hint` 在菜单里画在这一行的末尾，比标签小一号、用次要色，和 [Select](select.md) 的选项提示一样。
 
 ## 选中之后
 

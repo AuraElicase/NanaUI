@@ -1436,6 +1436,10 @@ impl ComponentView for Card {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ListItem {
     pub label: String,
+    /// 紧跟主文本的次要文字（如译名后的原文）：非空且未挂 content 槽时，
+    /// 在主文本之后渲染为与 detail 同字号、同取色的文本区，不改变行高。
+    /// 放不下时先让给主文本与 detail，宽度不够就不画；无障碍名照样带上。
+    pub note: String,
     /// 单行补充信息：非空且未挂 content 槽时渲染为行尾右对齐的小字号
     /// muted 文本区，不改变行高。
     pub detail: String,
@@ -1493,6 +1497,7 @@ impl ListItem {
         layout.text_overflow_ellipsis = true;
         Self {
             label: label.into(),
+            note: String::new(),
             detail: String::new(),
             selected: false,
             disabled: false,
@@ -1562,6 +1567,12 @@ impl ListItem {
 
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    /// 设置紧跟主文本的次要文字；空串清除。仅在未挂 content 槽时生效。
+    pub fn note(mut self, note: impl Into<String>) -> Self {
+        self.note = note.into();
         self
     }
 
@@ -1679,9 +1690,10 @@ impl ComponentView for ListItem {
     }
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
-        // 行文本只承载 label；detail 由几何端生成右对齐的小字号 muted
-        // 文本区，与 label 同行但不挤占同一文本。挂了 content 槽的行由槽
-        // 内容自绘，label 与 detail 都不渲染。
+        // 行文本只承载 label；note 与 detail 由几何端生成小字号 muted
+        // 文本区（note 紧跟 label，detail 右对齐），与 label 同行但不挤占
+        // 同一文本。挂了 content 槽的行由槽内容自绘，三者都不渲染。
+        let has_note = self.slots.content.is_none() && !self.note.is_empty();
         let has_detail = self.slots.content.is_none() && !self.detail.is_empty();
         let visible_label = if self.slots.content.is_none() {
             self.label.as_str()
@@ -1700,12 +1712,18 @@ impl ComponentView for ListItem {
             leading: self.slots.leading,
             content: self.slots.content,
             trailing: self.slots.trailing,
+            note: has_note.then(|| Arc::from(self.note.as_str())),
             detail: has_detail.then(|| Arc::from(self.detail.as_str())),
         };
         if world.standard_visual(id) != Some(visual.clone()) {
             mutations.set_standard_visual(id, Some(visual));
         }
+        // A note that does not fit is not drawn, but it is still said.
         let mut accessible = self.label.clone();
+        if has_note {
+            accessible.push(' ');
+            accessible.push_str(&self.note);
+        }
         if has_detail {
             accessible.push_str("  ");
             accessible.push_str(&self.detail);
@@ -5566,11 +5584,37 @@ mod tests {
                 leading: None,
                 content: None,
                 trailing: None,
+                note: None,
                 detail: Some(Arc::from("3 动作")),
             })
         );
         // 节点文本不再拼接 detail，也就不再依赖 muted span。
         assert!(world.extract_nodes(&[id])[0].text_spans.is_empty());
+    }
+
+    #[test]
+    fn a_note_follows_the_label_on_the_visual_and_in_the_name() {
+        let item = ListItem::new("角度X")
+            .note("ParamAngleX")
+            .detail("头部左右转");
+        let (world, id) = mount(&item);
+        // 行文本只承载 label；note 与 detail 各自由几何端独立成区。
+        assert_eq!(world.text(id), Some("角度X"));
+        assert_eq!(
+            world.standard_visual(id),
+            Some(StandardVisual::ListItem {
+                leading: None,
+                content: None,
+                trailing: None,
+                note: Some(Arc::from("ParamAngleX")),
+                detail: Some(Arc::from("头部左右转")),
+            })
+        );
+        // A note too narrow to draw is still said, after the label.
+        assert_eq!(
+            world.accessibility(id).unwrap().label.as_deref(),
+            Some("角度X ParamAngleX  头部左右转")
+        );
     }
 
     #[test]
@@ -5583,6 +5627,7 @@ mod tests {
                 leading: None,
                 content: None,
                 trailing: None,
+                note: None,
                 detail: None,
             })
         );
@@ -5591,10 +5636,13 @@ mod tests {
 
     #[test]
     fn content_slot_row_keeps_label_out_of_node_text() {
-        let item = ListItem::new("模型").detail("3 动作").slots(ListItemSlots {
-            content: Some(StableNodeId::new(2).unwrap()),
-            ..ListItemSlots::default()
-        });
+        let item = ListItem::new("模型")
+            .note("Model")
+            .detail("3 动作")
+            .slots(ListItemSlots {
+                content: Some(StableNodeId::new(2).unwrap()),
+                ..ListItemSlots::default()
+            });
         let (world, id) = mount(&item);
         assert_eq!(world.text(id), Some(""));
         assert_eq!(
@@ -5603,6 +5651,7 @@ mod tests {
                 leading: None,
                 content: Some(StableNodeId::new(2).unwrap()),
                 trailing: None,
+                note: None,
                 detail: None,
             })
         );

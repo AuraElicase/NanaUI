@@ -5616,6 +5616,74 @@ fn a_switch_that_authored_its_inset_keeps_its_track() {
     );
 }
 
+/// A row's note follows its label, as quiet as its detail and between the
+/// two, and gives way first: where the row has no room left for it, it is
+/// not drawn (the row still says it).
+#[test]
+fn a_rows_note_follows_its_label_and_gives_way_first() {
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let page = context
+        .create_component(document, crate::Stack::column(0.0))
+        .unwrap();
+    // The same row in a wide column and in one with no room for its note.
+    let rows = [360.0, 110.0].map(|width| {
+        let column = context
+            .create_component(
+                document,
+                crate::Stack::column(0.0).with_layout(|layout| {
+                    layout.width = Some(nana_ui_core::LengthSpec::Px(width));
+                }),
+            )
+            .unwrap();
+        context.append_child(page, column).unwrap();
+        let row = context
+            .create_component(
+                document,
+                crate::ListItem::new("角度X")
+                    .note("ParamAngleX")
+                    .detail("头部左右转"),
+            )
+            .unwrap();
+        context.append_child(column, row).unwrap();
+        row
+    });
+    context
+        .layout_document(document, crate::LayoutViewport::new(480.0, 200.0))
+        .unwrap();
+    let geometry = |row: crate::Entity<crate::ListItem>| match context
+        .world()
+        .extract_nodes(&[row.stable_id()])[0]
+        .component_geometry
+        .as_deref()
+    {
+        Some(crate::ComponentGeometry::ListItem {
+            content,
+            note,
+            detail,
+            ..
+        }) => (content.expect("a label box"), note.clone(), detail.clone()),
+        other => panic!("a list item derives list-item geometry, got {other:?}"),
+    };
+    let (label, note, detail) = geometry(rows[0]);
+    let note = note.expect("a wide row draws its note");
+    let detail = detail.expect("and its detail");
+    assert!(
+        label.x + label.width < note.bounds.x,
+        "the note starts after the label"
+    );
+    assert!(
+        note.bounds.x + note.bounds.width < detail.bounds.x,
+        "and ends before the detail"
+    );
+    assert_eq!(note.color, detail.color, "as quiet as the detail");
+    assert_eq!(note.font_size, detail.font_size);
+
+    let (_, note, detail) = geometry(rows[1]);
+    assert!(note.is_none(), "no room left for the note: {note:?}");
+    assert!(detail.is_some(), "the detail keeps its place");
+}
+
 /// Issue #101 F1: a focused row's secondary text stays readable.
 ///
 /// A `ListItem` focuses with `SemanticPaint::FOCUS_SURFACE`, which fills it
@@ -7306,6 +7374,7 @@ fn component_size_kind_and_fallback_geometry_preserve_design_contracts() {
         leading: Some(leading),
         content: Some(content),
         trailing: Some(trailing),
+        note: None,
         detail: None,
     } = context
         .world()

@@ -1008,6 +1008,7 @@ fn menu_surface_paints_row_icon_and_iconless_labels() {
                     font_size: 12.0,
                     font_weight: Some(500),
                 },
+                hint: None,
                 selected: false,
                 checked: false,
                 disabled: false,
@@ -1042,6 +1043,7 @@ fn menu_surface_paints_row_icon_and_iconless_labels() {
                     font_size: 12.0,
                     font_weight: Some(500),
                 },
+                hint: None,
                 selected: false,
                 checked: false,
                 disabled: false,
@@ -6583,6 +6585,7 @@ fn focused_list_item_paints_an_external_keyboard_ring() {
         leading: None,
         content: None,
         trailing: None,
+        note: None,
         detail: None,
     });
     item.standard_visual_foreground = Some([0.2, 0.6, 1.0, 1.0]);
@@ -6636,6 +6639,7 @@ fn compact_leading_icon_centers_on_the_parent_text_line() {
         leading: Some(id(2)),
         content: None,
         trailing: None,
+        note: None,
         detail: None,
     });
     row.source_style.text_vertical_alignment = TextVerticalAlignment::Center;
@@ -7065,6 +7069,7 @@ fn migrated_components_consume_runtime_subregion_geometry() {
         leading: None,
         content: None,
         trailing: None,
+        note: None,
         detail: None,
     });
     list_item.component_geometry = Some(Box::new(ComponentGeometry::ListItem {
@@ -7076,6 +7081,7 @@ fn migrated_components_consume_runtime_subregion_geometry() {
             height: 22.0,
         }),
         trailing: None,
+        note: None,
         detail: None,
     }));
     style_mut(&mut list_item).background = Some([0.15, 0.15, 0.15, 1.0]);
@@ -7731,6 +7737,7 @@ fn card_child_list_item_keeps_its_label() {
         leading: None,
         content: None,
         trailing: None,
+        note: None,
         detail: None,
     });
     item.component_geometry = Some(Box::new(ComponentGeometry::ListItem {
@@ -7742,6 +7749,7 @@ fn card_child_list_item_keeps_its_label() {
             height: 36.0,
         }),
         trailing: None,
+        note: None,
         detail: None,
     }));
 

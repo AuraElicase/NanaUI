@@ -44,7 +44,7 @@ widget(
 
 ## 选项
 
-选项是 `SearchDropdownOption::new(value, label)`，`.hint` 给一行补充。选中事件里的值就是选项的 `value`。
+选项是 `SearchDropdownOption::new(value, label)`，`.hint` 给一行补充：菜单里画在这一行的末尾、用次要色，收起的框里和标签连成一行。选中事件里的值就是选项的 `value`。
 
 ## 查询
 

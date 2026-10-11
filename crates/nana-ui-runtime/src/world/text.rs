@@ -4350,7 +4350,9 @@ impl UiWorld {
 
     /// The widest option label of a select that sizes to its options
     /// ([`crate::Select::fit_options`]), measured on one line in the field's
-    /// own style, the way its label is. `None` for any other node.
+    /// own style, the way its label is; an option with a hint holds the hint
+    /// after it too, which the field draws a step smaller, so it never comes
+    /// short. `None` for any other node.
     fn widest_fitted_option<S: TextShaper>(
         &self,
         id: StableNodeId,
@@ -4377,7 +4379,14 @@ impl UiWorld {
             .iter()
             .map(|option| {
                 let label = TextContent::new(Arc::clone(&option.label));
-                shaper.shape(id, &label, style, line).width
+                let width = shaper.shape(id, &label, style, line).width;
+                match option.hint.as_ref().filter(|hint| !hint.is_empty()) {
+                    Some(hint) => {
+                        let hint = TextContent::new(Arc::clone(hint));
+                        width + crate::select::HINT_GAP + shaper.shape(id, &hint, style, line).width
+                    }
+                    None => width,
+                }
             })
             .reduce(f32::max)
     }

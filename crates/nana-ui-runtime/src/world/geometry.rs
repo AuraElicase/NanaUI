@@ -1729,6 +1729,7 @@ impl UiWorld {
                 leading,
                 content: content_slot,
                 trailing,
+                note,
                 detail,
             } => {
                 // 隐藏的槽位子节点已退出 flex 流，其盒几何是陈旧的，不得
@@ -1812,10 +1813,50 @@ impl UiWorld {
                                 font_weight: None,
                             }
                         });
+                // 紧跟 label 的 note：与 detail 同字号同取色，只用 label 与
+                // detail 排好后剩下的宽度。label 先按自然宽度收窄，让 note
+                // 贴在字后；剩下的连最小可读宽度都不够时不画 note（label
+                // 照旧省略），没有 note 的行几何与原来逐字相同。
+                let note_region = note
+                    .clone()
+                    .filter(|note| !note.is_empty())
+                    .and_then(|note| {
+                        let label_size = style.font_size;
+                        let note_size = (label_size - 1.0).max(10.0);
+                        let gap = nana_ui_core::space::SM;
+                        let measure = self.chrome_text_measure(id);
+                        let label_natural = measure.width(
+                            self.text(id).unwrap_or_default(),
+                            label_size,
+                            style.font_weight,
+                        );
+                        let note_natural = measure.width(&note, note_size, None);
+                        let label_width = label_natural.min(label_rect.width);
+                        let note_x = label_rect.x + label_width + gap;
+                        let room = label_rect.x + label_rect.width - note_x;
+                        if room < note_natural.min(nana_ui_core::space::XXXL) {
+                            return None;
+                        }
+                        let note_height = (note_size * 1.2).min(label_rect.height.max(note_size));
+                        label_rect.width = label_width;
+                        Some(crate::ComponentTextRegion {
+                            bounds: LayoutBox {
+                                x: note_x,
+                                y: label_rect.y + (label_rect.height - note_height).max(0.0) / 2.0,
+                                width: note_natural.min(room),
+                                height: note_height,
+                            },
+                            content: note.into(),
+                            color: Some(secondary),
+                            font_size: note_size,
+                            font_weight: None,
+                        })
+                    });
                 Some(crate::ComponentGeometry::ListItem {
                     leading,
                     content: Some(label_rect),
                     trailing,
+                    note: note_region,
                     detail: detail_region,
                 })
             }
@@ -2435,6 +2476,7 @@ impl UiWorld {
             }
             StandardVisual::Select {
                 label,
+                hint,
                 placeholder,
                 size,
                 opened,
@@ -2445,6 +2487,7 @@ impl UiWorld {
             } => Some(crate::select::select_geometry(
                 bounds,
                 label,
+                hint.as_ref(),
                 *placeholder,
                 *size,
                 *opened,
@@ -2457,6 +2500,7 @@ impl UiWorld {
                 self.document_viewport_of(id),
                 *checkable,
                 padding,
+                self.chrome_text_measure(id),
             )),
             StandardVisual::MenuSurface {
                 kind: crate::MenuSurfaceKind::ContextMenu,

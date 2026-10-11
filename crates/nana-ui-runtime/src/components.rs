@@ -872,6 +872,8 @@ pub enum StandardVisual {
         leading: Option<StableNodeId>,
         content: Option<StableNodeId>,
         trailing: Option<StableNodeId>,
+        /// 紧跟主文本的次要文字；几何端在主文本之后生成小字号 muted 文本区。
+        note: Option<Arc<str>>,
         /// 单行补充信息；几何端生成右对齐的小字号 muted 文本区。
         detail: Option<Arc<str>>,
     },
@@ -968,6 +970,9 @@ pub enum StandardVisual {
     },
     Select {
         label: Arc<str>,
+        /// The quieter text drawn after `label` in the field: the hint of the
+        /// option it shows. See [`crate::SelectOption::hint`].
+        hint: Option<Arc<str>>,
         placeholder: bool,
         size: ControlSize,
         opened: bool,
@@ -1612,6 +1617,7 @@ pub enum ComponentGeometry {
         leading: Option<LayoutBox>,
         content: Option<LayoutBox>,
         trailing: Option<LayoutBox>,
+        note: Option<ComponentTextRegion>,
         detail: Option<ComponentTextRegion>,
     },
     StatusBadge {
@@ -1694,6 +1700,8 @@ pub enum ComponentGeometry {
     },
     Select {
         label: ComponentTextRegion,
+        /// The shown option's hint after the label, when there is room.
+        hint: Option<ComponentTextRegion>,
         handle: LayoutBox,
         handle_color: [f32; 4],
         background: Option<[f32; 4]>,
@@ -1828,6 +1836,8 @@ pub struct SelectMenuGeometry {
 pub struct SelectOptionGeometry {
     pub bounds: LayoutBox,
     pub label: ComponentTextRegion,
+    /// The option's hint at the row's end, quieter than the label.
+    pub hint: Option<ComponentTextRegion>,
     pub selected: bool,
     pub checked: bool,
     pub disabled: bool,
