@@ -84,7 +84,8 @@ pub use nana_ui_core::ToastTone;
 /// good: copy that wraps, and the parts only that form shows — a progress
 /// bar ([`Toast::progress`]), an action button ([`Toast::action`]), a close
 /// button that emits [`ToastDismissed`], and an icon in place of the tone
-/// glyph ([`Toast::icon`]). A `ToastStack` assembles every toast it holds.
+/// glyph ([`Toast::icon`]). A [`crate::ToastStack`] assembles every toast
+/// it holds.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Toast {
     pub title: Arc<str>,
@@ -130,7 +131,9 @@ impl Toast {
 
     /// Emit [`ToastDismissed`] once the toast has been on screen this long.
     /// An assembled toast does not count while a pointer is over it or focus
-    /// is inside it, and goes on with the time it had left.
+    /// is inside it, and goes on with the time it had left; a toast in a
+    /// [`crate::ToastStack`] counts only while the stack shows it and holds
+    /// while the pointer or focus is on any toast of the stack.
     pub fn timeout(mut self, timeout: std::time::Duration) -> Self {
         self.timeout = Some(timeout);
         self

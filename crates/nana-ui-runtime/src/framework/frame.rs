@@ -466,6 +466,9 @@ impl AppContext {
             self.apply_document_scroll_retention(document, force_full)?;
             self.announce_size_changes(document)?;
             self.play_pending_flips(document);
+            // A toast stack's new toasts were measured by this pass: what
+            // shows follows from their heights.
+            self.reconcile_toast_stacks(document)?;
             completed(3);
             Ok(report)
         })();

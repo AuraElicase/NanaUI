@@ -369,7 +369,12 @@ impl AppContext {
                     });
                 let hit = dock_handle.or(split_handle).or(workspace_handle).or(target);
                 let focus_target = hit.and_then(|id| nearest_focusable(self, id));
-                if !hit.is_some_and(|id| self.preserves_hover_card_editor_focus(id)) {
+                // A toast above an open modal takes the press; focus stays in
+                // the modal, as Tab does.
+                if !hit.is_some_and(|id| {
+                    self.preserves_hover_card_editor_focus(id)
+                        || self.press_keeps_modal_focus(document, id)
+                }) {
                     if let Some(focus) = focus_target {
                         // The press already sits on its target. Revealing it
                         // would scroll the content out from under the release.

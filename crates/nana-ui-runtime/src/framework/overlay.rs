@@ -99,18 +99,38 @@ impl AppContext {
 
     /// Whether an open blocking overlay (a modal dialog, a drawer) covers
     /// `node`: `node` is outside it. Such a node takes no press, not even
-    /// one that reaches it through a resize handle's slop.
+    /// one that reaches it through a resize handle's slop. A toast in a
+    /// [`crate::ToastStack`] is never covered: the application puts its
+    /// notices above its modal layer.
     pub(crate) fn covered_by_blocking_overlay(
         &self,
         document: DocumentId,
         node: StableNodeId,
     ) -> bool {
-        self.active_runtime_overlays(document)
-            .into_iter()
-            .any(|overlay| {
-                overlay.kind.blocks_pointer()
-                    && !self.world.is_descendant_or_self(node, overlay.root)
-            })
+        !self.in_toast_stack(node)
+            && self
+                .active_runtime_overlays(document)
+                .into_iter()
+                .any(|overlay| {
+                    overlay.kind.blocks_pointer()
+                        && !self.world.is_descendant_or_self(node, overlay.root)
+                })
+    }
+
+    /// Whether `node` is in a [`crate::ToastStack`] that holds toasts.
+    pub(crate) fn in_toast_stack(&self, node: StableNodeId) -> bool {
+        let stacks = &self.component_lifecycle.toast_stacks;
+        if stacks.is_empty() {
+            return false;
+        }
+        std::iter::successors(Some(node), |&id| self.world.parent_id(id))
+            .any(|id| stacks.contains_key(&id))
+    }
+
+    /// Whether a press on `node` leaves focus where it is: a toast above an
+    /// open modal takes the press, and focus stays in the modal.
+    pub(super) fn press_keeps_modal_focus(&self, document: DocumentId, node: StableNodeId) -> bool {
+        self.in_toast_stack(node) && self.has_blocking_runtime_overlay(document)
     }
 
     /// The resize handle within slop of `(x, y)` — a split pane's, a dock's
@@ -782,9 +802,20 @@ impl AppContext {
         x: f32,
         y: f32,
     ) -> Option<StableNodeId> {
-        let candidates = self
-            .world
-            .hit_test_candidates(document, x, y)
+        let hits = self.world.hit_test_candidates(document, x, y);
+        // A toast in a stack the application put above the modal keeps its
+        // own presses: they reach it, and they are no press outside.
+        if let Some(toast) = hits
+            .iter()
+            .copied()
+            .find(|candidate| {
+                self.overlay_descendant(root, *candidate) || self.in_toast_stack(*candidate)
+            })
+            .filter(|candidate| !self.overlay_descendant(root, *candidate))
+        {
+            return Some(toast);
+        }
+        let candidates = hits
             .into_iter()
             .filter(|candidate| {
                 self.overlay_descendant(root, *candidate)
