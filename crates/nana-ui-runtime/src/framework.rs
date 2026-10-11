@@ -615,6 +615,14 @@ struct ComponentLifecycle {
     pane_tree_slots: HashMap<StableNodeId, HashMap<Arc<str>, StableNodeId>, crate::BuildIdHasher>,
     /// Media transport bars whose idle hide the runtime drives.
     auto_overlays: std::collections::BTreeMap<StableNodeId, auto_overlay::AutoOverlay>,
+    /// When each scroll view's hold on its auto-hiding bars runs out.
+    scrollbar_holds: HashMap<StableNodeId, Duration, crate::BuildIdHasher>,
+    /// The scrollbar lane each pointer is on: the scroll view and the axis.
+    scrollbar_hot: HashMap<
+        (DocumentId, u64),
+        (StableNodeId, nana_ui_core::ScrollbarAxis),
+        crate::BuildIdHasher,
+    >,
 }
 
 impl ComponentLifecycle {
@@ -2882,6 +2890,10 @@ impl AppContext {
     ) -> Result<Option<StableNodeId>, FrameworkError> {
         self.component_lifecycle.now = now;
         self.world.animation_now = now;
+        if target.is_none() {
+            // A pointer that left, or was cancelled, is on no lane.
+            self.sync_scrollbar_hot(document, pointer_id, None)?;
+        }
         let previous = self.world.set_pointer_hover(document, pointer_id, target)?;
         if previous != target {
             if let Some(previous) = previous {
@@ -4106,6 +4118,9 @@ mod retained_interaction_tests;
 
 #[cfg(test)]
 mod scroll_origin_tests;
+
+#[cfg(test)]
+mod scrollbar_tests;
 
 /// A view an event handler ran on during another view's update.
 pub(super) struct TouchedObserver {

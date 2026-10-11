@@ -533,6 +533,31 @@ impl ThemeDefinition {
         self.bump()
     }
 
+    /// Style every scrollbar: its colours, its motion and the visibility
+    /// policy scroll views follow unless they choose their own. Sizes stay in
+    /// [`ThemeMetrics::scrollbar`](super::ThemeMetrics::scrollbar). See
+    /// [`ScrollbarRecipe`](super::ScrollbarRecipe).
+    pub const fn with_scrollbar(mut self, scrollbar: super::ScrollbarRecipe) -> Self {
+        self.components.scrollbar = Some(scrollbar);
+        self.bump()
+    }
+
+    /// Only the application's scrollbar policy: bars that hide on their own
+    /// (the default), resident bars, or none. A scroll view that names its
+    /// own visibility keeps it.
+    pub const fn with_scrollbar_visibility(
+        mut self,
+        visibility: crate::scrollbar::ScrollbarVisibility,
+    ) -> Self {
+        let mut recipe = match self.components.scrollbar {
+            Some(recipe) => recipe,
+            None => super::ScrollbarRecipe::DEFAULT,
+        };
+        recipe.visibility = visibility;
+        self.components.scrollbar = Some(recipe);
+        self.bump()
+    }
+
     /// Re-derive the whole accent family from one ramp.
     ///
     /// This is the foundation layer earning its place: setting
@@ -786,6 +811,23 @@ impl ThemeDefinition {
                 value: thousandths(motion.enter_scale),
             });
         }
+        let scrollbar = self
+            .components
+            .scrollbar
+            .ok_or(ThemeCompileError::MissingRecipe {
+                theme: self.id.clone(),
+                component: ComponentRecipeId::Scrollbar,
+                slot: "scrollbar",
+            })?;
+        // A bar may hide the moment its reason to show ends, but a fade or
+        // growth that never advances is a frozen bar written by accident.
+        for (token, transition) in [
+            ("scrollbar.motion.fade_in", scrollbar.motion.fade_in),
+            ("scrollbar.motion.fade_out", scrollbar.motion.fade_out),
+            ("scrollbar.motion.expand", scrollbar.motion.expand),
+        ] {
+            check.duration(token, transition.millis);
+        }
         if let Some(error) = error {
             return Err(error);
         }
@@ -795,6 +837,7 @@ impl ThemeDefinition {
             ButtonRecipe::from_variants(variants, invalid_border),
             status,
             dialog,
+            scrollbar,
         ))
     }
 }
@@ -885,7 +928,7 @@ fn palette_fields(palette: &SemanticPalette) -> [(&'static str, SemanticColor); 
     ]
 }
 
-fn metrics_fields(metrics: ThemeMetrics) -> [(&'static str, f32); 24] {
+fn metrics_fields(metrics: ThemeMetrics) -> [(&'static str, f32); 25] {
     [
         ("metrics.radius_xs", metrics.radius_xs),
         ("metrics.radius_sm", metrics.radius_sm),
@@ -917,6 +960,10 @@ fn metrics_fields(metrics: ThemeMetrics) -> [(&'static str, f32); 24] {
         (
             "metrics.scrollbar.thumb_thickness",
             metrics.scrollbar.thumb_thickness,
+        ),
+        (
+            "metrics.scrollbar.thumb_active_thickness",
+            metrics.scrollbar.thumb_active_thickness,
         ),
         (
             "metrics.scrollbar.thumb_min_length",
@@ -966,6 +1013,7 @@ const fn builtin_registry() -> ComponentThemeRegistry {
         button: builtin_button_recipe(),
         status: Some(StatusRecipe::DEFAULT),
         dialog: Some(super::DialogRecipe::DEFAULT),
+        scrollbar: Some(super::ScrollbarRecipe::DEFAULT),
     }
 }
 
@@ -1559,6 +1607,17 @@ mod tests {
             })
         ));
 
+        let mut forgot_scrollbar = dark();
+        forgot_scrollbar.components.scrollbar = None;
+        assert!(matches!(
+            forgot_scrollbar.compile(),
+            Err(ThemeCompileError::MissingRecipe {
+                component: ComponentRecipeId::Scrollbar,
+                slot: "scrollbar",
+                ..
+            })
+        ));
+
         // An empty registry is rejected on its first family, not accepted with
         // defaults filled in behind the author's back.
         let mut empty = dark();
@@ -1625,6 +1684,60 @@ mod tests {
             *themed.compile().expect("compiles").recipes().dialog(),
             placed
         );
+    }
+
+    /// The built-ins keep the bars they always had; a theme restyles every
+    /// bar, or only sets the application's policy, as a token change.
+    #[test]
+    fn a_scrollbar_recipe_reaches_the_compiled_theme() {
+        use super::super::{ScrollbarMotion, ScrollbarRecipe, ScrollbarTransition};
+        use crate::scrollbar::ScrollbarVisibility;
+        use crate::style_model::SemanticColorMix;
+        assert_eq!(
+            *dark().compile().expect("compiles").recipes().scrollbar(),
+            ScrollbarRecipe::DEFAULT
+        );
+        let styled = ScrollbarRecipe {
+            thumb: SemanticColorMix::role(SemanticColorRole::Faint),
+            track_hot: Some(SemanticColorMix::role(SemanticColorRole::Hover)),
+            ..ScrollbarRecipe::DEFAULT
+        };
+        let themed = dark().with_scrollbar(styled);
+        assert_eq!(themed.generation, dark().generation.next());
+        assert_eq!(
+            *themed.compile().expect("compiles").recipes().scrollbar(),
+            styled
+        );
+        let resident = themed.with_scrollbar_visibility(ScrollbarVisibility::Always);
+        let compiled = resident.compile().expect("compiles");
+        assert_eq!(
+            compiled.recipes().scrollbar().visibility,
+            ScrollbarVisibility::Always
+        );
+        assert_eq!(compiled.recipes().scrollbar().thumb, styled.thumb);
+
+        let mut frozen = dark();
+        frozen.components.scrollbar = Some(ScrollbarRecipe {
+            motion: ScrollbarMotion {
+                expand: ScrollbarTransition::new(0, crate::motion::Easing::Linear),
+                ..ScrollbarMotion::DEFAULT
+            },
+            ..ScrollbarRecipe::DEFAULT
+        });
+        assert!(matches!(
+            frozen.compile(),
+            Err(ThemeCompileError::ZeroDuration { token, .. })
+                if token == "scrollbar.motion.expand"
+        ));
+        let mut instant = dark();
+        instant.components.scrollbar = Some(ScrollbarRecipe {
+            motion: ScrollbarMotion {
+                hide_delay_ms: 0,
+                ..ScrollbarMotion::DEFAULT
+            },
+            ..ScrollbarRecipe::DEFAULT
+        });
+        assert!(instant.compile().is_ok(), "a bar may hide at once");
     }
 
     /// A CSS scrim's darkness in linear light: black at CSS 0.45 keeps

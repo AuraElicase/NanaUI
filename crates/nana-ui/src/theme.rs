@@ -28,13 +28,14 @@ pub use nana_ui_core::{
     ComponentRecipeDraft, ComponentRecipeId, ComponentThemeRegistry, ControlHeight, ControlPadding,
     CornerShape, DesignTokens, DialogInsets, DialogMotion, DialogRecipe, DialogTransition,
     EasingRole, EffectTokens, ElevationRole, FoundationTokens, HAIRLINE, LineRole, MotionRole,
-    MotionTokens, OpacityTokens, RadiusTier, SWITCH_METRICS, SemanticColor, SemanticPalette,
-    ShadowToken, SpacingStep, SpacingTokens, SquareSize, StateLayer, StatusRecipe, SurfaceMaterial,
-    SurfacePadding, SurfaceRole, SurfaceSpec, SurfaceTokens, SwitchMetrics, TextWeight,
-    ThemeAppearance, ThemeChoice, ThemeCompileError, ThemeDefinition, ThemeGeneration, ThemeId,
-    ThemeIdentity, ThemeMetrics, ThemeRegistry, ThemeRegistryError, ThemeResolution,
-    ThemeSchemaVersion, TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS,
-    builtin_theme_arc, linear_scrim_alpha, space, type_scale,
+    MotionTokens, OpacityTokens, RadiusTier, SCROLLBAR_METRICS, SWITCH_METRICS, ScrollbarMetrics,
+    ScrollbarMotion, ScrollbarRecipe, ScrollbarSkin, ScrollbarTransition, ScrollbarVisibility,
+    SemanticColor, SemanticPalette, ShadowToken, SpacingStep, SpacingTokens, SquareSize,
+    StateLayer, StatusRecipe, SurfaceMaterial, SurfacePadding, SurfaceRole, SurfaceSpec,
+    SurfaceTokens, SwitchMetrics, TextWeight, ThemeAppearance, ThemeChoice, ThemeCompileError,
+    ThemeDefinition, ThemeGeneration, ThemeId, ThemeIdentity, ThemeMetrics, ThemeRegistry,
+    ThemeRegistryError, ThemeResolution, ThemeSchemaVersion, TypeRole, TypographyTokens,
+    UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme_arc, linear_scrim_alpha, space, type_scale,
 };
 
 /// Compatibility name for applications that used the pre-registry theme

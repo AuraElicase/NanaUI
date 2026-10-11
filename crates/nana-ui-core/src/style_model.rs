@@ -396,7 +396,7 @@ pub struct SemanticColorMix {
     weight: u16,
 }
 impl SemanticColorMix {
-    pub fn new(first: SemanticColorRole, second: SemanticColorRole, ratio: f32) -> Self {
+    pub const fn new(first: SemanticColorRole, second: SemanticColorRole, ratio: f32) -> Self {
         Self {
             first,
             second: Some(second),
@@ -404,14 +404,23 @@ impl SemanticColorMix {
         }
     }
     /// Mix a palette role with transparent without fading descendants.
-    pub fn alpha(role: SemanticColorRole, alpha: f32) -> Self {
+    pub const fn alpha(role: SemanticColorRole, alpha: f32) -> Self {
         Self {
             first: role,
             second: None,
             weight: Self::weight(alpha),
         }
     }
-    fn weight(ratio: f32) -> u16 {
+    /// One palette role at full strength: a recipe slot that takes a mix can
+    /// still name a plain role.
+    pub const fn role(role: SemanticColorRole) -> Self {
+        Self {
+            first: role,
+            second: None,
+            weight: 10000,
+        }
+    }
+    const fn weight(ratio: f32) -> u16 {
         if ratio.is_finite() {
             (ratio.clamp(0.0, 1.0) * 10000.0).round() as u16
         } else {

@@ -685,6 +685,7 @@ impl AppContext {
                     .filter_map(|(_, lifecycle)| lifecycle.show_at.or(lifecycle.close_at)),
             )
             .chain(self.auto_overlay_deadline())
+            .chain(self.scrollbar_hold_deadline())
             .min()
     }
 
@@ -745,6 +746,11 @@ impl AppContext {
         for bar in self.drive_due_auto_overlays() {
             if !frame.component_updates.contains(&bar) {
                 frame.component_updates.push(bar);
+            }
+        }
+        for scroll in self.release_scrollbar_holds(now) {
+            if !frame.component_updates.contains(&scroll) {
+                frame.component_updates.push(scroll);
             }
         }
         self.sweep_hover_cards();

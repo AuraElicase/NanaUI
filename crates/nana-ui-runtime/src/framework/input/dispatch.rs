@@ -163,10 +163,26 @@ impl AppContext {
         } else {
             self.route_overlay_pointer(document, *pointer_id, overlay_phase, *x, *y)?
         };
-        let target = overlay.target;
+        // A shown scrollbar lane takes the pointer from the content under it:
+        // the row there loses its hover and its tooltip, the lane heats up,
+        // and a press there grabs the bar. A captured pointer stays with its
+        // capture, a drag included.
+        let captured = self
+            .world()
+            .pointer_capture(document, *pointer_id)
+            .is_some();
+        let lane = if captured || matches!(phase, PointerPhase::Cancel) {
+            None
+        } else {
+            self.scrollbar_target_near_hit(*x, *y, overlay.target)
+        };
+        let target = lane.map_or(overlay.target, |(view, _)| Some(view));
         *landed = target;
         self.set_pointer_location(document, *pointer_id, Some((*x, *y)));
         self.set_pointer_hover_at(document, *pointer_id, target, now)?;
+        if !captured {
+            self.sync_scrollbar_hot(document, *pointer_id, lane)?;
+        }
         self.update_text_diagnostic_hover_hit(document, *x, *y, target)?;
         let terminal_phase = match phase {
             PointerPhase::Down if *is_primary && *button == 0 => Some(0),
@@ -327,7 +343,7 @@ impl AppContext {
                     return Ok(CONSUMED);
                 }
                 if *button == 0
-                    && let Some((view, axis)) = self.scrollbar_target_near_hit(*x, *y, target)
+                    && let Some((view, axis)) = lane
                     && self.begin_scrollbar_drag(*pointer_id, view, axis, *x, *y)?
                 {
                     return Ok(CONSUMED);

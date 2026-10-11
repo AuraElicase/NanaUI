@@ -569,6 +569,7 @@ impl AppContext {
                     pointer_id: PointerId(local),
                     ..*wheel
                 };
+                self.note_input_time(now);
                 self.dispatch_wheel(document, &wheel, &mut landed)?
             }
             InputPayload::PointerEnter { x, y, .. } => {
@@ -595,6 +596,7 @@ impl AppContext {
                 InputDisposition::default()
             }
             InputPayload::Key(key) => {
+                self.note_input_time(now);
                 let disposition = self.dispatch_keystroke(
                     document,
                     KeyStroke {

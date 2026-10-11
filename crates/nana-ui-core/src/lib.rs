@@ -148,8 +148,9 @@ pub use rich_text::{
     RichTextStroke, TextStrokeJoin, TextStrokePlacement,
 };
 pub use scrollbar::{
-    SCROLLBAR_METRICS, ScrollbarAxis, ScrollbarMetrics, ScrollbarSkin, ScrollbarTrack,
-    ScrollbarVisibility, scrollbar_track,
+    SCROLLBAR_METRICS, ScrollbarAxis, ScrollbarExtent, ScrollbarLayout, ScrollbarMetrics,
+    ScrollbarRect, ScrollbarSkin, ScrollbarTrack, ScrollbarVisibility, scrollbar_layout,
+    scrollbar_track,
 };
 pub use selection::{SelectionMove, SingleSelection};
 pub use semantics::{
@@ -177,7 +178,8 @@ pub use theme::{
     ComponentRecipeDraft, ComponentRecipeId, ComponentThemeRegistry, ControlHeight, ControlPadding,
     CornerShape, DesignTokens, DialogInsets, DialogMotion, DialogRecipe, DialogTransition,
     EasingRole, EffectTokens, ElevationRole, FoundationTokens, HAIRLINE, LineRole, MotionRole,
-    MotionTokens, OpacityTokens, RadiusTier, SWITCH_METRICS, ShadowToken, SpacingStep,
+    MotionTokens, OpacityTokens, RadiusTier, SWITCH_METRICS, ScrollbarMotion, ScrollbarPaint,
+    ScrollbarPaintState, ScrollbarRecipe, ScrollbarTransition, ShadowToken, SpacingStep,
     SpacingTokens, SquareSize, StateLayer, StatusRecipe, SurfaceMaterial, SurfacePadding,
     SurfaceRole, SurfaceSpec, SurfaceTokens, SwitchMetrics, TextWeight, ThemeAppearance,
     ThemeChoice, ThemeCompileError, ThemeDefinition, ThemeGeneration, ThemeId, ThemeIdentity,

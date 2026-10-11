@@ -877,13 +877,100 @@ mod tests {
             .document_mut()
             .context_mut()
             .update_component(scroll, |scroll, _| {
-                scroll.scrollbars = ScrollbarVisibility::Hidden;
+                scroll.scrollbars = Some(ScrollbarVisibility::Hidden);
             })
             .expect("hide bars");
         let (_, hidden_right) = edges(&mut session);
         assert!(
             hidden_right < right,
             "hiding the bar must remove those pixels: {hidden_right} vs {right}"
+        );
+    }
+
+    /// Real GPU evidence for what the scrollbar redesign answers: content
+    /// used to paint over the bar. Opaque red rows fill the scrollport, and
+    /// the pixel at the thumb's centre must be the thumb's, not the rows'.
+    #[test]
+    fn opaque_rows_do_not_cover_the_scrollbar_thumb() {
+        use nana_ui::runtime::{
+            ComponentGeometry, LengthSpec, NodeStyle, ScrollAxes, ScrollView, Stack,
+        };
+        use nana_ui_core::ScrollbarVisibility;
+
+        const WIDTH: u32 = 160;
+        const HEIGHT: u32 = 120;
+
+        let Some(mut gpu) = offscreen::optional() else {
+            return;
+        };
+        let document_id = DocumentId::new(1).expect("document");
+        let mut document = RuntimeDocument::new(document_id);
+        let mut viewport = NodeStyle::default();
+        {
+            let layout = std::sync::Arc::make_mut(&mut viewport.layout);
+            layout.width = Some(LengthSpec::Px(WIDTH as f32));
+            layout.height = Some(LengthSpec::Px(HEIGHT as f32));
+        }
+        let scroll = document
+            .context_mut()
+            .mount_view_root(document_id, || {
+                let rows = (0..8)
+                    .map(|index| {
+                        widget(Stack::row(0.0).with_layout(|layout| {
+                            layout.width = Some(LengthSpec::Fill);
+                            layout.height = Some(LengthSpec::Px(40.0));
+                            layout.background = Some([1.0, 0.0, 0.0, 1.0]);
+                        }))
+                        .key(format!("row-{index}"))
+                    })
+                    .collect::<Vec<_>>();
+                widget(
+                    ScrollView::new(ScrollAxes::Vertical)
+                        .scrollbars(ScrollbarVisibility::Always)
+                        .style(viewport),
+                )
+                .key("scroll")
+                .children(rows)
+            })
+            .ok()
+            .and_then(|view| view.root::<ScrollView>())
+            .expect("scroll view");
+        let mut session = RuntimeAgentSession::new(document, WIDTH, HEIGHT).expect("session");
+        session.flush().expect("flush");
+        let Some(ComponentGeometry::Scrollbar {
+            vertical: Some(bar),
+            ..
+        }) = session
+            .document()
+            .context()
+            .world()
+            .component_geometry(scroll.stable_id())
+        else {
+            panic!("a resident bar");
+        };
+        let scene = session.document().scene().clone();
+        let pixels = gpu
+            .paint(
+                &scene,
+                Size::new(WIDTH, HEIGHT),
+                [0.0, 0.0, 0.0, 1.0],
+                None,
+                None,
+            )
+            .expect("offscreen paint");
+        let x = (bar.thumb.x + bar.thumb.width / 2.0) as u32;
+        let y = (bar.thumb.y + bar.thumb.height / 2.0) as u32;
+        let offset = ((y * WIDTH + x) * 4) as usize;
+        let [r, g, b] = [pixels[offset], pixels[offset + 1], pixels[offset + 2]];
+        assert!(
+            !(r > 200 && g < 80 && b < 80),
+            "the thumb is covered by the red rows at ({x}, {y}): {r} {g} {b}"
+        );
+        let row = ((y * WIDTH + 20) * 4) as usize;
+        assert!(
+            pixels[row] > 200 && pixels[row + 1] < 80,
+            "the rows themselves are red: {:?}",
+            &pixels[row..row + 3]
         );
     }
 

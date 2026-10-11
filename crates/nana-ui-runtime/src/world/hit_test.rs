@@ -1171,8 +1171,17 @@ impl UiWorld {
                         || !node.text.value.is_empty()
                         || self.nodes.custom_render(id).is_some()
                 });
+            // A scroll view whose bars can show groups what it holds, so its
+            // bars paint over it: hit order cuts there too.
+            let scrollbar_chrome = matches!(
+                self.nodes.visual(id),
+                Some(StandardVisual::Scrollbar { visibility, .. })
+                    if *visibility != nana_ui_core::ScrollbarVisibility::Hidden
+            );
             let group = (children
-                && (style.creates_paint_stacking_context() || (opacity > 0.0 && opacity < 1.0)))
+                && (style.creates_paint_stacking_context()
+                    || (opacity > 0.0 && opacity < 1.0)
+                    || scrollbar_chrome))
                 || filter_group
                 || !style.paint.mix_blend.is_normal();
             if group || id == target {

@@ -86,4 +86,4 @@ import "@nanaui/nanavue-components/controls.css";
 | `NanaPaneChrome` | `PaneChrome` |
 | `NanaSettingsRow` / `NanaSettingsCard` / `NanaSettingsPage` / `NanaSettingsCollapsibleCard` | 设置行 / 卡 / 页 / 折叠卡 |
 
-浮层用 `open` + `onUpdate:open`。`NanaScrollView` 用 `scrollbars="always|hidden"`（默认 auto-hide）。大列表用 `NanaVirtualList` / `Table` / `Tree`：只把当前窗口做成 live 节点。GPU 画面用 `NanaGpu` 的 `source`，对应宿主 `HostTexture` 槽，不是 2D canvas。示例：[`examples/overlay-controls.js`](./examples/overlay-controls.js)、[`examples/appearance-workspace.js`](./examples/appearance-workspace.js)。props 细则见 [`SEMANTICS.md`](./SEMANTICS.md)。
+浮层用 `open` + `onUpdate:open`。`NanaScrollView` 的 `scrollbars` 默认 `auto`，跟随应用主题的滚动条策略（内置 auto-hide）；`auto-hide|always|hidden` 固定成这一种。大列表用 `NanaVirtualList` / `Table` / `Tree`：只把当前窗口做成 live 节点。GPU 画面用 `NanaGpu` 的 `source`，对应宿主 `HostTexture` 槽，不是 2D canvas。示例：[`examples/overlay-controls.js`](./examples/overlay-controls.js)、[`examples/appearance-workspace.js`](./examples/appearance-workspace.js)。props 细则见 [`SEMANTICS.md`](./SEMANTICS.md)。

@@ -837,14 +837,27 @@ pub enum StandardVisual {
         /// `RangeField::track_gradient`.
         track_gradient: Option<Arc<[nana_ui_core::GradientStop]>>,
     },
-    /// Scroll container chrome. Carries policy only: the track and thumb boxes
-    /// come from the authoritative [`ScrollOffset`] / [`ScrollMetrics`] at
-    /// extraction time, so no scroll position is duplicated here.
+    /// Scroll container chrome. Carries policy and the bars' animated state
+    /// only: the lane, track and thumb boxes come from the authoritative
+    /// [`ScrollOffset`] / [`ScrollMetrics`] at extraction time, so no scroll
+    /// position is duplicated here.
     Scrollbar {
         axes: crate::ScrollAxes,
+        /// The view's own visibility, else the installed theme's policy.
         visibility: nana_ui_core::ScrollbarVisibility,
-        revealed: bool,
+        /// The view asks its auto-hiding bars to show: the pointer is inside
+        /// it, a lane is hot, a thumb is dragged, or a hold after a scroll or
+        /// a leave has not run out.
+        shown: bool,
+        /// The axis whose lane the pointer is on.
+        hot: Option<nana_ui_core::ScrollbarAxis>,
         dragging: Option<nana_ui_core::ScrollbarAxis>,
+        /// How far the bars have faded in, `0..=1`: animated toward `shown`
+        /// under `AutoHide`, 1 for `Always`, 0 for `Hidden`.
+        presence: f32,
+        /// How far each axis's thumb has grown toward its active thickness,
+        /// `[horizontal, vertical]`, `0..=1`.
+        expand: [f32; 2],
     },
     Card {
         title: Option<Arc<str>>,
@@ -1228,15 +1241,19 @@ pub struct RadioIndicator {
 
 /// One axis of resolved scrollbar chrome.
 ///
-/// `track` is the full band along the viewport edge and is also the drag hit
-/// region; `thumb` is the draggable handle inside it.
+/// `lane` is the band the bar is hovered and grabbed in; `track` is the
+/// capsule painted behind the thumb, as long as the lane and as thick as the
+/// active thumb; `thumb` is the draggable handle. All three share the lane's
+/// centre line.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScrollbarBar {
+    pub lane: LayoutBox,
     pub track: LayoutBox,
     pub thumb: LayoutBox,
-    /// Painted only when the container keeps its bars resident.
+    /// `None` paints no track.
     pub track_background: Option<[f32; 4]>,
     pub thumb_background: [f32; 4],
+    pub track_radius: f32,
     pub thumb_radius: f32,
     /// Smallest and largest content offsets this axis can reach.
     pub min_offset: f32,
@@ -1277,11 +1294,66 @@ impl ScrollbarBar {
         }
     }
 
+    /// Whether a point is on the lane: the bar's hover and press target.
     pub fn contains(&self, x: f32, y: f32) -> bool {
-        x >= self.track.x
-            && x < self.track.x + self.track.width
-            && y >= self.track.y
-            && y < self.track.y + self.track.height
+        x >= self.lane.x
+            && x < self.lane.x + self.lane.width
+            && y >= self.lane.y
+            && y < self.lane.y + self.lane.height
+    }
+}
+
+/// Where a scroll view's bars are heading: how present, and how grown on
+/// each axis (`[horizontal, vertical]`), each `0..=1`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ScrollbarTargets {
+    pub presence: f32,
+    pub expand: [f32; 2],
+}
+
+impl ScrollbarTargets {
+    /// Where bars of `visibility` head when the view asks to show them
+    /// (`shown`) with a pointer on the `hot` lane or a thumb `dragging`.
+    pub(crate) fn new(
+        visibility: nana_ui_core::ScrollbarVisibility,
+        shown: bool,
+        hot: Option<nana_ui_core::ScrollbarAxis>,
+        dragging: Option<nana_ui_core::ScrollbarAxis>,
+    ) -> Self {
+        use nana_ui_core::{ScrollbarAxis, ScrollbarVisibility};
+        let presence = match visibility {
+            ScrollbarVisibility::AutoHide => f32::from(u8::from(shown)),
+            ScrollbarVisibility::Always => 1.0,
+            ScrollbarVisibility::Hidden => 0.0,
+        };
+        let grown = |axis: ScrollbarAxis| {
+            let engaged = hot == Some(axis) || dragging == Some(axis);
+            f32::from(u8::from(
+                engaged && visibility != ScrollbarVisibility::Hidden,
+            ))
+        };
+        Self {
+            presence,
+            expand: [
+                grown(ScrollbarAxis::Horizontal),
+                grown(ScrollbarAxis::Vertical),
+            ],
+        }
+    }
+
+    /// The targets a scrollbar visual asks for; `None` for any other visual.
+    pub(crate) fn of(visual: &StandardVisual) -> Option<Self> {
+        let StandardVisual::Scrollbar {
+            visibility,
+            shown,
+            hot,
+            dragging,
+            ..
+        } = visual
+        else {
+            return None;
+        };
+        Some(Self::new(*visibility, *shown, *hot, *dragging))
     }
 }
 

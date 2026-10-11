@@ -25,6 +25,7 @@
 //! the whole reason the authoring and compiled forms are different types.
 
 use super::dialog::DialogRecipe;
+use super::scrollbar::ScrollbarRecipe;
 use crate::semantics::{ButtonKind, StatusTone};
 use crate::style_model::SemanticColorRole;
 
@@ -58,7 +59,9 @@ pub enum ComponentRecipeId {
     Menu,
     /// Modal frames and dialogs.
     Overlay,
-    /// Scrollbars.
+    /// Scrollbars. The family's foreground is not what a bar paints with:
+    /// that is the registry's [`ScrollbarRecipe`]. The id names the family
+    /// when that recipe is missing.
     Scrollbar,
     /// Accent-driven indicators: progress, spinner, badges, form-field chrome.
     Indicator,
@@ -317,6 +320,9 @@ pub struct ComponentThemeRegistry {
     pub status: Option<StatusRecipe>,
     /// The Overlay family's dialog card. See [`DialogRecipe`].
     pub dialog: Option<DialogRecipe>,
+    /// The Scrollbar family: colours, motion and the application's
+    /// visibility policy. See [`ScrollbarRecipe`].
+    pub scrollbar: Option<ScrollbarRecipe>,
 }
 
 impl ComponentThemeRegistry {
@@ -331,6 +337,7 @@ impl ComponentThemeRegistry {
             button: ButtonRecipeDraft::empty(),
             status: None,
             dialog: None,
+            scrollbar: None,
         }
     }
 
@@ -352,6 +359,7 @@ pub struct CompiledRecipes {
     button: ButtonRecipe,
     status: StatusRecipe,
     dialog: DialogRecipe,
+    scrollbar: ScrollbarRecipe,
 }
 
 impl CompiledRecipes {
@@ -360,12 +368,14 @@ impl CompiledRecipes {
         button: ButtonRecipe,
         status: StatusRecipe,
         dialog: DialogRecipe,
+        scrollbar: ScrollbarRecipe,
     ) -> Self {
         Self {
             families,
             button,
             status,
             dialog,
+            scrollbar,
         }
     }
 
@@ -396,5 +406,9 @@ impl CompiledRecipes {
 
     pub const fn dialog(&self) -> &DialogRecipe {
         &self.dialog
+    }
+
+    pub const fn scrollbar(&self) -> &ScrollbarRecipe {
+        &self.scrollbar
     }
 }

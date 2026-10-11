@@ -6217,9 +6217,58 @@ fn a_picture_xy_pad_strokes_its_frame_over_the_paint_and_rings_the_value() {
     assert!(quad_parts(&scene, 1, 4).is_some() && quad_parts(&scene, 1, 5).is_some());
 }
 
-#[test]
-fn scrollbar_chrome_paints_ordinary_quads_over_the_scrollport() {
-    let mut scroller = node(1, None, &[]);
+/// A scroll view's bar visual: one vertical axis, shown at `presence`.
+fn scrollbar_visual(
+    visibility: nana_ui_core::ScrollbarVisibility,
+    presence: f32,
+) -> StandardVisual {
+    StandardVisual::Scrollbar {
+        axes: nana_ui_runtime::ScrollAxes::Vertical,
+        visibility,
+        shown: true,
+        hot: None,
+        dragging: None,
+        presence,
+        expand: [0.0; 2],
+    }
+}
+
+/// A 200×120 scrollport's vertical bar: a 12px lane 2px inside its right
+/// edge, an 8px track and a 6px thumb on its centre line.
+fn vertical_bar(thumb_y: f32, track_background: Option<[f32; 4]>) -> ComponentGeometry {
+    ComponentGeometry::Scrollbar {
+        horizontal: None,
+        vertical: Some(nana_ui_runtime::ScrollbarBar {
+            lane: LayoutBox {
+                x: 186.0,
+                y: 2.0,
+                width: 12.0,
+                height: 116.0,
+            },
+            track: LayoutBox {
+                x: 188.0,
+                y: 2.0,
+                width: 8.0,
+                height: 116.0,
+            },
+            thumb: LayoutBox {
+                x: 189.0,
+                y: thumb_y,
+                width: 6.0,
+                height: 70.0,
+            },
+            track_background,
+            thumb_background: [0.6, 0.6, 0.6, 1.0],
+            track_radius: 4.0,
+            thumb_radius: 3.0,
+            min_offset: 0.0,
+            max_offset: 80.0,
+        }),
+    }
+}
+
+fn scroller(value: u64, children: &[u64], visual: StandardVisual) -> ExtractedNode {
+    let mut scroller = node(value, None, children);
     scroller.layout = LayoutBox {
         x: 0.0,
         y: 0.0,
@@ -6231,47 +6280,49 @@ fn scrollbar_chrome_paints_ordinary_quads_over_the_scrollport() {
         layout.overflow_x = nana_ui_core::OverflowSpec::Scroll;
         layout.overflow_y = nana_ui_core::OverflowSpec::Scroll;
     }
-    scroller.standard_visual = Some(StandardVisual::Scrollbar {
-        axes: nana_ui_runtime::ScrollAxes::Vertical,
-        visibility: nana_ui_core::ScrollbarVisibility::Always,
-        revealed: true,
-        dragging: None,
-    });
-    scroller.component_geometry = Some(Box::new(ComponentGeometry::Scrollbar {
-        horizontal: None,
-        vertical: Some(nana_ui_runtime::ScrollbarBar {
-            track: LayoutBox {
-                x: 188.0,
-                y: 0.0,
-                width: 12.0,
-                height: 120.0,
-            },
-            thumb: LayoutBox {
-                x: 191.0,
-                y: 0.0,
-                width: 6.0,
-                height: 72.0,
-            },
-            track_background: Some([0.1, 0.1, 0.1, 1.0]),
-            thumb_background: [0.6, 0.6, 0.6, 1.0],
-            thumb_radius: 3.0,
-            min_offset: 0.0,
-            max_offset: 80.0,
+    scroller.standard_visual = Some(visual);
+    scroller
+}
+
+fn filled(value: u64, parent: Option<u64>, color: [f32; 4]) -> ExtractedNode {
+    let mut node = node(value, parent, &[]);
+    node.layout = LayoutBox {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    node.source_style = NodeStyle {
+        layout: Arc::new(nana_ui_core::LayoutStyle {
+            background: Some(color),
+            ..Default::default()
         }),
-    }));
+        ..Default::default()
+    };
+    node
+}
+
+#[test]
+fn scrollbar_chrome_paints_ordinary_quads_over_the_scrollport() {
+    let mut scroller = scroller(
+        1,
+        &[],
+        scrollbar_visual(nana_ui_core::ScrollbarVisibility::Always, 1.0),
+    );
+    scroller.component_geometry = Some(Box::new(vertical_bar(2.0, Some([0.1, 0.1, 0.1, 1.0]))));
 
     let mut scene = UiScene::new();
     scene.apply_delta([scroller], []);
     let track = scene
         .primitive(PrimitiveId {
             node: id(1),
-            slot: 3,
+            slot: scrollbar_chrome_slot(2),
         })
         .expect("resident track");
     let thumb = scene
         .primitive(PrimitiveId {
             node: id(1),
-            slot: 4,
+            slot: scrollbar_chrome_slot(3),
         })
         .expect("thumb");
     assert!(matches!(
@@ -6280,9 +6331,11 @@ fn scrollbar_chrome_paints_ordinary_quads_over_the_scrollport() {
             background: Some(nana_ui_core::PaintColor::Srgb {
                 rgba: [0.1, 0.1, 0.1, 1.0]
             }),
+            corner_radius,
             ..
-        }
+        } if corner_radius.iter().all(|r| (*r - 4.0).abs() < f32::EPSILON)
     ));
+    assert_eq!((track.bounds.x, track.bounds.width), (188.0, 8.0));
     assert!(matches!(
         thumb.kind,
         ScenePrimitiveKind::Quad {
@@ -6291,8 +6344,8 @@ fn scrollbar_chrome_paints_ordinary_quads_over_the_scrollport() {
             ..
         } if corner_radius.iter().all(|r| (*r - 3.0).abs() < f32::EPSILON)
     ));
-    assert_eq!(thumb.bounds.x, 191.0);
-    assert_eq!(thumb.bounds.height, 72.0);
+    assert_eq!(thumb.bounds.x, 189.0);
+    assert_eq!(thumb.bounds.height, 70.0);
     // Both axes clip, so chrome shares the scrollport overflow clip and is
     // not cut by a tighter content clip.
     assert_eq!(
@@ -6313,7 +6366,7 @@ fn scrollbar_chrome_paints_ordinary_quads_over_the_scrollport() {
         scene
             .primitive(PrimitiveId {
                 node: id(1),
-                slot: 5,
+                slot: scrollbar_chrome_slot(1),
             })
             .is_none(),
         "a vertical-only container emits no horizontal bar"
@@ -6322,36 +6375,35 @@ fn scrollbar_chrome_paints_ordinary_quads_over_the_scrollport() {
 
 #[test]
 fn scrollbar_skin_thickness_still_paints_ordinary_quads() {
-    let mut scroller = node(1, None, &[]);
-    scroller.layout = LayoutBox {
-        x: 0.0,
-        y: 0.0,
-        width: 200.0,
-        height: 120.0,
-    };
-    scroller.standard_visual = Some(StandardVisual::Scrollbar {
-        axes: nana_ui_runtime::ScrollAxes::Vertical,
-        visibility: nana_ui_core::ScrollbarVisibility::Always,
-        revealed: true,
-        dragging: None,
-    });
+    let mut scroller = scroller(
+        1,
+        &[],
+        scrollbar_visual(nana_ui_core::ScrollbarVisibility::Always, 1.0),
+    );
     scroller.component_geometry = Some(Box::new(ComponentGeometry::Scrollbar {
         horizontal: None,
         vertical: Some(nana_ui_runtime::ScrollbarBar {
-            track: LayoutBox {
-                x: 192.0,
+            lane: LayoutBox {
+                x: 190.0,
                 y: 0.0,
                 width: 8.0,
                 height: 120.0,
             },
+            track: LayoutBox {
+                x: 192.0,
+                y: 0.0,
+                width: 4.0,
+                height: 120.0,
+            },
             thumb: LayoutBox {
-                x: 194.0,
+                x: 192.0,
                 y: 8.0,
                 width: 4.0,
                 height: 48.0,
             },
             track_background: Some([0.2, 0.2, 0.2, 1.0]),
             thumb_background: [1.0, 0.0, 0.0, 1.0],
+            track_radius: 2.0,
             thumb_radius: 2.0,
             min_offset: 0.0,
             max_offset: 80.0,
@@ -6363,13 +6415,13 @@ fn scrollbar_skin_thickness_still_paints_ordinary_quads() {
     let track = scene
         .primitive(PrimitiveId {
             node: id(1),
-            slot: 3,
+            slot: scrollbar_chrome_slot(2),
         })
         .expect("skinned track");
     let thumb = scene
         .primitive(PrimitiveId {
             node: id(1),
-            slot: 4,
+            slot: scrollbar_chrome_slot(3),
         })
         .expect("skinned thumb");
     assert!(matches!(
@@ -6381,7 +6433,7 @@ fn scrollbar_skin_thickness_still_paints_ordinary_quads() {
             ..
         }
     ));
-    assert_eq!(track.bounds.width, 8.0);
+    assert_eq!(track.bounds.width, 4.0);
     assert!(matches!(
         thumb.kind,
         ScenePrimitiveKind::Quad {
@@ -6391,7 +6443,85 @@ fn scrollbar_skin_thickness_still_paints_ordinary_quads() {
         } if corner_radius.iter().all(|r| (*r - 2.0).abs() < f32::EPSILON)
     ));
     assert_eq!(thumb.bounds.width, 4.0);
-    assert_eq!(thumb.bounds.x, 194.0);
+    assert_eq!(thumb.bounds.x, 192.0);
+}
+
+/// The report this redesign answers: content covered the bar. The bars
+/// paint over everything the scroll view holds — an opaque row and a row
+/// with z-index 100 alike — while a later sibling of the scroll view and a
+/// viewport-fixed surface inside it still paint over the bars.
+#[test]
+fn scrollbar_chrome_paints_over_the_content_it_scrolls() {
+    let mut scroll = scroller(
+        1,
+        &[2, 3, 5],
+        scrollbar_visual(nana_ui_core::ScrollbarVisibility::AutoHide, 1.0),
+    );
+    scroll.component_geometry = Some(Box::new(vertical_bar(2.0, Some([0.1, 0.1, 0.1, 1.0]))));
+    let row = filled(2, Some(1), [1.0, 0.0, 0.0, 1.0]);
+    let mut raised = filled(3, Some(1), [0.0, 1.0, 0.0, 1.0]);
+    raised.z_index = 100;
+    let mut popover = filled(5, Some(1), [0.5, 0.5, 0.5, 1.0]);
+    Arc::make_mut(&mut popover.source_style.layout).position = nana_ui_core::PositionSpec::Fixed;
+    let sibling = filled(4, None, [0.0, 0.0, 1.0, 1.0]);
+    let mut scene = UiScene::new();
+    scene.apply_delta([scroll.clone(), row, raised, popover, sibling], []);
+    let order = |scene: &UiScene| {
+        scene
+            .primitives()
+            .map(|primitive| (primitive.node.get(), primitive.id.slot))
+            .collect::<Vec<_>>()
+    };
+    let track = (1, scrollbar_chrome_slot(2));
+    let thumb = (1, scrollbar_chrome_slot(3));
+    let position = |scene: &UiScene, entry: (u64, u64)| {
+        order(scene)
+            .iter()
+            .position(|item| *item == entry)
+            .expect("painted")
+    };
+    let first_of = |scene: &UiScene, node: u64| {
+        order(scene)
+            .iter()
+            .position(|(painted, _)| *painted == node)
+            .expect("painted")
+    };
+    assert!(position(&scene, track) < position(&scene, thumb));
+    for content in [2, 3] {
+        assert!(
+            first_of(&scene, content) < position(&scene, track),
+            "node {content} paints under the bars"
+        );
+    }
+    assert!(
+        position(&scene, thumb) < first_of(&scene, 4),
+        "a later sibling covers the bars"
+    );
+    assert!(
+        position(&scene, thumb) < first_of(&scene, 5),
+        "a viewport-fixed surface covers the bars"
+    );
+
+    // Fading the bars or moving the thumb only repaints them.
+    scroll.standard_visual = Some(scrollbar_visual(
+        nana_ui_core::ScrollbarVisibility::AutoHide,
+        0.5,
+    ));
+    scroll.component_geometry = Some(Box::new(vertical_bar(30.0, None)));
+    let delta = scene.apply_delta([scroll.clone()], []);
+    assert!(!delta.order_changed, "a fade or a scroll must not re-sort");
+    assert!(position(&scene, thumb) > first_of(&scene, 3));
+
+    // A view whose bars never show stops grouping what it holds, so the
+    // raised row escapes it again: that is the one change that re-sorts.
+    scroll.standard_visual = Some(scrollbar_visual(
+        nana_ui_core::ScrollbarVisibility::Hidden,
+        0.0,
+    ));
+    scroll.component_geometry = None;
+    let delta = scene.apply_delta([scroll], []);
+    assert!(delta.order_changed);
+    assert!(first_of(&scene, 3) > first_of(&scene, 4));
 }
 
 #[test]
