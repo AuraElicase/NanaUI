@@ -889,13 +889,15 @@ impl UiWorld {
         self.style_model = next.style_model();
         self.theme = next;
         self.palette_epoch = self.palette_epoch.wrapping_add(1).max(1);
-        // Painters re-record against the new palette and radius tiers.
-        let painted = self
+        // Painters re-record against the new palette and radius tiers, card
+        // surface painters too.
+        let mut painted = self
             .paint_recordings
             .get_mut()
             .keys()
             .copied()
             .collect::<Vec<_>>();
+        painted.extend(self.modal_surface_recordings.get_mut().keys().copied());
         for id in painted {
             self.mark_repaint(id);
         }

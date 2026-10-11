@@ -741,6 +741,9 @@ pub enum StandardVisual {
         busy: bool,
         danger: bool,
         slots: crate::ModalSlots,
+        /// Paints the card in place of the theme's; see
+        /// [`crate::Dialog::surface_painter`].
+        surface_painter: Option<crate::NodePainter>,
     },
     Button {
         label: Arc<str>,
@@ -1474,6 +1477,9 @@ pub enum ComponentGeometry {
         /// overlay. It fades the scrim's colour and its blur together while
         /// the frame comes and goes; 1 at rest.
         scrim_opacity: f32,
+        /// The card as its surface painter recorded it, in the card's own
+        /// coordinates; `None` paints the theme's card.
+        surface_paint: Option<Arc<crate::PaintRecording>>,
     },
     Button {
         icon: Option<(nana_ui_core::Icon, LayoutBox)>,

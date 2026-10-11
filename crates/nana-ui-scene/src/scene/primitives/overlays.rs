@@ -24,6 +24,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
             scrim_color,
             scrim_blur,
             scrim_opacity,
+            surface_paint,
             ..
         }) => {
             // The scrim fades by its own opacity, not its node's layer (the
@@ -80,24 +81,31 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                     DrawerSide::Bottom => surface_bounds.height += radius,
                 }
             }
-            emit(ScenePrimitive {
-                id: PrimitiveId { node: id, slot: 11 },
-                node: id,
-                bounds: surface_bounds,
-                transform,
-                clips: surface_clips.into(),
-                opacity,
-                z_index: node.z_index,
-                document_order: node_order,
-                kind: ScenePrimitiveKind::Quad {
-                    background: crate::scene::slot_color(None, Some(*background)),
-                    border_color: crate::scene::slot_color(None, None),
-                    border_width: 0.0,
-                    corner_radius: corner_radii(radius),
-                    shadow: Some(*elevation),
-                    surface: QuadSurfacePaint::default(),
-                },
-            });
+            // A dialog that paints its own card leaves the theme's out,
+            // unless its painter asked for it with `draw_default()`.
+            let themed_card = surface_paint
+                .as_ref()
+                .is_none_or(|recording| recording.default_phase().is_some());
+            if themed_card {
+                emit(ScenePrimitive {
+                    id: PrimitiveId { node: id, slot: 11 },
+                    node: id,
+                    bounds: surface_bounds,
+                    transform,
+                    clips: surface_clips.into(),
+                    opacity,
+                    z_index: node.z_index,
+                    document_order: node_order,
+                    kind: ScenePrimitiveKind::Quad {
+                        background: crate::scene::slot_color(None, Some(*background)),
+                        border_color: crate::scene::slot_color(None, None),
+                        border_width: 0.0,
+                        corner_radius: corner_radii(radius),
+                        shadow: Some(*elevation),
+                        surface: QuadSurfacePaint::default(),
+                    },
+                });
+            }
             // The card's section dividers: hairlines across the whole card,
             // inside its edges, so the card's own clip trims them.
             for (slot, divider) in [(15, header_divider), (16, footer_divider)] {

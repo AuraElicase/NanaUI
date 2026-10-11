@@ -153,6 +153,60 @@ let theme = ThemeDefinition::NANA_DARK.with_dialog(DialogRecipe {
 });
 ```
 
+## 自己画卡面
+
+卡片的位置、分段、动效归主题的配方，外形归主题的卡片（`Surface` 底、`Overlay` 阴影、配方圆角）。应用有自己的卡片外形时——比如标题行站在一个高出卡身的标签页上、斜坡下到卡身、背后衬一块强调色底板——用 `.surface_painter(painter)` 自己画卡面。`Dialog` 和 `ConfirmDialog` 都有。
+
+painter 就是挂在节点上的那种 [`Painter`](../reference/components.md)，只是坐标原点在卡片左上角，尺寸是卡片的尺寸。它画在遮罩之上、卡片的标题、正文、分隔线和插槽之下，跟卡片一起淡入、移动。`cx.modal_sections()` 给出卡片各段在卡面坐标里的位置（`ModalSurfaceSections`）：
+
+| 字段 | 是什么 |
+| --- | --- |
+| `header` | 标题行这一段，卡片全宽，从顶边到分隔线下 |
+| `title` | 标题块（标题和说明），配方允许它走多宽就多宽 |
+| `icon` / `close` | 标题图标位、关闭位，有才有 |
+| `body` | 正文的内容盒 |
+| `footer` | 底栏这一段，卡片全宽一直到底边，有按钮或底栏插槽才有 |
+
+照这些框画形状，形状就始终在它们装的东西底下：标题长到两行、表头变高，标签页也跟着变高。
+
+只画子节点之下这一层：`paint_over_children` 和 painter 自己的命中都不用，整张卡片照模态卡片的规矩拿下落在上面的按下。在 painter 里调 `cx.draw_default()`，主题的卡片画在 painter 画的东西底下。录制按 painter 的 `paint_key`、卡片尺寸、各段位置和主题缓存，都没变就不再录。抽屉没有这个入口。
+
+```rust
+use nana_ui::runtime::{ConfirmDialog, PaintContext, PaintPath, Painter, SemanticColorRole};
+use nana_ui::theme::RadiusTier;
+
+struct TabbedCard;
+
+impl Painter for TabbedCard {
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let [width, height] = cx.size();
+        let rise = cx.modal_sections().map_or(0.0, |sections| sections.header.height);
+        let radius = cx.radius(RadiusTier::Lg);
+        let mut outline = PaintPath::new();
+        // 标签占卡宽一半，高出卡身 `rise`；斜坡和卡身照设计画。
+        outline
+            .move_to(0.0, height * 0.5)
+            .arc_to(0.0, 0.0, width * 0.5, 0.0, radius)
+            .arc_to(width * 0.5, 0.0, width * 0.5 + 30.0, rise, radius)
+            .arc_to(width * 0.5 + 30.0, rise, width, rise, radius)
+            .arc_to(width, rise, width, height, radius)
+            .arc_to(width, height, 0.0, height, radius)
+            .arc_to(0.0, height, 0.0, 0.0, radius)
+            .close();
+        cx.shadow(&outline, nana_ui::theme::ElevationRole::Overlay);
+        cx.fill_path(&outline, SemanticColorRole::Surface);
+    }
+
+    fn paint_key(&self) -> u64 {
+        0
+    }
+}
+
+let dialog = ConfirmDialog::new("删除场景", "场景内的模型会一并删除。")
+    .danger(true)
+    .surface_painter(TabbedCard);
+```
+
 ## 遮罩
 
 对话框和抽屉身后的遮罩归主题的效果 token：`EffectTokens::modal_scrim`（颜色和不透明度，内置是黑色 0.45）和 `modal_scrim_blur`（遮罩把身后的窗口模糊多少，CSS `backdrop-filter: blur(r)`，`r` 是高斯标准差，逻辑 px；内置 0，不模糊）。先模糊身后的窗口，再把遮罩的颜色叠上去，和 CSS 给元素的 `backdrop-filter` 与背景色的先后一样。

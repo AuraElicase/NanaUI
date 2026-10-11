@@ -161,6 +161,7 @@ impl UiWorld {
                 kind,
                 slots,
                 danger,
+                surface_painter,
                 ..
             } => {
                 let presentation = self.nodes.modal_text(id).copied().unwrap_or_default();
@@ -194,6 +195,41 @@ impl UiWorld {
                 let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe);
                 let body = chrome.body_box(surface);
                 let (title_x, title_y) = chrome.title_origin(surface);
+                let surface_paint = surface_painter.as_ref().map(|painter| {
+                    let local = |section: LayoutBox| LayoutBox {
+                        x: section.x - surface.x,
+                        y: section.y - surface.y,
+                        ..section
+                    };
+                    let title_height = presentation.title.height
+                        + presentation.description.map_or(0.0, |description| {
+                            crate::overlay_surfaces::MODAL_TITLE_DESC_GAP + description.height
+                        });
+                    let sections = crate::ModalSurfaceSections {
+                        header: LayoutBox {
+                            x: 0.0,
+                            y: 0.0,
+                            width: surface.width,
+                            height: chrome.header_height,
+                        },
+                        title: local(LayoutBox {
+                            x: title_x,
+                            y: title_y,
+                            width: text_width,
+                            height: title_height,
+                        }),
+                        icon: chrome.icon_box(surface).map(local),
+                        close: chrome.close_box(surface).map(local),
+                        body: local(body),
+                        footer: (chrome.footer_height > 0.0).then_some(LayoutBox {
+                            x: 0.0,
+                            y: surface.height - chrome.footer_height,
+                            width: surface.width,
+                            height: chrome.footer_height,
+                        }),
+                    };
+                    self.modal_surface_paint(id, painter, surface, sections)
+                });
                 // A danger dialog speaks in the status recipe's danger tone,
                 // over whatever colour the node's text would take, unless
                 // the recipe marks danger some other way.
@@ -314,6 +350,7 @@ impl UiWorld {
                     ),
                     scrim_color: self.theme.effects().modal_scrim.as_rgba_array(),
                     scrim_blur: self.theme.effects().modal_scrim_blur,
+                    surface_paint,
                     scrim_opacity: self.scrim_presence(id),
                 })
             }

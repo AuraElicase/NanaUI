@@ -3509,6 +3509,9 @@ pub struct Dialog {
     pub close_policy: nana_ui_core::DialogClosePolicy,
     pub initial_focus: crate::ModalInitialFocus,
     pub slots: crate::ModalSlots,
+    /// Paints the card in place of the theme's rounded card. See
+    /// [`Self::surface_painter`](fn@Self::surface_painter).
+    pub surface_painter: Option<crate::NodePainter>,
     pub style: NodeStyle,
 }
 
@@ -3524,8 +3527,28 @@ impl Dialog {
             close_policy: nana_ui_core::DialogClosePolicy::default(),
             initial_focus: crate::ModalInitialFocus::default(),
             slots: crate::ModalSlots::default(),
+            surface_painter: None,
             style: crate::overlay_surfaces::modal_root_style(),
         }
+    }
+
+    /// Paint the card with `painter` in place of the theme's rounded card:
+    /// its fill, edge and shadow, in the card's own coordinates, over the
+    /// scrim and under the card's title, text, dividers and slots. The
+    /// painter reads where the header, title, body and footer lie with
+    /// [`crate::PaintContext::modal_sections`], so a shape that rises around
+    /// the header follows it. The theme's recipe still places, divides and
+    /// moves the card; only how it looks is the painter's. It is recorded
+    /// again only when its key, the card's size or sections, or the theme
+    /// change.
+    ///
+    /// Behind-children paint only: `paint_over_children` and the painter's
+    /// hit test are not used, and the whole card takes presses as a modal
+    /// card does. `draw_default()` draws the theme's card under the
+    /// painter's ops.
+    pub fn surface_painter(mut self, painter: impl Into<crate::NodePainter>) -> Self {
+        self.surface_painter = Some(painter.into());
+        self
     }
 
     pub fn size(mut self, size: nana_ui_core::DialogSize) -> Self {
@@ -3605,6 +3628,7 @@ impl ComponentView for Dialog {
             false,
             self.danger,
             &self.slots,
+            self.surface_painter.as_ref(),
         );
     }
 }

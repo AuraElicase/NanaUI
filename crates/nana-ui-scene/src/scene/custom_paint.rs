@@ -189,6 +189,11 @@ pub(super) const PAINT_BEHIND_PRE: u32 = 0xFFFF_FFF0;
 pub(super) const PAINT_BEHIND_POST: u32 = 0xFFFF_FFF1;
 pub(super) const PAINT_OVER_PRE: u32 = 0xFFFF_FFF2;
 pub(super) const PAINT_OVER_POST: u32 = 0xFFFF_FFF3;
+/// The namespace a modal card's surface painter's primitives live in
+/// ([`nana_ui_runtime::Dialog::surface_painter`]). It paints at the card's
+/// own layer: over the scrim, under the card's dividers and text. See
+/// `primitive_paint_layer`.
+pub(super) const MODAL_SURFACE_PAINT: u32 = 0xFFFF_FFD0;
 
 /// The stacking entry a painted node's primitive sorts under, after the
 /// node's own prefix (a painted node is always a stacking group).
@@ -281,12 +286,110 @@ impl UiScene {
         opacity: f32,
         node_order: usize,
     ) {
+        self.emit_built_ops(
+            node,
+            built,
+            PaintPlacement {
+                origin: [node.layout.x, node.layout.y],
+                size: [node.layout.width, node.layout.height],
+                phases: [
+                    (PaintPhaseOps::Behind, PAINT_BEHIND_PRE, PAINT_BEHIND_POST),
+                    (PaintPhaseOps::Over, PAINT_OVER_PRE, PAINT_OVER_POST),
+                ],
+                adjust_default: true,
+            },
+            transform,
+            clips,
+            opacity,
+            node_order,
+        );
+    }
+
+    /// The geometry of a modal frame's card surface recording, built once
+    /// per recording and kept apart from the node's own painter's.
+    pub(super) fn prepare_modal_surface_paint(
+        &mut self,
+        id: StableNodeId,
+        recording: &Arc<PaintRecording>,
+    ) -> BuiltPaint {
+        match self.modal_surface_paint.get(&id) {
+            Some(built) if Arc::ptr_eq(&built.recording, recording) => built.clone(),
+            _ => {
+                let built = BuiltPaint {
+                    recording: Arc::clone(recording),
+                    node_mask: None,
+                    behind: build_ops(&recording.behind_children, false).into(),
+                    over: Arc::from([]),
+                };
+                self.modal_surface_paint.insert(id, built.clone());
+                built
+            }
+        }
+    }
+
+    /// Emit a modal frame's card surface primitives over `surface`, in the
+    /// card's own coordinates, at the card's layer. `draw_default()` in the
+    /// recording leaves the theme's card in (it is emitted with the frame's
+    /// built-ins) and adjusts nothing.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn emit_modal_surface_paint(
+        &mut self,
+        node: &ExtractedNode,
+        surface: nana_ui_runtime::LayoutBox,
+        built: &BuiltPaint,
+        transform: AffineTransform,
+        clips: &Arc<[ClipRegion]>,
+        opacity: f32,
+        node_order: usize,
+    ) {
+        self.emit_built_ops(
+            node,
+            built,
+            PaintPlacement {
+                origin: [surface.x, surface.y],
+                size: [surface.width.max(0.0), surface.height.max(0.0)],
+                phases: [
+                    (
+                        PaintPhaseOps::Behind,
+                        MODAL_SURFACE_PAINT,
+                        MODAL_SURFACE_PAINT,
+                    ),
+                    (
+                        PaintPhaseOps::None,
+                        MODAL_SURFACE_PAINT,
+                        MODAL_SURFACE_PAINT,
+                    ),
+                ],
+                adjust_default: false,
+            },
+            transform,
+            clips,
+            opacity,
+            node_order,
+        );
+    }
+
+    /// Emit a recording's built ops at `placement` for `node`.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_built_ops(
+        &mut self,
+        node: &ExtractedNode,
+        built: &BuiltPaint,
+        placement: PaintPlacement,
+        transform: AffineTransform,
+        clips: &Arc<[ClipRegion]>,
+        opacity: f32,
+        node_order: usize,
+    ) {
         let node_mask = built.node_mask.as_ref();
-        let origin = [node.layout.x, node.layout.y];
-        for (ops, pre, post) in [
-            (&built.behind, PAINT_BEHIND_PRE, PAINT_BEHIND_POST),
-            (&built.over, PAINT_OVER_PRE, PAINT_OVER_POST),
-        ] {
+        let origin = placement.origin;
+        let [width, height] = placement.size;
+        for (phase, pre, post) in placement.phases {
+            let ops: &[BuiltOp] = match phase {
+                PaintPhaseOps::Behind => &built.behind,
+                PaintPhaseOps::Over => &built.over,
+                PaintPhaseOps::None => &[],
+            };
             let mut namespace = pre;
             for (index, op) in ops.iter().enumerate() {
                 let local_clips = |local: &[LocalClip]| -> Arc<[ClipRegion]> {
@@ -313,6 +416,9 @@ impl UiScene {
                         opacity: op_opacity,
                     } => {
                         namespace = post;
+                        if !placement.adjust_default {
+                            continue;
+                        }
                         let extra: Vec<ClipRegion> = local
                             .iter()
                             .map(|clip| clip_region(clip, origin, transform))
@@ -333,8 +439,8 @@ impl UiScene {
                             SceneRect {
                                 x: origin[0],
                                 y: origin[1],
-                                width: node.layout.width,
-                                height: node.layout.height,
+                                width,
+                                height,
                             },
                             |clip| offset_rect(clip, origin),
                         ),
@@ -351,8 +457,8 @@ impl UiScene {
                             SceneRect {
                                 x: origin[0],
                                 y: origin[1],
-                                width: node.layout.width,
-                                height: node.layout.height,
+                                width,
+                                height,
                             },
                             |(mesh, _)| offset_rect(mesh.bounds, origin),
                         ),
@@ -469,6 +575,24 @@ impl UiScene {
             }
         }
     }
+}
+
+/// Which of a recording's built phases a placement emits.
+#[derive(Clone, Copy)]
+enum PaintPhaseOps {
+    Behind,
+    Over,
+    None,
+}
+
+/// Where a recording's ops land: the box they were recorded in, which
+/// phases go out under which slot namespaces (before and after
+/// `draw_default()`), and whether `draw_default()` re-states the built-ins.
+struct PaintPlacement {
+    origin: [f32; 2],
+    size: [f32; 2],
+    phases: [(PaintPhaseOps, u32, u32); 2],
+    adjust_default: bool,
 }
 
 impl UiScene {

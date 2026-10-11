@@ -94,6 +94,22 @@ impl NodePainter {
             size: [size[0].to_bits(), size[1].to_bits()],
             theme_epoch,
             state,
+            sections: 0,
+        }
+    }
+
+    /// The key of a recording of this painter as a modal card's surface:
+    /// the card's sections join the size, theme and state, so a header that
+    /// grows re-records a surface shaped around it.
+    pub(crate) fn surface_cache_key(
+        &self,
+        size: [f32; 2],
+        theme_epoch: u64,
+        sections: &crate::ModalSurfaceSections,
+    ) -> PaintCacheKey {
+        PaintCacheKey {
+            sections: sections.digest(),
+            ..self.cache_key(size, theme_epoch, PaintState::default())
         }
     }
 }
@@ -128,6 +144,9 @@ pub(crate) struct PaintCacheKey {
     size: [u32; 2],
     theme_epoch: u64,
     state: PaintState,
+    /// A modal surface's sections ([`crate::ModalSurfaceSections::digest`]);
+    /// 0 for a node's own painter.
+    sections: u64,
 }
 
 /// 节点当前的交互状态。状态变化会让节点重录，painter 不必把它算进
@@ -1455,6 +1474,9 @@ pub struct PaintContext<'a> {
     recorded_transform: Affine,
     recorded_opacity: f32,
     saved: Vec<SavedState>,
+    /// Where a modal card's sections lie, when this records the card's
+    /// surface rather than a node.
+    sections: Option<crate::ModalSurfaceSections>,
 }
 
 type SavedState = (Affine, f32, BlendMode, nana_ui_core::ImageSampling, usize);
@@ -1484,6 +1506,7 @@ impl<'a> PaintContext<'a> {
             recorded_transform: AFFINE_IDENTITY,
             recorded_opacity: 1.0,
             saved: Vec::new(),
+            sections: None,
         }
     }
 
@@ -1517,6 +1540,13 @@ impl<'a> PaintContext<'a> {
     /// 节点当前的交互状态。
     pub fn state(&self) -> PaintState {
         self.state
+    }
+
+    /// 录的是模态对话框卡面（[`crate::Dialog::surface_painter`]）时，卡面
+    /// 各段在卡面坐标里的位置：标题行、标题块、图标位、关闭位、正文、底栏。
+    /// 录普通节点时是 `None`。
+    pub fn modal_sections(&self) -> Option<crate::ModalSurfaceSections> {
+        self.sections
     }
 
     /// 按节点字体和当前字体集测量一段文字；`max_width` 为 `None` 时不折行。
@@ -2029,6 +2059,28 @@ impl PaintRecording {
         };
         record(painter, theme, size, state, &measure)
     }
+
+    /// 把 `painter` 当作一张 `size` 大、分段为 `sections` 的模态对话框卡面
+    /// 录一次，文字按 em 估算测量。
+    ///
+    /// 用于在没有 `UiWorld` 的地方检查一个卡面 painter 录下了什么；挂在
+    /// [`crate::Dialog::surface_painter`] 上时由框架录制。
+    pub fn record_modal_surface(
+        painter: &dyn Painter,
+        theme: &CompiledTheme,
+        size: [f32; 2],
+        sections: crate::ModalSurfaceSections,
+    ) -> Self {
+        let base = crate::ComputedStyle::default();
+        let measure = |text: &PaintText, font: f32, max_width: Option<f32>| {
+            let (style, constraints, content) = paint_text_request(&base, text, font, max_width);
+            paint_text_size(
+                &crate::components::measure_em_text(&content, &style, constraints),
+                font,
+            )
+        };
+        record_surface(painter, theme, size, sections, &measure)
+    }
 }
 
 /// 录一次：先背景阶段，再前景阶段。
@@ -2048,6 +2100,25 @@ pub(crate) fn record(
     PaintRecording {
         behind_children,
         over_children,
+    }
+}
+
+/// 录一张模态对话框卡面：只有背景阶段。卡面画在遮罩之上、卡片的文字与
+/// 插槽之下，没有「子节点之上」可言，所以 `paint_over_children` 不录。
+pub(crate) fn record_surface(
+    painter: &dyn Painter,
+    theme: &CompiledTheme,
+    size: [f32; 2],
+    sections: crate::ModalSurfaceSections,
+    measure: TextMeasure<'_>,
+) -> PaintRecording {
+    let mut surface = PaintContext::new(theme, size, PaintState::default(), measure, false);
+    surface.sections = Some(sections);
+    painter.paint(&mut surface);
+    let (behind_children, _) = surface.finish();
+    PaintRecording {
+        behind_children,
+        over_children: Vec::new(),
     }
 }
 

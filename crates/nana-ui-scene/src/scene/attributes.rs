@@ -311,6 +311,7 @@ mod tests {
                 scrim_color: [0.0, 0.0, 0.0, 0.45],
                 scrim_blur: 0.0,
                 scrim_opacity: 1.0,
+                surface_paint: None,
             }
         } else {
             ComponentGeometry::EmptyState {
@@ -333,6 +334,7 @@ mod tests {
                 body: body_root,
                 ..Default::default()
             },
+            surface_painter: None,
         });
     }
 

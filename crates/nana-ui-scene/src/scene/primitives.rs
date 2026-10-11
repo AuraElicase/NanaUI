@@ -627,7 +627,25 @@ impl UiScene {
             };
             let mut emit = |primitive| self.insert_primitive(primitive);
             match node.component_geometry.as_deref() {
-                Some(ComponentGeometry::ModalFrame { .. }) => overlays::build(&context, &mut emit),
+                Some(ComponentGeometry::ModalFrame {
+                    surface,
+                    surface_paint,
+                    ..
+                }) => {
+                    overlays::build(&context, &mut emit);
+                    match surface_paint {
+                        Some(recording) => {
+                            let built = self.prepare_modal_surface_paint(id, recording);
+                            self.emit_modal_surface_paint(
+                                &node, *surface, &built, transform, &clips, opacity, node_order,
+                            );
+                        }
+                        None if !self.modal_surface_paint.is_empty() => {
+                            self.modal_surface_paint.remove(&id);
+                        }
+                        None => {}
+                    }
+                }
                 Some(ComponentGeometry::Button { .. }) => controls_base::build(&context, &mut emit),
                 Some(ComponentGeometry::TextInput { .. }) => text::build(&context, &mut emit),
                 Some(ComponentGeometry::Switch { .. }) => controls_base::build(&context, &mut emit),

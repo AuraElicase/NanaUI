@@ -333,7 +333,7 @@ pub use nana_ui_core::{
 };
 pub use overlay_surfaces::{
     ConfirmDialog, ConfirmIntent, ConfirmSlots, Drawer, ModalBehavior, ModalInitialFocus,
-    ModalSlots, ModalSurface, ModalSurfaceKind,
+    ModalSlots, ModalSurface, ModalSurfaceKind, ModalSurfaceSections,
 };
 pub use overlay_visibility::{
     OVERLAY_IDLE, OverlayLocks, OverlayVisibility, OverlayVisibilityChanged,
