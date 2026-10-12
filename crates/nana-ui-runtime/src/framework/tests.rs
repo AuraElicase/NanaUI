@@ -1198,6 +1198,190 @@ fn plugin_pointer_hooks_hear_every_button_modifiers_and_clicks() {
 }
 
 #[test]
+fn property_grid_places_controls_drags_its_column_folds_and_disables() {
+    use crate::view::widget;
+    use crate::{
+        PropertyGrid, PropertyLabelWidthChanged, PropertyRow, PropertySection,
+        PropertySectionToggled, ScrubChanged, ScrubDragging, ScrubField,
+    };
+    use nana_ui_input::{InputPayload, PointerInput, PointerPhase};
+
+    static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let root = context
+        .create_component(document, crate::Stack::fill_column(0.0))
+        .unwrap();
+    let sections = || {
+        [
+            PropertySection::new(
+                "transform",
+                "Transform",
+                [
+                    PropertyRow::new("x", "X").mixed(true),
+                    PropertyRow::new("y", "Y").disabled(Some("locked by the parent")),
+                ],
+            ),
+            PropertySection::new("draw", "Draw", [PropertyRow::new("opacity", "Opacity")]),
+        ]
+    };
+    context
+        .mount_view(root.stable_id(), move || {
+            widget(PropertyGrid::new(sections()))
+                .on(|e: &PropertyLabelWidthChanged| {
+                    HEARD.lock().unwrap().push(format!("width {}", e.width))
+                })
+                .on(|e: &PropertySectionToggled| {
+                    HEARD
+                        .lock()
+                        .unwrap()
+                        .push(format!("{} {}", e.id, e.collapsed))
+                })
+                .children((
+                    widget(ScrubField::new(1.0).mixed(true)).key("x"),
+                    widget(ScrubField::new(2.0))
+                        .key("y")
+                        .on(|_: &ScrubDragging| HEARD.lock().unwrap().push("y drag".into()))
+                        .on(|_: &ScrubChanged| HEARD.lock().unwrap().push("y changed".into())),
+                    widget(ScrubField::new(0.5)).key("opacity"),
+                ))
+        })
+        .unwrap();
+    let grid = Entity::<PropertyGrid>::from_stable_id(
+        context.world().node(root.stable_id()).unwrap().children[0],
+    );
+    let relayout = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(400.0, 300.0))
+            .unwrap();
+        context.rebuild_hit_test(document);
+    };
+    relayout(&mut context);
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let parts = |context: &AppContext| context.read(grid, |g| g.parts.clone()).unwrap().unwrap();
+    let row = |context: &AppContext, section: usize, row: usize| {
+        parts(context).sections[section].rows[row].clone()
+    };
+    let bounds = |context: &AppContext, id| context.world().component_layout_box(id).unwrap();
+    let keyed = |context: &AppContext, key: &str| {
+        context
+            .assembled_child(grid.stable_id(), key)
+            .expect("keyed control")
+    };
+
+    // each control sits in its row; every label is one width
+    let x = row(&context, 0, 0);
+    assert_eq!(
+        context.world().parent_id(keyed(&context, "x")),
+        Some(x.slot)
+    );
+    for (section, index) in [(0, 0), (0, 1), (1, 0)] {
+        assert_eq!(
+            bounds(&context, row(&context, section, index).label).width,
+            96.0
+        );
+    }
+    // the mixed label stands out; the disabled one fades and says why
+    let label_color = |context: &AppContext, id| {
+        context
+            .read(Entity::<crate::Text>::from_stable_id(id), |t| {
+                t.style.foreground
+            })
+            .unwrap()
+    };
+    let y = row(&context, 0, 1);
+    assert_eq!(
+        label_color(&context, x.label),
+        Some(nana_ui_core::SemanticColorRole::Text)
+    );
+    assert_eq!(
+        label_color(&context, y.label),
+        Some(nana_ui_core::SemanticColorRole::Faint)
+    );
+    assert_eq!(context.world().text(y.reason), Some("locked by the parent"));
+
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let mouse = |phase, (x, y): (f32, f32)| InputPayload::Pointer(PointerInput::mouse(phase, x, y));
+    let mid = |b: crate::LayoutBox| (b.x + b.width / 2.0, b.y + b.height / 2.0);
+
+    // the disabled row's control takes no press
+    let control = mid(bounds(&context, y.slot));
+    input
+        .route(&mut context, mouse(PointerPhase::Down, control))
+        .unwrap();
+    input
+        .route(
+            &mut context,
+            mouse(PointerPhase::Move, (control.0 + 40.0, control.1)),
+        )
+        .unwrap();
+    input
+        .route(
+            &mut context,
+            mouse(PointerPhase::Up, (control.0 + 40.0, control.1)),
+        )
+        .unwrap();
+    assert!(take().is_empty(), "the veil swallowed it");
+
+    // the column edge drags every label to one new width
+    let divider = mid(bounds(&context, parts(&context).divider));
+    input
+        .route(&mut context, mouse(PointerPhase::Down, divider))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Move, (140.0, divider.1)))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, (140.0, divider.1)))
+        .unwrap();
+    assert_eq!(take(), ["width 140"]);
+    relayout(&mut context);
+    for (section, index) in [(0, 0), (0, 1), (1, 0)] {
+        assert_eq!(
+            bounds(&context, row(&context, section, index).label).width,
+            140.0
+        );
+    }
+
+    // a header press folds its section
+    let header = mid(bounds(&context, parts(&context).sections[0].header));
+    input
+        .route(&mut context, mouse(PointerPhase::Down, header))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, header))
+        .unwrap();
+    assert_eq!(take(), ["transform true"]);
+    assert_eq!(
+        context
+            .read(grid, PropertyGrid::collapsed_sections)
+            .unwrap(),
+        [Arc::<str>::from("transform")]
+    );
+    let body = parts(&context).sections[0].body;
+    assert_eq!(
+        context
+            .read(
+                Entity::<crate::property_grid::GridBox>::from_stable_id(body),
+                |b| b.style.layout.display
+            )
+            .unwrap(),
+        Some(nana_ui_core::DisplaySpec::None)
+    );
+
+    // a row the model drops keeps its control, hidden
+    let opacity = keyed(&context, "opacity");
+    context
+        .update_component(grid, |grid, _| grid.sections.truncate(1))
+        .unwrap();
+    assert!(context.world().contains(opacity));
+    assert_eq!(
+        context.world().parent_id(opacity),
+        Some(parts(&context).stash)
+    );
+}
+
+#[test]
 fn tree_view_selects_toggles_drags_and_renames() {
     use crate::{
         TreeDropIntent, TreeDropPosition, TreeDropRequested, TreeRenameRequested,

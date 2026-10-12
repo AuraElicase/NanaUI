@@ -19,3 +19,5 @@ let form = DynamicForm::new([
 ```
 
 `DynamicFormEvent` 只报告字段键和值：`Activate`、`Toggle`、`Select` 和 `Input`。应用负责把事件映射到产品状态、校验和持久化；组件不理解业务意图。
+
+要做专业工具检查器那种密集的两列属性面板，用 [PropertyGrid](property-grid.md)。
