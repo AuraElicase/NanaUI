@@ -1,0 +1,32 @@
+crates/nana-ui-core/src/rich_text.rs
+  h_8e6780fc7b4bb1 15,368-369,444-449,510
+crates/nana-ui-runtime/src/lib.rs
+  h_8e6780fc7b4bb1 111
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 39-48,96,172-173,186,202-207,282,321-328,364,610-613,661-663
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 18,172-173,1051-1060,1070,1201-1202,1307-1308,1347,1386,1572,1610-1621,1734-1742,2279,3147,3207-3211
+crates/nana-ui-scene/src/scene/primitives.rs
+  h_8e6780fc7b4bb1 421-439,550-552
+crates/nana-ui-scene/src/scene/rich_background.rs
+  h_8e6780fc7b4bb1 1-152
+crates/nana-ui-scene/tests/rich_background_contrast.rs
+  h_8e6780fc7b4bb1 1-266
+crates/nana-ui-scene/tests/rich_typing_background.rs
+  h_8e6780fc7b4bb1 1-386
+docs/components/rich-text-editor.md
+  h_8e6780fc7b4bb1 88-89,106
+docs/components/rich-text-view.md
+  h_8e6780fc7b4bb1 52,57-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "3dd3efac0bf8f19da921ea7b80f2490c4bfd89a4",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
