@@ -1025,6 +1025,26 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "xy pad shows the two-axis value inside a field border",
     ),
     f(
+        Component::ScrubField,
+        "rest",
+        "scrub field shows its label at the start and the value with its unit at the end",
+    ),
+    f(
+        Component::ScrubField,
+        "mixed",
+        "a mixed scrub field shows a dash in place of the value",
+    ),
+    f(
+        Component::ScrubField,
+        "disabled",
+        "a disabled scrub field keeps its value and takes no pointer or focus",
+    ),
+    f(
+        Component::ScrubField,
+        "editing",
+        "an editing scrub field shows its number input, focused with the value selected",
+    ),
+    f(
         Component::XYPad,
         "invalid",
         "invalid xy pad uses a danger field border",
@@ -1355,6 +1375,16 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         Component::XYPad,
         "hover",
         "xy pad hover raises its field border",
+    ),
+    f(
+        Component::ScrubField,
+        "hover",
+        "scrub field hover shows the resize cursor over its field",
+    ),
+    f(
+        Component::ScrubField,
+        "focused",
+        "focused scrub field takes the focus ring and steps with the arrow keys",
     ),
     f(
         Component::XYPad,

@@ -3225,6 +3225,19 @@ impl AppContext {
                 if let Some(entity) = self.view_entity::<NumberInput>(request.target) {
                     return self.step_number_input(entity, steps);
                 }
+                if let Some(entity) = self.view_entity::<crate::ScrubField>(request.target) {
+                    let step = self.read(entity, |field| field.spec.step)?;
+                    let value = self.read(entity, |field| field.value)?;
+                    let next = value + step * f64::from(steps.signum());
+                    if self.set_scrub_field_value(entity, next, false)? {
+                        let value = self.read(entity, |field| field.value)?;
+                        self.update_component(entity, |_, view| {
+                            view.emit(crate::ScrubChanged { value })
+                        })?;
+                        return Ok(true);
+                    }
+                    return Ok(false);
+                }
                 if let Some((entity, Some(thumb))) = self.range_span_target(request.target) {
                     return self.adjust_range_span(
                         entity,

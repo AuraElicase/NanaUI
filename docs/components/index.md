@@ -20,6 +20,7 @@
 - [Checkbox](checkbox.md) — 勾选。`model` 绑定 `checked`。
 - [Switch](switch.md) — 开关。比复选框多一个 `loading`。
 - [RangeField](range-field.md) — 滑块。模板标签是 `<Slider>`，函数是 `slider(min, max, step)`。
+- [ScrubField](scrub-field.md) — 在数字上左右拖动改值的属性字段，单击后可键入，支持混合值。
 - [RangeSpanField](range-span-field.md) — 双滑块区间，可横可竖，轨道上可标实时值。模板标签是 `<RangeSpan>`，函数是 `range_span(min, max, step)`。
 - [Select](select.md) — 单值下拉。
 - [Dropdown](dropdown.md) — 单值或多值。没有 `<Dropdown>` 标签。

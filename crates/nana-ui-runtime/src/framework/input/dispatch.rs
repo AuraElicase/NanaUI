@@ -1060,7 +1060,8 @@ impl AppContext {
         };
         if let Some(adjustment) = range_adjustment
             && (self.adjust_focused_range(document, adjustment)?
-                || self.adjust_focused_range_span(document, adjustment)?)
+                || self.adjust_focused_range_span(document, adjustment)?
+                || self.adjust_focused_scrub_field(document, adjustment)?)
         {
             return Ok(true);
         }
@@ -1125,6 +1126,8 @@ impl AppContext {
         // editing keys in `text_editor_key`; Escape is not an editing key and
         // reverts the draft here.
         if key == "Escape" && self.revert_focused_number_input(document)? {
+            // a scrub field's typing ends with its revert
+            self.end_focused_scrub_edit(document)?;
             return Ok(true);
         }
         let palette_nav = match key {
@@ -1388,7 +1391,12 @@ impl AppContext {
                     self.step_focused_number_input(document, steps)?;
                     return Ok(true);
                 }
-                "Enter" => return self.commit_focused_number_input(document),
+                "Enter" => {
+                    let committed = self.commit_focused_number_input(document)?;
+                    // a scrub field's typing ends with Enter, committed or not
+                    let ended = self.end_focused_scrub_edit(document)?;
+                    return Ok(committed || ended);
+                }
                 _ => {}
             }
         }
