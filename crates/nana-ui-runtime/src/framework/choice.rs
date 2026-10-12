@@ -80,6 +80,8 @@ impl AppContext {
         self.update_component(entity, |select, _| select.toggle_open())
     }
 
+    /// Activation at a window point: an option of the open menu, the field,
+    /// or elsewhere, which closes the menu.
     pub fn activate_select_at(
         &mut self,
         entity: Entity<Select>,
@@ -89,11 +91,11 @@ impl AppContext {
         if self.read(entity, Select::inactive)? {
             return Ok(false);
         }
+        // The menu and the field are laid out under any scroll above them.
+        let (x, y) = self.menu_point(entity.id, x, y);
         let opened = self.read(entity, |select| select.opened)?;
         if opened {
-            if let Some(crate::ComponentGeometry::Select {
-                menu: Some(menu), ..
-            }) = self.world.component_geometry(entity.id)
+            if let Some(menu) = self.open_select_menu(entity.id)
                 && let Some(index) = crate::select::select_option_at(&menu, x, y)
             {
                 return self.update_component(entity, |select, cx| {
@@ -138,12 +140,20 @@ impl AppContext {
         if self.read(entity, Select::inactive)? {
             return Ok(false);
         }
+        let menu = self.open_select_menu(target);
         self.update_component(entity, |select, _| {
             if !select.opened {
-                select.toggle_open()
-            } else {
-                select.highlight_delta(delta)
+                return select.toggle_open();
             }
+            let moved = select.highlight_delta(delta);
+            if moved {
+                crate::select::reveal_menu_row(
+                    &mut select.menu_scroll,
+                    menu.as_ref(),
+                    select.highlighted,
+                );
+            }
+            moved
         })
     }
 
@@ -166,17 +176,25 @@ impl AppContext {
         if self.read(entity, Dropdown::inactive)? {
             return Ok(false);
         }
+        let menu = self.open_select_menu(target);
         self.update_component(entity, |dropdown, cx| {
             if !dropdown.opened {
-                if let Some(event) = dropdown.toggle_open() {
+                return if let Some(event) = dropdown.toggle_open() {
                     cx.emit(event);
                     true
                 } else {
                     false
-                }
-            } else {
-                dropdown.highlight_delta(delta)
+                };
             }
+            let moved = dropdown.highlight_delta(delta);
+            if moved {
+                crate::select::reveal_menu_row(
+                    &mut dropdown.menu_scroll,
+                    menu.as_ref(),
+                    dropdown.highlighted,
+                );
+            }
+            moved
         })
     }
 
@@ -262,6 +280,7 @@ impl AppContext {
         })
     }
 
+    /// Activation at a window point, as [`Self::activate_select_at`].
     pub fn activate_search_dropdown_at(
         &mut self,
         entity: Entity<SearchDropdown>,
@@ -271,10 +290,8 @@ impl AppContext {
         if self.read(entity, SearchDropdown::inactive)? {
             return Ok(false);
         }
-        let menu = match self.world.component_geometry(entity.id) {
-            Some(crate::ComponentGeometry::Select { menu, .. }) => menu,
-            _ => None,
-        };
+        let (x, y) = self.menu_point(entity.id, x, y);
+        let menu = self.open_select_menu(entity.id);
         let Some(field) = self.world.component_layout_box(entity.id) else {
             return Ok(false);
         };
@@ -313,17 +330,22 @@ impl AppContext {
         if self.read(entity, SearchDropdown::inactive)? {
             return Ok(false);
         }
+        let menu = self.open_select_menu(target);
         self.update_component(entity, |dropdown, cx| {
             if !dropdown.opened {
-                if let Some(event) = dropdown.toggle_open() {
+                return if let Some(event) = dropdown.toggle_open() {
                     cx.emit(event);
                     true
                 } else {
                     false
-                }
-            } else {
-                dropdown.highlight_delta(delta)
+                };
             }
+            let moved = dropdown.highlight_delta(delta);
+            if moved {
+                let row = dropdown.highlighted_visible();
+                crate::select::reveal_menu_row(&mut dropdown.menu_scroll, menu.as_ref(), row);
+            }
+            moved
         })
     }
 
@@ -414,6 +436,7 @@ impl AppContext {
         )
     }
 
+    /// Activation at a window point, as [`Self::activate_select_at`].
     pub fn activate_dropdown_at(
         &mut self,
         entity: Entity<Dropdown>,
@@ -423,10 +446,8 @@ impl AppContext {
         if self.read(entity, Dropdown::inactive)? {
             return Ok(false);
         }
-        let menu = match self.world.component_geometry(entity.id) {
-            Some(crate::ComponentGeometry::Select { menu, .. }) => menu,
-            _ => None,
-        };
+        let (x, y) = self.menu_point(entity.id, x, y);
+        let menu = self.open_select_menu(entity.id);
         let Some(field) = self.world.component_layout_box(entity.id) else {
             return Ok(false);
         };

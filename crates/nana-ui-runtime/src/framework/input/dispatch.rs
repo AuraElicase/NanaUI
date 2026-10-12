@@ -655,6 +655,8 @@ impl AppContext {
                     true
                 ))?;
                 let pressed = self.release_pointer(document, *pointer_id).is_some();
+                // Before the hover clears, so the hooked node hears it leave.
+                let hooked = self.cancel_pointer_hook(document, *pointer_id)?;
                 self.set_pointer_hover_at(document, *pointer_id, None, now)?;
                 let calendar =
                     optional_input!("calendar", self.clear_calendar_heatmap_hover(document))?;
@@ -673,6 +675,7 @@ impl AppContext {
                     || calendar
                     || split_hover
                     || pressed
+                    || hooked
             }
             _ => false,
         };

@@ -8,8 +8,8 @@ use crate::select::{menu_option_label, select_option_at};
 use crate::view_components::project_common;
 use crate::{
     AccessibilityRole, AccessibilityState, ComponentView, InteractionState, MutationQueue,
-    NodeKind, NodeStyle, SelectOptionData, SemanticPaint, StableNodeId, StandardVisual,
-    TextContent, UiWorld,
+    NodeKind, NodeStyle, SelectMenuScroll, SelectOptionData, SemanticPaint, StableNodeId,
+    StandardVisual, TextContent, UiWorld,
 };
 
 /// Option identity stays application-owned. Disabled options remain visible.
@@ -68,6 +68,8 @@ pub struct Dropdown {
     pub invalid: bool,
     pub opened: bool,
     pub highlighted: Option<usize>,
+    /// How the open menu is scrolled. See [`SelectMenuScroll`].
+    pub menu_scroll: SelectMenuScroll,
     /// Resting field has no fill and no border, like a toolbar picker. Hover
     /// and the open state still wash it so the hit target stays visible.
     pub bare_trigger: bool,
@@ -104,6 +106,7 @@ impl Dropdown {
             invalid: false,
             opened: false,
             highlighted: None,
+            menu_scroll: SelectMenuScroll::default(),
             bare_trigger: false,
             style: crate::select::field_style_for_size(ControlSize::Medium),
         }
@@ -155,6 +158,7 @@ impl Dropdown {
         } else {
             self.highlighted = None;
         }
+        self.menu_scroll = SelectMenuScroll::default();
         self
     }
 
@@ -210,6 +214,7 @@ impl Dropdown {
             return None;
         }
         self.opened = !self.opened;
+        self.menu_scroll = SelectMenuScroll::default();
         if self.opened {
             self.highlighted = self.selected_index().or_else(|| self.first_enabled());
             Some(DropdownEvent::Opened)
@@ -225,6 +230,7 @@ impl Dropdown {
         }
         self.opened = false;
         self.highlighted = None;
+        self.menu_scroll = SelectMenuScroll::default();
         Some(DropdownEvent::Closed)
     }
 
@@ -403,6 +409,7 @@ impl ComponentView for Dropdown {
             })
         }),
         hooks: Some(|hooks| hooks.dropdown = Some(&DROPDOWN_HOOKS)),
+        pointer: Some(&crate::framework::DROPDOWN_MENU_POINTER),
         ..crate::TypeBehavior::NONE
     };
 
@@ -414,15 +421,17 @@ impl ComponentView for Dropdown {
     }
 
     fn reconcile(&mut self, mut next: Self) {
-        // Selection and options are the application's; the open menu and its
-        // keyboard highlight belong to the interaction in flight, and survive a
-        // refresh that did not touch those props.
+        // Selection and options are the application's; the open menu, its
+        // keyboard highlight and its scroll belong to the interaction in
+        // flight, and survive a refresh that did not touch those props.
         if next.inactive() {
             next.opened = false;
             next.highlighted = None;
+            next.menu_scroll = SelectMenuScroll::default();
         } else if self.selection == next.selection && self.options == next.options {
             next.opened = self.opened;
             next.highlighted = self.highlighted;
+            next.menu_scroll = self.menu_scroll;
         }
         *self = next;
     }
@@ -445,6 +454,8 @@ impl ComponentView for Dropdown {
             loading: self.loading,
             options: self.option_data().into(),
             highlighted: self.highlighted,
+            menu_scroll: self.menu_scroll,
+            menu_room: crate::select::menu_room(self.opened && !self.inactive(), id, world),
             checkable: matches!(self.selection, DropdownSelection::Multiple(_)),
             fit_options: false,
         };

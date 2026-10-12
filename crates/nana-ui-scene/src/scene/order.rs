@@ -17,7 +17,7 @@ impl UiScene {
             .values()
             .map(|held| {
                 let primitive = &held.primitive;
-                if let Some(key) = triggered_overlay_surface_key(primitive) {
+                if let Some(key) = root_layer_key(&self.nodes, primitive) {
                     return key;
                 }
                 if self.splits_paint(primitive.node) {

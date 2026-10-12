@@ -176,6 +176,13 @@ const SELECT_MENU_BACKGROUNDS: u32 = 9;
 const SELECT_MENU_MARKS: u32 = 10;
 const SELECT_MENU_LABELS: u32 = 11;
 const SELECT_MENU_HINTS: u32 = 12;
+/// An open select menu's scrollbar over its rows: the track (0), the thumb
+/// (1).
+const SELECT_MENU_SCROLLBAR: u32 = 13;
+/// An open select menu's surface, under its rows. Slots 3..=6 are the
+/// field's arrow and 7 its hint: the surface used to take slot 4 and hid an
+/// arrow stroke for as long as the menu was open.
+const SELECT_MENU_SURFACE_SLOT: u64 = 8;
 /// A rich text editor's selection rectangles share the document selection's
 /// paint layer (under the glyphs) from this index on.
 const RICH_EDITOR_SELECTION_BASE: usize = 1 << 16;
@@ -250,6 +257,37 @@ fn triggered_overlay_surface_key(primitive: &ScenePrimitive) -> Option<SceneOrde
             primitive,
         )
     })
+}
+
+/// An open select menu's surface, rows and bar: the surface slot and the
+/// menu's namespaces, `SELECT_MENU_BACKGROUNDS` to `SELECT_MENU_SCROLLBAR`.
+fn is_select_menu_slot(slot: u64) -> bool {
+    slot == SELECT_MENU_SURFACE_SLOT
+        || (u64::from(SELECT_MENU_BACKGROUNDS)..=u64::from(SELECT_MENU_SCROLLBAR))
+            .contains(&(slot >> 32))
+}
+
+/// An open select menu's paint-order key, as a triggered surface's: its own
+/// `(z_index, document_order)` at the root, where `z_index` is the menu's
+/// level. Inside its field's groups, the group of a later sibling painted over
+/// the rows the menu opened across. Hit testing ranks the menu the same way.
+fn select_menu_key(nodes: &SceneNodes, primitive: &ScenePrimitive) -> Option<SceneOrderKey> {
+    (is_select_menu_slot(primitive.id.slot)
+        && nodes.get(&primitive.node).is_some_and(|node| {
+            matches!(node.standard_visual, Some(StandardVisual::Select { .. }))
+        }))
+    .then(|| {
+        SceneOrderKey::at(
+            Arc::from([(primitive.z_index, primitive.document_order)]),
+            primitive,
+        )
+    })
+}
+
+/// The paint-order key a primitive takes at the root, out of the groups
+/// around its node, if it is one of the layers that do.
+fn root_layer_key(nodes: &SceneNodes, primitive: &ScenePrimitive) -> Option<SceneOrderKey> {
+    triggered_overlay_surface_key(primitive).or_else(|| select_menu_key(nodes, primitive))
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -1871,7 +1909,7 @@ impl UiScene {
             .values()
             .map(|held| {
                 let primitive = &held.primitive;
-                if let Some(key) = triggered_overlay_surface_key(primitive) {
+                if let Some(key) = root_layer_key(&self.nodes, primitive) {
                     return key;
                 }
                 if self.splits_paint(primitive.node) {
@@ -2415,7 +2453,7 @@ impl UiScene {
     /// document order in it are the node's — so while the rebuild pass runs it
     /// is computed once per node and every primitive shares that `Arc`.
     fn scene_order_key(&self, primitive: &ScenePrimitive) -> SceneOrderKey {
-        if let Some(key) = triggered_overlay_surface_key(primitive) {
+        if let Some(key) = root_layer_key(&self.nodes, primitive) {
             return key;
         }
         if let Ok(mut scratch) = self.rebuild_scratch.lock()
@@ -3201,7 +3239,7 @@ fn order_key(
     node_order: &NodeMap<usize>,
     primitive: &ScenePrimitive,
 ) -> SceneOrderKey {
-    if let Some(key) = triggered_overlay_surface_key(primitive) {
+    if let Some(key) = root_layer_key(nodes, primitive) {
         return key;
     }
     let prefix: GroupPrefix = group_prefix(nodes, node_order, primitive.node).into();

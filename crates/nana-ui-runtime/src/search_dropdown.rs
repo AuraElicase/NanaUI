@@ -9,8 +9,8 @@ use crate::select::{field_style_for_size, menu_option_label, select_option_at};
 use crate::view_components::project_common;
 use crate::{
     AccessibilityRole, AccessibilityState, ComponentView, InteractionState, MutationQueue,
-    NodeKind, NodeStyle, SelectOptionData, SemanticPaint, StableNodeId, StandardVisual,
-    TextContent, TextInputState, UiWorld,
+    NodeKind, NodeStyle, SelectMenuScroll, SelectOptionData, SemanticPaint, StableNodeId,
+    StandardVisual, TextContent, TextInputState, UiWorld,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,6 +55,9 @@ pub struct SearchDropdown {
     pub invalid: bool,
     pub opened: bool,
     pub highlighted: Option<usize>,
+    /// How the open menu is scrolled. See [`SelectMenuScroll`]; a new query
+    /// starts it over.
+    pub menu_scroll: SelectMenuScroll,
     pub state: TextInputState,
     pub style: NodeStyle,
 }
@@ -79,6 +82,7 @@ impl SearchDropdown {
             invalid: false,
             opened: false,
             highlighted: None,
+            menu_scroll: SelectMenuScroll::default(),
             state: TextInputState::new(""),
             style: field_style_for_size(ControlSize::Medium),
         }
@@ -123,6 +127,7 @@ impl SearchDropdown {
         } else {
             self.highlighted = None;
         }
+        self.menu_scroll = SelectMenuScroll::default();
         self
     }
 
@@ -188,6 +193,7 @@ impl SearchDropdown {
             return None;
         }
         self.opened = !self.opened;
+        self.menu_scroll = SelectMenuScroll::default();
         if self.opened {
             self.highlighted = self.first_visible();
             Some(SearchDropdownEvent::Opened)
@@ -203,14 +209,21 @@ impl SearchDropdown {
         }
         self.opened = false;
         self.highlighted = None;
+        self.menu_scroll = SelectMenuScroll::default();
         Some(SearchDropdownEvent::Closed)
     }
 
     pub fn set_query(&mut self, query: impl Into<String>) -> SearchDropdownEvent {
         let query = query.into();
         self.state.replace_value(query.clone());
-        self.highlighted = self.first_visible();
+        self.highlight_first_match();
         SearchDropdownEvent::Search(query)
+    }
+
+    /// A new query lists other rows: highlight the first and show it.
+    fn highlight_first_match(&mut self) {
+        self.highlighted = self.first_visible();
+        self.menu_scroll.offset = None;
     }
 
     pub fn highlight_delta(&mut self, delta: i32) -> bool {
@@ -248,7 +261,7 @@ impl SearchDropdown {
         if !self.state.replace_selection(text) {
             return false;
         }
-        self.highlighted = self.first_visible();
+        self.highlight_first_match();
         true
     }
 
@@ -266,7 +279,7 @@ impl SearchDropdown {
         {
             return false;
         }
-        self.highlighted = self.first_visible();
+        self.highlight_first_match();
         true
     }
 
@@ -305,7 +318,9 @@ impl SearchDropdown {
             .collect()
     }
 
-    fn highlighted_visible(&self) -> Option<usize> {
+    /// The highlighted option's row in the open menu, which lists only the
+    /// options the query matches.
+    pub(crate) fn highlighted_visible(&self) -> Option<usize> {
         let highlighted = self.highlighted?;
         self.visible_indices()
             .into_iter()
@@ -329,6 +344,7 @@ impl ComponentView for SearchDropdown {
         }),
         hooks: Some(|hooks| hooks.search_dropdown = Some(&SEARCH_DROPDOWN_HOOKS)),
         editable: Some(&crate::framework::Editable::<Self>::HOOKS),
+        pointer: Some(&crate::framework::SEARCH_DROPDOWN_MENU_POINTER),
         ..crate::TypeBehavior::NONE
     };
 
@@ -345,9 +361,11 @@ impl ComponentView for SearchDropdown {
         if next.inactive() {
             next.opened = false;
             next.highlighted = None;
+            next.menu_scroll = SelectMenuScroll::default();
         } else if self.value == next.value && self.options == next.options {
             next.opened = self.opened;
             next.highlighted = self.highlighted;
+            next.menu_scroll = self.menu_scroll;
             next.state = self.state.clone();
         }
         *self = next;
@@ -372,6 +390,8 @@ impl ComponentView for SearchDropdown {
             loading: self.loading,
             options: self.option_data().into(),
             highlighted: self.highlighted_visible(),
+            menu_scroll: self.menu_scroll,
+            menu_room: crate::select::menu_room(self.opened && !self.inactive(), id, world),
             checkable: false,
             fit_options: false,
         };

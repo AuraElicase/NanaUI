@@ -613,7 +613,10 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
             if let Some(menu) = menu {
                 let menu_z = node.z_index.max(1_000);
                 emit(ScenePrimitive {
-                    id: PrimitiveId { node: id, slot: 4 },
+                    id: PrimitiveId {
+                        node: id,
+                        slot: SELECT_MENU_SURFACE_SLOT,
+                    },
                     node: id,
                     bounds: scene_rect(menu.surface),
                     transform,
@@ -633,13 +636,32 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                             matching_paint_color(node.style.paint_colors.border, Some(menu.border)),
                             Some(menu.border),
                         ),
-                        border_width: 1.0,
+                        border_width: menu.border_width,
                         corner_radius: corner_radii(node.chrome_radii.md),
                         shadow: Some(menu.elevation),
                         surface: QuadSurfacePaint::default(),
                     },
                 });
+                // The rows and the bar are cut at the surface's inside edge,
+                // rounded as the surface is there: rows scroll under the
+                // border and never paint past a surface capped short of them.
+                let menu_clips = &parent_clips
+                    .iter()
+                    .cloned()
+                    .chain(std::iter::once(ClipRegion {
+                        bounds: scene_rect(menu.viewport),
+                        transform,
+                        corner_radius: (node.chrome_radii.md - menu.border_width).max(0.0),
+                        polygon_clip: None,
+                    }))
+                    .collect::<Arc<[ClipRegion]>>();
                 for (index, option) in menu.options.iter().enumerate() {
+                    // A row scrolled wholly out of sight paints nothing.
+                    if option.bounds.y >= menu.viewport.y + menu.viewport.height
+                        || option.bounds.y + option.bounds.height <= menu.viewport.y
+                    {
+                        continue;
+                    }
                     if option.checked {
                         let mut mark = component_text_primitive(
                             id,
@@ -660,7 +682,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                             false,
                             node,
                             transform,
-                            Arc::clone(parent_clips),
+                            Arc::clone(menu_clips),
                             opacity,
                             node_order,
                         );
@@ -672,7 +694,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                             &VisualPrimitiveContext {
                                 node: id,
                                 transform,
-                                clips: parent_clips,
+                                clips: menu_clips,
                                 opacity,
                                 z_index: menu_z,
                                 document_order: node_order,
@@ -700,7 +722,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                         true,
                         node,
                         transform,
-                        Arc::clone(parent_clips),
+                        Arc::clone(menu_clips),
                         opacity,
                         node_order,
                     );
@@ -715,13 +737,47 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                             true,
                             node,
                             transform,
-                            Arc::clone(parent_clips),
+                            Arc::clone(menu_clips),
                             opacity,
                             node_order,
                         );
                         hint.z_index = menu_z;
                         emit(hint);
                     }
+                }
+                if let Some(bar) = &menu.scrollbar {
+                    let context = VisualPrimitiveContext {
+                        node: id,
+                        transform,
+                        clips: menu_clips,
+                        opacity,
+                        z_index: menu_z,
+                        document_order: node_order,
+                    };
+                    if let Some(background) = bar.track_background {
+                        emit(visual_quad(
+                            &context,
+                            collection_slot(SELECT_MENU_SCROLLBAR, 0),
+                            scene_rect(bar.track),
+                            VisualQuadStyle {
+                                background: Some(background),
+                                border_color: None,
+                                border_width: 0.0,
+                                corner_radius: corner_radii(bar.track_radius),
+                            },
+                        ));
+                    }
+                    emit(visual_quad(
+                        &context,
+                        collection_slot(SELECT_MENU_SCROLLBAR, 1),
+                        scene_rect(bar.thumb),
+                        VisualQuadStyle {
+                            background: Some(bar.thumb_background),
+                            border_color: None,
+                            border_width: 0.0,
+                            corner_radius: corner_radii(bar.thumb_radius),
+                        },
+                    ));
                 }
             }
         }

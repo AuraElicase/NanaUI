@@ -76,6 +76,7 @@ widget(
 | `invalid` | — | 字段 |
 | `opened` | — | 字段 |
 | `highlighted` | — | 字段。`set_query` 把高亮移到第一项；`close` 在开着时清掉高亮 |
+| `menu_scroll` | — | 字段。菜单的滚动位置；`set_query` 让菜单回到第一个匹配项。菜单的展开、滚动和滚动条见 [Select 的菜单](select.md#菜单) |
 
 ## 事件
 
