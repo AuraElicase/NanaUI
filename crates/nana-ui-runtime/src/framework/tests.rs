@@ -1198,6 +1198,315 @@ fn plugin_pointer_hooks_hear_every_button_modifiers_and_clicks() {
 }
 
 #[test]
+fn app_menu_bar_opens_switches_cascades_and_reports_ids() {
+    use crate::{AppMenuBar, MenuBarActivated};
+    use nana_ui_core::{Menu, MenuBar, MenuEntry, MenuShortcut};
+    use nana_ui_input::{
+        InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey, PointerInput,
+        PointerPhase,
+    };
+
+    static HEARD: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let model = MenuBar::new([
+        Menu::new(
+            "File",
+            [
+                MenuEntry::item(11, "Open").shortcut(MenuShortcut::primary("o")),
+                MenuEntry::Separator,
+                MenuEntry::Submenu(Menu::new(
+                    "Recent",
+                    [
+                        MenuEntry::item(12, "a.vlive"),
+                        MenuEntry::item(13, "b.vlive"),
+                    ],
+                )),
+                MenuEntry::item(14, "Quit").enabled(false),
+            ],
+        ),
+        Menu::new("Edit", [MenuEntry::item(15, "Undo").checked(true)]),
+    ]);
+    let bar = context
+        .create_component(document, AppMenuBar::new(model))
+        .unwrap();
+    context.assemble_app_menu_bar(bar).unwrap();
+    context
+        .on(bar, |_, e: &MenuBarActivated, _| {
+            HEARD.lock().unwrap().push(e.id)
+        })
+        .unwrap();
+    let relayout = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(400.0, 300.0))
+            .unwrap();
+        context.rebuild_hit_test(document);
+    };
+    relayout(&mut context);
+    let relayout_narrow = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(220.0, 300.0))
+            .unwrap();
+        context.rebuild_hit_test(document);
+    };
+    let parts = |context: &AppContext| context.read(bar, |b| b.parts.clone()).unwrap().unwrap();
+    let center = |context: &AppContext, id| {
+        let b = context.world().component_layout_box(id).unwrap();
+        (b.x + b.width / 2.0, b.y + b.height / 2.0)
+    };
+    let open = |context: &AppContext| {
+        context
+            .read(bar, |b| {
+                b.open_titles()
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap()
+    };
+    let hot = |context: &AppContext| {
+        context
+            .read(bar, |b| b.highlighted().map(str::to_owned))
+            .unwrap()
+    };
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let active = |context: &AppContext| context.read(bar, AppMenuBar::is_active).unwrap();
+    let _ = nana_ui_core::take_menu_activations();
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let mouse = |phase, (x, y): (f32, f32)| InputPayload::Pointer(PointerInput::mouse(phase, x, y));
+    let key = |name: &'static str, state| {
+        InputPayload::Key(KeyInput {
+            physical: PhysicalKey(name.into()),
+            logical: LogicalKey(name.into()),
+            state,
+            repeat: false,
+            modifiers: InputModifiers::empty(),
+        })
+    };
+
+    // a press on a title opens its menu; moving onto the next title switches
+    let titles = parts(&context).titles;
+    let file = center(&context, titles[0].0);
+    let edit = center(&context, titles[1].0);
+    input
+        .route(&mut context, mouse(PointerPhase::Down, file))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, file))
+        .unwrap();
+    assert_eq!(open(&context), ["File"]);
+    relayout(&mut context);
+    let panel = parts(&context).panels[0].panel;
+    let menu = context.world().component_layout_box(panel).unwrap();
+    let title = context.world().component_layout_box(titles[0].0).unwrap();
+    assert_eq!(menu.x, title.x, "the menu opens under its title");
+    assert!(menu.y >= title.y + title.height - 0.5);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, edit))
+        .unwrap();
+    assert_eq!(open(&context), ["Edit"]);
+    relayout(&mut context);
+    let undo = parts(&context).panels[0].rows[0].texts.unwrap();
+    assert_eq!(context.world().text(undo[0]), Some("✓"));
+    input
+        .route(&mut context, mouse(PointerPhase::Move, file))
+        .unwrap();
+    relayout(&mut context);
+
+    // a submenu cascades to the side of its row and closes from a sibling row
+    let rows = parts(&context).panels[0].rows.clone();
+    assert_eq!(
+        context.world().text(rows[0].texts.unwrap()[2]),
+        Some(if cfg!(target_os = "macos") {
+            "⌘O"
+        } else {
+            "Ctrl+O"
+        })
+    );
+    let recent = center(&context, rows[2].row);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, recent))
+        .unwrap();
+    assert_eq!(open(&context), ["File", "Recent"]);
+    relayout(&mut context);
+    let sub = parts(&context).panels[1].clone();
+    let sub_box = context.world().component_layout_box(sub.panel).unwrap();
+    assert!(sub_box.x >= menu.x + menu.width - 8.0, "beside its parent");
+    let first = center(&context, sub.rows[0].row);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, first))
+        .unwrap();
+    assert_eq!(hot(&context).as_deref(), Some("a.vlive"));
+    let open_row = center(&context, rows[0].row);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, open_row))
+        .unwrap();
+    assert_eq!(open(&context), ["File"]);
+    assert_eq!(hot(&context).as_deref(), Some("Open"));
+    relayout(&mut context);
+
+    // heading for an open submenu across a sibling row keeps it open
+    input
+        .route(&mut context, mouse(PointerPhase::Move, recent))
+        .unwrap();
+    relayout(&mut context);
+    let quit_row = context.world().component_layout_box(rows[3].row).unwrap();
+    let toward = (
+        menu.x + menu.width - 6.0,
+        quit_row.y + quit_row.height / 2.0,
+    );
+    input
+        .route(&mut context, mouse(PointerPhase::Move, toward))
+        .unwrap();
+    assert_eq!(open(&context), ["File", "Recent"]);
+    let quit = center(&context, rows[3].row);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, quit))
+        .unwrap();
+    assert_eq!(open(&context), ["File"]);
+    assert_eq!(hot(&context).as_deref(), Some("Quit"));
+    relayout(&mut context);
+
+    // a disabled item does nothing; an item reports its id and closes the bar
+    input
+        .route(&mut context, mouse(PointerPhase::Down, quit))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, quit))
+        .unwrap();
+    assert_eq!(open(&context), ["File"]);
+    input
+        .route(&mut context, mouse(PointerPhase::Down, open_row))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, open_row))
+        .unwrap();
+    assert!(open(&context).is_empty());
+    assert_eq!(take(), [11]);
+    assert_eq!(nana_ui_core::take_menu_activations(), [11]);
+    relayout(&mut context);
+
+    // a press-drag from a title chooses on release
+    input
+        .route(&mut context, mouse(PointerPhase::Down, file))
+        .unwrap();
+    relayout(&mut context);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, recent))
+        .unwrap();
+    relayout(&mut context);
+    let second = center(&context, parts(&context).panels[1].rows[1].row);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, second))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, second))
+        .unwrap();
+    assert_eq!(take(), [13]);
+    relayout(&mut context);
+
+    // a press outside closes the menu and goes no further
+    input
+        .route(&mut context, mouse(PointerPhase::Down, file))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, file))
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(open(&context), ["File"]);
+    input
+        .route(&mut context, mouse(PointerPhase::Down, (390.0, 290.0)))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, (390.0, 290.0)))
+        .unwrap();
+    assert!(open(&context).is_empty());
+    relayout(&mut context);
+
+    // F10 gives the bar the keyboard; the arrows and Enter choose
+    input
+        .route(&mut context, key("F10", KeyState::Pressed))
+        .unwrap();
+    assert!(active(&context));
+    input
+        .route(&mut context, key("ArrowDown", KeyState::Pressed))
+        .unwrap();
+    assert_eq!(hot(&context).as_deref(), Some("Open"));
+    input
+        .route(&mut context, key("ArrowDown", KeyState::Pressed))
+        .unwrap();
+    input
+        .route(&mut context, key("ArrowRight", KeyState::Pressed))
+        .unwrap();
+    assert_eq!(open(&context), ["File", "Recent"]);
+    input
+        .route(&mut context, key("Escape", KeyState::Pressed))
+        .unwrap();
+    assert_eq!(open(&context), ["File"]);
+    // Right on a submenu row opens it; on an item it moves to the next menu
+    input
+        .route(&mut context, key("ArrowUp", KeyState::Pressed))
+        .unwrap();
+    input
+        .route(&mut context, key("ArrowRight", KeyState::Pressed))
+        .unwrap();
+    assert_eq!(open(&context), ["Edit"]);
+    input
+        .route(&mut context, key("Enter", KeyState::Pressed))
+        .unwrap();
+    assert_eq!(take(), [15]);
+    assert!(!active(&context));
+
+    // Alt alone does the same; Escape lets go
+    input
+        .route(&mut context, key("Alt", KeyState::Pressed))
+        .unwrap();
+    input
+        .route(&mut context, key("Alt", KeyState::Released))
+        .unwrap();
+    assert!(active(&context));
+    input
+        .route(&mut context, key("Escape", KeyState::Pressed))
+        .unwrap();
+    assert!(!active(&context));
+    // Alt with another key in between is a chord, not the menu
+    input
+        .route(&mut context, key("Alt", KeyState::Pressed))
+        .unwrap();
+    input
+        .route(&mut context, key("a", KeyState::Pressed))
+        .unwrap();
+    input
+        .route(&mut context, key("Alt", KeyState::Released))
+        .unwrap();
+    assert!(!active(&context));
+
+    // in a narrow window a submenu stays inside it
+    context
+        .layout_document(document, crate::LayoutViewport::new(220.0, 300.0))
+        .unwrap();
+    context.rebuild_hit_test(document);
+    input
+        .route(&mut context, mouse(PointerPhase::Down, file))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, file))
+        .unwrap();
+    relayout_narrow(&mut context);
+    let recent = center(&context, parts(&context).panels[0].rows[2].row);
+    input
+        .route(&mut context, mouse(PointerPhase::Move, recent))
+        .unwrap();
+    relayout_narrow(&mut context);
+    let sub = context
+        .world()
+        .component_layout_box(parts(&context).panels[1].panel)
+        .unwrap();
+    assert!(sub.x >= 0.0 && sub.x + sub.width <= 220.0, "{sub:?}");
+    let _ = nana_ui_core::take_menu_activations();
+}
+
+#[test]
 fn scrub_field_drags_types_steps_and_shows_mixed_values() {
     use crate::{ScrubChanged, ScrubDragging, ScrubField, ScrubInput};
     use nana_ui_input::{

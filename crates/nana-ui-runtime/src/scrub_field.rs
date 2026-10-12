@@ -626,7 +626,7 @@ impl AppContext {
         })
     }
 
-    fn document_of_node(&self, id: StableNodeId) -> Result<DocumentId, FrameworkError> {
+    pub(crate) fn document_of_node(&self, id: StableNodeId) -> Result<DocumentId, FrameworkError> {
         Ok(self
             .world()
             .node(id)

@@ -7,6 +7,33 @@
 //!
 //! Controls never touch this. An application declares the bar and routes the
 //! ids it gets back, the same shape as an action registry.
+//!
+//! The ids come back through one queue whichever menu showed the bar: the
+//! platform's native menu and the runtime's in-app `AppMenuBar` both report
+//! with [`push_menu_activation`], and [`take_menu_activations`] drains them.
+
+use std::sync::Mutex;
+
+static ACTIVATIONS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// Records a chosen item's id. Called by whatever showed the menu: the
+/// platform's menu callback or an in-app menu bar.
+pub fn push_menu_activation(id: u32) {
+    if let Ok(mut queue) = ACTIVATIONS.lock() {
+        queue.push(id);
+    }
+}
+
+/// Menu ids the user chose since the last call, in order.
+///
+/// Drain this once a frame and route the ids the way you route any other
+/// command. Never empty-loops: an untouched menu yields an empty vec.
+pub fn take_menu_activations() -> Vec<u32> {
+    ACTIVATIONS
+        .lock()
+        .map(|mut queue| std::mem::take(&mut *queue))
+        .unwrap_or_default()
+}
 
 /// A key combination shown beside a menu item.
 ///

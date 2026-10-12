@@ -15,6 +15,7 @@ pub use input::{
 mod hooks;
 mod keyboard;
 mod lifecycle;
+mod menu_bar_keys;
 mod modal;
 mod registry;
 mod roving_focus;

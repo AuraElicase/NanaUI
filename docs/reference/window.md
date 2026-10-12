@@ -276,6 +276,8 @@ IME：焦点进可编辑字段时 `Window::request_ime_update(Enable)` 一次（
 
 `installed_menu_bar()` 读回平台实际持有的菜单（macOS）。供宿主自检。`crates/nana-window/examples/menu-probe.rs` 就是用它做真机验收的。
 
+要画在界面里、跟随主题的菜单栏（自绘标题栏、Linux），用运行时组件 [`AppMenuBar`](../components/app-menu-bar.md)。它读同一份模型，选中项进同一个 `take_menu_activations()` 队列。
+
 菜单是整体替换：再调一次 `SetMenuBar` 换掉整条。没有增量条目 API。重建一个菜单很便宜。而跨三个平台做 diff 不便宜。
 
 ## 文件对话框

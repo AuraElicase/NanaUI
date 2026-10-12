@@ -28,9 +28,10 @@ use nana_ui::runtime::{
     AboutMetadata as RuntimeAboutMetadata, AboutSection as RuntimeAboutSection,
     AccessibilityAction, AccessibilityActionRequest, ActionMenu as RuntimeActionMenu,
     ActionMenuItem as RuntimeActionMenuItem, Activate,
-    AnchoredActionMenu as RuntimeAnchoredActionMenu, AppShell as RuntimeAppShell,
-    AppTitleBar as RuntimeAppTitleBar, AppearanceSection as RuntimeAppearanceSection,
-    Avatar as RuntimeAvatar, Button as RuntimeButton, CalendarHeatmap as RuntimeCalendarHeatmap,
+    AnchoredActionMenu as RuntimeAnchoredActionMenu, AppMenuBar as RuntimeAppMenuBar,
+    AppShell as RuntimeAppShell, AppTitleBar as RuntimeAppTitleBar,
+    AppearanceSection as RuntimeAppearanceSection, Avatar as RuntimeAvatar,
+    Button as RuntimeButton, CalendarHeatmap as RuntimeCalendarHeatmap,
     CalendarHeatmapDatum as RuntimeCalendarDatum, Card as RuntimeCard, Checkbox as RuntimeCheckbox,
     Chip as RuntimeChip, CommandPalette as RuntimeCommandPalette,
     ConfirmDialog as RuntimeConfirmDialog, ContextMenu as RuntimeContextMenu,
@@ -111,6 +112,7 @@ enum Component {
     ListItem,
     RangeField,
     ScrubField,
+    AppMenuBar,
     SegmentedControl,
     Tabs,
     StatusBadge,
@@ -193,6 +195,7 @@ impl Component {
             Self::ListItem => component_ids::LIST_ITEM,
             Self::RangeField => component_ids::RANGE_FIELD,
             Self::ScrubField => component_ids::SCRUB_FIELD,
+            Self::AppMenuBar => component_ids::APP_MENU_BAR,
             Self::SegmentedControl => component_ids::SEGMENTED_CONTROL,
             Self::Tabs => component_ids::TABS,
             Self::StatusBadge => component_ids::STATUS_BADGE,
@@ -448,6 +451,7 @@ fn fixture_size(fixture: Fixture) -> Size<u32> {
         (Component::ToastStack, _) => Size::new(420, 140),
         (Component::XYPad, _) => Size::new(420, 88),
         (Component::ScrubField, _) => Size::new(420, 88),
+        (Component::AppMenuBar, _) => Size::new(420, 220),
         (Component::QrCode, _) => Size::new(280, 280),
         (Component::Select, "opened") => Size::new(420, 220),
         (Component::Popover | Component::ActionMenu, _) => Size::new(420, 200),
@@ -982,6 +986,13 @@ fn runtime_fixture(
             }
             field.stable_id()
         }
+        Component::AppMenuBar => {
+            let context = document.context_mut();
+            let bar = context
+                .create_component(document_id, RuntimeAppMenuBar::new(app_menu_bar_model()))?;
+            context.assemble_app_menu_bar(bar)?;
+            bar.stable_id()
+        }
         Component::SegmentedControl => {
             let segmented = create_segmented_fixture(&mut document, fixture)?;
             let target = segmented.control.stable_id();
@@ -1515,6 +1526,12 @@ fn runtime_fixture(
             action,
         )?;
         (contract_ok, contract_ok, true)
+    } else if fixture.component == Component::AppMenuBar {
+        (
+            exercise_app_menu_bar(&mut document, viewport, &mut shaper, fixture, target)?,
+            true,
+            true,
+        )
     } else if let Some(segmented) = segmented_fixture.as_ref() {
         segmented_contract_failed =
             exercise_segmented_contract(&mut document, viewport, &mut shaper, fixture, segmented)?;
@@ -1640,6 +1657,122 @@ fn with_menu_items<C: nana_ui::runtime::ComponentView>(
         widget(RuntimeActionMenuItem::new("Rename")),
         widget(RuntimeActionMenuItem::new("Delete").danger(true)),
     ))
+}
+
+fn app_menu_bar_model() -> nana_ui_core::MenuBar {
+    use nana_ui_core::{Menu, MenuBar, MenuEntry, MenuShortcut};
+    MenuBar::new([
+        Menu::new(
+            "File",
+            [
+                MenuEntry::item(1, "Open…").shortcut(MenuShortcut::primary("o")),
+                MenuEntry::item(2, "Save").shortcut(MenuShortcut::primary("s")),
+                MenuEntry::item(3, "Save As…").shortcut(MenuShortcut::primary("s").shift()),
+                MenuEntry::Separator,
+                MenuEntry::Submenu(Menu::new(
+                    "Recent",
+                    [
+                        MenuEntry::item(4, "aurora.vlive"),
+                        MenuEntry::item(5, "sena.psd"),
+                    ],
+                )),
+                MenuEntry::Separator,
+                MenuEntry::item(6, "Quit").enabled(false),
+            ],
+        ),
+        Menu::new("Edit", [MenuEntry::item(7, "Undo")]),
+        Menu::new(
+            "View",
+            [
+                MenuEntry::item(8, "Wireframe").checked(true),
+                MenuEntry::item(9, "Vertices"),
+            ],
+        ),
+    ])
+}
+
+/// Drive the menu bar into its state with real input, laying out between
+/// steps as frames would: open needs the title's box, a cascade the row's.
+fn exercise_app_menu_bar(
+    document: &mut RuntimeDocument,
+    viewport: LayoutViewport,
+    shaper: &mut NanaTextShaper,
+    fixture: Fixture,
+    target: StableNodeId,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let document_id = document.document();
+    let bar = nana_ui::runtime::Entity::<RuntimeAppMenuBar>::from_stable_id(target);
+    let mut adapter = SnapshotInput::default();
+    let center = |document: &RuntimeDocument, id: StableNodeId| {
+        let b = document
+            .context()
+            .world()
+            .layout_box(id)
+            .expect("menu bar part");
+        (b.x + b.width / 2.0, b.y + b.height / 2.0)
+    };
+    let child = |document: &RuntimeDocument, id: StableNodeId, index: usize| {
+        document
+            .context()
+            .world()
+            .node(id)
+            .expect("menu bar node")
+            .children[index]
+    };
+    let file = center(document, child(document, target, 0));
+    match fixture.state {
+        "rest" => Ok(true),
+        "hover" => {
+            adapter.dispatch(
+                document.context_mut(),
+                document_id,
+                &pointer(PointerPhase::Move, file.0, file.1),
+            )?;
+            document.flush(viewport, shaper)?;
+            Ok(!document.context().read(bar, RuntimeAppMenuBar::is_open)?)
+        }
+        "open" | "cascade" => {
+            for phase in [PointerPhase::Down, PointerPhase::Up] {
+                adapter.dispatch(
+                    document.context_mut(),
+                    document_id,
+                    &pointer(phase, file.0, file.1),
+                )?;
+            }
+            document.flush(viewport, shaper)?;
+            if fixture.state == "cascade" {
+                // the bar's children: three titles, then the open menu
+                let menu = child(document, target, 3);
+                let recent = center(document, child(document, menu, 4));
+                adapter.dispatch(
+                    document.context_mut(),
+                    document_id,
+                    &pointer(PointerPhase::Move, recent.0, recent.1),
+                )?;
+                document.flush(viewport, shaper)?;
+                let submenu = child(document, target, 4);
+                let first = center(document, child(document, submenu, 0));
+                adapter.dispatch(
+                    document.context_mut(),
+                    document_id,
+                    &pointer(PointerPhase::Move, first.0, first.1),
+                )?;
+            }
+            let titles = document
+                .context()
+                .read(bar, |bar| bar.open_titles().len())?;
+            Ok(titles == if fixture.state == "cascade" { 2 } else { 1 })
+        }
+        "keyboard" => {
+            for key in ["F10", "ArrowRight", "ArrowRight", "ArrowDown"] {
+                adapter.dispatch(document.context_mut(), document_id, &keyboard(key))?;
+            }
+            Ok(document
+                .context()
+                .read(bar, |bar| bar.highlighted() == Some("Wireframe"))?)
+        }
+        _ => Ok(false),
+    }
 }
 
 fn slot_label_style() -> NodeStyle {
