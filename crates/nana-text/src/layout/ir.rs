@@ -79,6 +79,12 @@ pub struct PlacedLabel {
     /// The tag's box (the label and its padding, not the clear room either
     /// side of it), in line space.
     pub rect: TextRect,
+    /// The square kept for the label's picture, in line space.
+    #[serde(default)]
+    pub icon: Option<TextRect>,
+    /// [`crate::ObjectLabel::color`].
+    #[serde(default)]
+    pub color: Option<[f32; 4]>,
     /// Shaped label runs with `origin_x_px` set where they are drawn.
     pub runs: Vec<crate::shape::ShapedRun>,
 }

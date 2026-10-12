@@ -493,3 +493,76 @@ fn a_texture_object_is_drawn_by_the_host_texture_renderer() {
     assert_eq!(custom[0].0.resource.as_ref(), "sticker:dance");
     assert!((custom[0].1.width - 28.0).abs() < 0.01);
 }
+
+fn mention_line(name: &str, fill: [f32; 4]) -> RichText {
+    RichText::builder()
+        .plain("hi ")
+        .object(nana_ui_core::RichObject::label(
+            6,
+            name,
+            nana_ui_core::RichLabelStyle {
+                fill,
+                text: [0.1, 0.1, 0.1, 1.0],
+                scale: 0.9,
+                icon: Some(Arc::from("file:///avatars/42.png")),
+                ..nana_ui_core::RichLabelStyle::default()
+            },
+        ))
+        .plain(" ok")
+        .build()
+}
+
+#[test]
+fn a_styled_label_takes_room_and_paints_its_pill_and_picture() {
+    let mut runtime = document(label_layout(), RichText::new("hi  ok"));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let plain = runtime.context().world().text_metrics(id(LABEL)).unwrap();
+
+    set_rich(&mut runtime, mention_line("奈奈", [0.9, 0.4, 0.6, 1.0]));
+    settle(&mut runtime, &mut shaper);
+    let with = runtime.context().world().text_metrics(id(LABEL)).unwrap();
+    assert!(
+        with.width > plain.width + 20.0,
+        "{} -> {}",
+        plain.width,
+        with.width
+    );
+
+    let pictures = object_quads(&runtime);
+    assert_eq!(pictures.len(), 1, "the avatar is an image quad");
+    let picture = pictures[0];
+    assert!(
+        (picture.width - picture.height).abs() < 0.01,
+        "square: {picture:?}"
+    );
+    let pills: Vec<_> = runtime
+        .scene()
+        .primitives()
+        .filter(|primitive| primitive.node == id(LABEL))
+        .filter(|primitive| {
+            matches!(
+                &primitive.kind,
+                ScenePrimitiveKind::Quad { surface, .. } if surface.content_image.is_none()
+            )
+        })
+        .map(|primitive| primitive.bounds)
+        .collect();
+    assert_eq!(pills.len(), 1, "one pill");
+    let pill = pills[0];
+    assert!(picture.x > pill.x && picture.x + picture.width < pill.x + pill.width);
+    assert!(
+        picture.y >= pill.y - 0.01 && picture.y + picture.height <= pill.y + pill.height + 0.01
+    );
+
+    // A longer name is a new label: the line is laid out again.
+    set_rich(&mut runtime, mention_line("奈奈奈奈", [0.9, 0.4, 0.6, 1.0]));
+    settle(&mut runtime, &mut shaper);
+    let longer = runtime.context().world().text_metrics(id(LABEL)).unwrap();
+    assert!(
+        longer.width > with.width + 10.0,
+        "{} -> {}",
+        with.width,
+        longer.width
+    );
+}

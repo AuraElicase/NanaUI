@@ -14,7 +14,7 @@ use crate::id::FontGeneration;
 use crate::layout::{IntrinsicWidths, LayoutCounters, LayoutRequest, Layouter, TextLayout};
 use crate::metrics::RunMetrics;
 use crate::shaping::{ShapeCounters, ShapeRequest, ShapedText, Shaper};
-use crate::source::TextSource;
+use crate::source::{ObjectLabel, TextSource};
 use crate::style::{TextKind, TextStyle};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -253,17 +253,26 @@ fn ruby_style(source: &TextSource, base: &TextStyle, at: usize) -> TextStyle {
     }
 }
 
-/// The style an object label is shaped in: the text's around it, at
-/// [`crate::source::LABEL_SCALE`] of the size, upright and medium weight.
-fn label_style(source: &TextSource, base: &TextStyle, at: usize) -> TextStyle {
+/// The style an object label is shaped in: the text's around it, at the
+/// label's scale of the size (by default [`crate::source::LABEL_SCALE`]),
+/// upright and medium weight unless the label names one.
+fn label_style(source: &TextSource, base: &TextStyle, label: &ObjectLabel) -> TextStyle {
+    let at = label.offset;
     let spans = source.spans();
     let style = spans
         .iter()
         .rfind(|span| span.range.start <= at && at < span.range.end)
         .map_or(base, |span| &span.style);
+    let scale = if label.scale.is_finite() && label.scale > 0.0 {
+        label.scale.min(4.0)
+    } else {
+        crate::source::LABEL_SCALE
+    };
     TextStyle {
-        font_size_px: (style.font_size_px * crate::source::LABEL_SCALE).max(9.0),
-        font_weight: style.font_weight.clamp(500, 700),
+        font_size_px: (style.font_size_px * scale).max(9.0),
+        font_weight: label
+            .weight
+            .map_or_else(|| style.font_weight.clamp(500, 700), |w| w.clamp(100, 900)),
         italic: false,
         letter_spacing_px: 0.0,
         ..style.clone()
@@ -318,7 +327,7 @@ impl TextEngine for NativeTextEngine {
             .labels()
             .iter()
             .map(|label| {
-                let style = label_style(source, base, label.offset);
+                let style = label_style(source, base, label);
                 let text = TextSource::new(Arc::clone(&label.text));
                 let constraints = TextConstraints {
                     max_width_px: None,

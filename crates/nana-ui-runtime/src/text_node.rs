@@ -437,10 +437,15 @@ impl TextNodeState {
                         rich.objects()
                             .iter()
                             .filter_map(|(offset, object)| {
-                                Some(nana_text::ObjectLabel {
-                                    offset: *offset,
-                                    text: Arc::clone(object.tag_label()?),
-                                })
+                                let text = Arc::clone(object.tag_label()?);
+                                let mut label = nana_text::ObjectLabel::new(*offset, text);
+                                if let Some(style) = object.label_style() {
+                                    label.scale = style.scale;
+                                    label.weight = style.weight;
+                                    label.color = Some(style.text);
+                                    label.icon = style.icon.is_some();
+                                }
+                                Some(label)
                             })
                             .collect(),
                     );
@@ -583,10 +588,13 @@ pub(crate) fn classify_rich_change(
     let before = previous.map_or(&[][..], RichText::objects);
     let after = next.map_or(&[][..], RichText::objects);
     if before.len() != after.len()
-        || before
-            .iter()
-            .zip(after)
-            .any(|((at, old), (to, new))| at != to || old.line_box() != new.line_box())
+        || before.iter().zip(after).any(|((at, old), (to, new))| {
+            // A label's text and look are shaped into the layout.
+            at != to
+                || old.line_box() != new.line_box()
+                || (old.tag_label().is_some() || new.tag_label().is_some())
+                    && old.content != new.content
+        })
     {
         dirty |= TextDirty::CONSTRAINT;
     }

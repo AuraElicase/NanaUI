@@ -115,8 +115,9 @@ pub struct RubySpan {
 pub const RUBY_SCALE: f32 = 0.5;
 
 /// A label an inline object shows inside itself: an editor's marker tag
-/// ("pause", "sound: coin"). The object takes the label's room — shaped at
-/// [`LABEL_SCALE`] of the text around it, plus padding — instead of its own
+/// ("pause", "sound: coin"), or a name with a picture before it. The object
+/// takes the label's room — shaped at [`Self::scale`] of the text around it,
+/// plus padding and the icon's square — instead of its own
 /// [`InlineObjectMetrics`], and the layout places the label's runs inside it
 /// ([`crate::PlacedLabel`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -124,6 +125,50 @@ pub struct ObjectLabel {
     /// Byte offset of the object's U+FFFC in [`TextSource::text`].
     pub offset: usize,
     pub text: Arc<str>,
+    /// Size relative to the text around the object.
+    #[serde(default = "label_scale")]
+    pub scale: f32,
+    /// Weight; `None` takes the text's around it, held to 500..=700.
+    #[serde(default)]
+    pub weight: Option<u16>,
+    /// Ink, straight sRGB with alpha; `None` is the light tag ink.
+    #[serde(default)]
+    pub color: Option<[f32; 4]>,
+    /// Keep a square before the text for a picture
+    /// ([`crate::PlacedLabel::icon`]).
+    #[serde(default)]
+    pub icon: bool,
+}
+
+fn label_scale() -> f32 {
+    LABEL_SCALE
+}
+
+impl ObjectLabel {
+    /// A plain tag label: small, medium weight, light ink, no icon.
+    pub fn new(offset: usize, text: impl Into<Arc<str>>) -> Self {
+        Self {
+            offset,
+            text: text.into(),
+            scale: LABEL_SCALE,
+            weight: None,
+            color: None,
+            icon: false,
+        }
+    }
+
+    /// What the layout reads besides the shaped text: the icon square and
+    /// the ink, as bits for a cache key.
+    pub fn layout_bits(&self) -> [u32; 5] {
+        let [r, g, b, a] = self.color.unwrap_or([-1.0; 4]);
+        [
+            u32::from(self.icon),
+            r.to_bits(),
+            g.to_bits(),
+            b.to_bits(),
+            a.to_bits(),
+        ]
+    }
 }
 
 /// A label's size relative to the text around its object.

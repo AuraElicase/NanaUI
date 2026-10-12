@@ -2003,9 +2003,11 @@ impl TextPipeline {
             }
         }
         // Object labels (tags), inside their objects, on their own pill: a
-        // fixed light ink. Each glyph stands for the object's character, so
-        // it takes the object's effects and reveal turn.
+        // light ink unless the label names one. Each glyph stands for the
+        // object's character, so it takes the object's effects and reveal
+        // turn.
         for label in &layout.labels {
+            let ink = label.color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
             let baseline = (label.baseline_y_px * scale).round();
             let cluster = label.offset as u32;
             for run in &label.runs {
@@ -2026,7 +2028,7 @@ impl TextPipeline {
                         size,
                         synthesis,
                         mode,
-                        [1.0, 1.0, 1.0, 1.0],
+                        ink,
                         None,
                         GlyphRole::Fill,
                         PlacedGlyph {
