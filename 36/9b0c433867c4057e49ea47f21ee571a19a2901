@@ -1,0 +1,16 @@
+crates/nana-ui/src/scene_paint/text/mod.rs
+  h_8e6780fc7b4bb1 42-43
+crates/nana-ui/src/scene_paint/text/stacked_effects_tests.rs
+  h_8e6780fc7b4bb1 1-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "369b0c433867c4057e49ea47f21ee571a19a2901",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
