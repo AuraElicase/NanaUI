@@ -1,0 +1,18 @@
+crates/nana-ui-scene/src/scene/attributes.rs
+  h_8e6780fc7b4bb1 104-106
+crates/nana-ui-scene/src/scene/compositor.rs
+  h_8e6780fc7b4bb1 1032-1034
+crates/nana-ui-scene/src/scene/compositor_delta_tests.rs
+  h_8e6780fc7b4bb1 1-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "cd58107ed09ba0f5fb7e4bdb1b534f50dafc6598",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
