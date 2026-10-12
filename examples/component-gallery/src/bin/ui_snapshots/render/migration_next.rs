@@ -52,7 +52,7 @@ use nana_ui::runtime::{
     PaneTreeNode as RuntimePaneTreeNode, Panel as RuntimePanel, Popover as RuntimePopover,
     Progress as RuntimeProgress, QrCode as RuntimeQrCode, RangeField as RuntimeRangeField,
     ReorderItem as RuntimeReorderItem, ReorderList as RuntimeReorderList, RichSpan,
-    RuntimeDocument, SearchDropdown as RuntimeSearchDropdown,
+    RuntimeDocument, ScrubField as RuntimeScrubField, SearchDropdown as RuntimeSearchDropdown,
     SearchDropdownOption as RuntimeSearchDropdownOption,
     SegmentedControl as RuntimeSegmentedControl, SegmentedOption as RuntimeSegmentedOption,
     SegmentedSelectionRequested, Select as RuntimeSelect, SelectOption as RuntimeSelectOption,
@@ -110,6 +110,7 @@ enum Component {
     Card,
     ListItem,
     RangeField,
+    ScrubField,
     SegmentedControl,
     Tabs,
     StatusBadge,
@@ -191,6 +192,7 @@ impl Component {
             Self::Card => component_ids::CARD,
             Self::ListItem => component_ids::LIST_ITEM,
             Self::RangeField => component_ids::RANGE_FIELD,
+            Self::ScrubField => component_ids::SCRUB_FIELD,
             Self::SegmentedControl => component_ids::SEGMENTED_CONTROL,
             Self::Tabs => component_ids::TABS,
             Self::StatusBadge => component_ids::STATUS_BADGE,
@@ -445,6 +447,7 @@ fn fixture_size(fixture: Fixture) -> Size<u32> {
         (Component::ToastStack, "stacked") => Size::new(420, 240),
         (Component::ToastStack, _) => Size::new(420, 140),
         (Component::XYPad, _) => Size::new(420, 88),
+        (Component::ScrubField, _) => Size::new(420, 88),
         (Component::QrCode, _) => Size::new(280, 280),
         (Component::Select, "opened") => Size::new(420, 220),
         (Component::Popover | Component::ActionMenu, _) => Size::new(420, 200),
@@ -960,6 +963,24 @@ fn runtime_fixture(
                 .context_mut()
                 .create_component(document_id, component)?
                 .stable_id()
+        }
+        Component::ScrubField => {
+            let mut component = RuntimeScrubField::new(1.25)
+                .range(0.0, 10.0)
+                .step(0.05)
+                .precision(2)
+                .label("X")
+                .unit("px")
+                .mixed(fixture.state == "mixed")
+                .disabled(fixture.state == "disabled");
+            set_full_width(&mut component.style);
+            let context = document.context_mut();
+            let field = context.create_component(document_id, component)?;
+            context.assemble_scrub_field(field)?;
+            if fixture.state == "editing" {
+                context.begin_scrub_edit(field)?;
+            }
+            field.stable_id()
         }
         Component::SegmentedControl => {
             let segmented = create_segmented_fixture(&mut document, fixture)?;

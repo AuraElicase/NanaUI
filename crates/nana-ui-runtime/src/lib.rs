@@ -26,6 +26,7 @@ mod component_registry;
 mod components;
 mod custom_paint;
 mod paint_script;
+mod scrub_field;
 /// The BCP 47 tag [`MutationQueue::set_language`] and
 /// [`UiWorld::set_default_language`] take.
 pub use nana_text::font::LanguageTag;
@@ -375,6 +376,7 @@ pub use rich_text::{
     SelectableRichText, TextSelectionGroup, TextSelectionGroupId, TextSelectionSnapshot,
 };
 pub use schedule::SystemWork;
+pub use scrub_field::{ScrubChanged, ScrubDragging, ScrubField, ScrubInput};
 pub use search_dropdown::{SearchDropdown, SearchDropdownEvent, SearchDropdownOption};
 pub use select::{Select, SelectChanged, SelectOption};
 pub use selection::{

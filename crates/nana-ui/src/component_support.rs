@@ -119,6 +119,7 @@ component_catalog! {
     TEXTAREA => { id: "textarea", name: "Textarea", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Ime, Accessibility] },
     HOSTED_TEXTAREA => { id: "hosted-textarea", name: "HostedTextarea", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Ime, Accessibility] },
     RANGE_FIELD => { id: "range-field", name: "RangeField", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility] },
+    SCRUB_FIELD => { id: "scrub-field", name: "ScrubField", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Ime, Accessibility] },
     SELECT => { id: "select", name: "Select", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility, Overlay] },
     SEGMENTED_CONTROL => { id: "segmented-control", name: "SegmentedControl", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility] },
     TABS => { id: "tabs", name: "Tabs", family: Navigation, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility] },

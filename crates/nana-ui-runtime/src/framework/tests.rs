@@ -1198,6 +1198,182 @@ fn plugin_pointer_hooks_hear_every_button_modifiers_and_clicks() {
 }
 
 #[test]
+fn scrub_field_drags_types_steps_and_shows_mixed_values() {
+    use crate::{ScrubChanged, ScrubDragging, ScrubField, ScrubInput};
+    use nana_ui_input::{
+        InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey, PointerInput,
+        PointerPhase,
+    };
+
+    static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let field = context
+        .create_component(
+            document,
+            ScrubField::new(1.0)
+                .range(0.0, 10.0)
+                .step(0.1)
+                .precision(2)
+                .label("X")
+                .unit("px"),
+        )
+        .unwrap();
+    // a view assembles on build; a component created by hand is assembled by its creator
+    assert!(context.assemble_scrub_field(field).unwrap());
+    context
+        .on(field, |_, e: &ScrubInput, _| {
+            HEARD.lock().unwrap().push(format!("input {:.2}", e.value))
+        })
+        .unwrap();
+    context
+        .on(field, |_, e: &ScrubChanged, _| {
+            HEARD
+                .lock()
+                .unwrap()
+                .push(format!("changed {:.2}", e.value))
+        })
+        .unwrap();
+    context
+        .on(field, |_, e: &ScrubDragging, _| {
+            HEARD
+                .lock()
+                .unwrap()
+                .push(format!("dragging {}", e.dragging))
+        })
+        .unwrap();
+    let relayout = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(300.0, 100.0))
+            .unwrap();
+        context.rebuild_hit_test(document);
+    };
+    relayout(&mut context);
+    let texts = |context: &AppContext| -> Vec<String> {
+        let parts = context.read(field, |f| f.parts).unwrap().unwrap();
+        [parts.label, parts.value]
+            .iter()
+            .map(|id| context.world().text(*id).unwrap_or("").to_owned())
+            .collect()
+    };
+    assert_eq!(texts(&context), ["X", "1.00 px"]);
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let ctrl = InputModifiers {
+        control: true,
+        ..InputModifiers::empty()
+    };
+    let at = |phase, x: f32, modifiers| {
+        InputPayload::Pointer(PointerInput {
+            modifiers,
+            ..PointerInput::mouse(phase, x, 10.0)
+        })
+    };
+    let none = InputModifiers::empty();
+
+    // drag: 10 px at 0.1 per px, then 10 px finer with Ctrl; one commit at the end
+    input
+        .route(&mut context, at(PointerPhase::Down, 50.0, none))
+        .unwrap();
+    input
+        .route(&mut context, at(PointerPhase::Move, 51.0, none))
+        .unwrap();
+    assert!(take().is_empty(), "inside the click slop");
+    input
+        .route(&mut context, at(PointerPhase::Move, 60.0, none))
+        .unwrap();
+    input
+        .route(&mut context, at(PointerPhase::Move, 70.0, ctrl))
+        .unwrap();
+    input
+        .route(&mut context, at(PointerPhase::Up, 70.0, ctrl))
+        .unwrap();
+    assert_eq!(
+        take(),
+        [
+            "dragging true",
+            "input 2.00",
+            "input 2.10",
+            "dragging false",
+            "changed 2.10"
+        ]
+    );
+    assert_eq!(context.read(field, |f| f.value).unwrap(), 2.1);
+
+    // the bounds hold
+    input
+        .route(&mut context, at(PointerPhase::Down, 50.0, none))
+        .unwrap();
+    input
+        .route(&mut context, at(PointerPhase::Move, 290.0, none))
+        .unwrap();
+    input
+        .route(&mut context, at(PointerPhase::Up, 290.0, none))
+        .unwrap();
+    assert_eq!(context.read(field, |f| f.value).unwrap(), 10.0);
+    take();
+
+    // a click types: the input takes the focus; Enter commits and gives it back
+    input
+        .route(&mut context, at(PointerPhase::Down, 50.0, none))
+        .unwrap();
+    input
+        .route(&mut context, at(PointerPhase::Up, 50.0, none))
+        .unwrap();
+    let parts = context.read(field, |f| f.parts).unwrap().unwrap();
+    assert!(context.read(field, |f| f.editing).unwrap());
+    assert_eq!(context.world().focused(document), Some(parts.input));
+    // typing replaces the selected value
+    let typed = |input: &mut crate::HeadlessInput, context: &mut AppContext, text: &str| {
+        input
+            .route(
+                context,
+                InputPayload::Text(nana_ui_input::CommittedText {
+                    text: text.to_owned(),
+                    key: None,
+                }),
+            )
+            .unwrap();
+    };
+    typed(&mut input, &mut context, "3.5");
+    let key = |name: &'static str| KeyInput {
+        physical: PhysicalKey(name.into()),
+        logical: LogicalKey(name.into()),
+        state: KeyState::Pressed,
+        repeat: false,
+        modifiers: InputModifiers::empty(),
+    };
+    input
+        .route(&mut context, InputPayload::Key(key("Enter")))
+        .unwrap();
+    assert_eq!(take(), ["changed 3.50"]);
+    assert!(!context.read(field, |f| f.editing).unwrap());
+    assert_eq!(context.world().focused(document), Some(field.stable_id()));
+
+    // Escape reverts the typing: no change
+    context.begin_scrub_edit(field).unwrap();
+    typed(&mut input, &mut context, "9");
+    input
+        .route(&mut context, InputPayload::Key(key("Escape")))
+        .unwrap();
+    assert!(take().is_empty());
+    assert!(!context.read(field, |f| f.editing).unwrap());
+    assert_eq!(context.read(field, |f| f.value).unwrap(), 3.5);
+
+    // a mixed field shows a dash; a step sets every object to one value
+    context.set_scrub_field_value(field, 3.5, true).unwrap();
+    relayout(&mut context);
+    assert_eq!(texts(&context), ["X", "—"]);
+    assert_eq!(context.world().focused(document), Some(field.stable_id()));
+    input
+        .route(&mut context, InputPayload::Key(key("ArrowUp")))
+        .unwrap();
+    assert_eq!(take(), ["changed 3.60"]);
+    relayout(&mut context);
+    assert_eq!(texts(&context), ["X", "3.60 px"]);
+}
+
+#[test]
 fn plugin_register_activation_reaches_activate_node() {
     #[derive(Clone, PartialEq)]
     struct Ping;
