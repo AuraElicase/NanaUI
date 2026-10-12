@@ -1,6 +1,7 @@
 """Stable runner report envelopes."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from .invariants import (
     evaluate_invariants,
@@ -11,6 +12,20 @@ from .schema import (
 )
 
 
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def portable_path(text: str) -> str:
+    """Repo paths become repo-relative and the home directory becomes `~`,
+    so a committed report never carries a user or machine name."""
+    for root, replacement in ((REPO_ROOT, ""), (Path.home(), "~/")):
+        for prefix in {str(root), root.as_posix()}:
+            prefix = prefix.rstrip("/\\")
+            for sep in ("/", "\\"):
+                text = text.replace(prefix + sep, replacement)
+    return text
 
 
 def envelope(
@@ -50,11 +65,11 @@ def envelope(
         "unsupported" if status == "unsupported" else "closest-legacy-reference"
     )
     if command:
-        payload["command"] = list(command)
+        payload["command"] = [portable_path(str(part)) for part in command]
     if source_binary:
-        payload["source_binary"] = source_binary
+        payload["source_binary"] = portable_path(source_binary)
     if source_report:
-        payload["source_report"] = source_report
+        payload["source_report"] = portable_path(source_report)
     if mapping_notes:
         payload["mapping_notes"] = list(mapping_notes)
     if metrics:
