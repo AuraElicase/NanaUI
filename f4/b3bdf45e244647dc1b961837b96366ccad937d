@@ -1,0 +1,14 @@
+crates/nana-window/src/contrast_preference.rs
+  h_8e6780fc7b4bb1 65-67,118-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f4b3bdf45e244647dc1b961837b96366ccad937d",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
