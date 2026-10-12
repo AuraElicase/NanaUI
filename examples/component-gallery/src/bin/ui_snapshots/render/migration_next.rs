@@ -547,6 +547,16 @@ fn runtime_fixture(
     let document_id = DocumentId::new(9).expect("migration fixture document id");
     let mut document = RuntimeDocument::new(document_id);
     document.context_mut().set_preset_theme(theme)?;
+    if (fixture.component, fixture.state) == (Component::TreeView, "compact") {
+        // the dense example density (#341): rows, gaps and indent from the theme
+        let definition = match theme {
+            ThemeAppearance::Light => nana_ui_core::ThemeDefinition::NANA_LIGHT,
+            _ => nana_ui_core::ThemeDefinition::NANA_DARK,
+        };
+        document
+            .context_mut()
+            .set_theme_definition(&definition.with_metrics(nana_ui_core::COMPACT_METRICS))?;
+    }
     let mut root_style = NodeStyle::default();
     {
         let layout = Arc::make_mut(&mut root_style.layout);

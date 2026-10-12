@@ -176,19 +176,20 @@ pub use tab_drag::{
 };
 pub use theme::{
     AccentRamp, BorderTokens, BorderWidth, ButtonRecipe, ButtonRecipeDraft, ButtonVariantDraft,
-    ButtonVariantRecipe, ChromeRadii, CompiledRecipes, CompiledTheme, ComponentRecipe,
-    ComponentRecipeDraft, ComponentRecipeId, ComponentThemeRegistry, ControlHeight, ControlPadding,
-    CornerShape, DesignTokens, DialogAlign, DialogDividerInset, DialogInsets, DialogMotion,
-    DialogRecipe, DialogTransition, EasingRole, EffectTokens, ElevationRole, FoundationTokens,
-    HAIRLINE, LineRole, MotionRole, MotionTokens, OpacityTokens, RadiusTier, RecipeText,
-    SWITCH_METRICS, ScrollbarMotion, ScrollbarPaint, ScrollbarPaintState, ScrollbarRecipe,
-    ScrollbarTransition, ShadowToken, SpacingStep, SpacingTokens, SquareSize, StateLayer,
-    StatusRecipe, SurfaceMaterial, SurfacePadding, SurfaceRole, SurfaceSpec, SurfaceTokens,
-    SwitchMetrics, TextWeight, ThemeAppearance, ThemeChoice, ThemeCompileError, ThemeDefinition,
-    ThemeGeneration, ThemeId, ThemeIdentity, ThemeMetrics, ThemeRegistry, ThemeRegistryError,
-    ThemeResolution, ThemeSchemaVersion, ToastGlyphs, ToastIndicator, ToastMotion,
-    ToastProgressRecipe, ToastRecipe, TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS,
-    builtin_theme, builtin_theme_arc, linear_scrim_alpha, space, type_scale,
+    ButtonVariantRecipe, COMPACT_METRICS, ChromeRadii, CompiledRecipes, CompiledTheme,
+    ComponentRecipe, ComponentRecipeDraft, ComponentRecipeId, ComponentThemeRegistry,
+    ControlHeight, ControlPadding, CornerShape, DesignTokens, DialogAlign, DialogDividerInset,
+    DialogInsets, DialogMotion, DialogRecipe, DialogTransition, EasingRole, EffectTokens,
+    ElevationRole, FoundationTokens, HAIRLINE, LineRole, MotionRole, MotionTokens, OpacityTokens,
+    RadiusTier, RecipeText, SWITCH_METRICS, ScrollbarMotion, ScrollbarPaint, ScrollbarPaintState,
+    ScrollbarRecipe, ScrollbarTransition, ShadowToken, SpacingStep, SpacingTokens, SquareSize,
+    StateLayer, StatusRecipe, SurfaceMaterial, SurfacePadding, SurfaceRole, SurfaceSpec,
+    SurfaceTokens, SwitchMetrics, TREE_METRICS, TextWeight, ThemeAppearance, ThemeChoice,
+    ThemeCompileError, ThemeDefinition, ThemeGeneration, ThemeId, ThemeIdentity, ThemeMetrics,
+    ThemeRegistry, ThemeRegistryError, ThemeResolution, ThemeSchemaVersion, ToastGlyphs,
+    ToastIndicator, ToastMotion, ToastProgressRecipe, ToastRecipe, TreeMetrics, TypeRole,
+    TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme, builtin_theme_arc,
+    linear_scrim_alpha, space, type_scale,
 };
 pub use tree::{TreeNavigation, TreeNode, TreeViewEvent, tree_navigation_event};
 pub use typography::{

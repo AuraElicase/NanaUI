@@ -213,6 +213,31 @@ runtime crate 里 `const NAME: f32/u16/u64 = <数字>` 共 217 个（`ROW_HEIGHT
 
 钉住它的测试：`a_thicker_scrollbar_in_the_installed_theme_reaches_the_bar`。把那行换回常量。它报 `12 -> 12` 然后红。
 
+### 树的几何并入主题（#341）
+
+`ThemeMetrics` 同样组合一个 `tree: TreeMetrics`，字段如下：
+
+- `row_gap`：行间距。
+- `indent`：每层缩进。
+- `inset`：行内边距。
+- `disclosure`：展开三角的方块。
+- `icon`：行图标的方块。
+
+默认值 `TREE_METRICS` 就是原来写死在 `TreeView` 里的常量（2 / 12 / 4 / 16 / 12），所以默认主题的像素不变。行高本来就是小号控件高度（`compact_control_height`），本来就跟着主题走。`#[serde(default)]` 保证旧的 metrics blob 仍能读取；主题编译时，这五个值和其他长度一样要通过有限值和非负的检查。
+
+`COMPACT_METRICS` 是一套紧凑密度的示例，对应专业工具面板常见的 20 px 行：
+
+- 小号和中号控件高 20 / 24。
+- 内边距收紧。
+- 树行之间没有间距，每层缩进 10。
+- 颜色、字号和圆角不变。
+
+安装方式是 `ThemeDefinition::NANA_DARK.with_metrics(COMPACT_METRICS)`。菜单项高度也是小号控件高度，所以同样跟着这套密度变化。画廊里的 `tree-view/compact` 夹具展示这套密度。
+
+钉住它的测试：`rows_follow_the_installed_tree_metrics`。它在默认主题和紧凑示例下各量一次树的高度、行距和缩进。
+
+菜单面板的内边距和项间距（`MENU_SURFACE_PADDING` / `MENU_ITEM_GAP`）仍然是常量。它们在构造菜单样式时就写进了样式，安装主题拿不到。要改成 token，所有菜单表面（ContextMenu、Select、ActionMenu、AppMenuBar）必须一起改成在写入时解析，只改一处会让面板高度和内容错位。
+
 ### 圆角说档位，不说像素（F1 部分解决）
 
 这是本轮的结构性改动。

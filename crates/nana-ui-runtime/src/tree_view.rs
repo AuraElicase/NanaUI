@@ -12,11 +12,6 @@ use crate::{
     LayoutBox, MutationQueue, NodeKind, NodeStyle, StableNodeId, StandardVisual, UiWorld,
 };
 
-const ROW_GAP: f32 = nana_ui_core::space::XXS;
-use crate::popover::TREE_DEPTH_STEP as DEPTH_STEP;
-const DISCLOSURE_SIZE: f32 = nana_ui_core::type_scale::LINE;
-const ICON_SIZE: f32 = nana_ui_core::type_scale::META;
-
 /// Visible-row tree. Hidden collapsed children are not projected.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TreeView {
@@ -97,7 +92,7 @@ impl TreeView {
 
     fn intrinsic_height(&self, metrics: nana_ui_core::ThemeMetrics) -> f32 {
         let count = self.visible_rows().len().max(1) as f32;
-        count * self.size.height_in(metrics) + (count - 1.0) * ROW_GAP
+        count * self.size.height_in(metrics) + (count - 1.0) * metrics.tree.row_gap
     }
 }
 
@@ -234,37 +229,38 @@ pub(crate) fn tree_view_geometry(
     metrics: nana_ui_core::ThemeMetrics,
 ) -> crate::ComponentGeometry {
     let row_height = size.height_in(metrics);
+    let tree = metrics.tree;
     let geometry = rows
         .iter()
         .enumerate()
         .map(|(index, row)| {
-            let y = bounds.y + index as f32 * (row_height + ROW_GAP);
+            let y = bounds.y + index as f32 * (row_height + tree.row_gap);
             let row_bounds = LayoutBox {
                 x: bounds.x,
                 y,
                 width: bounds.width,
                 height: row_height,
             };
-            let indent = f32::from(row.depth) * DEPTH_STEP;
-            let mut cursor = bounds.x + indent + 4.0;
+            let indent = f32::from(row.depth) * tree.indent;
+            let mut cursor = bounds.x + indent + tree.inset;
             let disclosure = row.branch.then(|| {
                 let box_ = LayoutBox {
                     x: cursor,
-                    y: y + (row_height - DISCLOSURE_SIZE) / 2.0,
-                    width: DISCLOSURE_SIZE,
-                    height: DISCLOSURE_SIZE,
+                    y: y + (row_height - tree.disclosure) / 2.0,
+                    width: tree.disclosure,
+                    height: tree.disclosure,
                 };
-                cursor += DISCLOSURE_SIZE;
+                cursor += tree.disclosure;
                 box_
             });
             let icon = row.icon.map(|icon| {
                 let box_ = LayoutBox {
                     x: cursor,
-                    y: y + (row_height - ICON_SIZE) / 2.0,
-                    width: ICON_SIZE,
-                    height: ICON_SIZE,
+                    y: y + (row_height - tree.icon) / 2.0,
+                    width: tree.icon,
+                    height: tree.icon,
                 };
-                cursor += ICON_SIZE + 4.0;
+                cursor += tree.icon + tree.inset;
                 (
                     icon,
                     box_,
@@ -284,7 +280,7 @@ pub(crate) fn tree_view_geometry(
                     bounds: LayoutBox {
                         x: cursor,
                         y,
-                        width: (bounds.x + bounds.width - cursor - 4.0).max(0.0),
+                        width: (bounds.x + bounds.width - cursor - tree.inset).max(0.0),
                         height: row_height,
                     },
                     content: Arc::clone(&row.label).into(),
@@ -358,6 +354,53 @@ mod tests {
         let event = tree.navigate(TreeNavigation::Next).expect("next");
         assert_eq!(event, TreeViewEvent::Select(Arc::from("readme")));
         assert_eq!(tree.selected_id().map(Arc::as_ref), Some("readme"));
+    }
+
+    /// The tree's height and its rows' boxes and label starts, as laid out.
+    fn rows(theme: Option<nana_ui_core::ThemeMetrics>) -> (f32, Vec<LayoutBox>, Vec<f32>) {
+        let mut context = AppContext::new();
+        if let Some(metrics) = theme {
+            context
+                .set_theme_definition(
+                    &nana_ui_core::ThemeDefinition::NANA_DARK.with_metrics(metrics),
+                )
+                .unwrap();
+        }
+        let tree = context.create_component(document(), sample()).unwrap();
+        context
+            .layout_document(document(), crate::LayoutViewport::new(300.0, 300.0))
+            .unwrap();
+        let height = context.world().layout_box(tree.stable_id()).unwrap().height;
+        let Some(crate::ComponentGeometry::TreeView { rows }) =
+            context.world().component_geometry(tree.stable_id())
+        else {
+            panic!("tree geometry");
+        };
+        (
+            height,
+            rows.iter().map(|row| row.bounds).collect(),
+            rows.iter().map(|row| row.label.bounds.x).collect(),
+        )
+    }
+
+    #[test]
+    fn rows_follow_the_installed_tree_metrics() {
+        // the default theme: 28 px rows 2 px apart, 12 px per level
+        let (height, bounds, labels) = rows(None);
+        assert_eq!(height, 4.0 * 28.0 + 3.0 * 2.0);
+        assert_eq!(bounds[1].y - bounds[0].y, 30.0);
+        // `lib.rs` is a level in and has no disclosure; `src` has one
+        assert_eq!(labels[1] - labels[0], 12.0 - nana_ui_core::type_scale::LINE);
+        // the compact example: 20 px rows touching, 10 px per level
+        let compact = nana_ui_core::COMPACT_METRICS;
+        let (height, bounds, labels) = rows(Some(compact));
+        assert_eq!(height, 4.0 * 20.0);
+        assert_eq!(bounds[1].y - bounds[0].y, 20.0);
+        assert_eq!(bounds[1].height, 20.0);
+        assert_eq!(
+            labels[1] - labels[0],
+            compact.tree.indent - compact.tree.disclosure
+        );
     }
 
     #[test]

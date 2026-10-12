@@ -8,3 +8,11 @@ state: expanded
   text #2/110 40.00,20.00 216.00x28.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
   text #2/111 36.00,50.00 220.00x28.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=600 line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
   text #2/112 24.00,80.00 232.00x28.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+state: compact
+  target: 20.00,20.00 240.00x60.00
+  a11y: role=List disabled=false checked=None selected=None mixed=false
+  quad #2/11 20.00,40.00 240.00x20.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
+  text #2/40 22.00,24.00 12.00x12.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  text #2/110 34.00,20.00 224.00x20.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  text #2/111 32.00,40.00 226.00x20.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=600 line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  text #2/112 22.00,60.00 236.00x20.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false

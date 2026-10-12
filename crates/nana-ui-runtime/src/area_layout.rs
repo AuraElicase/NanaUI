@@ -44,6 +44,8 @@ const DRAG_SLOP: f32 = nana_ui_core::space::SM;
 const CORNER: f32 = 12.0;
 /// The cut line a split previews, px.
 const PREVIEW_LINE: f32 = 2.0;
+/// The least a divider grabs, however thin the gap it draws, px.
+const GRIP: f32 = 6.0;
 
 /// What changed in the layout.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -372,10 +374,24 @@ fn bar_style(axis: AreaAxis, gap: f32, shown: bool) -> NodeStyle {
     let mut style = NodeStyle::default();
     {
         let layout = Arc::make_mut(&mut style.layout);
+        // a thin seam still grabs GRIP px: the bar reaches over the areas'
+        // edges by negative margins and stays above them
+        let grip = gap.max(GRIP);
+        let reach = Some(LengthSpec::Px(-(grip - gap) / 2.0));
         match axis {
-            AreaAxis::Horizontal => layout.width = Some(LengthSpec::Px(gap)),
-            AreaAxis::Vertical => layout.height = Some(LengthSpec::Px(gap)),
+            AreaAxis::Horizontal => {
+                layout.width = Some(LengthSpec::Px(grip));
+                layout.margin_left = reach;
+                layout.margin_right = reach;
+            }
+            AreaAxis::Vertical => {
+                layout.height = Some(LengthSpec::Px(grip));
+                layout.margin_top = reach;
+                layout.margin_bottom = reach;
+            }
         }
+        layout.position = PositionSpec::Relative;
+        layout.z_index = Some(1);
         layout.flex_shrink = Some(0.0);
         layout.align_self = Some(AlignSpec::Stretch);
         layout.cursor = Some(match axis {
