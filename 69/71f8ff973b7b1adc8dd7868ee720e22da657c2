@@ -1,0 +1,26 @@
+crates/nana-ui-input/src/host_services.rs
+  h_8e6780fc7b4bb1 109-122,152,174,193-207,251-262
+crates/nana-ui-platform/src/clipboard.rs
+  h_8e6780fc7b4bb1 19-25,70,86-94,285-346,385-401,463-478
+crates/nana-ui-platform/src/lib.rs
+  h_8e6780fc7b4bb1 24-25
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 21,23,821-823,978-986,990-993,1004,1015-1026
+crates/nana-ui-scene/tests/rich_typing_background.rs
+  h_8e6780fc7b4bb1 190-196,202
+crates/nana-ui/src/scene_host/host_services.rs
+  h_8e6780fc7b4bb1 12-13,137-148
+docs/components/rich-text-editor.md
+  h_8e6780fc7b4bb1 92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6971f8ff973b7b1adc8dd7868ee720e22da657c2",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
