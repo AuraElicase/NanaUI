@@ -1045,6 +1045,26 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "an editing scrub field shows its number input, focused with the value selected",
     ),
     f(
+        Component::AppMenuBar,
+        "rest",
+        "app menu bar draws its titles in a row in the theme's text color",
+    ),
+    f(
+        Component::AppMenuBar,
+        "open",
+        "a pressed title takes the active wash and its menu opens under it with shortcuts at the end and a separator line",
+    ),
+    f(
+        Component::AppMenuBar,
+        "cascade",
+        "a submenu row stays highlighted and its submenu opens beside it with its first row hot",
+    ),
+    f(
+        Component::AppMenuBar,
+        "keyboard",
+        "F10 and the arrows open the third menu with its checked first row highlighted",
+    ),
+    f(
         Component::XYPad,
         "invalid",
         "invalid xy pad uses a danger field border",
@@ -1385,6 +1405,11 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         Component::ScrubField,
         "focused",
         "focused scrub field takes the focus ring and steps with the arrow keys",
+    ),
+    f(
+        Component::AppMenuBar,
+        "hover",
+        "the title under the pointer takes the hover wash while no menu is open",
     ),
     f(
         Component::XYPad,

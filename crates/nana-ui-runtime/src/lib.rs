@@ -10,6 +10,7 @@
 #![allow(clippy::type_complexity)]
 
 mod animation;
+mod app_menu_bar;
 mod avatar;
 mod bars;
 mod breadcrumb;
@@ -164,6 +165,7 @@ pub use animation::{
     layout_flip_play_spec, layout_flip_spec, loading_animation, retarget_track,
     toast_timeout_animation, track_completion_deadline, workspace_animation,
 };
+pub use app_menu_bar::{AppMenuBar, MenuBarActivated, menu_shortcut_label};
 pub use avatar::{Avatar, DEFAULT_SIZE as AVATAR_DEFAULT_SIZE};
 pub use bars::{StatusBar, Toolbar};
 pub use breadcrumb::{

@@ -257,6 +257,11 @@ pub(crate) struct InputState {
     pub(super) pointer_details: HashMap<(DocumentId, u64), super::hooks::PointerDetail>,
     /// The button whose press a node's pointer hooks captured.
     pub(super) hook_buttons: HashMap<(DocumentId, u64), i16>,
+    /// Each document's in-app menu bar that is open or holds the keyboard.
+    pub(super) menu_bars: HashMap<DocumentId, StableNodeId>,
+    /// Alt went down with nothing after it yet: its release gives the menu
+    /// bar the keyboard.
+    pub(super) menu_alt: bool,
     caret_blink: blink::CaretBlink,
 }
 
@@ -269,6 +274,8 @@ impl Default for InputState {
             pressed_buttons: HashMap::new(),
             pointer_details: HashMap::new(),
             hook_buttons: HashMap::new(),
+            menu_bars: HashMap::new(),
+            menu_alt: false,
             caret_blink: blink::CaretBlink::default(),
         }
     }

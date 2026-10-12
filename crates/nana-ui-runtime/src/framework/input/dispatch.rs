@@ -322,6 +322,7 @@ impl AppContext {
                 if self.dismiss_popovers_outside(target)? {
                     return Ok(CONSUMED);
                 }
+                self.cancel_menu_bar_alt();
                 self.dismiss_detached_menus(target)?;
                 if let Some(target) = target
                     && self.press_pointer_hook(
@@ -348,6 +349,7 @@ impl AppContext {
                     // from reaching the control underneath.
                     return Ok(CONSUMED);
                 }
+                self.cancel_menu_bar_alt();
                 self.dismiss_detached_menus(target)?;
                 // Scrollbars overlay content, so they claim the press
                 // before the node underneath sees it.
@@ -390,6 +392,7 @@ impl AppContext {
                 if !hit.is_some_and(|id| {
                     self.preserves_hover_card_editor_focus(id)
                         || self.press_keeps_modal_focus(document, id)
+                        || self.is_menu_bar_node(id)
                 }) {
                     if let Some(focus) = focus_target {
                         // The press already sits on its target. Revealing it
@@ -853,6 +856,13 @@ impl AppContext {
             ..
         } = stroke;
         let keyboard_barrier = self.has_blocking_runtime_overlay(document);
+        // An open menu bar, or one the keyboard holds, takes its keys first.
+        if !keyboard_barrier
+            && !stroke.is_text()
+            && self.route_menu_bar_key(document, key, pressed, repeat, modifiers)?
+        {
+            return Ok(CONSUMED);
+        }
         if pressed && !modifiers.alt && !modifiers.control && !modifiers.meta {
             let overlay_key = match key {
                 "Escape" if !repeat => Some(OverlayKey::Escape),

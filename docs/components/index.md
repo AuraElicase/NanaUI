@@ -86,6 +86,7 @@
 - [Popover](popover.md) — 弹出层。按下、焦点、Enter、空格和面板锚点都走触发器。
 - [ActionMenu](action-menu.md) — 动作菜单。对齐改成起始边。
 - [ContextMenu](context-menu.md) — 上下文菜单。角色是菜单。
+- [AppMenuBar](app-menu-bar.md) — 画在应用界面里的菜单栏，跟随主题，子菜单级联弹出；选中项和原生菜单走同一个 id 队列。
 - [CommandPalette](command-palette.md) — 命令面板。真正的 dispatch 和快捷键存盘由你做。
 - [Toast](toast.md) — 被动通知。装配后带进度、一个动作和关闭按钮；移除由你做。
 - [ToastStack](toast-stack.md) — 通知角。先量后显、排队、进退场；放在模态层之上时模态打开也可按。

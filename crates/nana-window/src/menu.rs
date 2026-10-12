@@ -14,8 +14,6 @@
 //! Windows gets an in-window `HMENU`, and other platforms are a no-op —
 //! [`menu_bar_support`] reports which you got.
 
-use std::sync::{Mutex, OnceLock};
-
 pub use nana_ui_core::{Menu, MenuBar, MenuEntry, MenuShortcut};
 
 /// How much of the menu bar the running platform provides.
@@ -45,29 +43,19 @@ pub const fn menu_bar_support() -> MenuBarSupport {
     }
 }
 
-/// Ids the user chose since the last drain.
-fn activations() -> &'static Mutex<Vec<u32>> {
-    static ACTIVATIONS: OnceLock<Mutex<Vec<u32>>> = OnceLock::new();
-    ACTIVATIONS.get_or_init(|| Mutex::new(Vec::new()))
-}
-
 /// Records a chosen id. Called from the platform's menu callback.
 #[cfg(any(test, target_os = "macos", target_os = "windows"))]
 pub(crate) fn push_activation(id: u32) {
-    if let Ok(mut queue) = activations().lock() {
-        queue.push(id);
-    }
+    nana_ui_core::push_menu_activation(id);
 }
 
-/// Menu ids the user chose since the last call, in order.
+/// Menu ids the user chose since the last call, in order, from the native
+/// menu and from an in-app menu bar alike.
 ///
 /// Drain this once a frame and route the ids the way you route any other
 /// command. Never empty-loops: an untouched menu yields an empty vec.
 pub fn take_menu_activations() -> Vec<u32> {
-    activations()
-        .lock()
-        .map(|mut queue| std::mem::take(&mut *queue))
-        .unwrap_or_default()
+    nana_ui_core::take_menu_activations()
 }
 
 /// Installs `bar` as the application's menu bar, without a window.

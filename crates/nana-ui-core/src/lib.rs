@@ -111,7 +111,9 @@ pub use layout_frontier::{
 };
 pub use layout_style_change::{LayoutFieldSet, LayoutStyleChange};
 pub use menu::{MenuConfirmation, MenuSelection};
-pub use menu_bar::{Menu, MenuBar, MenuEntry, MenuShortcut};
+pub use menu_bar::{
+    Menu, MenuBar, MenuEntry, MenuShortcut, push_menu_activation, take_menu_activations,
+};
 pub use motion::{
     AnimatableProperty, AnimationClass, AnimationDirection, AnimationFillMode, AnimationIteration,
     AnimationPlayState, AnimationPlayback, CompiledMotion, DecayParams, Easing, FlipRect,
