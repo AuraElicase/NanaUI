@@ -84,7 +84,8 @@ pub struct NodePointerHooks<C: View> {
     /// The pointer moved over the node, or anywhere while the node holds
     /// its capture.
     pub moved: fn(&mut AppContext, Entity<C>, NodePointer) -> Handled,
-    /// The pointer left the node, or the node stopped being reachable.
+    /// The pointer left the node, or the node stopped being reachable, or a
+    /// press it captured was cancelled before its release.
     pub left: EntityFn<C, ()>,
     /// A primary press on the node. `Ok(true)` captures the pointer for the
     /// node until the release and consumes the press.
@@ -285,6 +286,22 @@ impl AppContext {
         }
         let mut mutations = MutationQueue::new();
         mutations.capture_pointer(pointer_id, target);
+        self.commit_mutations(mutations)?;
+        Ok(true)
+    }
+
+    /// A cancelled pointer whose press a node with pointer hooks captured:
+    /// the capture ends with no release, and the node hears the pointer
+    /// leave once the hover is cleared.
+    pub(super) fn cancel_pointer_hook(&mut self, document: DocumentId, pointer_id: u64) -> Handled {
+        let Some(owner) = self.world.pointer_capture(document, pointer_id) else {
+            return Ok(false);
+        };
+        if self.pointer_hooks(owner).is_none() {
+            return Ok(false);
+        }
+        let mut mutations = MutationQueue::new();
+        mutations.release_pointer(pointer_id, owner);
         self.commit_mutations(mutations)?;
         Ok(true)
     }

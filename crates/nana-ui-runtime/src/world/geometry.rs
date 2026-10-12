@@ -2482,6 +2482,8 @@ impl UiWorld {
                 opened,
                 options,
                 highlighted,
+                menu_scroll,
+                menu_room,
                 checkable,
                 ..
             } => Some(crate::select::select_geometry(
@@ -2493,10 +2495,12 @@ impl UiWorld {
                 *opened,
                 options,
                 *highlighted,
+                *menu_scroll,
+                *menu_room,
                 style,
                 &source,
-                &self.style_model.palette,
-                self.style_model.metrics,
+                self.style_model,
+                self.theme.recipes().scrollbar(),
                 self.document_viewport_of(id),
                 *checkable,
                 padding,
@@ -2820,6 +2824,77 @@ impl UiWorld {
             )),
             _ => None,
         }
+    }
+
+    /// Where a menu hanging off `id` can be seen, in `id`'s own layout y: the
+    /// window and every clip above `id` that hit testing cuts it by, each
+    /// moved through the scroll offsets between that box and `id`. A
+    /// `position: fixed` ancestor is window-placed and ends the walk, as it
+    /// does for hit testing. Transforms are left out: they bend where the menu
+    /// is placed, not whether what it draws matches what it hits.
+    ///
+    /// `None` until the document is laid out, or when nothing is left to see.
+    pub(crate) fn select_menu_room(&self, id: StableNodeId) -> Option<crate::SelectMenuRoom> {
+        let viewport = self.document_viewport_of(id)?;
+        let mut top = f32::NEG_INFINITY;
+        let mut bottom = f32::INFINITY;
+        let mut clip = |bounds: LayoutBox, shift: f32| {
+            top = top.max(bounds.y + shift);
+            bottom = bottom.min(bounds.y + bounds.height + shift);
+        };
+        // Scroll offsets between the box being looked at and `id`.
+        let mut shift = 0.0;
+        let mut child = id;
+        let mut current = self.parent_id(id);
+        while let Some(ancestor) = current {
+            shift += self.scroll_offset(ancestor).unwrap_or_default().y;
+            let style = self.hit_motion_layout(ancestor);
+            let layout = self.component_layout_box(ancestor)?;
+            if let Some((x, y, width, height)) =
+                style.overflow_clip_box(layout.x, layout.y, layout.width, layout.height)
+            {
+                clip(
+                    LayoutBox {
+                        x,
+                        y,
+                        width,
+                        height,
+                    },
+                    shift,
+                );
+            }
+            if self.clip_visuals != 0 {
+                match self.nodes.visual(ancestor) {
+                    Some(StandardVisual::EmptyState { .. }) => clip(layout, shift),
+                    Some(StandardVisual::ModalFrame { slots, .. }) => {
+                        let body_root = slots.body == Some(child);
+                        if let Some(crate::ComponentGeometry::ModalFrame {
+                            surface, body, ..
+                        }) = self.component_geometry(ancestor)
+                        {
+                            clip(surface, shift);
+                            if body_root {
+                                clip(body, shift);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if style.position == nana_ui_core::PositionSpec::Fixed {
+                break;
+            }
+            child = ancestor;
+            current = self.parent_id(ancestor);
+        }
+        clip(
+            LayoutBox {
+                height: viewport.height,
+                ..LayoutBox::default()
+            },
+            shift,
+        );
+        (top < bottom).then_some(crate::SelectMenuRoom { top, bottom })
     }
 }
 

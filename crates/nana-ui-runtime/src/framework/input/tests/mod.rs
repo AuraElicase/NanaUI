@@ -44,6 +44,7 @@ mod modal_handles;
 mod popover_trigger;
 mod router;
 mod scrollbar_lane;
+mod select_menu;
 mod terminal;
 
 /// One thing a fixture does to a document, as a host would deliver it.

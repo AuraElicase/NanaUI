@@ -1114,28 +1114,10 @@ impl UiWorld {
             key.groups.push((crate::popover::MENU_OVERLAY_Z_INDEX, 0));
             return;
         }
-        let shift = index.inherited_shift(target);
-        let has_overlay = self
-            .document_of(target)
-            .is_some_and(|document| self.has_compositor_transform_overlay_for(document));
-        let menu_hit = index.entries.get(&target).is_some_and(|node| {
-            node.entry.menu.is_some_and(|menu| {
-                if has_overlay {
-                    self.layout_projection_transform(target)
-                        .is_some_and(|(transform, persp)| {
-                            transformed_contains(menu, transform, persp, x, y)
-                        })
-                } else {
-                    transformed_contains(
-                        menu,
-                        node.entry.transform,
-                        node.entry.persp,
-                        x - shift[0],
-                        y - shift[1],
-                    )
-                }
-            })
-        });
+        let menu_hit = self.menu_region_contains(index, target, x, y);
+        // An open select menu is a root-level layer at the menu's level, as
+        // the scene paints it, ordered by where its field sits.
+        let select_menu = menu_hit && self.select_menus.contains(&target);
         let mut cursor = Some(target);
         while let Some(id) = cursor {
             key.chain.push(id);
@@ -1150,6 +1132,9 @@ impl UiWorld {
             let style = self.hit_motion_layout(id);
             key.path
                 .push(index.entries.get(&id).map_or(0, |entry| entry.entry.order));
+            if select_menu {
+                continue;
+            }
             inherited_z = style.z_index.unwrap_or(inherited_z);
             let children = node
                 .hierarchy
@@ -1193,6 +1178,49 @@ impl UiWorld {
                 key.groups.push((z, key.path.len()));
             }
         }
+        if select_menu {
+            let z = self.hit_motion_layout(target).z_index.unwrap_or(0);
+            key.groups
+                .push((z.max(crate::popover::MENU_OVERLAY_Z_INDEX), key.path.len()));
+        }
+    }
+
+    /// Whether `target`'s menu region (an open select menu, a hover card's
+    /// connector strip) is at the window point `(x, y)`.
+    fn menu_region_contains(&self, index: &HitIndex, target: StableNodeId, x: f32, y: f32) -> bool {
+        let shift = index.inherited_shift(target);
+        let has_overlay = self
+            .document_of(target)
+            .is_some_and(|document| self.has_compositor_transform_overlay_for(document));
+        index.entries.get(&target).is_some_and(|node| {
+            node.entry.menu.is_some_and(|menu| {
+                if has_overlay {
+                    self.layout_projection_transform(target)
+                        .is_some_and(|(transform, persp)| {
+                            transformed_contains(menu, transform, persp, x, y)
+                        })
+                } else {
+                    transformed_contains(
+                        menu,
+                        node.entry.transform,
+                        node.entry.persp,
+                        x - shift[0],
+                        y - shift[1],
+                    )
+                }
+            })
+        })
+    }
+
+    /// Whether an open select menu of `index`'s document is at `(x, y)`, so
+    /// the hit there is ranked by paint order rather than taken as the tree
+    /// walk first meets one.
+    fn select_menu_at(&self, index: &HitIndex, document: DocumentId, x: f32, y: f32) -> bool {
+        !self.select_menus.is_empty()
+            && self.select_menus.iter().any(|id| {
+                self.document_of(*id) == Some(document)
+                    && self.menu_region_contains(index, *id, x, y)
+            })
     }
 
     fn visit_presentation_roots(
@@ -1335,6 +1363,7 @@ impl UiWorld {
             return candidates;
         };
         if forest.viewport_hit_at(x, y)
+            || self.select_menu_at(forest, document, x, y)
             || self.has_compositor_transform_overlay_for(document)
             || self.hanging_surfaces_at(document, x, y).next().is_some()
         {
@@ -1418,10 +1447,9 @@ impl UiWorld {
     pub fn hit_test(&self, document: DocumentId, x: f32, y: f32) -> Option<StableNodeId> {
         self.hit_test_queries.set(self.hit_test_queries.get() + 1);
         if !self.closing_surfaces.is_empty()
-            || self
-                .hit_test_index
-                .get(&document)
-                .is_some_and(|index| index.viewport_hit_at(x, y))
+            || self.hit_test_index.get(&document).is_some_and(|index| {
+                index.viewport_hit_at(x, y) || self.select_menu_at(index, document, x, y)
+            })
             || self.hanging_surfaces_at(document, x, y).next().is_some()
         {
             return self.topmost_candidate(document, x, y);
@@ -1458,6 +1486,7 @@ impl UiWorld {
         } = &mut *scratch;
         let forest = self.collect_hit_candidates(document, x, y, candidates)?;
         if !forest.viewport_hit_at(x, y)
+            && !self.select_menu_at(forest, document, x, y)
             && !self.has_compositor_transform_overlay_for(document)
             && self.hanging_surfaces_at(document, x, y).next().is_none()
         {

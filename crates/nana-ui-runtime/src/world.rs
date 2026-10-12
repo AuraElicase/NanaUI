@@ -833,6 +833,10 @@ pub struct UiWorld {
     /// surfaces take the pointer at the content's level, above the page, so
     /// hit testing looks them up here instead of walking the tree.
     triggered_overlays: HashSet<StableNodeId, BuildIdHasher>,
+    /// Live open Select, Dropdown and SearchDropdown menus. A menu paints in
+    /// the root stacking context at its level, over the groups of the page
+    /// around its field, so hit testing ranks by paint order where one is.
+    select_menus: HashSet<StableNodeId, BuildIdHasher>,
     /// Live nodes whose box resolves against the viewport (`position: fixed`,
     /// `vw` / `vh`). A resize dirties this set together with document roots
     /// instead of discarding the retained layout cache.
@@ -1019,6 +1023,7 @@ impl UiWorld {
             clip_visuals: 0,
             z_index_nodes: 0,
             triggered_overlays: HashSet::default(),
+            select_menus: HashSet::default(),
             viewport_basis_nodes: 0,
             #[cfg(test)]
             block_read_steps: 0,
@@ -3622,6 +3627,7 @@ impl UiWorld {
             z_index: record.is_some_and(|record| record.resolved_layout.z_index.is_some())
                 || is_triggered_menu_overlay(visual),
             triggered: is_triggered_menu_overlay(visual),
+            select_menu: matches!(visual, Some(StandardVisual::Select { opened: true, .. })),
             viewport: record.is_some_and(|record| record.layout_depends_on_viewport),
         }
     }
@@ -3659,6 +3665,15 @@ impl UiWorld {
                 self.triggered_overlays.insert(id);
             } else {
                 self.triggered_overlays.remove(&id);
+            }
+        }
+        if let Some(id) = id
+            && previous.select_menu != next.select_menu
+        {
+            if next.select_menu {
+                self.select_menus.insert(id);
+            } else {
+                self.select_menus.remove(&id);
             }
         }
         if let Some(id) = id {
@@ -5243,6 +5258,8 @@ struct PresenceFlags {
     z_index: bool,
     /// An open triggered menu, whose surface hangs above the page.
     triggered: bool,
+    /// An open select menu, which paints above the page.
+    select_menu: bool,
     /// Style resolves against the viewport (`position: fixed`, `vw` / `vh`).
     viewport: bool,
 }
@@ -5253,6 +5270,7 @@ impl PresenceFlags {
         clip: false,
         z_index: false,
         triggered: false,
+        select_menu: false,
         viewport: false,
     };
 }

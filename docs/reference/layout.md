@@ -744,6 +744,8 @@ flex 项和 grid 项上的 float，按 CSS 被块化，然后忽略。
 
 重叠处的命中排序用同一条前缀切断。否则后面的兄弟卡会抢走菜单点击。卡面本身也在这一层接指针。落在条目之间或内边距上的按下，留在菜单里。不穿到底下的页面。也不当成按触发器去开合菜单。
 
+Select、Dropdown、SearchDropdown 打开的菜单也排在根层叠上下文。层级是 `MENU_OVERLAY_Z_INDEX`，字段自己的 `z-index` 更高时取它，同层按字段的文档顺序排。所以它画在后出现的兄弟组之上，重叠处命中也归它。和弹出层不同，它不是 viewport-fixed：它带着字段的变换，仍受字段外层的裁剪。菜单摆放时只用看得见的那一块，见 [Select 的菜单](../components/select.md#菜单)。
+
 不要靠你的应用给整张卡抬 `z_index`。
 
 这不是完整的 CSS Appendix E。负 z 分层、float 和 inline 层、transform 单独成层等，未全做。

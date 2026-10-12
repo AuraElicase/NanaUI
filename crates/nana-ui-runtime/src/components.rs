@@ -980,6 +980,11 @@ pub enum StandardVisual {
         loading: bool,
         options: Arc<[SelectOptionData]>,
         highlighted: Option<usize>,
+        /// How the open menu's rows are scrolled and its scrollbar held.
+        menu_scroll: SelectMenuScroll,
+        /// Where the open menu can be seen, taken when the field last
+        /// projected; `None` before it has been laid out.
+        menu_room: Option<SelectMenuRoom>,
         /// Whether this menu can ever draw check marks (a multi-select
         /// dropdown). The check lane is reserved for the whole menu when it
         /// can, so labels do not shift as options are checked and unchecked.
@@ -1823,20 +1828,79 @@ pub enum ComponentGeometry {
     },
 }
 
+/// An open Select, Dropdown or SearchDropdown menu.
+///
+/// Its rows keep their places in `options`, one per option the menu lists,
+/// at `bounds` already moved by `scroll`. Only the part of a row inside
+/// `viewport` is drawn and takes the pointer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectMenuGeometry {
     pub surface: LayoutBox,
+    /// The surface inside its border: where the rows scroll, cut and hit, as
+    /// CSS clips a scroll container's content at its padding box.
+    pub viewport: LayoutBox,
+    pub border_width: f32,
+    /// How far the rows are scrolled up, `0..=max_scroll` px.
+    pub scroll: f32,
+    /// How far the rows can scroll; `0` when the surface holds them all.
+    pub max_scroll: f32,
+    /// The bar beside rows that overflow, unless the theme hides scrollbars.
+    /// The rows end where its lane starts.
+    pub scrollbar: Option<ScrollbarBar>,
     pub elevation: ComponentElevation,
     pub background: [f32; 4],
     pub border: [f32; 4],
     pub options: Vec<SelectOptionGeometry>,
 }
 
+/// How an open Select, Dropdown or SearchDropdown menu is scrolled and how
+/// its scrollbar is held.
+///
+/// Interaction state, like the keyboard highlight: it starts over each time
+/// the menu opens, and an application refresh that leaves the value and the
+/// options alone keeps it.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct SelectMenuScroll {
+    /// How far the rows are scrolled up, px. `None` until the wheel, the
+    /// scrollbar or the keyboard moves them: the menu then shows its
+    /// highlighted option, the chosen one as it opens, in the middle where
+    /// the list allows. The menu clamps it to what its rows can scroll.
+    pub offset: Option<f32>,
+    /// The pointer is on the scrollbar's lane.
+    pub hot: bool,
+    /// The thumb is being dragged.
+    pub drag: Option<SelectMenuDrag>,
+}
+
+/// The span of a select field's own layout y its open menu can be seen in:
+/// the window, cut by every clip above the field, through the scroll
+/// offsets between them. The menu opens down or up into it and is capped to
+/// it.
+///
+/// It is taken when the field projects. A page scrolled under an open menu
+/// carries the menu with its field until the menu next changes, so what is
+/// drawn and what the pointer hits stay one geometry.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SelectMenuRoom {
+    pub top: f32,
+    pub bottom: f32,
+}
+
+/// A drag of an open menu's scrollbar thumb.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SelectMenuDrag {
+    /// Where the thumb was taken, px below its top.
+    pub grab: f32,
+    /// The offset the press started from; a cancelled drag goes back to it.
+    pub from: f32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectOptionGeometry {
     pub bounds: LayoutBox,
     pub label: ComponentTextRegion,
-    /// The option's hint at the row's end, quieter than the label.
+    /// The option's hint at the row's end, quieter than the label. A select
+    /// menu's row scrolled out of sight has none: nothing draws it.
     pub hint: Option<ComponentTextRegion>,
     pub selected: bool,
     pub checked: bool,

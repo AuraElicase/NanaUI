@@ -24,6 +24,10 @@ pub(crate) use lifecycle::lifecycle_hooks;
 pub(crate) use text_edit::Editable;
 pub use text_edit::EditableHooks;
 mod scroll;
+mod select_menu;
+pub(crate) use select_menu::{
+    DROPDOWN_MENU_POINTER, SEARCH_DROPDOWN_MENU_POINTER, SELECT_MENU_POINTER,
+};
 mod selection;
 pub use selection::FormValidity;
 #[cfg(feature = "rich-text")]

@@ -6,14 +6,16 @@ use crate::view_components::project_common;
 use crate::{
     AccessibilityRole, AccessibilityState, ComponentElevation, ComponentGeometry,
     ComponentTextRegion, ComputedStyle, InteractionState, InteractionStyle, LayoutBox,
-    MutationQueue, NodeKind, NodeStyle, SelectOptionData, SemanticPaint, StableNodeId,
-    StandardVisual, TextContent, TextVerticalAlignment, UiWorld,
+    MutationQueue, NodeKind, NodeStyle, SelectMenuGeometry, SelectMenuScroll, SelectOptionData,
+    SemanticPaint, StableNodeId, StandardVisual, TextContent, TextVerticalAlignment, UiWorld,
 };
 
 /// Width of the drop-down arrow at the end of the field.
 pub(crate) const HANDLE_WIDTH: f32 = nana_ui_core::type_scale::LINE;
 const MENU_GAP: f32 = 0.0;
 const MENU_PAD: f32 = crate::popover::MENU_SURFACE_PADDING;
+/// The menu surface's stroke, inside its box: the rows scroll within it.
+const MENU_BORDER: f32 = nana_ui_core::HAIRLINE;
 use crate::popover::MENU_ITEM_GAP;
 /// Width of the leading check lane in a drop-down menu row.
 const MENU_CHECK_RESERVE: f32 = nana_ui_core::type_scale::LINE;
@@ -80,6 +82,8 @@ pub struct Select {
     pub invalid: bool,
     pub opened: bool,
     pub highlighted: Option<usize>,
+    /// How the open menu is scrolled. See [`SelectMenuScroll`].
+    pub menu_scroll: SelectMenuScroll,
     /// Size the field's content to its widest option and its arrow, as a
     /// native `<select>` sizes itself, rather than to the label it shows.
     /// See [`Self::fit_options`].
@@ -108,6 +112,7 @@ impl Select {
             invalid: false,
             opened: false,
             highlighted: None,
+            menu_scroll: SelectMenuScroll::default(),
             fit_options: false,
             style: field_style_for_size(ControlSize::Medium),
         }
@@ -172,6 +177,7 @@ impl Select {
         } else {
             self.highlighted = None;
         }
+        self.menu_scroll = SelectMenuScroll::default();
         self
     }
 
@@ -212,12 +218,14 @@ impl Select {
         } else {
             self.highlighted = None;
         }
+        self.menu_scroll = SelectMenuScroll::default();
         true
     }
 
     pub fn close(&mut self) {
         self.opened = false;
         self.highlighted = None;
+        self.menu_scroll = SelectMenuScroll::default();
     }
 
     pub fn highlight_delta(&mut self, delta: i32) -> bool {
@@ -354,6 +362,7 @@ impl crate::ComponentView for Select {
             })
         }),
         hooks: Some(|hooks| hooks.select = Some(&SELECT_HOOKS)),
+        pointer: Some(&crate::framework::SELECT_MENU_POINTER),
         ..crate::TypeBehavior::NONE
     };
 
@@ -365,13 +374,15 @@ impl crate::ComponentView for Select {
     }
 
     fn reconcile(&mut self, mut next: Self) {
-        // Value/options are application state; the open menu and its keyboard
-        // highlight belong to the current interaction while those props agree.
+        // Value/options are application state; the open menu, its keyboard
+        // highlight and its scroll belong to the current interaction while
+        // those props agree.
         if next.inactive() {
             next.close();
         } else if self.value == next.value && self.options == next.options {
             next.opened = self.opened;
             next.highlighted = self.highlighted;
+            next.menu_scroll = self.menu_scroll;
         }
         *self = next;
     }
@@ -408,6 +419,8 @@ impl crate::ComponentView for Select {
                 })
                 .collect(),
             highlighted: self.highlighted,
+            menu_scroll: self.menu_scroll,
+            menu_room: menu_room(self.opened && !self.inactive(), id, world),
             checkable: false,
             fit_options: self.fit_options,
         };
@@ -470,15 +483,18 @@ pub(crate) fn select_geometry(
     opened: bool,
     options: &[SelectOptionData],
     highlighted: Option<usize>,
+    menu_scroll: SelectMenuScroll,
+    menu_room: Option<crate::SelectMenuRoom>,
     style: &ComputedStyle,
     source: &NodeStyle,
-    palette: &SemanticPalette,
-    metrics: nana_ui_core::ThemeMetrics,
+    model: nana_ui_core::StyleModelRef,
+    scrollbars: &nana_ui_core::ScrollbarRecipe,
     viewport: Option<crate::LayoutViewport>,
     checkable: bool,
     padding: nana_ui_core::PaddingSpec,
     measure: crate::text_width::ChromeTextMeasure<'_>,
 ) -> ComponentGeometry {
+    let palette = &model.palette;
     let border = source.layout.resolved_border_width();
     let content = LayoutBox {
         x: bounds.x + border + padding.left,
@@ -500,9 +516,10 @@ pub(crate) fn select_geometry(
             size,
             options,
             highlighted,
-            palette,
-            metrics,
-            viewport,
+            menu_scroll,
+            model,
+            scrollbars,
+            menu_room.or_else(|| window_room(viewport)),
             checkable,
             measure,
         )
@@ -574,24 +591,61 @@ fn select_menu_geometry(
     size: ControlSize,
     options: &[SelectOptionData],
     highlighted: Option<usize>,
-    palette: &SemanticPalette,
-    metrics: nana_ui_core::ThemeMetrics,
-    viewport: Option<crate::LayoutViewport>,
+    menu_scroll: SelectMenuScroll,
+    model: nana_ui_core::StyleModelRef,
+    scrollbars: &nana_ui_core::ScrollbarRecipe,
+    room: Option<crate::SelectMenuRoom>,
     checkable: bool,
     measure: crate::text_width::ChromeTextMeasure<'_>,
-) -> crate::SelectMenuGeometry {
+) -> SelectMenuGeometry {
+    let palette = &model.palette;
+    let metrics = model.metrics;
     let item_height = size.height_in(metrics);
     let count = options.len().max(1) as f32;
     let natural_height =
         MENU_PAD * 2.0 + count * item_height + (count - 1.0).max(0.0) * MENU_ITEM_GAP;
     let is_light = palette.background.as_rgba_array()[0] > 0.5;
-    let (surface_y, height) = resolve_menu_vertical(field, natural_height, viewport);
+    let (surface_y, height) = resolve_menu_vertical(field, natural_height, room);
     let surface = LayoutBox {
         x: field.x,
         y: surface_y,
         width: field.width,
         height,
     };
+    // A surface capped short of its rows scrolls them inside its border and
+    // cuts them there, the way CSS clips a scroll container's content at its
+    // padding box; drawing them on past it painted over whatever was below.
+    let rows_viewport = LayoutBox {
+        x: surface.x + MENU_BORDER,
+        y: surface.y + MENU_BORDER,
+        width: (surface.width - MENU_BORDER * 2.0).max(0.0),
+        height: (surface.height - MENU_BORDER * 2.0).max(0.0),
+    };
+    let max_scroll = (natural_height - height).max(0.0);
+    let scroll = menu_offset(
+        menu_scroll.offset,
+        highlighted,
+        item_height,
+        height,
+        max_scroll,
+    );
+    let scrollbar = (max_scroll > 0.0)
+        .then(|| {
+            menu_scrollbar(
+                rows_viewport,
+                natural_height,
+                height,
+                scroll,
+                menu_scroll,
+                model,
+                scrollbars,
+            )
+        })
+        .flatten();
+    // The rows leave the bar its lane, so its thumb never covers a label, a
+    // hint or a highlight.
+    let rows_x = surface.x + MENU_PAD;
+    let rows_right = scrollbar.map_or(surface.x + surface.width - MENU_PAD, |bar| bar.lane.x);
     // Reserved for the whole menu when the menu *can* check, not when one
     // option currently is: deriving it from `any(checked)` shifted every label
     // 16px sideways the moment the first option became checked.
@@ -600,12 +654,12 @@ fn select_menu_geometry(
         .iter()
         .enumerate()
         .map(|(index, option)| {
-            let y = surface.y + MENU_PAD + index as f32 * (item_height + MENU_ITEM_GAP);
+            let y = surface.y + MENU_PAD + index as f32 * (item_height + MENU_ITEM_GAP) - scroll;
             let selected = highlighted == Some(index);
             let bounds = LayoutBox {
-                x: surface.x + MENU_PAD,
+                x: rows_x,
                 y,
-                width: (surface.width - MENU_PAD * 2.0).max(0.0),
+                width: (rows_right - rows_x).max(0.0),
                 height: item_height,
             };
             let mut label_box = LayoutBox {
@@ -614,7 +668,10 @@ fn select_menu_geometry(
                 width: (bounds.width - size.padding_x_in(metrics) * 2.0 - check_reserve).max(0.0),
                 height: bounds.height,
             };
-            let hint = menu_option_hint(option, &mut label_box, size, palette, measure);
+            // Measuring a hint shapes text; a row out of sight is not drawn.
+            let hint = overlaps_vertically(bounds, rows_viewport)
+                .then(|| menu_option_hint(option, &mut label_box, size, palette, measure))
+                .flatten();
             crate::SelectOptionGeometry {
                 bounds,
                 label: ComponentTextRegion {
@@ -637,8 +694,13 @@ fn select_menu_geometry(
             }
         })
         .collect();
-    crate::SelectMenuGeometry {
+    SelectMenuGeometry {
         surface,
+        viewport: rows_viewport,
+        border_width: MENU_BORDER,
+        scroll,
+        max_scroll,
+        scrollbar,
         elevation: ComponentElevation {
             color: nana_ui_core::PaintColor::srgb([
                 0.0,
@@ -707,42 +769,196 @@ pub(crate) fn menu_option_label(option: &SelectOptionData) -> Arc<str> {
     }
 }
 
-pub(crate) fn select_option_at(menu: &crate::SelectMenuGeometry, x: f32, y: f32) -> Option<usize> {
+/// The enabled row under a point, as the menu draws it: only inside the
+/// viewport the rows are cut to, and never on the scrollbar's lane.
+pub(crate) fn select_option_at(menu: &SelectMenuGeometry, x: f32, y: f32) -> Option<usize> {
+    if !menu.viewport.contains(x, y) || menu.scrollbar.is_some_and(|bar| bar.contains(x, y)) {
+        return None;
+    }
     menu.options
         .iter()
         .position(|option| !option.disabled && option.bounds.contains(x, y))
 }
 
+/// How far an open menu's rows sit scrolled: `offset` clamped to what they
+/// can scroll. Before anything has scrolled them (`None`) the highlighted
+/// row, the chosen one as the menu opens, sits in the middle where the list
+/// allows.
+fn menu_offset(
+    offset: Option<f32>,
+    highlighted: Option<usize>,
+    item_height: f32,
+    height: f32,
+    max_scroll: f32,
+) -> f32 {
+    if max_scroll <= 0.0 {
+        return 0.0;
+    }
+    let offset = offset.unwrap_or_else(|| {
+        highlighted.map_or(0.0, |row| {
+            MENU_PAD + row as f32 * (item_height + MENU_ITEM_GAP) + (item_height - height) / 2.0
+        })
+    });
+    if offset.is_finite() {
+        offset.clamp(0.0, max_scroll)
+    } else {
+        0.0
+    }
+}
+
+/// The offset that shows `row` of an open menu whole, inside the surface's
+/// padding, moving the rows as little as it can from where they are.
+pub(crate) fn menu_offset_revealing(menu: &SelectMenuGeometry, row: usize) -> Option<f32> {
+    let bounds = menu.options.get(row)?.bounds;
+    let top = menu.surface.y + MENU_PAD;
+    let bottom = menu.surface.y + menu.surface.height - MENU_PAD;
+    let offset = if bounds.y < top {
+        menu.scroll - (top - bounds.y)
+    } else if bounds.y + bounds.height > bottom {
+        menu.scroll + (bounds.y + bounds.height - bottom)
+    } else {
+        menu.scroll
+    };
+    Some(offset.clamp(0.0, menu.max_scroll))
+}
+
+/// After the keyboard moves the highlight to `row`, scroll the menu, as
+/// `menu` last drew it, just far enough to show that row.
+pub(crate) fn reveal_menu_row(
+    scroll: &mut SelectMenuScroll,
+    menu: Option<&SelectMenuGeometry>,
+    row: Option<usize>,
+) {
+    if let (Some(menu), Some(row)) = (menu, row)
+        && let Some(offset) = menu_offset_revealing(menu, row)
+    {
+        scroll.offset = Some(offset);
+    }
+}
+
+/// The bar beside an open menu's overflowing rows, built like every scroll
+/// view's: the installed scrollbar metrics, the theme's recipe, the lane
+/// inside the surface's border. A menu is open only while it is in use, so
+/// its bar shows for as long as the rows overflow, unless the theme hides
+/// scrollbars; a resident policy adds the resting track. The thumb is at its
+/// active thickness while the lane is hot or the thumb is dragged.
+fn menu_scrollbar(
+    rows_viewport: LayoutBox,
+    content: f32,
+    viewport: f32,
+    offset: f32,
+    state: SelectMenuScroll,
+    model: nana_ui_core::StyleModelRef,
+    recipe: &nana_ui_core::ScrollbarRecipe,
+) -> Option<crate::ScrollbarBar> {
+    use nana_ui_core::{ScrollbarRect, ScrollbarVisibility};
+    if recipe.visibility == ScrollbarVisibility::Hidden {
+        return None;
+    }
+    let dragging = state.drag.is_some();
+    let expand = f32::from(u8::from(state.hot || dragging));
+    let layout = nana_ui_core::scrollbar_layout(
+        nana_ui_core::ScrollbarAxis::Vertical,
+        ScrollbarRect {
+            x: rows_viewport.x,
+            y: rows_viewport.y,
+            width: rows_viewport.width,
+            height: rows_viewport.height,
+        },
+        false,
+        nana_ui_core::ScrollbarExtent {
+            viewport,
+            content,
+            offset,
+            min_offset: 0.0,
+        },
+        expand,
+        model.metrics.scrollbar,
+    )?;
+    let paint = recipe.paint(
+        model,
+        None,
+        nana_ui_core::ScrollbarPaintState {
+            presence: 1.0,
+            expand,
+            dragging,
+            resident: recipe.visibility == ScrollbarVisibility::Always,
+        },
+    );
+    let layout_box = |rect: ScrollbarRect| LayoutBox {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+    };
+    Some(crate::ScrollbarBar {
+        lane: layout_box(layout.lane),
+        track: layout_box(layout.track),
+        thumb: layout_box(layout.thumb),
+        track_background: paint.track,
+        thumb_background: paint.thumb,
+        track_radius: layout.track_radius,
+        thumb_radius: layout.thumb_radius,
+        min_offset: layout.axis.min_offset,
+        max_offset: layout.axis.max_offset,
+    })
+}
+
+fn overlaps_vertically(row: LayoutBox, viewport: LayoutBox) -> bool {
+    row.y < viewport.y + viewport.height && row.y + row.height > viewport.y
+}
+
 /// Places the drop-down surface below its field, folding it back inside the
-/// window near the bottom edge.
+/// room it can be seen in near that room's bottom edge.
 ///
 /// Preference order matches the menu families: open downwards; flip above the
 /// field when the space below cannot hold the menu but the space above can;
-/// otherwise stay on the roomier side and cap the height to it. Without a
-/// viewport (the document has not been laid out yet) the menu keeps its natural
+/// otherwise stay on the roomier side and cap the height to it. Without a room
+/// (the document has not been laid out yet) the menu keeps its natural
 /// downward placement.
 fn resolve_menu_vertical(
     field: LayoutBox,
     natural_height: f32,
-    viewport: Option<crate::LayoutViewport>,
+    room: Option<crate::SelectMenuRoom>,
 ) -> (f32, f32) {
     let below_y = field.y + field.height + MENU_GAP;
-    let Some(viewport) = viewport else {
+    let Some(room) = room else {
         return (below_y, natural_height);
     };
-    let space_below = (viewport.height - below_y).max(0.0);
+    let space_below = (room.bottom - below_y).max(0.0);
     if natural_height <= space_below {
         return (below_y, natural_height);
     }
-    let space_above = (field.y - MENU_GAP).max(0.0);
+    let above_y = field.y - MENU_GAP;
+    let space_above = (above_y - room.top).max(0.0);
     if natural_height <= space_above {
-        return (field.y - MENU_GAP - natural_height, natural_height);
+        return (above_y - natural_height, natural_height);
     }
     if space_above > space_below {
-        (0.0, space_above)
+        (above_y - space_above, space_above)
     } else {
         (below_y, space_below)
     }
+}
+
+/// What an open menu projects as its room: taken now, from the boxes the
+/// last layout gave the field and everything above it. A closed menu has
+/// none to keep.
+pub(crate) fn menu_room(
+    open: bool,
+    id: StableNodeId,
+    world: &UiWorld,
+) -> Option<crate::SelectMenuRoom> {
+    open.then(|| world.select_menu_room(id)).flatten()
+}
+
+/// The room a menu opened before its field projected with a layout has: the
+/// window, where the field's own layout y meets it.
+fn window_room(viewport: Option<crate::LayoutViewport>) -> Option<crate::SelectMenuRoom> {
+    viewport.map(|viewport| crate::SelectMenuRoom {
+        top: 0.0,
+        bottom: viewport.height,
+    })
 }
 
 /// Re-applies only the metrics `ControlSize` owns onto an existing field style.
@@ -847,11 +1063,14 @@ mod tests {
         }
     }
 
+    fn window(height: f32) -> Option<crate::SelectMenuRoom> {
+        window_room(Some(crate::LayoutViewport::new(600.0, height)))
+    }
+
     #[test]
     fn menu_opens_downwards_when_the_viewport_has_room() {
-        let viewport = crate::LayoutViewport::new(600.0, 600.0);
         let field = menu_field(100.0);
-        let (y, height) = resolve_menu_vertical(field, 90.0, Some(viewport));
+        let (y, height) = resolve_menu_vertical(field, 90.0, window(600.0));
         assert_eq!(y, field.y + field.height + MENU_GAP);
         assert_eq!(height, 90.0);
     }
@@ -860,9 +1079,8 @@ mod tests {
     fn menu_flips_above_the_field_when_it_would_fall_off_the_bottom() {
         // Field near the bottom edge: 600 - (500 + 32 + gap) leaves < 90px below,
         // while 500px sit above it.
-        let viewport = crate::LayoutViewport::new(600.0, 600.0);
         let field = menu_field(500.0);
-        let (y, height) = resolve_menu_vertical(field, 90.0, Some(viewport));
+        let (y, height) = resolve_menu_vertical(field, 90.0, window(600.0));
         assert_eq!(height, 90.0, "a flipped menu keeps its natural height");
         assert_eq!(y, field.y - MENU_GAP - 90.0);
         assert!(y >= 0.0, "flipped menu stays inside the viewport");
@@ -870,13 +1088,32 @@ mod tests {
 
     #[test]
     fn a_menu_taller_than_both_sides_is_capped_to_the_roomier_one() {
-        let viewport = crate::LayoutViewport::new(600.0, 300.0);
         let field = menu_field(220.0);
-        let (y, height) = resolve_menu_vertical(field, 5_000.0, Some(viewport));
+        let (y, height) = resolve_menu_vertical(field, 5_000.0, window(300.0));
         // 220px above vs 300-(220+32+gap) below: it opens upwards, capped.
         assert_eq!(y, 0.0);
         assert!(height <= 220.0, "capped to the space above, got {height}");
         assert!(height > 0.0);
+    }
+
+    #[test]
+    fn a_menu_opens_into_the_room_it_can_be_seen_in() {
+        // A card scrolled 400px, its viewport 150..550 of the window: in the
+        // field's layout y that is 550..950. The field at 600 has 318px
+        // below it in the card and 50 above.
+        let room = Some(crate::SelectMenuRoom {
+            top: 550.0,
+            bottom: 950.0,
+        });
+        let field = menu_field(600.0);
+        let (y, height) = resolve_menu_vertical(field, 200.0, room);
+        assert_eq!((y, height), (field.y + field.height + MENU_GAP, 200.0));
+        let (y, height) = resolve_menu_vertical(field, 5_000.0, room);
+        assert_eq!((y, height), (632.0, 318.0), "capped to the card's bottom");
+        // Near the card's bottom it flips up and stops at the card's top.
+        let field = menu_field(900.0);
+        let (y, height) = resolve_menu_vertical(field, 5_000.0, room);
+        assert_eq!((y, height), (550.0, 350.0));
     }
 
     #[test]
@@ -1385,5 +1622,192 @@ mod tests {
         let (label, placeholder) = select.display_label();
         assert_eq!(label.as_ref(), "Choose view");
         assert!(placeholder);
+    }
+
+    /// `count` options, `v{n}` labelled `Option {n}`.
+    fn long_options(count: usize) -> Vec<SelectOption> {
+        (0..count)
+            .map(|n| SelectOption::new(format!("v{n}"), format!("Option {n}")))
+            .collect()
+    }
+
+    fn open_menu(context: &AppContext, select: crate::Entity<Select>) -> SelectMenuGeometry {
+        match context.world().component_geometry(select.stable_id()) {
+            Some(ComponentGeometry::Select {
+                menu: Some(menu), ..
+            }) => menu,
+            other => panic!("expected an open select menu, got {other:?}"),
+        }
+    }
+
+    fn centre(bounds: LayoutBox) -> (f32, f32) {
+        (
+            bounds.x + bounds.width / 2.0,
+            bounds.y + bounds.height / 2.0,
+        )
+    }
+
+    /// Whether the menu draws `row` whole, clear of its top and bottom
+    /// padding.
+    fn shows_whole(menu: &SelectMenuGeometry, row: usize) -> bool {
+        let bounds = menu.options[row].bounds;
+        bounds.y >= menu.surface.y + MENU_PAD
+            && bounds.y + bounds.height <= menu.surface.y + menu.surface.height - MENU_PAD
+    }
+
+    #[test]
+    fn a_menu_taller_than_its_room_scrolls_its_rows_inside_the_surface() {
+        // The field sits at the top of a 400px window; 40 rows need 1366px.
+        let (context, selects, _) = stacked(vec![
+            Select::new(Some("v30"))
+                .options(long_options(40))
+                .opened(true),
+        ]);
+        let menu = open_menu(&context, selects[0]);
+        let surface = menu.surface;
+        assert_eq!(
+            surface.y + surface.height,
+            400.0,
+            "capped to the room below"
+        );
+        assert_eq!(
+            menu.viewport,
+            LayoutBox {
+                x: surface.x + MENU_BORDER,
+                y: surface.y + MENU_BORDER,
+                width: surface.width - MENU_BORDER * 2.0,
+                height: surface.height - MENU_BORDER * 2.0,
+            }
+        );
+        let pitch = ControlSize::Medium.height_in(nana_ui_core::UI_METRICS) + MENU_ITEM_GAP;
+        assert_eq!(
+            menu.max_scroll,
+            MENU_PAD * 2.0 + 40.0 * pitch - MENU_ITEM_GAP - surface.height
+        );
+        // Rows keep their places in the list and move together by the offset.
+        for (row, option) in menu.options.iter().enumerate() {
+            assert_eq!(
+                option.bounds.y,
+                surface.y + MENU_PAD + row as f32 * pitch - menu.scroll
+            );
+        }
+        // It opens on the option the field shows, in the middle of the rows.
+        assert!(shows_whole(&menu, 30));
+        let middle = menu.viewport.y + menu.viewport.height / 2.0;
+        assert!((centre(menu.options[30].bounds).1 - middle).abs() < 1.0);
+        // A bar stands beside the rows, which end where its lane starts.
+        let bar = menu.scrollbar.expect("rows that overflow get a bar");
+        assert!(bar.lane.x + bar.lane.width <= menu.viewport.x + menu.viewport.width);
+        assert!(bar.lane.y >= menu.viewport.y);
+        assert!(bar.lane.y + bar.lane.height <= menu.viewport.y + menu.viewport.height);
+        assert!(
+            menu.options
+                .iter()
+                .all(|option| option.bounds.x + option.bounds.width <= bar.lane.x)
+        );
+        assert_eq!(bar.min_offset, 0.0);
+        assert_eq!(bar.max_offset, menu.max_scroll);
+        // The pointer meets what is drawn: the shown row, not one scrolled
+        // out of sight, not the part of a row the edge cuts off, not the lane.
+        let (x, y) = centre(menu.options[30].bounds);
+        assert_eq!(select_option_at(&menu, x, y), Some(30));
+        let below = menu.options[39].bounds;
+        assert!(below.y >= menu.viewport.y + menu.viewport.height);
+        assert_eq!(select_option_at(&menu, x, centre(below).1), None);
+        let edge = menu.viewport.y + menu.viewport.height;
+        let cut = menu
+            .options
+            .iter()
+            .position(|option| {
+                option.bounds.y < edge && option.bounds.y + option.bounds.height > edge
+            })
+            .expect("a row runs past the bottom edge");
+        assert_eq!(select_option_at(&menu, x, edge - 1.0), Some(cut));
+        assert_eq!(select_option_at(&menu, x, edge + 0.5), None);
+        let (lane_x, lane_y) = centre(bar.lane);
+        assert_eq!(select_option_at(&menu, lane_x, lane_y), None);
+    }
+
+    #[test]
+    fn a_menu_that_holds_its_rows_does_not_scroll_or_show_a_bar() {
+        let (context, selects, _) = stacked(vec![
+            Select::new(Some("v2"))
+                .options(long_options(4))
+                .opened(true),
+        ]);
+        let menu = open_menu(&context, selects[0]);
+        assert_eq!((menu.scroll, menu.max_scroll), (0.0, 0.0));
+        assert!(menu.scrollbar.is_none());
+        let first = menu.options[0].bounds;
+        assert_eq!(first.y, menu.surface.y + MENU_PAD);
+        assert_eq!(first.width, menu.surface.width - MENU_PAD * 2.0);
+    }
+
+    #[test]
+    fn arrow_keys_scroll_the_highlighted_row_into_view() {
+        let (mut context, selects, _) = stacked(vec![
+            Select::new(Some("v0"))
+                .options(long_options(40))
+                .opened(true),
+        ]);
+        let select = selects[0];
+        assert!(context.focus_node(document(), select.stable_id()).unwrap());
+        let top = open_menu(&context, select);
+        assert_eq!(top.scroll, 0.0);
+        // Down past the bottom edge and on round to the first option again.
+        for step in 1..=40 {
+            assert!(context.adjust_focused_select(document(), 1).unwrap());
+            let row = step % 40;
+            assert_eq!(
+                context.read(select, |select| select.highlighted).unwrap(),
+                Some(row)
+            );
+            let menu = open_menu(&context, select);
+            assert!(
+                shows_whole(&menu, row),
+                "row {row} at {:?}",
+                menu.options[row].bounds
+            );
+            if row > 0 && menu.scroll > 0.0 {
+                // Only as far as it has to: the row comes in at the bottom.
+                let bounds = menu.options[row].bounds;
+                let bottom = menu.surface.y + menu.surface.height - MENU_PAD;
+                assert!(
+                    (bounds.y + bounds.height - bottom).abs() < 0.01,
+                    "row {row} ends at {} not {bottom}",
+                    bounds.y + bounds.height
+                );
+            }
+        }
+        assert_eq!(open_menu(&context, select).scroll, 0.0);
+        // Up from the first wraps to the last, at the end of the list.
+        assert!(context.adjust_focused_select(document(), -1).unwrap());
+        let menu = open_menu(&context, select);
+        assert_eq!(menu.scroll, menu.max_scroll);
+        assert!(shows_whole(&menu, 39));
+        // Back up a row it already shows does not move the rows.
+        assert!(context.adjust_focused_select(document(), -1).unwrap());
+        assert_eq!(open_menu(&context, select).scroll, menu.max_scroll);
+    }
+
+    #[test]
+    fn reopening_or_refreshing_keeps_the_scroll_only_while_the_menu_stays_open() {
+        let mut select = Select::new(Some("v0"))
+            .options(long_options(40))
+            .opened(true);
+        select.menu_scroll.offset = Some(120.0);
+        // A refresh of unrelated props keeps the interaction's scroll.
+        crate::ComponentView::reconcile(
+            &mut select,
+            Select::new(Some("v0"))
+                .options(long_options(40))
+                .invalid(true),
+        );
+        assert_eq!(select.menu_scroll.offset, Some(120.0));
+        // Closing forgets it, so the next opening shows the chosen option.
+        select.close();
+        assert_eq!(select.menu_scroll, SelectMenuScroll::default());
+        assert!(select.toggle_open());
+        assert_eq!(select.menu_scroll, SelectMenuScroll::default());
     }
 }

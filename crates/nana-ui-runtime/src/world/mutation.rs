@@ -1214,15 +1214,19 @@ fn select_fitted_options_changed(
 }
 
 // Select options extend the hit region without changing the field layout.
-// Highlight and label changes remain paint-only.
-fn select_menu_hit_shape(visual: Option<&StandardVisual>) -> Option<(ControlSize, usize)> {
+// The room the menu opens into places its surface. Highlight, scroll and
+// label changes remain paint-only.
+fn select_menu_hit_shape(
+    visual: Option<&StandardVisual>,
+) -> Option<(ControlSize, usize, Option<crate::SelectMenuRoom>)> {
     match visual {
         Some(StandardVisual::Select {
             opened: true,
             size,
             options,
+            menu_room,
             ..
-        }) => Some((*size, options.len())),
+        }) => Some((*size, options.len(), *menu_room)),
         _ => None,
     }
 }
