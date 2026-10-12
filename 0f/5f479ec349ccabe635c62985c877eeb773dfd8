@@ -1,0 +1,16 @@
+crates/nana-ui-runtime/src/world/hit_test.rs
+  h_8e6780fc7b4bb1 1370-1373,1427-1429,1435-1437
+crates/nana-ui-runtime/src/world/tests.rs
+  h_8e6780fc7b4bb1 1966-2014
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0f5f479ec349ccabe635c62985c877eeb773dfd8",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
