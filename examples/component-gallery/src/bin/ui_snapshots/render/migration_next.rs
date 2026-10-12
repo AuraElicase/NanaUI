@@ -51,10 +51,10 @@ use nana_ui::runtime::{
     NativeMarkdown as RuntimeNativeMarkdown, NodeStyle, OverlayHost as RuntimeOverlayHost,
     PaneChrome as RuntimePaneChrome, PaneTree as RuntimePaneTree,
     PaneTreeNode as RuntimePaneTreeNode, Panel as RuntimePanel, Popover as RuntimePopover,
-    Progress as RuntimeProgress, QrCode as RuntimeQrCode, RangeField as RuntimeRangeField,
-    ReorderItem as RuntimeReorderItem, ReorderList as RuntimeReorderList, RichSpan,
-    RuntimeDocument, ScrubField as RuntimeScrubField, SearchDropdown as RuntimeSearchDropdown,
-    SearchDropdownOption as RuntimeSearchDropdownOption,
+    Progress as RuntimeProgress, PropertyGrid as RuntimePropertyGrid, QrCode as RuntimeQrCode,
+    RangeField as RuntimeRangeField, ReorderItem as RuntimeReorderItem,
+    ReorderList as RuntimeReorderList, RichSpan, RuntimeDocument, ScrubField as RuntimeScrubField,
+    SearchDropdown as RuntimeSearchDropdown, SearchDropdownOption as RuntimeSearchDropdownOption,
     SegmentedControl as RuntimeSegmentedControl, SegmentedOption as RuntimeSegmentedOption,
     SegmentedSelectionRequested, Select as RuntimeSelect, SelectOption as RuntimeSelectOption,
     SelectableRichText as RuntimeSelectableRichText, SettingsCard as RuntimeSettingsCard,
@@ -114,6 +114,7 @@ enum Component {
     ScrubField,
     AppMenuBar,
     AreaLayout,
+    PropertyGrid,
     SegmentedControl,
     Tabs,
     StatusBadge,
@@ -198,6 +199,7 @@ impl Component {
             Self::ScrubField => component_ids::SCRUB_FIELD,
             Self::AppMenuBar => component_ids::APP_MENU_BAR,
             Self::AreaLayout => component_ids::AREA_LAYOUT,
+            Self::PropertyGrid => component_ids::PROPERTY_GRID,
             Self::SegmentedControl => component_ids::SEGMENTED_CONTROL,
             Self::Tabs => component_ids::TABS,
             Self::StatusBadge => component_ids::STATUS_BADGE,
@@ -455,6 +457,7 @@ fn fixture_size(fixture: Fixture) -> Size<u32> {
         (Component::ScrubField, _) => Size::new(420, 88),
         (Component::AppMenuBar, _) => Size::new(420, 220),
         (Component::AreaLayout, _) => Size::new(520, 280),
+        (Component::PropertyGrid, _) => Size::new(360, 240),
         (Component::QrCode, _) => Size::new(280, 280),
         (Component::Select, "opened") => Size::new(420, 220),
         (Component::Popover | Component::ActionMenu, _) => Size::new(420, 200),
@@ -547,7 +550,10 @@ fn runtime_fixture(
     let document_id = DocumentId::new(9).expect("migration fixture document id");
     let mut document = RuntimeDocument::new(document_id);
     document.context_mut().set_preset_theme(theme)?;
-    if (fixture.component, fixture.state) == (Component::TreeView, "compact") {
+    if matches!(
+        (fixture.component, fixture.state),
+        (Component::TreeView, "compact") | (Component::PropertyGrid, "compact")
+    ) {
         // the dense example density (#341): rows, gaps and indent from the theme
         let definition = match theme {
             ThemeAppearance::Light => nana_ui_core::ThemeDefinition::NANA_LIGHT,
@@ -998,6 +1004,41 @@ fn runtime_fixture(
                 context.begin_scrub_edit(field)?;
             }
             field.stable_id()
+        }
+        Component::PropertyGrid => {
+            use nana_ui::runtime::{PropertyRow, PropertySection};
+            let (_, grid) = document
+                .context_mut()
+                .mount_view_detached(document_id, || {
+                    let grid = entity_ref::<RuntimePropertyGrid>();
+                    let view = widget(RuntimePropertyGrid::new([
+                        PropertySection::new(
+                            "transform",
+                            "Transform",
+                            [
+                                PropertyRow::new("x", "X").mixed(true),
+                                PropertyRow::new("y", "Y"),
+                                PropertyRow::new("angle", "Angle")
+                                    .disabled(Some("set by the parent deformer")),
+                            ],
+                        ),
+                        PropertySection::new(
+                            "draw",
+                            "Draw",
+                            [PropertyRow::new("opacity", "Opacity")],
+                        ),
+                    ]))
+                    .entity_ref(grid)
+                    .children((
+                        widget(RuntimeScrubField::new(12.5).mixed(true).unit("px")).key("x"),
+                        widget(RuntimeScrubField::new(-40.0).unit("px")).key("y"),
+                        widget(RuntimeScrubField::new(15.0).unit("°")).key("angle"),
+                        widget(RuntimeScrubField::new(1.0).range(0.0, 1.0).precision(2))
+                            .key("opacity"),
+                    ));
+                    with_refs(view, grid)
+                })?;
+            grid.stable_id()
         }
         Component::AreaLayout => {
             let (_, layout) = document

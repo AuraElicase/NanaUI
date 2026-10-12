@@ -1045,6 +1045,16 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "an editing scrub field shows its number input, focused with the value selected",
     ),
     f(
+        Component::PropertyGrid,
+        "rest",
+        "two sections of label and scrub-field rows: a mixed X, a disabled Angle with its reason",
+    ),
+    f(
+        Component::PropertyGrid,
+        "compact",
+        "under the compact example metrics the rows are 20 px and the panel denser",
+    ),
+    f(
         Component::AreaLayout,
         "rest",
         "four areas meet at two-pixel gaps, each with its header strip and content",

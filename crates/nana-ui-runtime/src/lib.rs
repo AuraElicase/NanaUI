@@ -28,6 +28,7 @@ mod component_registry;
 mod components;
 mod custom_paint;
 mod paint_script;
+mod property_grid;
 mod scrub_field;
 /// The BCP 47 tag [`MutationQueue::set_language`] and
 /// [`UiWorld::set_default_language`] take.
@@ -365,6 +366,9 @@ pub use presentation::{
 #[cfg(feature = "syntax-highlighting")]
 pub use presentation::{HighlightPresentation, SyntectHighlighter};
 pub use profiler::{FrameProfile, FrameProfiler, StageStatus, StageTiming};
+pub use property_grid::{
+    PropertyGrid, PropertyLabelWidthChanged, PropertyRow, PropertySection, PropertySectionToggled,
+};
 pub use qr_code::{QrCode, QrCodeError};
 pub use range_span::{
     RangeSpanChanged, RangeSpanDragState, RangeSpanDragging, RangeSpanField, RangeSpanHandle,
