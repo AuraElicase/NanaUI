@@ -2571,10 +2571,17 @@ impl UiWorld {
                 self.style_model.metrics,
                 self.chrome_text_measure(id),
             )),
-            StandardVisual::TreeView { rows, size } => Some(crate::tree_view::tree_view_geometry(
+            StandardVisual::TreeView {
+                rows,
+                size,
+                columns,
+                drop,
+            } => Some(crate::tree_view::tree_view_geometry(
                 bounds,
                 rows,
                 *size,
+                columns,
+                drop.as_ref(),
                 &self.style_model.palette,
                 self.style_model.metrics,
             )),

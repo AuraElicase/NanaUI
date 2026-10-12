@@ -1206,6 +1206,21 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
     ),
     f(
         Component::TreeView,
+        "multi",
+        "an outliner tree with two rows selected by Ctrl and a visibility column of on and off eyes",
+    ),
+    f(
+        Component::TreeView,
+        "drag-preview",
+        "dragging the selection onto a branch outlines the branch it would go into",
+    ),
+    f(
+        Component::TreeView,
+        "renaming",
+        "a renamed row shows a focused text input over its label with the name selected",
+    ),
+    f(
+        Component::TreeView,
         "compact",
         "under the compact example metrics rows are 20 px, touch, and indent 10 px per level",
     ),

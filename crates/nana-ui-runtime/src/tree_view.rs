@@ -1,16 +1,119 @@
 //! Flattened disclosure tree. Application owns node identities and expansion.
+//!
+//! With [`TreeView::multiple`] the tree keeps a selection set with an active
+//! row (#342): a press selects one row, Ctrl (Cmd) toggles a row in or out,
+//! Shift selects the range from the anchor, Shift with the arrows extends it;
+//! every change emits [`TreeSelectionChanged`]. [`TreeView::columns`] puts on
+//! / off icons at the end of each row (visible, locked): a press flips one
+//! without touching the selection, and dragging across rows sets the same
+//! value on each ([`TreeToggleChanged`]). [`TreeView::reorderable`] lets rows
+//! be dragged onto another row — before it, into it or after it, with a
+//! preview — and reports a [`TreeDropRequested`] for the application to
+//! accept or not. [`TreeView::renamable`] opens an in-place text input on F2
+//! or a double click: Enter or leaving commits ([`TreeRenameRequested`]),
+//! Escape cancels.
 
 use std::sync::Arc;
 
 use nana_ui_core::{
-    ControlSize, Icon, LengthSpec, TreeNavigation, TreeNode, TreeViewEvent, tree_navigation_event,
+    ControlSize, Icon, LengthSpec, PositionSpec, TreeNavigation, TreeNode, TreeViewEvent,
+    tree_navigation_event,
 };
 
-use crate::view_components::project_common;
+use crate::view_components::{TextChanged, TextInput, project_common};
 use crate::{
-    AccessibilityRole, AccessibilityState, ComponentTextRegion, ComponentView, InteractionState,
-    LayoutBox, MutationQueue, NodeKind, NodeStyle, StableNodeId, StandardVisual, UiWorld,
+    AccessibilityRole, AccessibilityState, AppContext, ComponentTextRegion, ComponentView,
+    DocumentId, Entity, FocusWithinChanged, FrameworkError, InteractionState, LayoutBox,
+    MutationQueue, NodeKind, NodePointer, NodePointerHooks, NodeStyle, StableNodeId,
+    StandardVisual, UiWorld,
 };
+
+/// A press that moves less than this is a click, px.
+const DRAG_SLOP: f32 = nana_ui_core::space::XS;
+
+/// Placement resolved for a tree drop target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreeDropPosition {
+    Before,
+    Inside,
+    After,
+}
+
+/// Framework-owned tree drop intent. Applications keep node semantics.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeDropIntent {
+    pub target: Arc<str>,
+    pub position: TreeDropPosition,
+}
+
+/// A column of on / off icons at the end of every row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeToggleColumn {
+    pub icon: Icon,
+    /// What the column means, for assistive technology: `Visible`.
+    pub label: Arc<str>,
+}
+
+impl TreeToggleColumn {
+    pub fn new(icon: Icon, label: impl Into<Arc<str>>) -> Self {
+        Self {
+            icon,
+            label: label.into(),
+        }
+    }
+}
+
+/// The selection changed: every selected row in tree order, and the active
+/// one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeSelectionChanged {
+    pub selected: Vec<Arc<str>>,
+    pub active: Option<Arc<str>>,
+}
+
+/// A row's toggle in `column` was set to `on`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeToggleChanged {
+    pub id: Arc<str>,
+    pub column: usize,
+    pub on: bool,
+}
+
+/// `rows` were dropped at `intent`. The tree does not move them: the
+/// application changes its nodes if it accepts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeDropRequested {
+    pub rows: Vec<Arc<str>>,
+    pub intent: TreeDropIntent,
+}
+
+/// `id` was renamed to `text`. The application renames the node if it
+/// accepts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeRenameRequested {
+    pub id: Arc<str>,
+    pub text: String,
+}
+
+/// A press held on the tree.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum TreeGesture {
+    /// On a row: a click, or the start of a drag.
+    Press {
+        row: Arc<str>,
+        origin: (f32, f32),
+        /// The row was already selected: a click without a drag selects it
+        /// alone on release, a drag takes the whole selection.
+        select_on_release: bool,
+        dragging: bool,
+    },
+    /// Across a toggle column, setting each row to `on`.
+    Swipe {
+        column: usize,
+        on: bool,
+        touched: Vec<Arc<str>>,
+    },
+}
 
 /// Visible-row tree. Hidden collapsed children are not projected.
 #[derive(Debug, Clone, PartialEq)]
@@ -18,6 +121,23 @@ pub struct TreeView {
     pub nodes: Vec<TreeNode<Arc<str>>>,
     pub size: ControlSize,
     pub style: NodeStyle,
+    /// Ctrl and Shift build a selection of several rows.
+    pub multiple: bool,
+    /// On / off icons at the end of each row; a node's states are its
+    /// [`TreeNode::toggles`].
+    pub columns: Vec<TreeToggleColumn>,
+    /// Rows drag onto other rows.
+    pub reorderable: bool,
+    /// F2 or a double click renames a row in place.
+    pub renamable: bool,
+    pub(crate) active: Option<Arc<str>>,
+    pub(crate) anchor: Option<Arc<str>>,
+    pub(crate) gesture: Option<TreeGesture>,
+    pub(crate) drop: Option<TreeDropIntent>,
+    pub(crate) renaming: Option<Arc<str>>,
+    /// What the rename input holds, for a commit by leaving.
+    pub(crate) rename_text: String,
+    pub(crate) rename_input: Option<StableNodeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +150,7 @@ pub struct TreeRowData {
     pub expanded: bool,
     pub selected: bool,
     pub disabled: bool,
+    pub toggles: Vec<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -43,6 +164,16 @@ pub struct TreeRowGeometry {
     pub disabled: bool,
     pub expanded: bool,
     pub background: Option<[f32; 4]>,
+    /// The toggle icons at the end of the row, first column first.
+    pub toggles: Vec<(Icon, LayoutBox, [f32; 4])>,
+}
+
+/// Where a drop would land: a line between rows, or a row outlined.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TreeDropMark {
+    pub bounds: LayoutBox,
+    pub inside: bool,
+    pub color: [f32; 4],
 }
 
 impl TreeView {
@@ -59,11 +190,42 @@ impl TreeView {
             nodes: nodes.into_iter().collect(),
             size: ControlSize::Small,
             style: NodeStyle::default(),
+            multiple: false,
+            columns: Vec::new(),
+            reorderable: false,
+            renamable: false,
+            active: None,
+            anchor: None,
+            gesture: None,
+            drop: None,
+            renaming: None,
+            rename_text: String::new(),
+            rename_input: None,
         }
     }
 
     pub fn size(mut self, size: ControlSize) -> Self {
         self.size = size;
+        self
+    }
+
+    pub fn multiple(mut self, multiple: bool) -> Self {
+        self.multiple = multiple;
+        self
+    }
+
+    pub fn columns(mut self, columns: impl IntoIterator<Item = TreeToggleColumn>) -> Self {
+        self.columns = columns.into_iter().collect();
+        self
+    }
+
+    pub fn reorderable(mut self, reorderable: bool) -> Self {
+        self.reorderable = reorderable;
+        self
+    }
+
+    pub fn renamable(mut self, renamable: bool) -> Self {
+        self.renamable = renamable;
         self
     }
 
@@ -73,21 +235,109 @@ impl TreeView {
         rows
     }
 
+    /// The first selected row in tree order.
     pub fn selected_id(&self) -> Option<&Arc<str>> {
         find_selected(&self.nodes)
+    }
+
+    /// Every selected row, in tree order.
+    pub fn selected_ids(&self) -> Vec<Arc<str>> {
+        let mut out = Vec::new();
+        collect_selected(&self.nodes, &mut out);
+        out
+    }
+
+    /// The row the selection is about: the last one clicked, if it is
+    /// still selected, else the first selected.
+    pub fn active_id(&self) -> Option<&Arc<str>> {
+        self.active
+            .as_ref()
+            .filter(|id| is_selected(&self.nodes, id))
+            .or_else(|| self.selected_id())
+    }
+
+    /// The row being renamed.
+    pub fn renaming(&self) -> Option<&Arc<str>> {
+        self.renaming.as_ref()
     }
 
     pub fn apply_event(&mut self, event: TreeViewEvent<Arc<str>>) -> bool {
         match event {
             TreeViewEvent::Toggle(id) => toggle_node(&mut self.nodes, &id),
-            TreeViewEvent::Select(id) => select_node(&mut self.nodes, &id),
+            TreeViewEvent::Select(id) => {
+                self.active = Some(Arc::clone(&id));
+                self.anchor = Some(Arc::clone(&id));
+                select_node(&mut self.nodes, &id)
+            }
         }
     }
 
     pub fn navigate(&mut self, navigation: TreeNavigation) -> Option<TreeViewEvent<Arc<str>>> {
-        let event = tree_navigation_event(&self.nodes, self.selected_id(), navigation)?;
+        let from = self.active_id().cloned();
+        let event = tree_navigation_event(&self.nodes, from.as_ref(), navigation)?;
         self.apply_event(event.clone());
         Some(event)
+    }
+
+    /// Select only `id`; it becomes active and the range anchor.
+    pub fn select_only(&mut self, id: &Arc<str>) -> bool {
+        self.apply_event(TreeViewEvent::Select(Arc::clone(id)))
+    }
+
+    /// Add `id` to the selection or take it out (Ctrl / Cmd); it becomes
+    /// active and the anchor.
+    pub fn toggle_in_selection(&mut self, id: &Arc<str>) -> bool {
+        let on = !is_selected(&self.nodes, id);
+        self.active = Some(Arc::clone(id));
+        self.anchor = Some(Arc::clone(id));
+        set_selected(&mut self.nodes, id, on)
+    }
+
+    /// Select the visible rows from the anchor to `id` (Shift); `id` becomes
+    /// active, the anchor stays.
+    pub fn select_range_to(&mut self, id: &Arc<str>) -> bool {
+        let rows = self.visible_rows();
+        let to = rows.iter().position(|row| &row.id == id);
+        let from = self
+            .anchor
+            .as_ref()
+            .and_then(|anchor| rows.iter().position(|row| &row.id == anchor))
+            .or(to);
+        let (Some(from), Some(to)) = (from, to) else {
+            return false;
+        };
+        let (low, high) = (from.min(to), from.max(to));
+        let range = rows[low..=high]
+            .iter()
+            .map(|row| Arc::clone(&row.id))
+            .collect::<Vec<_>>();
+        if self.anchor.is_none() {
+            self.anchor = Some(Arc::clone(id));
+        }
+        self.active = Some(Arc::clone(id));
+        set_selection(&mut self.nodes, &range)
+    }
+
+    /// Move the active row by `navigation` and select the range from the
+    /// anchor to it (Shift with the arrows).
+    pub fn extend(&mut self, navigation: TreeNavigation) -> bool {
+        let from = self.active_id().cloned();
+        let Some(TreeViewEvent::Select(to)) =
+            tree_navigation_event(&self.nodes, from.as_ref(), navigation)
+        else {
+            return false;
+        };
+        if self.anchor.is_none() {
+            self.anchor = from;
+        }
+        self.select_range_to(&to)
+    }
+
+    fn selection_event(&self) -> TreeSelectionChanged {
+        TreeSelectionChanged {
+            selected: self.selected_ids(),
+            active: self.active_id().cloned(),
+        }
     }
 
     fn intrinsic_height(&self, metrics: nana_ui_core::ThemeMetrics) -> f32 {
@@ -99,7 +349,9 @@ impl TreeView {
 impl ComponentView for TreeView {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         activate_at: Some(crate::AppContext::activate_tree_at),
+        assembler: Some(AppContext::assemble_tree_rename),
         hooks: Some(|hooks| hooks.tree = Some(&TREE_HOOKS)),
+        pointer: Some(&TREE_POINTER),
         ..crate::TypeBehavior::NONE
     };
 
@@ -108,6 +360,24 @@ impl ComponentView for TreeView {
         share: &mut dyn FnMut(&mut std::sync::Arc<nana_ui_core::LayoutStyle>),
     ) {
         share(&mut self.style.layout);
+    }
+
+    fn reconcile(&mut self, mut next: Self) {
+        // a gesture, a rename and the active row are the tree's own
+        next.active = self.active.take();
+        next.anchor = self.anchor.take();
+        next.gesture = self.gesture.take();
+        next.drop = self.drop.take();
+        next.renaming = self.renaming.take();
+        next.rename_text = std::mem::take(&mut self.rename_text);
+        next.rename_input = self.rename_input.take();
+        *self = next;
+    }
+
+    fn keep_framework_state(&mut self, previous: &Self) {
+        if self.rename_input.is_none() {
+            self.rename_input = previous.rename_input;
+        }
     }
 
     fn node_kind(&self) -> NodeKind {
@@ -123,6 +393,8 @@ impl ComponentView for TreeView {
         let visual = StandardVisual::TreeView {
             rows: rows.into(),
             size: self.size,
+            columns: self.columns.iter().map(|column| column.icon).collect(),
+            drop: self.drop.clone(),
         };
         if world.standard_visual(id) != Some(visual.clone()) {
             mutations.set_standard_visual(id, Some(visual));
@@ -131,6 +403,10 @@ impl ComponentView for TreeView {
         let layout = Arc::make_mut(&mut style.layout);
         if layout.width.is_none() {
             layout.width = Some(LengthSpec::Fill);
+        }
+        // the rename input is placed over its row
+        if layout.position == PositionSpec::Static {
+            layout.position = PositionSpec::Relative;
         }
         // Boxes are border-box, so declared padding has to be added on top of
         // the row stack; otherwise it eats the last row. A caller that sets its
@@ -154,7 +430,7 @@ impl ComponentView for TreeView {
             },
             AccessibilityState {
                 role: AccessibilityRole::List,
-                label: self.selected_id().cloned(),
+                label: self.active_id().cloned(),
                 disabled: false,
                 ..AccessibilityState::default()
             },
@@ -173,6 +449,7 @@ fn collect_rows(nodes: &[TreeNode<Arc<str>>], depth: u8, rows: &mut Vec<TreeRowD
             expanded: node.expanded,
             selected: node.selected,
             disabled: node.disabled,
+            toggles: node.toggles.clone(),
         });
         if node.branch && node.expanded {
             collect_rows(&node.children, depth.saturating_add(1), rows);
@@ -190,6 +467,75 @@ fn find_selected(nodes: &[TreeNode<Arc<str>>]) -> Option<&Arc<str>> {
         }
     }
     None
+}
+
+fn collect_selected(nodes: &[TreeNode<Arc<str>>], out: &mut Vec<Arc<str>>) {
+    for node in nodes {
+        if node.selected {
+            out.push(Arc::clone(&node.id));
+        }
+        collect_selected(&node.children, out);
+    }
+}
+
+fn find_node<'a>(nodes: &'a [TreeNode<Arc<str>>], id: &Arc<str>) -> Option<&'a TreeNode<Arc<str>>> {
+    for node in nodes {
+        if &node.id == id {
+            return Some(node);
+        }
+        if let Some(found) = find_node(&node.children, id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn find_node_mut<'a>(
+    nodes: &'a mut [TreeNode<Arc<str>>],
+    id: &Arc<str>,
+) -> Option<&'a mut TreeNode<Arc<str>>> {
+    for node in nodes {
+        if &node.id == id {
+            return Some(node);
+        }
+        if let Some(found) = find_node_mut(&mut node.children, id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn is_selected(nodes: &[TreeNode<Arc<str>>], id: &Arc<str>) -> bool {
+    find_node(nodes, id).is_some_and(|node| node.selected)
+}
+
+/// `inner` is `outer` or one of its descendants.
+fn is_within(nodes: &[TreeNode<Arc<str>>], outer: &Arc<str>, inner: &Arc<str>) -> bool {
+    find_node(nodes, outer)
+        .is_some_and(|node| &node.id == inner || find_node(&node.children, inner).is_some())
+}
+
+fn set_selected(nodes: &mut [TreeNode<Arc<str>>], id: &Arc<str>, on: bool) -> bool {
+    match find_node_mut(nodes, id) {
+        Some(node) if !node.disabled && node.selected != on => {
+            node.selected = on;
+            true
+        }
+        _ => false,
+    }
+}
+
+fn set_selection(nodes: &mut [TreeNode<Arc<str>>], ids: &[Arc<str>]) -> bool {
+    let mut changed = false;
+    for node in nodes {
+        let selected = !node.disabled && ids.contains(&node.id);
+        if node.selected != selected {
+            node.selected = selected;
+            changed = true;
+        }
+        changed |= set_selection(&mut node.children, ids);
+    }
+    changed
 }
 
 fn toggle_node(nodes: &mut [TreeNode<Arc<str>>], id: &Arc<str>) -> bool {
@@ -225,12 +571,16 @@ pub(crate) fn tree_view_geometry(
     bounds: LayoutBox,
     rows: &[TreeRowData],
     size: ControlSize,
+    columns: &[Icon],
+    drop: Option<&TreeDropIntent>,
     palette: &nana_ui_core::SemanticPalette,
     metrics: nana_ui_core::ThemeMetrics,
 ) -> crate::ComponentGeometry {
     let row_height = size.height_in(metrics);
     let tree = metrics.tree;
-    let geometry = rows
+    // the toggle columns take the row's end, one icon and one inset each
+    let toggles_width = columns.len() as f32 * (tree.icon + tree.inset);
+    let geometry: Vec<TreeRowGeometry> = rows
         .iter()
         .enumerate()
         .map(|(index, row)| {
@@ -271,6 +621,28 @@ pub(crate) fn tree_view_geometry(
                     },
                 )
             });
+            let toggles_x = bounds.x + bounds.width - toggles_width;
+            let toggles = columns
+                .iter()
+                .enumerate()
+                .map(|(column, icon)| {
+                    let on = row.toggles.get(column).copied().unwrap_or(false);
+                    (
+                        *icon,
+                        LayoutBox {
+                            x: toggles_x + column as f32 * (tree.icon + tree.inset),
+                            y: y + (row_height - tree.icon) / 2.0,
+                            width: tree.icon,
+                            height: tree.icon,
+                        },
+                        if on {
+                            palette.muted.as_rgba_array()
+                        } else {
+                            palette.faint.as_rgba_array()
+                        },
+                    )
+                })
+                .collect();
             TreeRowGeometry {
                 id: Arc::clone(&row.id),
                 bounds: row_bounds,
@@ -280,7 +652,8 @@ pub(crate) fn tree_view_geometry(
                     bounds: LayoutBox {
                         x: cursor,
                         y,
-                        width: (bounds.x + bounds.width - cursor - tree.inset).max(0.0),
+                        width: (bounds.x + bounds.width - toggles_width - cursor - tree.inset)
+                            .max(0.0),
                         height: row_height,
                     },
                     content: Arc::clone(&row.label).into(),
@@ -296,10 +669,36 @@ pub(crate) fn tree_view_geometry(
                 disabled: row.disabled,
                 expanded: row.expanded,
                 background: row.selected.then_some(palette.selected.as_rgba_array()),
+                toggles,
             }
         })
         .collect();
-    crate::ComponentGeometry::TreeView { rows: geometry }
+    let drop = drop.and_then(|intent| {
+        let row = geometry.iter().find(|row| row.id == intent.target)?;
+        let line = nana_ui_core::HAIRLINE * 2.0;
+        let bounds = match intent.position {
+            TreeDropPosition::Before => LayoutBox {
+                y: row.bounds.y - (tree.row_gap + line) / 2.0,
+                height: line,
+                ..row.bounds
+            },
+            TreeDropPosition::After => LayoutBox {
+                y: row.bounds.y + row.bounds.height + (tree.row_gap - line) / 2.0,
+                height: line,
+                ..row.bounds
+            },
+            TreeDropPosition::Inside => row.bounds,
+        };
+        Some(TreeDropMark {
+            bounds,
+            inside: intent.position == TreeDropPosition::Inside,
+            color: palette.accent.as_rgba_array(),
+        })
+    });
+    crate::ComponentGeometry::TreeView {
+        rows: geometry,
+        drop,
+    }
 }
 
 pub(crate) fn tree_row_at(rows: &[TreeRowGeometry], x: f32, y: f32) -> Option<usize> {
@@ -313,11 +712,477 @@ pub(crate) fn tree_disclosure_at(rows: &[TreeRowGeometry], x: f32, y: f32) -> Op
     })
 }
 
+/// The toggle cell at `(x, y)`: the row's full height around each icon.
+fn tree_toggle_at(rows: &[TreeRowGeometry], x: f32, y: f32) -> Option<(usize, usize)> {
+    let row = tree_row_at(rows, x, y)?;
+    let cells = &rows[row].toggles;
+    let column = cells.iter().position(|(_, icon, _)| {
+        let reach = (rows[row].bounds.height - icon.height).max(0.0) / 2.0;
+        x >= icon.x - reach && x < icon.x + icon.width + reach
+    })?;
+    Some((row, column))
+}
+
 /// The router reaches this picker's keyboard only once one exists.
 pub(crate) static TREE_HOOKS: crate::framework::NavigateHooks<crate::TreeNavigation> =
     crate::framework::NavigateHooks {
         navigate: crate::AppContext::navigate_focused_tree,
     };
+
+const TREE_POINTER: NodePointerHooks<TreeView> = NodePointerHooks {
+    moved: tree_moved,
+    left: |cx, tree| {
+        // a cancelled press: nothing lands
+        cx.update_component(tree, |tree, _| {
+            tree.gesture = None;
+            tree.drop = None;
+        })
+    },
+    pressed: tree_pressed,
+    released: tree_released,
+    wheel: |_, _, _| Ok(false),
+};
+
+/// The tree's rows as laid out, and the pointer in layout px.
+fn tree_rows(
+    cx: &AppContext,
+    tree: Entity<TreeView>,
+    pointer: &NodePointer,
+) -> Option<(Vec<TreeRowGeometry>, (f32, f32))> {
+    let crate::ComponentGeometry::TreeView { rows, .. } =
+        cx.world().component_geometry(tree.stable_id())?
+    else {
+        return None;
+    };
+    let origin = cx.world().component_layout_box(tree.stable_id())?;
+    Some((rows, (pointer.x + origin.x, pointer.y + origin.y)))
+}
+
+fn tree_pressed(
+    cx: &mut AppContext,
+    tree: Entity<TreeView>,
+    pointer: NodePointer,
+) -> Result<bool, FrameworkError> {
+    if pointer.button != 0 {
+        return Ok(false);
+    }
+    let Some((rows, (x, y))) = tree_rows(cx, tree, &pointer) else {
+        return Ok(false);
+    };
+    if let Some(index) = tree_disclosure_at(&rows, x, y) {
+        let id = Arc::clone(&rows[index].id);
+        cx.update_component(tree, |tree, view| {
+            let event = TreeViewEvent::Toggle(id);
+            if tree.apply_event(event.clone()) {
+                view.emit(event);
+            }
+        })?;
+        return Ok(true);
+    }
+    if let Some((index, column)) = tree_toggle_at(&rows, x, y) {
+        let id = Arc::clone(&rows[index].id);
+        cx.update_component(tree, |tree, view| {
+            let on = !find_node(&tree.nodes, &id)
+                .and_then(|node| node.toggles.get(column).copied())
+                .unwrap_or(false);
+            if let Some(event) = set_toggle(tree, &id, column, on) {
+                view.emit(event);
+            }
+            tree.gesture = Some(TreeGesture::Swipe {
+                column,
+                on,
+                touched: vec![id],
+            });
+        })?;
+        return Ok(true);
+    }
+    let Some(index) = tree_row_at(&rows, x, y) else {
+        return Ok(false);
+    };
+    if rows[index].disabled {
+        return Ok(true);
+    }
+    let id = Arc::clone(&rows[index].id);
+    let rename = pointer.click_count >= 2;
+    let modifiers = pointer.modifiers;
+    let primary = modifiers.control || modifiers.meta;
+    cx.update_component(tree, |tree, view| {
+        let before = tree.selected_ids();
+        let already = is_selected(&tree.nodes, &id);
+        let mut select_on_release = false;
+        if tree.multiple && primary {
+            tree.toggle_in_selection(&id);
+        } else if tree.multiple && modifiers.shift {
+            tree.select_range_to(&id);
+        } else if already && tree.reorderable && before.len() > 1 {
+            // a drag takes the whole selection; a click selects this alone
+            select_on_release = true;
+            tree.active = Some(Arc::clone(&id));
+        } else if tree.select_only(&id) {
+            view.emit(TreeViewEvent::Select(Arc::clone(&id)));
+        } else {
+            tree.active = Some(Arc::clone(&id));
+        }
+        if tree.selected_ids() != before {
+            view.emit(tree.selection_event());
+        }
+        tree.gesture = Some(TreeGesture::Press {
+            row: Arc::clone(&id),
+            origin: (x, y),
+            select_on_release,
+            dragging: false,
+        });
+    })?;
+    if rename && cx.read(tree, |tree| tree.renamable)? {
+        cx.update_component(tree, |tree, _| tree.gesture = None)?;
+        cx.begin_tree_rename(tree, &id)?;
+    }
+    Ok(true)
+}
+
+fn tree_moved(
+    cx: &mut AppContext,
+    tree: Entity<TreeView>,
+    pointer: NodePointer,
+) -> Result<bool, FrameworkError> {
+    if !pointer.captured {
+        return Ok(false);
+    }
+    let Some((rows, (x, y))) = tree_rows(cx, tree, &pointer) else {
+        return Ok(true);
+    };
+    let over = tree_row_at(&rows, x, y);
+    cx.update_component(tree, |tree, view| match tree.gesture.clone() {
+        Some(TreeGesture::Swipe {
+            column,
+            on,
+            mut touched,
+        }) => {
+            if let Some(index) = over
+                && !touched.contains(&rows[index].id)
+            {
+                let id = Arc::clone(&rows[index].id);
+                if let Some(event) = set_toggle(tree, &id, column, on) {
+                    view.emit(event);
+                }
+                touched.push(id);
+                tree.gesture = Some(TreeGesture::Swipe {
+                    column,
+                    on,
+                    touched,
+                });
+            }
+        }
+        Some(TreeGesture::Press {
+            row,
+            origin,
+            select_on_release,
+            dragging,
+        }) => {
+            if !tree.reorderable {
+                return;
+            }
+            let moved = (x - origin.0).abs().max((y - origin.1).abs()) >= DRAG_SLOP;
+            if !dragging && !moved {
+                return;
+            }
+            tree.gesture = Some(TreeGesture::Press {
+                row: Arc::clone(&row),
+                origin,
+                select_on_release,
+                dragging: true,
+            });
+            let dragged = dragged_rows(tree, &row);
+            tree.drop = over.and_then(|index| {
+                let target = &rows[index];
+                if target.disabled
+                    || dragged
+                        .iter()
+                        .any(|dragged| is_within(&tree.nodes, dragged, &target.id))
+                {
+                    return None;
+                }
+                let fraction = (y - target.bounds.y) / target.bounds.height.max(1.0);
+                let position = if fraction < 0.25 {
+                    TreeDropPosition::Before
+                } else if fraction > 0.75 {
+                    TreeDropPosition::After
+                } else {
+                    TreeDropPosition::Inside
+                };
+                Some(TreeDropIntent {
+                    target: Arc::clone(&target.id),
+                    position,
+                })
+            });
+        }
+        None => {}
+    })?;
+    Ok(true)
+}
+
+fn tree_released(
+    cx: &mut AppContext,
+    tree: Entity<TreeView>,
+    _: NodePointer,
+) -> Result<bool, FrameworkError> {
+    cx.update_component(tree, |tree, view| {
+        let gesture = tree.gesture.take();
+        let drop = tree.drop.take();
+        let Some(TreeGesture::Press {
+            row,
+            select_on_release,
+            dragging,
+            ..
+        }) = gesture
+        else {
+            return;
+        };
+        if dragging {
+            if let Some(intent) = drop {
+                view.emit(TreeDropRequested {
+                    rows: dragged_rows(tree, &row),
+                    intent,
+                });
+            }
+        } else if select_on_release {
+            let before = tree.selected_ids();
+            if tree.select_only(&row) {
+                view.emit(TreeViewEvent::Select(Arc::clone(&row)));
+            }
+            if tree.selected_ids() != before {
+                view.emit(tree.selection_event());
+            }
+        }
+    })?;
+    Ok(true)
+}
+
+/// What a drag from `row` carries: the selection when `row` is in it.
+fn dragged_rows(tree: &TreeView, row: &Arc<str>) -> Vec<Arc<str>> {
+    if is_selected(&tree.nodes, row) {
+        tree.selected_ids()
+    } else {
+        vec![Arc::clone(row)]
+    }
+}
+
+/// Set a row's toggle; the event when it changed.
+fn set_toggle(
+    tree: &mut TreeView,
+    id: &Arc<str>,
+    column: usize,
+    on: bool,
+) -> Option<TreeToggleChanged> {
+    let node = find_node_mut(&mut tree.nodes, id)?;
+    if node.toggles.len() <= column {
+        node.toggles.resize(column + 1, false);
+    }
+    if node.toggles[column] == on {
+        return None;
+    }
+    node.toggles[column] = on;
+    Some(TreeToggleChanged {
+        id: Arc::clone(id),
+        column,
+        on,
+    })
+}
+
+impl AppContext {
+    /// Rename `id` in place: an input over its label takes the focus with
+    /// the label selected.
+    pub fn begin_tree_rename(
+        &mut self,
+        tree: Entity<TreeView>,
+        id: &Arc<str>,
+    ) -> Result<bool, FrameworkError> {
+        let document = self.document_of_node(tree.stable_id())?;
+        let started = self.update_component(tree, |tree, _| {
+            if !tree.renamable || find_node(&tree.nodes, id).is_none_or(|node| node.disabled) {
+                return false;
+            }
+            tree.renaming = Some(Arc::clone(id));
+            tree.rename_text = find_node(&tree.nodes, id)
+                .map(|node| node.label.clone())
+                .unwrap_or_default();
+            true
+        })?;
+        let Some(input) = self
+            .read(tree, |tree| tree.rename_input)?
+            .filter(|_| started)
+        else {
+            return Ok(false);
+        };
+        self.focus_node(document, input)?;
+        self.select_all_focused_text(document)?;
+        Ok(true)
+    }
+
+    /// End a rename; `commit` reports the text.
+    pub fn end_tree_rename(
+        &mut self,
+        tree: Entity<TreeView>,
+        commit: bool,
+    ) -> Result<bool, FrameworkError> {
+        let Some((id, input)) =
+            self.read(tree, |tree| tree.renaming.clone().zip(tree.rename_input))?
+        else {
+            return Ok(false);
+        };
+        let text = self.read(Entity::<TextInput>::from_stable_id(input), |input| {
+            input.state.value.as_str().to_owned()
+        })?;
+        let document = self.document_of_node(tree.stable_id())?;
+        let focused = self.world().focused(document) == Some(input);
+        self.update_component(tree, |tree, view| {
+            tree.renaming = None;
+            if commit {
+                view.emit(TreeRenameRequested { id, text });
+            }
+        })?;
+        if focused {
+            self.focus_node_in_place(document, tree.stable_id())?;
+        }
+        Ok(true)
+    }
+
+    /// Enter (`commit`) or Escape on a rename input ends the rename.
+    pub(crate) fn end_focused_tree_rename(
+        &mut self,
+        document: DocumentId,
+        commit: bool,
+    ) -> Result<bool, FrameworkError> {
+        let Some(tree) = self
+            .world()
+            .focused(document)
+            .and_then(|input| self.world().parent_id(input))
+            .and_then(|parent| self.view_entity::<TreeView>(parent))
+        else {
+            return Ok(false);
+        };
+        self.end_tree_rename(tree, commit)
+    }
+
+    /// F2 on a focused tree, or Shift with an arrow: rename the active row,
+    /// or extend the selection.
+    pub(crate) fn focused_tree_key(
+        &mut self,
+        document: DocumentId,
+        key: &str,
+        shift: bool,
+    ) -> Result<bool, FrameworkError> {
+        let Some(tree) = self
+            .world()
+            .focused(document)
+            .and_then(|id| self.view_entity::<TreeView>(id))
+        else {
+            return Ok(false);
+        };
+        if key == "F2" && !shift {
+            let Some(active) = self.read(tree, |tree| tree.active_id().cloned())? else {
+                return Ok(false);
+            };
+            return self.begin_tree_rename(tree, &active);
+        }
+        let navigation = match key {
+            "ArrowUp" => TreeNavigation::Previous,
+            "ArrowDown" => TreeNavigation::Next,
+            "Home" => TreeNavigation::First,
+            "End" => TreeNavigation::Last,
+            _ => return Ok(false),
+        };
+        if !shift {
+            return Ok(false);
+        }
+        self.update_component(tree, |tree, view| {
+            if !tree.multiple {
+                return false;
+            }
+            let before = tree.selected_ids();
+            tree.extend(navigation);
+            if tree.selected_ids() != before {
+                view.emit(tree.selection_event());
+            }
+            true
+        })
+    }
+
+    /// The input a rename shows, over the row's label; gone when no rename
+    /// is open.
+    pub fn assemble_tree_rename(&mut self, tree: Entity<TreeView>) -> Result<bool, FrameworkError> {
+        let (renaming, input) =
+            self.read(tree, |tree| (tree.renaming.clone(), tree.rename_input))?;
+        let input = input.filter(|input| self.world().contains(*input));
+        let Some(id) = renaming else {
+            if let Some(input) = input {
+                let mut mutations = MutationQueue::new();
+                mutations.despawn_subtree(input);
+                self.commit_mutations(mutations)?;
+                self.update_component(tree, |tree, _| tree.rename_input = None)?;
+            }
+            return Ok(false);
+        };
+        let label = self
+            .read(tree, |tree| {
+                find_node(&tree.nodes, &id).map(|node| node.label.clone())
+            })?
+            .unwrap_or_default();
+        // the label's box, in the tree's own px
+        let bounds = match (
+            self.world().component_geometry(tree.stable_id()),
+            self.world().component_layout_box(tree.stable_id()),
+        ) {
+            (Some(crate::ComponentGeometry::TreeView { rows, .. }), Some(origin)) => {
+                rows.iter().find(|row| row.id == id).map(|row| LayoutBox {
+                    x: row.label.bounds.x - origin.x,
+                    y: row.bounds.y - origin.y,
+                    width: row.label.bounds.width,
+                    height: row.bounds.height,
+                })
+            }
+            _ => None,
+        };
+        let created = input.is_none();
+        let input = match input {
+            Some(input) => input,
+            None => {
+                let document = self.document_of_node(tree.stable_id())?;
+                let input = self.create_detached_component(
+                    document,
+                    TextInput::new(label).size(ControlSize::Small),
+                )?;
+                self.observe(input, tree, |tree, event: &TextChanged, _| {
+                    tree.rename_text = event.value.as_str().to_owned();
+                })?;
+                self.on(tree, |tree, event: &FocusWithinChanged, cx| {
+                    // leaving the tree commits
+                    if !event.focused
+                        && let Some(id) = tree.renaming.take()
+                    {
+                        let text = tree.rename_text.clone();
+                        cx.emit(TreeRenameRequested { id, text });
+                    }
+                })?;
+                self.update_component(tree, |tree, _| tree.rename_input = Some(input.stable_id()))?;
+                input.stable_id()
+            }
+        };
+        if let Some(bounds) = bounds {
+            self.update_component(Entity::<TextInput>::from_stable_id(input), |input, _| {
+                let layout = Arc::make_mut(&mut input.style.layout);
+                layout.position = PositionSpec::Absolute;
+                layout.offset_left = Some(LengthSpec::Px(bounds.x));
+                layout.offset_top = Some(LengthSpec::Px(bounds.y));
+                layout.width = Some(LengthSpec::Px(bounds.width.max(48.0)));
+                layout.height = Some(LengthSpec::Px(bounds.height));
+                layout.z_index = Some(1);
+            })?;
+        }
+        self.append_children(tree.stable_id(), &[input])?;
+        Ok(created)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -371,7 +1236,7 @@ mod tests {
             .layout_document(document(), crate::LayoutViewport::new(300.0, 300.0))
             .unwrap();
         let height = context.world().layout_box(tree.stable_id()).unwrap().height;
-        let Some(crate::ComponentGeometry::TreeView { rows }) =
+        let Some(crate::ComponentGeometry::TreeView { rows, .. }) =
             context.world().component_geometry(tree.stable_id())
         else {
             panic!("tree geometry");

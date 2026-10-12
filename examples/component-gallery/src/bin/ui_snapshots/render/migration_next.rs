@@ -1435,6 +1435,12 @@ fn runtime_fixture(
                     ]),
             )?
             .stable_id(),
+        Component::TreeView if matches!(fixture.state, "multi" | "drag-preview" | "renaming") => {
+            document
+                .context_mut()
+                .create_component(document_id, outliner_tree_fixture())?
+                .stable_id()
+        }
         Component::TreeView => document
             .context_mut()
             .create_component(
@@ -1565,6 +1571,14 @@ fn runtime_fixture(
             action,
         )?;
         (contract_ok, contract_ok, true)
+    } else if fixture.component == Component::TreeView
+        && matches!(fixture.state, "multi" | "drag-preview" | "renaming")
+    {
+        (
+            exercise_outliner_tree(&mut document, viewport, &mut shaper, fixture, target)?,
+            true,
+            true,
+        )
     } else if fixture.component == Component::AreaLayout {
         (
             exercise_area_layout(&mut document, viewport, &mut shaper, fixture, target)?,
@@ -1702,6 +1716,120 @@ fn with_menu_items<C: nana_ui::runtime::ComponentView>(
         widget(RuntimeActionMenuItem::new("Rename")),
         widget(RuntimeActionMenuItem::new("Delete").danger(true)),
     ))
+}
+
+/// An outliner (#342): several rows selected, a visibility column, drag and
+/// rename on.
+fn outliner_tree_fixture() -> RuntimeTreeView {
+    use std::sync::Arc;
+    let id = |s: &str| Arc::<str>::from(s);
+    RuntimeTreeView::new([
+        TreeNode::branch(
+            id("head"),
+            "head",
+            true,
+            [
+                TreeNode::leaf(id("face"), "face").toggles([true]),
+                TreeNode::leaf(id("eye"), "eye").toggles([false]),
+            ],
+        )
+        .toggles([true]),
+        TreeNode::leaf(id("body"), "body").toggles([true]),
+    ])
+    .multiple(true)
+    .columns([nana_ui::runtime::TreeToggleColumn::new(
+        nana_ui_core::Icon::Eye,
+        "Visible",
+    )])
+    .reorderable(true)
+    .renamable(true)
+}
+
+/// Select face and body with Ctrl; drag them onto head (held); or rename eye.
+fn exercise_outliner_tree(
+    document: &mut RuntimeDocument,
+    viewport: LayoutViewport,
+    shaper: &mut NanaTextShaper,
+    fixture: Fixture,
+    target: StableNodeId,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let document_id = document.document();
+    let tree = nana_ui::runtime::Entity::<RuntimeTreeView>::from_stable_id(target);
+    let mut adapter = SnapshotInput::default();
+    let Some(nana_ui::runtime::ComponentGeometry::TreeView { rows, .. }) =
+        document.context().world().component_geometry(target)
+    else {
+        return Ok(false);
+    };
+    let at = |name: &str| {
+        let b = rows
+            .iter()
+            .find(|row| row.id.as_ref() == name)
+            .expect("row")
+            .bounds;
+        (b.x + b.width / 3.0, b.y + b.height / 2.0)
+    };
+    let ctrl = |phase, (x, y): (f32, f32)| -> Gesture {
+        (
+            InputPayload::Pointer(PointerInput {
+                pressure: 0.0,
+                modifiers: InputModifiers {
+                    control: true,
+                    ..InputModifiers::default()
+                },
+                ..PointerInput::mouse(phase, x, y)
+            }),
+            None,
+        )
+    };
+    let context = document.context_mut();
+    match fixture.state {
+        "multi" | "drag-preview" => {
+            for name in ["face", "body"] {
+                let p = at(name);
+                adapter.dispatch(context, document_id, &ctrl(PointerPhase::Down, p))?;
+                adapter.dispatch(context, document_id, &ctrl(PointerPhase::Up, p))?;
+            }
+            if fixture.state == "drag-preview" {
+                // away from the Ctrl-click, or the press is its double click
+                let (from, to) = (at("body"), at("head"));
+                let from = (from.0 + 40.0, from.1);
+                adapter.dispatch(
+                    context,
+                    document_id,
+                    &pointer(PointerPhase::Down, from.0, from.1),
+                )?;
+                adapter.dispatch(
+                    context,
+                    document_id,
+                    &pointer(PointerPhase::Move, to.0, to.1),
+                )?;
+            }
+            document.flush(viewport, shaper)?;
+            Ok(document
+                .context()
+                .read(tree, |tree| tree.selected_ids().len() == 2)?)
+        }
+        "renaming" => {
+            let eye = at("eye");
+            adapter.dispatch(
+                context,
+                document_id,
+                &pointer(PointerPhase::Down, eye.0, eye.1),
+            )?;
+            adapter.dispatch(
+                context,
+                document_id,
+                &pointer(PointerPhase::Up, eye.0, eye.1),
+            )?;
+            context.begin_tree_rename(tree, &std::sync::Arc::from("eye"))?;
+            document.flush(viewport, shaper)?;
+            Ok(document
+                .context()
+                .read(tree, |tree| tree.renaming().is_some())?)
+        }
+        _ => Ok(false),
+    }
 }
 
 fn area_layout_model() -> nana_ui::runtime::AreaLayoutModel {

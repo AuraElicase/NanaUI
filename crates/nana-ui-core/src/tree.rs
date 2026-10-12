@@ -9,6 +9,9 @@ pub struct TreeNode<Id> {
     pub expanded: bool,
     pub selected: bool,
     pub disabled: bool,
+    /// The row's on / off states, one per toggle column of the tree
+    /// (visible, locked). Missing entries read as off.
+    pub toggles: Vec<bool>,
     pub children: Vec<TreeNode<Id>>,
 }
 
@@ -22,6 +25,7 @@ impl<Id> TreeNode<Id> {
             expanded: false,
             selected: false,
             disabled: false,
+            toggles: Vec::new(),
             children: Vec::new(),
         }
     }
@@ -40,6 +44,7 @@ impl<Id> TreeNode<Id> {
             expanded,
             selected: false,
             disabled: false,
+            toggles: Vec::new(),
             children: children.into_iter().collect(),
         }
     }
@@ -56,6 +61,12 @@ impl<Id> TreeNode<Id> {
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// The row's toggle states, one per toggle column.
+    pub fn toggles(mut self, toggles: impl IntoIterator<Item = bool>) -> Self {
+        self.toggles = toggles.into_iter().collect();
         self
     }
 }

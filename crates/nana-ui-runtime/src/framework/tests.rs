@@ -1198,6 +1198,264 @@ fn plugin_pointer_hooks_hear_every_button_modifiers_and_clicks() {
 }
 
 #[test]
+fn tree_view_selects_toggles_drags_and_renames() {
+    use crate::{
+        TreeDropIntent, TreeDropPosition, TreeDropRequested, TreeRenameRequested,
+        TreeSelectionChanged, TreeToggleChanged, TreeToggleColumn, TreeView,
+    };
+    use nana_ui_core::{Icon, TreeNode};
+    use nana_ui_input::{
+        InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey, PointerInput,
+        PointerPhase,
+    };
+
+    static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let id = |s: &str| Arc::<str>::from(s);
+    let tree = context
+        .create_component(
+            document,
+            TreeView::new([
+                TreeNode::branch(
+                    id("head"),
+                    "head",
+                    true,
+                    [
+                        TreeNode::leaf(id("face"), "face"),
+                        TreeNode::leaf(id("eye"), "eye"),
+                    ],
+                ),
+                TreeNode::leaf(id("body"), "body"),
+            ])
+            .multiple(true)
+            .columns([TreeToggleColumn::new(Icon::Eye, "Visible")])
+            .reorderable(true)
+            .renamable(true),
+        )
+        .unwrap();
+    let heard = |s: String| HEARD.lock().unwrap().push(s);
+    context
+        .on(tree, move |_, e: &TreeSelectionChanged, _| {
+            heard(format!(
+                "selected {:?} active {:?}",
+                e.selected.iter().map(|s| s.as_ref()).collect::<Vec<_>>(),
+                e.active.as_deref()
+            ))
+        })
+        .unwrap();
+    context
+        .on(tree, |_, e: &TreeToggleChanged, _| {
+            HEARD
+                .lock()
+                .unwrap()
+                .push(format!("toggle {} {} {}", e.id, e.column, e.on))
+        })
+        .unwrap();
+    context
+        .on(tree, |_, e: &TreeDropRequested, _| {
+            HEARD.lock().unwrap().push(format!(
+                "drop {:?} {} {:?}",
+                e.rows.iter().map(|s| s.as_ref()).collect::<Vec<_>>(),
+                e.intent.target,
+                e.intent.position
+            ))
+        })
+        .unwrap();
+    context
+        .on(tree, |_, e: &TreeRenameRequested, _| {
+            HEARD
+                .lock()
+                .unwrap()
+                .push(format!("rename {} {}", e.id, e.text))
+        })
+        .unwrap();
+    let relayout = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(300.0, 200.0))
+            .unwrap();
+        context.rebuild_hit_test(document);
+    };
+    relayout(&mut context);
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let rows = |context: &AppContext| match context.world().component_geometry(tree.stable_id()) {
+        Some(crate::ComponentGeometry::TreeView { rows, drop }) => (rows, drop),
+        _ => panic!("tree geometry"),
+    };
+    let row = |context: &AppContext, name: &str| {
+        let (rows, _) = rows(context);
+        let row = rows
+            .into_iter()
+            .find(|row| row.id.as_ref() == name)
+            .unwrap();
+        (row.bounds, row.toggles)
+    };
+    let mid = |b: crate::LayoutBox| (b.x + b.width / 2.0, b.y + b.height / 2.0);
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let with = |modifiers| {
+        move |phase, (x, y): (f32, f32)| {
+            InputPayload::Pointer(PointerInput {
+                modifiers,
+                ..PointerInput::mouse(phase, x, y)
+            })
+        }
+    };
+    let plain = with(InputModifiers::empty());
+    let ctrl = with(InputModifiers {
+        control: true,
+        ..InputModifiers::empty()
+    });
+    let shift = with(InputModifiers {
+        shift: true,
+        ..InputModifiers::empty()
+    });
+    let key = |name: &'static str, shift: bool| {
+        InputPayload::Key(KeyInput {
+            physical: PhysicalKey(name.into()),
+            logical: LogicalKey(name.into()),
+            state: KeyState::Pressed,
+            repeat: false,
+            modifiers: InputModifiers {
+                shift,
+                ..InputModifiers::empty()
+            },
+        })
+    };
+    let click = |input: &mut crate::HeadlessInput,
+                 context: &mut AppContext,
+                 pointer: &dyn Fn(PointerPhase, (f32, f32)) -> InputPayload,
+                 at| {
+        input
+            .route(context, pointer(PointerPhase::Down, at))
+            .unwrap();
+        input.route(context, pointer(PointerPhase::Up, at)).unwrap();
+    };
+    let selected = |context: &AppContext| {
+        context
+            .read(tree, |t| {
+                t.selected_ids()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap()
+    };
+
+    // a press selects one row; Ctrl adds one; Shift selects the range from the anchor
+    let body = mid(row(&context, "body").0);
+    let face = mid(row(&context, "face").0);
+    let eye = mid(row(&context, "eye").0);
+    click(&mut input, &mut context, &plain, body);
+    assert_eq!(take(), [r#"selected ["body"] active Some("body")"#]);
+    click(&mut input, &mut context, &ctrl, face);
+    assert_eq!(take(), [r#"selected ["face", "body"] active Some("face")"#]);
+    click(&mut input, &mut context, &shift, eye);
+    assert_eq!(take(), [r#"selected ["face", "eye"] active Some("eye")"#]);
+    // Shift with an arrow extends it
+    input.route(&mut context, key("ArrowDown", true)).unwrap();
+    assert_eq!(
+        take(),
+        [r#"selected ["face", "eye", "body"] active Some("body")"#]
+    );
+    relayout(&mut context);
+
+    // a toggle flips without touching the selection; a drag down the column sets each row
+    let (_, toggles) = row(&context, "face");
+    let cell = mid(toggles[0].1);
+    input
+        .route(&mut context, plain(PointerPhase::Down, cell))
+        .unwrap();
+    input
+        .route(&mut context, plain(PointerPhase::Move, (cell.0, eye.1)))
+        .unwrap();
+    input
+        .route(&mut context, plain(PointerPhase::Move, (cell.0, body.1)))
+        .unwrap();
+    input
+        .route(&mut context, plain(PointerPhase::Up, (cell.0, body.1)))
+        .unwrap();
+    assert_eq!(
+        take(),
+        [
+            "toggle face 0 true",
+            "toggle eye 0 true",
+            "toggle body 0 true"
+        ]
+    );
+    assert_eq!(selected(&context), ["face", "eye", "body"]);
+    relayout(&mut context);
+
+    // dragging a selected row takes the selection; the preview marks where it lands
+    let (head, _) = row(&context, "head");
+    input
+        .route(&mut context, plain(PointerPhase::Down, body))
+        .unwrap();
+    input
+        .route(&mut context, plain(PointerPhase::Move, mid(head)))
+        .unwrap();
+    relayout(&mut context);
+    let (_, mark) = rows(&context);
+    let mark = mark.expect("a drop mark");
+    assert!(mark.inside);
+    assert_eq!(mark.bounds, head);
+    input
+        .route(
+            &mut context,
+            plain(PointerPhase::Move, (body.0, head.y + 2.0)),
+        )
+        .unwrap();
+    relayout(&mut context);
+    assert!(
+        !rows(&context).1.unwrap().inside,
+        "the top quarter is before"
+    );
+    input
+        .route(&mut context, plain(PointerPhase::Move, mid(head)))
+        .unwrap();
+    input
+        .route(&mut context, plain(PointerPhase::Up, mid(head)))
+        .unwrap();
+    assert_eq!(take(), [r#"drop ["face", "eye", "body"] head Inside"#]);
+    assert_eq!(
+        selected(&context),
+        ["face", "eye", "body"],
+        "the tree moves nothing"
+    );
+    relayout(&mut context);
+    assert!(rows(&context).1.is_none());
+
+    // a click without a drag on a selected row selects it alone
+    click(&mut input, &mut context, &plain, eye);
+    assert_eq!(take(), [r#"selected ["eye"] active Some("eye")"#]);
+
+    // a double click renames in place: Enter reports the text, the tree keeps the focus
+    click(&mut input, &mut context, &plain, eye);
+    click(&mut input, &mut context, &plain, eye);
+    assert_eq!(
+        context.read(tree, |t| t.renaming().cloned()).unwrap(),
+        Some(id("eye"))
+    );
+    let field = context.read(tree, |t| t.rename_input).unwrap().unwrap();
+    assert_eq!(context.world().focused(document), Some(field));
+    assert!(context.replace_focused_text(document, "eyes").unwrap());
+    input.route(&mut context, key("Enter", false)).unwrap();
+    assert_eq!(take(), ["rename eye eyes"]);
+    assert_eq!(context.world().focused(document), Some(tree.stable_id()));
+    assert!(!context.world().contains(field), "the input goes");
+
+    // F2 renames the active row; Escape cancels
+    input.route(&mut context, key("F2", false)).unwrap();
+    assert!(context.read(tree, |t| t.renaming().is_some()).unwrap());
+    input.route(&mut context, key("Escape", false)).unwrap();
+    assert!(take().is_empty());
+    assert!(context.read(tree, |t| t.renaming().is_none()).unwrap());
+    let _ = (TreeDropIntent {
+        target: id("x"),
+        position: TreeDropPosition::After,
+    },);
+}
+
+#[test]
 fn area_layout_resizes_splits_joins_maximizes_and_keeps_contents() {
     use crate::view::widget;
     use crate::{AreaAxis, AreaChange, AreaLayout, AreaLayoutChanged, AreaLayoutModel};

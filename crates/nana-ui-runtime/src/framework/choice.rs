@@ -469,7 +469,7 @@ impl AppContext {
         x: f32,
         y: f32,
     ) -> Result<bool, FrameworkError> {
-        let Some(crate::ComponentGeometry::TreeView { rows }) =
+        let Some(crate::ComponentGeometry::TreeView { rows, .. }) =
             self.world.component_geometry(entity.id)
         else {
             return Ok(false);

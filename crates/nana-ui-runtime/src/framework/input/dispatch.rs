@@ -940,6 +940,16 @@ impl AppContext {
         {
             return Ok(CONSUMED);
         }
+        // A tree's in-place rename ends with Enter (committed) or Escape
+        // before the input sees either.
+        if matches!(key, "Enter" | "Escape")
+            && !modifiers.alt
+            && !modifiers.control
+            && !modifiers.meta
+            && self.end_focused_tree_rename(document, key == "Enter")?
+        {
+            return Ok(CONSUMED);
+        }
         // Focused plain text editors own their editing keys (caret moves,
         // selection, deletion, indent, pairing) before any generic routing.
         if self.text_editor_key(
@@ -1027,6 +1037,9 @@ impl AppContext {
             } else {
                 false
             }
+        } else if modifiers.shift && !modifiers.alt && !modifiers.control && !modifiers.meta {
+            // Shift with an arrow extends a tree's selection
+            self.focused_tree_key(document, key, true)?
         } else {
             false
         };
@@ -1058,6 +1071,9 @@ impl AppContext {
     ) -> Result<bool, FrameworkError> {
         if primary {
             return Ok(false);
+        }
+        if key == "F2" && self.focused_tree_key(document, key, false)? {
+            return Ok(true);
         }
         let range_adjustment = match key {
             "ArrowLeft" | "ArrowDown" => Some(RangeAdjustment::Decrement),
