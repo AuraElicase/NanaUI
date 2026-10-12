@@ -11,6 +11,7 @@
 
 mod animation;
 mod app_menu_bar;
+mod area_layout;
 mod avatar;
 mod bars;
 mod breadcrumb;
@@ -166,6 +167,10 @@ pub use animation::{
     toast_timeout_animation, track_completion_deadline, workspace_animation,
 };
 pub use app_menu_bar::{AppMenuBar, MenuBarActivated, menu_shortcut_label};
+pub use area_layout::{
+    Area, AreaAxis, AreaChange, AreaGeometry, AreaLayout, AreaLayoutChanged, AreaLayoutError,
+    AreaLayoutModel, AreaNode, AreaSplitter,
+};
 pub use avatar::{Avatar, DEFAULT_SIZE as AVATAR_DEFAULT_SIZE};
 pub use bars::{StatusBar, Toolbar};
 pub use breadcrumb::{

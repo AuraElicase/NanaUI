@@ -7764,6 +7764,7 @@ html[data-theme="dark"], [data-theme="dark"] { --bg: #181818; }
             ("not-allowed", CursorSpec::NotAllowed),
             ("crosshair", CursorSpec::Crosshair),
             ("ew-resize", CursorSpec::EwResize),
+            ("ns-resize", CursorSpec::NsResize),
             ("help", CursorSpec::Help),
             ("wait", CursorSpec::Wait),
             ("progress", CursorSpec::Progress),

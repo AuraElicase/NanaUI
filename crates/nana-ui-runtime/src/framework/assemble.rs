@@ -74,6 +74,16 @@ impl AppContext {
         self.assembled.get(&parent)?.get(key).map(|child| child.id)
     }
 
+    /// Every keyed child of `parent`, with its key, in no particular order.
+    pub(crate) fn assembled_children(&self, parent: StableNodeId) -> Vec<(String, StableNodeId)> {
+        self.assembled.get(&parent).map_or_else(Vec::new, |slots| {
+            slots
+                .iter()
+                .map(|(key, child)| (key.clone(), child.id))
+                .collect()
+        })
+    }
+
     /// Reconcile keyed children of `parent` without rebuilding the tree.
     pub fn mount<P: View>(
         &mut self,

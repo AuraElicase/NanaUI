@@ -1577,6 +1577,8 @@ pub enum CursorSpec {
     Crosshair,
     /// Horizontal resize / scrub (`ew-resize`).
     EwResize,
+    /// Vertical resize (`ns-resize`).
+    NsResize,
     Help,
     Wait,
     Progress,
@@ -1597,6 +1599,7 @@ impl CursorSpec {
             "not-allowed" => Self::NotAllowed,
             "crosshair" => Self::Crosshair,
             "ew-resize" => Self::EwResize,
+            "ns-resize" => Self::NsResize,
             "help" => Self::Help,
             "wait" => Self::Wait,
             "progress" => Self::Progress,

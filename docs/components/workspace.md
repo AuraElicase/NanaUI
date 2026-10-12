@@ -73,4 +73,4 @@ widget(Workspace::new()).region(RegionId::Primary, column())
 
 ## 参见
 
-[总览](index.md) · [控件](../reference/components.md) · [工作区](../reference/workspace.md)
+[AreaLayout](area-layout.md)（DCC 式区域切分与工作区预设） · [总览](index.md) · [控件](../reference/components.md) · [工作区](../reference/workspace.md)
