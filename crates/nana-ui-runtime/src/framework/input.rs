@@ -10,6 +10,7 @@
 //! All routing state lives here, on the context the source is bound to, so
 //! two windows never share a pointer, an IME owner or a cursor.
 
+mod blink;
 mod dispatch;
 mod effects;
 mod headless;
@@ -251,6 +252,7 @@ pub(crate) struct InputState {
     /// all its buttons; another button going down or up meanwhile must not
     /// end or activate what the first started.
     pub(super) pressed_buttons: HashMap<(DocumentId, u64), i16>,
+    caret_blink: blink::CaretBlink,
 }
 
 impl Default for InputState {
@@ -260,6 +262,7 @@ impl Default for InputState {
             next_pointer: 1,
             counters: InputCounters::default(),
             pressed_buttons: HashMap::new(),
+            caret_blink: blink::CaretBlink::default(),
         }
     }
 }
@@ -814,6 +817,9 @@ impl AppContext {
                 state.focus_ever = true;
             }
         }
+        // A window that lost focus keeps its caret shown and still; one
+        // that regained it starts the blink over.
+        self.reset_caret_blink();
         if focused {
             self.sync_text_input(source, document, true, services);
         } else {

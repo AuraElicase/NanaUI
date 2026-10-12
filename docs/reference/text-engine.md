@@ -1549,7 +1549,7 @@ world 镜像、`TextChanged`、presentation 三处）。现在剩下编辑本身
 
 | 项 | 状态 |
 | --- | --- |
-| caret blink | Runtime 目前没有 blink；它属于 scene overlay 的可见性 / 不透明度（paint），不得推进任何文本 revision。`nana-text` 侧门禁已钉住「只查询几何」零文本工作 |
+| ~~caret blink~~ **已接** | 聚焦编辑器（`TextInput` / `TextArea` / `RichTextEditor`）的光标在动画时钟上显示、隐藏各 500 ms（`CARET_BLINK_INTERVAL`）。打字、光标移动、获得焦点都让它立即显示并重新计时；窗口失焦时光标常亮，不再唤醒。隐藏只在提取时去掉光标（`UiWorld::set_hidden_carets`，只标 RENDER），光标几何、IME 锚点和滚动不受影响，不推进任何文本 revision。没有聚焦的编辑器时 `next_animation_deadline` 不含它 |
 | ~~Runtime 视觉序左右移动~~ **已接** | 见「视觉序的左右箭头」：`text_caret_visual_step` 探针 + `EditorGeometry::visual_move`，无几何时退回逻辑步进；选区非空时收拢到视觉边缘，与 `EditSession` 同一规则（#182） |
 | a11y composition | 现有 a11y 合同只有 value / selection / editable（caret 即 selection focus），AccessKit 没有 composition 范围，不伪造；字符级 geometry 同理 |
 | 局部 cluster splice | 不做；最小失效单位是段落 |
@@ -1672,7 +1672,7 @@ entry 的颜色指纹把 span 颜色和 `rich.revision` 合在一起：改描边
 - **编辑状态** 在组件里：选区（锚点、焦点，字节）、预编辑及其光标、光标处的输入样式、撤销 / 重做快照（整份 `RichText` 的克隆，两次引用计数），上限 200 步，连续打字合成一步。应用交回相等的 `value` 时这些都保留；交回不同的文档时选区收进新文本，预编辑和输入样式清掉。
 - **区间重映射。** 编辑落到 `RichText::replace_range` / `replace_with`：span 走 `AttributedRanges::splice`（插入的字继承光标前那个字），对象跟着自己的字符平移，删掉字符就删掉对象。复制取 `RichText::slice`。
 - **输入。** 键盘在终端之后、普通编辑器之前路由到聚焦的富文本编辑器（应用的按键策略仍然最先看到按键）；组字走 `dispatch_composition` 的同一位置；指针按下、拖动、松开在终端之后处理。输入法的上下文是 `TextInputPurpose::Normal`，锚点是编辑器光标。
-- **光标与选区。** 组件把字节位置写进 `RichEditorMarks`（`SetRichEditorMarks`，只重绘）。场景在提取时用节点自己的保留排版算矩形：选区在字形下面（和文档选区同一层），光标在上面。只有聚焦的编辑器画光标；焦点移动时标脏重绘。
+- **光标与选区。** 组件把字节位置写进 `RichEditorMarks`（`SetRichEditorMarks`，只重绘）。场景在提取时用节点自己的保留排版算矩形：选区在字形下面（和文档选区同一层），光标在上面。只有聚焦的编辑器画光标；焦点移动时标脏重绘。空文本节点本来不保留排版，编辑器例外：空文档保留它那一行空行，光标画在行首，输入法也锚在这里。编辑后、新排版之前旧排版放不下新光标时，输入法暂用编辑器的内容盒，不会丢掉锚点。
 - **剪贴板。** 系统剪贴板只放纯文本；进程内记住最后一段复制的富文本及其纯文本哈希，粘贴的文字与之相同时贴回富文本。跨进程的富格式留给宿主扩展。
 
 ### 逐字呈现

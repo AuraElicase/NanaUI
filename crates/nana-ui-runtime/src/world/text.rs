@@ -4277,11 +4277,14 @@ impl UiWorld {
                     ),
                 };
                 // An empty Text node still has a line box to measure, but
-                // nothing to draw: it retains no layout.
+                // nothing to draw: it retains no layout. An empty rich editor
+                // keeps its one empty line: the caret is drawn on it and the
+                // IME anchors to it.
+                let retained = text_bytes > 0 || self.nodes.rich_editor_marks(id).is_some();
                 PlainText {
                     metrics,
                     natural,
-                    layout: (text_bytes > 0).then_some(layout),
+                    layout: retained.then_some(layout),
                     provisional,
                 }
             }

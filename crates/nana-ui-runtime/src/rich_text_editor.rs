@@ -849,8 +849,12 @@ impl AppContext {
             .is_some_and(|entity| self.read(entity, RichTextEditor::editable).unwrap_or(false))
     }
 
-    /// Where the focused rich editor's caret is, in the document's layout
-    /// space: what the IME anchors its candidates to.
+    /// Where the focused rich editor's caret shows in the window: what the
+    /// IME anchors its candidates to. An edit is routed before the frame
+    /// that lays it out, and the layout it replaces cannot place the new
+    /// caret; the editor's content box stands in until then, as the field
+    /// does for a text input without caret geometry. The IME never loses
+    /// its anchor while typing: a session that loses one is torn down.
     pub(crate) fn rich_editor_caret_bounds(
         &self,
         document: DocumentId,
@@ -859,14 +863,24 @@ impl AppContext {
         let id = entity.stable_id();
         let (content, scroll) = self.world().document_text_pointer_context(id)?;
         let caret = self.read(entity, |view| view.display().1.caret).ok()??;
-        let (_, layout) = self.world().text_layout(id)?;
-        let (x, top, height) = caret_box(layout, caret)?;
-        Some(crate::LayoutBox {
-            x: content.x + x - scroll.x,
-            y: content.y + top - scroll.y,
-            width: nana_ui_core::HAIRLINE,
-            height,
-        })
+        let placed = self
+            .world()
+            .text_layout(id)
+            .and_then(|(_, layout)| caret_box(layout, caret));
+        let bounds = match placed {
+            Some((x, top, height)) => crate::LayoutBox {
+                x: content.x + x - scroll.x,
+                y: content.y + top - scroll.y,
+                width: nana_ui_core::HAIRLINE,
+                height,
+            },
+            None => content,
+        };
+        Some(
+            self.world()
+                .project_input_bounds(id, bounds)
+                .unwrap_or(bounds),
+        )
     }
 
     /// A key on the focused rich editor. `None` when no rich editor is

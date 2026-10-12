@@ -328,6 +328,96 @@ fn the_caret_and_selection_are_drawn_from_the_editors_own_layout() {
 }
 
 #[test]
+fn an_empty_focused_editor_draws_its_caret_and_anchors_the_ime() {
+    let (mut runtime, _, editor) = document(RichText::new(""));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let mut input = HeadlessInput::bind(runtime.context_mut(), document_id());
+    focus(&mut runtime, &mut input, editor);
+    settle(&mut runtime, &mut shaper);
+    runtime
+        .context_mut()
+        .refresh_input_effects(HeadlessInput::SOURCE, input.services_mut());
+    let carets: Vec<_> = runtime
+        .scene()
+        .primitives()
+        .filter(|primitive| primitive.node == editor.stable_id())
+        .filter(|primitive| matches!(primitive.kind, ScenePrimitiveKind::Quad { .. }))
+        .map(|primitive| primitive.bounds)
+        .collect();
+    let [caret] = carets.as_slice() else {
+        panic!("an empty focused editor draws one caret: {carets:?}");
+    };
+    let bounds = runtime
+        .context()
+        .world()
+        .layout_box(editor.stable_id())
+        .unwrap();
+    assert!(caret.height > 0.0, "on the empty line: {caret:?}");
+    assert!(
+        (caret.x - bounds.x).abs() < 1.0,
+        "at the start: {caret:?} in {bounds:?}"
+    );
+    let cursor = input
+        .services()
+        .text_input()
+        .and_then(|state| state.cursor_area)
+        .expect("the IME anchors to the empty line's caret");
+    assert!(cursor.height > 0.0);
+
+    // Typing the first character and deleting it again never leaves the IME
+    // without a caret: a session that loses one is torn down mid-composition.
+    for (code, text) in [("KeyA", Some("a")), ("Backspace", None)] {
+        input
+            .press(
+                runtime.context_mut(),
+                key(code, InputModifiers::default()),
+                text,
+                None,
+            )
+            .unwrap();
+        assert!(
+            input
+                .services()
+                .text_input()
+                .is_some_and(|state| state.cursor_area.is_some()),
+            "after {code}"
+        );
+        settle(&mut runtime, &mut shaper);
+    }
+    assert_eq!(editor_value(&runtime, editor).text(), "");
+}
+
+#[test]
+fn the_caret_blinks_in_the_scene_without_text_work() {
+    let (mut runtime, _, editor) = document(RichText::new("blink"));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let mut input = HeadlessInput::bind(runtime.context_mut(), document_id());
+    focus(&mut runtime, &mut input, editor);
+    settle(&mut runtime, &mut shaper);
+    let carets = |runtime: &RuntimeDocument| {
+        runtime
+            .scene()
+            .primitives()
+            .filter(|primitive| primitive.node == editor.stable_id())
+            .filter(|primitive| matches!(primitive.kind, ScenePrimitiveKind::Quad { .. }))
+            .count()
+    };
+    let ms = std::time::Duration::from_millis;
+    for (now, shown) in [(1000, 1), (1500, 0), (2000, 1)] {
+        runtime.context_mut().advance_animations(ms(now));
+        runtime.flush(viewport(), &mut shaper).unwrap();
+        assert_eq!(carets(&runtime), shown, "at {now}ms");
+        let work = runtime.context().world().last_text_work_counters();
+        assert_eq!(
+            work.text_nodes_shaped, 0,
+            "a blink shapes nothing: {work:?}"
+        );
+    }
+}
+
+#[test]
 fn toolbar_attributes_restyle_the_selection_without_reflowing_a_colour() {
     let (mut runtime, _, editor) = document(RichText::new("make it red"));
     let mut shaper = NanaTextEngineShaper::new(engine());

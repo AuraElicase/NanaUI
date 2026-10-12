@@ -689,6 +689,7 @@ impl AppContext {
             )
             .chain(self.auto_overlay_deadline())
             .chain(self.scrollbar_hold_deadline())
+            .chain(self.caret_blink_deadline())
             .min()
     }
 
@@ -704,6 +705,7 @@ impl AppContext {
     pub fn advance_animations(&mut self, now: Duration) -> AnimationFrame {
         self.component_lifecycle.now = now;
         let mut frame = self.world.advance_animations(now);
+        self.advance_caret_blink(now, &mut frame);
         let finished_surfaces = frame
             .samples
             .iter()

@@ -518,9 +518,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         if host.input_source.endpoint.is_empty() {
             return disposition;
         }
-        let window = Arc::clone(host.surface.window());
         let (_, endpoint, input_id, generation) =
-            NativeWindowServices::of(window.as_ref(), &self.clipboard, &mut host.input_source);
+            NativeWindowServices::of(&self.clipboard, &mut host.input_source);
         let bound = self.program.write_document(id, |document| {
             let document_id = document.document();
             let context = document.context_mut();
@@ -567,7 +566,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         while let Some(host) = self.window_contexts.get_mut(&id) {
             let text = &mut self.text;
             let (mut services, endpoint, _, _) =
-                NativeWindowServices::of(window.as_ref(), &self.clipboard, &mut host.input_source);
+                NativeWindowServices::of(&self.clipboard, &mut host.input_source);
             let routed_event = self
                 .program
                 .write_document(id, |document| {
@@ -659,9 +658,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let Some(host) = self.window_contexts.get_mut(&id) else {
             return;
         };
-        let window = Arc::clone(host.surface.window());
         let (mut services, _, input_id, _) =
-            NativeWindowServices::of(window.as_ref(), &self.clipboard, &mut host.input_source);
+            NativeWindowServices::of(&self.clipboard, &mut host.input_source);
         self.program.write_document(id, |document| {
             document
                 .context_mut()
@@ -669,6 +667,17 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         });
         if services.cursor_changed {
             self.apply_window_cursor(id);
+        }
+    }
+
+    /// Bring every window's native IME to the state the Runtime last asked
+    /// for. Runs at the end of the turn, outside any window message: an IME
+    /// request made while the platform delivers a key or a composition
+    /// re-enters the window procedure.
+    pub(super) fn apply_window_ime(&mut self) {
+        for host in self.window_contexts.values_mut() {
+            let apply = host.input_source.take_ime_apply();
+            host_services::apply_text_input(host.surface.window().as_ref(), apply);
         }
     }
 

@@ -1173,6 +1173,87 @@ fn text_input_state_follows_the_focused_editor() {
     assert_eq!(input.services().text_input(), None);
 }
 
+/// The focused editor's caret blinks on the animation clock, shown then
+/// hidden, and typing shows it again at once. Only a focused editor in a
+/// focused window asks the clock for a wake; the blink is paint only.
+#[test]
+fn the_focused_editors_caret_blinks_and_typing_shows_it() {
+    let ms = Duration::from_millis;
+    let mut context = AppContext::new();
+    let doc = document(16);
+    let mut input = HeadlessInput::bind(&mut context, doc);
+    assert_eq!(context.next_animation_deadline(), None);
+    let node = focused_editor(&mut context, doc, "text").stable_id();
+    let work = context.take_system_work();
+    context
+        .compat_world_mut()
+        .resolve_styles(&work.style)
+        .unwrap();
+    context
+        .compat_world_mut()
+        .shape_text(&work.text, &mut crate::MeasureTextShaper)
+        .unwrap();
+    input
+        .route(&mut context, InputPayload::Focus { focused: true })
+        .unwrap();
+    // Due at once: the first advance starts the shown half.
+    assert_eq!(context.next_animation_deadline(), Some(Duration::ZERO));
+    let caret = |context: &AppContext| match context.world().extract_nodes(&[node])[0]
+        .component_geometry
+        .as_deref()
+    {
+        Some(crate::ComponentGeometry::TextInput { caret, .. }) => caret.is_some(),
+        _ => false,
+    };
+    let frame = context.advance_animations(ms(1000));
+    assert!(!frame.component_updates.contains(&node));
+    assert!(caret(&context), "the shown half draws the caret");
+    assert_eq!(context.next_animation_deadline(), Some(ms(1500)));
+
+    let frame = context.advance_animations(ms(1500));
+    assert!(frame.component_updates.contains(&node), "drawn hidden");
+    assert!(!caret(&context), "the hidden half leaves it out");
+    assert_eq!(context.next_animation_deadline(), Some(ms(2000)));
+    let anchor = input.services().text_input().unwrap().cursor_area;
+    assert!(anchor.is_some(), "the IME anchor does not blink");
+
+    input.text(&mut context, "!").unwrap();
+    assert_eq!(context.world().text(node), Some("text!"));
+    assert!(
+        !context.world().caret_hidden(node),
+        "typing shows the caret"
+    );
+    assert_eq!(context.next_animation_deadline(), Some(Duration::ZERO));
+    let frame = context.advance_animations(ms(1600));
+    assert!(frame.component_updates.contains(&node), "drawn shown again");
+    assert_eq!(context.next_animation_deadline(), Some(ms(2100)));
+
+    context.advance_animations(ms(2100));
+    assert!(context.world().caret_hidden(node));
+    input
+        .route(&mut context, InputPayload::Focus { focused: false })
+        .unwrap();
+    assert!(
+        !context.world().caret_hidden(node),
+        "a window without focus shows its caret still"
+    );
+    assert_eq!(context.next_animation_deadline(), None);
+
+    input
+        .route(&mut context, InputPayload::Focus { focused: true })
+        .unwrap();
+    assert_eq!(context.next_animation_deadline(), Some(Duration::ZERO));
+    context.clear_focus(doc).unwrap();
+    input
+        .route(&mut context, InputPayload::Focus { focused: true })
+        .unwrap();
+    assert_eq!(
+        context.next_animation_deadline(),
+        None,
+        "no editor, no wake"
+    );
+}
+
 /// A field of any size hands the IME a bounded window; composition into it
 /// routes like any other, and nothing can hold input back.
 #[test]

@@ -215,6 +215,9 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.wake(event_loop, now);
         }
         let frame_deadline = self.schedule_presentations(event_loop, now);
+        // Last: routing and the frames above recorded what the IME should
+        // show (a frame moves the caret it anchors to).
+        self.apply_window_ime();
         // Taken here, after everything above has had its chance to enqueue
         // work: a signal raised on the host thread deliberately skips the
         // proxy wake-up, so this deadline is the only thing that brings the

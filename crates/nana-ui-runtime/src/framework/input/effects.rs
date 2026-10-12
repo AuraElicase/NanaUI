@@ -26,6 +26,10 @@ enum TextInputKey {
         node: Option<StableNodeId>,
         caret: Option<LayoutBox>,
     },
+    RichEditor {
+        node: Option<StableNodeId>,
+        caret: Option<LayoutBox>,
+    },
     Editor {
         node: StableNodeId,
         revisions: nana_text::EditRevisions,
@@ -49,6 +53,16 @@ pub(super) struct SourceEffects {
 }
 
 impl SourceEffects {
+    /// The editor whose caret the host was last told about: the one that
+    /// blinks. A terminal draws its own cursor.
+    pub(super) fn caret_node(&self) -> Option<StableNodeId> {
+        match self.text_input.flatten()? {
+            TextInputKey::Editor { node, .. } => Some(node),
+            TextInputKey::RichEditor { node, .. } => node,
+            TextInputKey::Terminal { .. } => None,
+        }
+    }
+
     /// The host restored its own cursor.
     pub(super) fn forget_cursor(&mut self) {
         self.cursor = None;
@@ -160,6 +174,9 @@ impl AppContext {
             return;
         }
         state.effects.text_input = Some(key);
+        // Typing, a caret that moved and a focus that arrived all show the
+        // caret and start its blink over.
+        self.reset_caret_blink();
         self.input.counters.text_input_updates += 1;
         let context = key.and_then(|_| self.text_input_context(document));
         services.set_text_input(context.as_ref());
@@ -173,7 +190,7 @@ impl AppContext {
             });
         }
         if self.rich_editor_accepts_input(document) {
-            return Some(TextInputKey::Terminal {
+            return Some(TextInputKey::RichEditor {
                 node: self.world.focused(document),
                 caret: self.rich_editor_caret_bounds(document),
             });
