@@ -1,0 +1,58 @@
+Cargo.toml
+  h_8e6780fc7b4bb1 42-46
+crates/nana-ui/src/scene_host/host_services.rs
+  h_8e6780fc7b4bb1 124-126,138-150,365-407
+platform/winit-win32/Cargo.toml
+  h_8e6780fc7b4bb1 1-65
+platform/winit-win32/LICENSE
+  h_8e6780fc7b4bb1 1-201
+platform/winit-win32/README.md
+  h_8e6780fc7b4bb1 1-12
+platform/winit-win32/rustfmt.toml
+  h_8e6780fc7b4bb1 1-20
+platform/winit-win32/src/dark_mode.rs
+  h_8e6780fc7b4bb1 1-164
+platform/winit-win32/src/definitions.rs
+  h_8e6780fc7b4bb1 1-246
+platform/winit-win32/src/dnd.rs
+  h_8e6780fc7b4bb1 1-1617
+platform/winit-win32/src/dpi.rs
+  h_8e6780fc7b4bb1 1-115
+platform/winit-win32/src/event_loop.rs
+  h_8e6780fc7b4bb1 1-2853
+platform/winit-win32/src/event_loop/runner.rs
+  h_8e6780fc7b4bb1 1-626
+platform/winit-win32/src/icon.rs
+  h_8e6780fc7b4bb1 1-263
+platform/winit-win32/src/ime.rs
+  h_8e6780fc7b4bb1 1-161
+platform/winit-win32/src/keyboard.rs
+  h_8e6780fc7b4bb1 1-1264
+platform/winit-win32/src/keyboard_layout.rs
+  h_8e6780fc7b4bb1 1-984
+platform/winit-win32/src/lib.rs
+  h_8e6780fc7b4bb1 1-776
+platform/winit-win32/src/minimal_ime.rs
+  h_8e6780fc7b4bb1 1-67
+platform/winit-win32/src/monitor.rs
+  h_8e6780fc7b4bb1 1-208
+platform/winit-win32/src/raw_input.rs
+  h_8e6780fc7b4bb1 1-301
+platform/winit-win32/src/util.rs
+  h_8e6780fc7b4bb1 1-367
+platform/winit-win32/src/window.rs
+  h_8e6780fc7b4bb1 1-1704
+platform/winit-win32/src/window_state.rs
+  h_8e6780fc7b4bb1 1-566
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "15490df996195fc7d0692ba7437e0cba82b3b3c5",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
