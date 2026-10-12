@@ -8,7 +8,7 @@
 | 文件 | 内容 |
 | --- | --- |
 | `text-paint-matrix.json` | `nana-text-paint-benchmark` 全矩阵：14 种 workload × 1 / 100 / 1k / 10k 标签，动画类 workload 另跑 60 / 120 / 240 帧 |
-| `text-paint-ab.json` | 会话开始时（`04a55ecbd`）与收尾后的同一批格子，交替两种跑序各 5 轮，取 min |
+| `text-paint-ab.json` | 会话开始时（`4cc7db0aa`）与收尾后的同一批格子，交替两种跑序各 5 轮，取 min |
 | `gpu-scene-text-*.json` | #8 的四道文本门禁的真机报告，全部 `ok` |
 
 ## 怎么跑的
@@ -23,7 +23,7 @@ for id in gpu-scene-text-retained gpu-scene-text-paint-color \
 done
 ```
 
-A/B 的「前」是用 `git archive 04a55ecbd` 导出、独立 target 目录构建的同一个基准，
+A/B 的「前」是用 `git archive 4cc7db0aa` 导出、独立 target 目录构建的同一个基准，
 没有在共享工作区里切换文件。每格的量是 `flush p50 + batch p50 + upload p50`。
 
 ## 计数（每帧，一万标签，60 帧那一档）

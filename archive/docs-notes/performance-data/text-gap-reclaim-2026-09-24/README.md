@@ -10,7 +10,7 @@ instructions retired；GPU 时间只引用负载低于 4 时交替跑、取 min 
 | --- | --- |
 | `text-paint-settle-gapped.json` / `-reclaimed.json` | 一万标签 `mutate-random-settle`（240 帧），回收关掉 / 打开 |
 | `gpu-ab-10k.json` | 同一 workload 600 帧，两份二进制交替 10 轮，每轮的负载与 `gpu_ms` / `batch_ms` / `gpu_upload_ms` |
-| `text-paint-counters-before.json` / `-after.json` | 一万标签八个既有格子，改动前（`git archive 5f4cc03bc`、独立 target 目录）与改动后 |
+| `text-paint-counters-before.json` / `-after.json` | 一万标签八个既有格子，改动前（`git archive 98fc23998`、独立 target 目录）与改动后 |
 | `instructions.json` | 一万标签五格，前后交替 3 次，120 帧整进程的 instructions retired |
 | `gpu-scene-text-*.json` | #8 的文本门禁与 #223 / #99 的两道，全部 `ok` |
 

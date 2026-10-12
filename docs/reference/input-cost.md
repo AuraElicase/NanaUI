@@ -51,10 +51,10 @@ macOS / Apple Silicon，`--release`，60 次预热 + 400 次计时移动，P50�
 
 | 改动 | 作用 | 2,000 行效果 |
 | --- | --- | --- |
-| `resolve_layout` 按 revision 挡（`8157c65`） | 每事件七段全树遍历重算同一个结果 | 无头 1.444 → 0.379 ms |
-| `sync_svg_rasters` 走索引（`1929d24`） | 每窗口帧最多四次全节点扫描 + 每节点一次 String 分配 | 生产 0.583 → 0.062 ms |
-| `patchProp` 的 style 按值比较（`707d161`） | 内联 style 对象每次渲染都是新引用，每行一次跨界进 CSS 级联 | `reactive` 60.3 → 10.9 ms |
-| `flush_scene_frame` 按 Scene instance 挡（`b52c9b8`） | 每帧重录每个绘制盒，每节点三把锁 | 无头 0.258 → 0.063；滚动 1.903 → 0.064 |
+| `resolve_layout` 按 revision 挡（`f3ad6d3`） | 每事件七段全树遍历重算同一个结果 | 无头 1.444 → 0.379 ms |
+| `sync_svg_rasters` 走索引（`1c13923`） | 每窗口帧最多四次全节点扫描 + 每节点一次 String 分配 | 生产 0.583 → 0.062 ms |
+| `patchProp` 的 style 按值比较（`ea2f721`） | 内联 style 对象每次渲染都是新引用，每行一次跨界进 CSS 级联 | `reactive` 60.3 → 10.9 ms |
+| `flush_scene_frame` 按 Scene instance 挡（`5d2015e`） | 每帧重录每个绘制盒，每节点三把锁 | 无头 0.258 → 0.063；滚动 1.903 → 0.064 |
 
 一路上被数据推翻的判断留在这里。它们都容易再犯：
 

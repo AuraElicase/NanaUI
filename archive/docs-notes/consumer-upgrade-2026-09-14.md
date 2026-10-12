@@ -1,6 +1,6 @@
 # 消费方升级记录（2026-09-14）
 
-本轮在 NanaUI 补齐 NanaLive #75 依赖、但属于框架的窗口与最新帧能力。编码、Sink、音频、转场仍在 NanaLive。`url()` 图片按文档 fetch host 分桶的修复已在 `7b374e470` 落地（NanaUI #75）。
+本轮在 NanaUI 补齐 NanaLive #75 依赖、但属于框架的窗口与最新帧能力。编码、Sink、音频、转场仍在 NanaLive。`url()` 图片按文档 fetch host 分桶的修复已在 `8c557ccf6` 落地（NanaUI #75）。
 
 冻结基线以各应用当时的 git pin 为准。NanaLive 本次一并迁移；LiliaBilibili、LiliaCode、NanaShader 等下次升 pin 时按下面适配。
 

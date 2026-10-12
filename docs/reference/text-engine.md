@@ -1735,7 +1735,7 @@ cutover 之后仍有几条路径不经过 `nana-text` 量字。或者量了但�
 | 路径 | 之前 | 现在 |
 | --- | --- | --- |
 | Markdown 几何（`UiWorld::markdown_layout`） | 逐字素从 Runtime 的 `GlyphCache` 取宽度求和，没见过的字按 0.6em 估算；画的时候同一 span 同一行却整段交给引擎排 | 每个 span 的每一行交给引擎整形一次（`text_engine_shaper::grapheme_advances`），逐字素 advance 取相邻 caret 之差。gallery 富文本页里粗体 span 之后的空隙因此消失：标题 run 61.20 → 44.90 px |
-| SelectableRichText 的框高、拖选与高亮 | 框高按 `\n` 行数写死，命中每个字素固定 12 px，高亮盖满内容框 | 框高由 Runtime 按框宽测量，命中与高亮都读节点保留的那份 `TextLayout`（680f28ba3） |
+| SelectableRichText 的框高、拖选与高亮 | 框高按 `\n` 行数写死，命中每个字素固定 12 px，高亮盖满内容框 | 框高由 Runtime 按框宽测量，命中与高亮都读节点保留的那份 `TextLayout`（10db26c1e） |
 | 单字符快路径（`NanaTextEngineShaper::shape_cached`） | 见过的字符直接返回缓存 advance、`ascent: None`：同一个 “A” 冷缓存 ascent 13.57、热缓存退回 0.8em 基线 | 删除。引擎自己的 layout cache 已经回答重复字符串；`GlyphCache` 只剩不带引擎的测试 shaper 用 |
 | 不带 `scene-view` 的 nana-ui-vue | `MeasureTextShaper`（em 宽度）：同一份 Vue 文档按 feature 换测量后端 | 始终用进程级引擎（`nana-ui` 无 GPU 部分成为必选依赖） |
 | `RuntimeLayoutEngine::layout_style_tree`（Vue 预绘制回退、css-parity） | 写死 `MeasureTextShaper` | 调用方传 shaper，Vue 传 `NanaTextShaper` |
@@ -2897,7 +2897,7 @@ profile（`/usr/bin/sample`。8,000 行）定位到的按帧 O(文档) 项。按
 左右移动**：方向键现在要问一次几何探针（见「视觉序的左右箭头」）。换来的是 BiDi 与换行处
 caret 不再跳位。
 
-#182 之后同机复测（Apple M4。macOS 27。2026-09-24。release。before = `79df8b8d1`。after = #182
+#182 之后同机复测（Apple M4。macOS 27。2026-09-24。release。before = `739defab4`。after = #182
 全部提交。两个二进制**交替**跑 8 轮、每轮换先后。每格取 8 次 p50 的最小值。60 samples / 15 warmup。
 负载 4–6）：
 

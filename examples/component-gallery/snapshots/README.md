@@ -69,7 +69,7 @@ accumulate references nobody checks.
 
 A prefix keeps other components under verification, but it does not tell you
 whether the change inside your prefix is yours. Baselines go stale: this tree
-was recorded once at `352bd2492` and 338 commits later 421 of 615 snapshots
+was recorded once at `d1ebddffb` and 338 commits later 421 of 615 snapshots
 disagreed with it, none of them from the branch that noticed. Blessing then
 means signing for two weeks of other people's work.
 

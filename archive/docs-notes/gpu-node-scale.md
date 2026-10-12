@@ -7,7 +7,7 @@
 ## 环境及可比性
 
 - macOS 26.6.2；Apple M4；wgpu Metal 后端（adapter 报告 `Apple M4 (Metal)`）。
-- release 构建，`--locked`。HEAD 为 `1100b020b9384f58fb0e744d50f0b2857973d28c`，工作区含本轮基准改动（新场景、`node_repeat`、`frame_graph` 报告字段），不含任何优化改动。
+- release 构建，`--locked`。HEAD 为 `8258c1ace64e472cf17d51f3f11cf9f5ac92f619`，工作区含本轮基准改动（新场景、`node_repeat`、`frame_graph` 报告字段），不含任何优化改动。
 - 离屏目标，`offscreen-submit` 模式，每档 3 帧预热后取 20 帧。**不测 Surface 呈现。**
 - 单机单次，没有跨机对照，也没有历史基线。下面的绝对毫秒数只用于「同一台机器上改动前后」的对照，不能用来宣称跨框架结论。
 
