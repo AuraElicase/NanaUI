@@ -1986,6 +1986,47 @@ mod tests {
         assert!(surface_paint.is_none(), "the theme's card");
     }
 
+    /// A title held to the tab wraps at the tab, but the message still runs
+    /// across the whole body: the card is exactly as tall as without the cap,
+    /// with no lines reserved for a message measured at the title's width.
+    #[test]
+    fn a_capped_title_leaves_the_message_its_body_width() {
+        use nana_ui_core::{DialogRecipe, LengthSpec};
+        let measure = |title_max_width: Option<LengthSpec>| {
+            let mut cx = AppContext::new();
+            let document = DocumentId::new(1).unwrap();
+            let recipe = DialogRecipe {
+                title_max_width,
+                ..DialogRecipe::DEFAULT
+            };
+            cx.set_theme_definition(&nana_ui_core::ThemeDefinition::NANA_DARK.with_dialog(recipe))
+                .unwrap();
+            let confirm = cx
+                .create_component(
+                    document,
+                    ConfirmDialog::new(
+                        "开启兼容",
+                        "开启后，插件可以连接本机，每个插件第一次连接都需要你允许；这段说明足够长，在正文宽度里也要折成好几行，在标题的宽度里会折成更多行。",
+                    ),
+                )
+                .unwrap();
+            cx.assemble_confirm_dialog(confirm).unwrap();
+            shaped_layout(&mut cx, document, 800.0, 600.0);
+            let crate::ComponentGeometry::ModalFrame {
+                surface,
+                body_text: Some(message),
+                ..
+            } = modal_geometry(&cx, confirm.stable_id())
+            else {
+                panic!("a confirm with a message")
+            };
+            (surface.height, message.bounds.height)
+        };
+        let free = measure(None);
+        let capped = measure(Some(LengthSpec::Percent(30.0)));
+        assert_eq!(capped, free);
+    }
+
     /// A card whose header stands on a tab: the recipe sets the title's
     /// type, keeps a danger title in the text colour, holds the title inside
     /// the tab's share of the card and starts the rule where the heading

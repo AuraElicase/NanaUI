@@ -81,7 +81,7 @@ let export = Dialog::new("导出资源库").size(DialogSize::capped(560.0, 92.0)
 
 标题的字型也归配方：`title: RecipeText { size, weight }`，内置 14 / 600，就是 CSS 的 `font-size` 和 `font-weight`；`weight: None` 沿用节点自己的字重。测量和绘制读同一份，量出来的标题就是画出来的标题。抽屉保留自己的标题。
 
-`title_max_width: Option<LengthSpec>` 限制标题块（标题和说明）最宽能走多远：`%` 按卡片宽度算，`vw` / `vh` 按遮罩算，`None`（内置）一直走到关闭位。标题行站在比卡片窄的形状上时用它，比如卡面自己画了一个高出卡身的标签页、标题要留在标签里：写 `title_max_width: Some(LengthSpec::Percent(50.0))`，标题在卡宽的一半处折行或截断，无障碍名仍是完整标题。
+`title_max_width: Option<LengthSpec>` 限制标题块（标题和说明）最宽能走多远：`%` 按卡片宽度算，`vw` / `vh` 按遮罩算，`None`（内置）一直走到关闭位。标题行站在比卡片窄的形状上时用它，比如卡面自己画了一个高出卡身的标签页、标题要留在标签里：写 `title_max_width: Some(LengthSpec::Percent(50.0))`，标题在卡宽的一半处折行或截断，无障碍名仍是完整标题。它只管标题块：确认框的正文按正文区的宽度折行和量高，不受这个上限影响。
 
 :::api
 

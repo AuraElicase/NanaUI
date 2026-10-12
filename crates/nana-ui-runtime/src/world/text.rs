@@ -512,12 +512,16 @@ pub(super) fn shape_empty_state_text(
     }
 }
 
+/// `max_width` wraps the title and its description; `body_width` wraps the
+/// message, which runs across the body rather than beside the icon and the
+/// close button, and under no title cap.
 pub(super) fn shape_modal_text(
     id: StableNodeId,
     visual: &StandardVisual,
     inherited: &ComputedStyle,
     recipe: &nana_ui_core::DialogRecipe,
     max_width: Option<f32>,
+    body_width: Option<f32>,
     shaper: &mut impl TextShaper,
 ) -> ModalTextPresentation {
     let StandardVisual::ModalFrame {
@@ -535,6 +539,11 @@ pub(super) fn shape_modal_text(
         wrap: max_width.is_some(),
         shaping: crate::TextShaping::Auto,
         ..Default::default()
+    };
+    let body_constraints = crate::TextShapeConstraints {
+        max_width: body_width,
+        wrap: body_width.is_some(),
+        ..constraints
     };
     let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe);
     let mut title_style = inherited.clone();
@@ -577,7 +586,7 @@ pub(super) fn shape_modal_text(
                     value: value.to_string().into(),
                 },
                 &body_style,
-                constraints,
+                body_constraints,
             )
         }),
     }
@@ -3901,6 +3910,7 @@ impl UiWorld {
                             self.theme.border().hairline,
                         );
                         let wrap_width = chrome.text_width(surface, root);
+                        let body_width = chrome.body_box(surface).width;
                         let runs = shaper.runs;
                         let intrinsic = shape_modal_text(
                             id,
@@ -3908,6 +3918,7 @@ impl UiWorld {
                             computed,
                             self.theme.recipes().dialog(),
                             Some(wrap_width),
+                            Some(body_width),
                             &mut shaper,
                         );
                         work.record_text_pass(1, usize::from(shaper.runs > runs));
@@ -4936,6 +4947,7 @@ impl UiWorld {
                         visual,
                         &style,
                         self.theme.recipes().dialog(),
+                        None,
                         None,
                         &mut shaper,
                     );
