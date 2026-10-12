@@ -252,6 +252,11 @@ pub(crate) struct InputState {
     /// all its buttons; another button going down or up meanwhile must not
     /// end or activate what the first started.
     pub(super) pressed_buttons: HashMap<(DocumentId, u64), i16>,
+    /// Each pointer's latest sample details (buttons, modifiers, pressure,
+    /// multi-click count) for the node pointer hooks.
+    pub(super) pointer_details: HashMap<(DocumentId, u64), super::hooks::PointerDetail>,
+    /// The button whose press a node's pointer hooks captured.
+    pub(super) hook_buttons: HashMap<(DocumentId, u64), i16>,
     caret_blink: blink::CaretBlink,
 }
 
@@ -262,6 +267,8 @@ impl Default for InputState {
             next_pointer: 1,
             counters: InputCounters::default(),
             pressed_buttons: HashMap::new(),
+            pointer_details: HashMap::new(),
+            hook_buttons: HashMap::new(),
             caret_blink: blink::CaretBlink::default(),
         }
     }

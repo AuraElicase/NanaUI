@@ -120,6 +120,9 @@ fn chart_left(cx: &mut AppContext, chart: Entity<Chart>) -> Result<(), Framework
 }
 
 fn chart_pressed(cx: &mut AppContext, chart: Entity<Chart>, pointer: NodePointer) -> HandledResult {
+    if pointer.button != 0 {
+        return Ok(false);
+    }
     let id = chart.stable_id();
     let Some((spec, layout)) = shown(cx, id) else {
         return Ok(false);

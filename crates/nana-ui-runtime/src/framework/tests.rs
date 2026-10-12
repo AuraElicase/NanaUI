@@ -977,6 +977,227 @@ fn plugin_pointer_hooks_hear_hover_drags_and_wheel() {
 }
 
 #[test]
+fn plugin_pointer_hooks_hear_every_button_modifiers_and_clicks() {
+    use crate::{AccessibilityState, InteractionState, NodePointer, NodePointerHooks, NodeWheel};
+    use nana_ui_input::{InputModifiers, InputPayload, PointerInput, PointerPhase, PointerType};
+
+    static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    fn note(line: String) {
+        HEARD.lock().unwrap().push(line);
+    }
+    fn line(what: &str, p: NodePointer) -> String {
+        format!(
+            "{what} b{} bs{} c{} alt{} cap{} p{} {:?}",
+            p.button,
+            p.buttons,
+            p.click_count,
+            p.modifiers.alt,
+            p.captured,
+            p.pressure,
+            p.pointer_type
+        )
+    }
+    #[derive(Clone, PartialEq)]
+    struct Canvas;
+    impl ComponentView for Canvas {
+        fn node_kind(&self) -> NodeKind {
+            NodeKind::Element {
+                tag: "canvas".into(),
+            }
+        }
+        fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
+            let mut style = NodeStyle::default();
+            let layout = Arc::make_mut(&mut style.layout);
+            layout.width = Some(LengthSpec::Px(100.0));
+            layout.height = Some(LengthSpec::Px(100.0));
+            crate::view_components::project_common(
+                id,
+                world,
+                mutations,
+                &style,
+                InteractionState {
+                    pointer_events: true,
+                    focusable: false,
+                },
+                AccessibilityState::default(),
+            );
+        }
+    }
+    impl crate::RegisterableComponent for Canvas {
+        const TYPE_ID: &'static str = "test.canvas";
+        const TAGS: &'static [&'static str] = &["canvas"];
+        fn from_semantic(_: &crate::SemanticSpec<'_>) -> Self {
+            Canvas
+        }
+    }
+    fn moved(
+        _: &mut AppContext,
+        _: Entity<Canvas>,
+        p: NodePointer,
+    ) -> Result<bool, FrameworkError> {
+        if p.captured {
+            note(line("move", p));
+        }
+        Ok(true)
+    }
+    fn left(_: &mut AppContext, _: Entity<Canvas>) -> Result<(), FrameworkError> {
+        Ok(())
+    }
+    fn pressed(
+        _: &mut AppContext,
+        _: Entity<Canvas>,
+        p: NodePointer,
+    ) -> Result<bool, FrameworkError> {
+        note(line("press", p));
+        Ok(true)
+    }
+    fn released(
+        _: &mut AppContext,
+        _: Entity<Canvas>,
+        p: NodePointer,
+    ) -> Result<bool, FrameworkError> {
+        note(line("release", p));
+        Ok(true)
+    }
+    fn wheel(_: &mut AppContext, _: Entity<Canvas>, w: NodeWheel) -> Result<bool, FrameworkError> {
+        note(format!(
+            "wheel alt{} shift{}",
+            w.modifiers.alt, w.modifiers.shift
+        ));
+        Ok(true)
+    }
+    static HOOKS: NodePointerHooks<Canvas> = NodePointerHooks {
+        moved,
+        left,
+        pressed,
+        released,
+        wheel,
+    };
+    struct CanvasExt;
+    impl UiExtension for CanvasExt {
+        fn name(&self) -> &'static str {
+            "test.canvas"
+        }
+        fn install(&self, registrar: &mut ExtensionRegistrar) -> Result<(), FrameworkError> {
+            registrar.register_component::<Canvas>()?;
+            registrar.register_pointer::<Canvas>(&HOOKS)
+        }
+    }
+
+    let mut context = AppContext::new();
+    context.install(&CanvasExt).unwrap();
+    let document = DocumentId::new(1).unwrap();
+    context.create_component(document, Canvas).unwrap();
+    context
+        .layout_document(document, crate::LayoutViewport::new(300.0, 300.0))
+        .unwrap();
+    context.rebuild_hit_test(document);
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let alt = InputModifiers {
+        alt: true,
+        ..InputModifiers::empty()
+    };
+    let sample = |phase, x, button: i16, buttons: u16| {
+        InputPayload::Pointer(PointerInput {
+            button,
+            buttons,
+            pressure: if buttons == 0 { 0.0 } else { 0.5 },
+            modifiers: alt,
+            ..PointerInput::mouse(phase, x, 20.0)
+        })
+    };
+    // middle drag: captured past the edge until the middle button's release
+    input
+        .route(&mut context, sample(PointerPhase::Down, 10.0, 1, 4))
+        .unwrap();
+    input
+        .route(&mut context, sample(PointerPhase::Move, 150.0, -1, 4))
+        .unwrap();
+    input
+        .route(&mut context, sample(PointerPhase::Up, 150.0, 1, 0))
+        .unwrap();
+    // secondary drag
+    input
+        .route(&mut context, sample(PointerPhase::Down, 10.0, 2, 2))
+        .unwrap();
+    input
+        .route(&mut context, sample(PointerPhase::Move, 160.0, -1, 2))
+        .unwrap();
+    input
+        .route(&mut context, sample(PointerPhase::Up, 160.0, 2, 0))
+        .unwrap();
+    // a double click of the primary button
+    for _ in 0..2 {
+        input
+            .route(&mut context, sample(PointerPhase::Down, 30.0, 0, 1))
+            .unwrap();
+        input
+            .route(&mut context, sample(PointerPhase::Up, 30.0, 0, 0))
+            .unwrap();
+    }
+    // a pen press carries its type and pressure
+    input
+        .route(
+            &mut context,
+            InputPayload::Pointer(PointerInput {
+                pointer_type: PointerType::Pen,
+                pressure: 0.75,
+                ..PointerInput::mouse(PointerPhase::Down, 60.0, 20.0)
+            }),
+        )
+        .unwrap();
+    input
+        .route(
+            &mut context,
+            InputPayload::Pointer(PointerInput {
+                pointer_type: PointerType::Pen,
+                ..PointerInput::mouse(PointerPhase::Up, 60.0, 20.0)
+            }),
+        )
+        .unwrap();
+    input
+        .route(
+            &mut context,
+            InputPayload::Wheel(nana_ui_input::WheelInput {
+                pointer_id: nana_ui_input::PointerId(0),
+                x: 10.0,
+                y: 10.0,
+                delta_x: 0.0,
+                delta_y: 3.0,
+                unit: nana_ui_input::WheelUnit::Pixels,
+                modifiers: alt,
+            }),
+        )
+        .unwrap();
+    let heard = HEARD.lock().unwrap().clone();
+    let want = [
+        "press b1 bs4 c1 alttrue capfalse p0.5 Mouse",
+        "move b-1 bs4 c1 alttrue captrue p0.5 Mouse",
+        "release b1 bs0 c1 alttrue captrue p0 Mouse",
+        "press b2 bs2 c1 alttrue capfalse p0.5 Mouse",
+        "move b-1 bs2 c1 alttrue captrue p0.5 Mouse",
+        "release b2 bs0 c1 alttrue captrue p0 Mouse",
+        "press b0 bs1 c1 alttrue capfalse p0.5 Mouse",
+        "release b0 bs0 c1 alttrue captrue p0 Mouse",
+        "press b0 bs1 c2 alttrue capfalse p0.5 Mouse",
+        "release b0 bs0 c2 alttrue captrue p0 Mouse",
+    ];
+    for w in want {
+        assert!(heard.iter().any(|h| h == w), "missing {w:?} in {heard:?}");
+    }
+    assert!(
+        heard
+            .iter()
+            .any(|h| h.starts_with("press b0") && h.ends_with("p0.75 Pen")),
+        "{heard:?}"
+    );
+    assert!(
+        heard.contains(&"wheel alttrue shiftfalse".to_owned()),
+        "{heard:?}"
+    );
+}
+
+#[test]
 fn plugin_register_activation_reaches_activate_node() {
     #[derive(Clone, PartialEq)]
     struct Ping;
