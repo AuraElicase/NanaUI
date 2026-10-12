@@ -46,6 +46,9 @@ pub struct ConfirmSlots {
     /// An icon before the title, in the header row.
     pub title_icon: Option<StableNodeId>,
     pub body: Option<StableNodeId>,
+    /// Content at the start of the action row, one action tall: a "don't
+    /// ask again" switch beside the buttons.
+    pub footer: Option<StableNodeId>,
     pub close_action: Option<StableNodeId>,
     pub cancel: StableNodeId,
     pub secondary: Option<StableNodeId>,
@@ -57,12 +60,12 @@ impl ConfirmSlots {
         ModalSlots {
             title_icon: self.title_icon,
             body: self.body,
+            footer: self.footer,
             close_action: self.close_action,
             actions: std::iter::once(self.cancel)
                 .chain(self.secondary)
                 .chain([self.confirm])
                 .collect(),
-            ..ModalSlots::default()
         }
     }
 }
@@ -182,6 +185,7 @@ pub struct ConfirmDialog {
 pub(crate) struct RequestedConfirmSlots {
     pub title_icon: Option<StableNodeId>,
     pub body: Option<StableNodeId>,
+    pub footer: Option<StableNodeId>,
     pub close_action: Option<StableNodeId>,
     pub cancel: Option<StableNodeId>,
     pub secondary: Option<StableNodeId>,
@@ -282,6 +286,13 @@ impl ConfirmDialog {
     /// Content between the message and the actions, placed on assembly.
     pub fn body(mut self, body: StableNodeId) -> Self {
         self.requested.body = Some(body);
+        self
+    }
+
+    /// Content at the start of the action row, placed on assembly: one
+    /// action tall, as wide as the row leaves beside the actions.
+    pub fn footer(mut self, footer: StableNodeId) -> Self {
+        self.requested.footer = Some(footer);
         self
     }
 
@@ -1083,6 +1094,7 @@ mod tests {
         let slots = ConfirmSlots {
             title_icon: None,
             body: None,
+            footer: None,
             close_action: None,
             cancel: cancel.stable_id(),
             secondary: None,
@@ -2555,6 +2567,7 @@ mod tests {
                 ConfirmSlots {
                     title_icon: None,
                     body: None,
+                    footer: None,
                     close_action: close.map(|close| close.stable_id()),
                     cancel: cancel.stable_id(),
                     secondary: None,
@@ -2588,6 +2601,107 @@ mod tests {
         assert!((open - (HEADER.bottom + BODY.top)).abs() < 0.01);
     }
 
+    /// A confirmation's footer stands at the start of its action row: on the
+    /// actions' line and as tall as they are, from the footer's inset to the
+    /// leftmost action less the gap. It adds no height and moves no action,
+    /// comes before the actions in the dialog's order, and the dialog still
+    /// opens on its first action.
+    #[test]
+    fn confirm_footer_stands_at_the_start_of_the_action_row() {
+        struct Laid {
+            surface: crate::LayoutBox,
+            footer: Option<crate::LayoutBox>,
+            cancel: crate::LayoutBox,
+            accept: crate::LayoutBox,
+        }
+        fn lay_out(with_footer: bool) -> Laid {
+            let mut cx = AppContext::new();
+            let document = DocumentId::new(1).unwrap();
+            let host = cx
+                .create_component(document, crate::OverlayHost::new())
+                .unwrap();
+            let confirm = cx
+                .create_component(
+                    document,
+                    ConfirmDialog::new("Turn it on", "Plugins may connect once it is on."),
+                )
+                .unwrap();
+            let footer = with_footer.then(|| {
+                cx.create_detached_component(document, crate::Switch::new("Don't ask again", false))
+                    .unwrap()
+            });
+            let cancel = cx
+                .create_detached_component(document, Button::new("Cancel"))
+                .unwrap();
+            let accept = cx
+                .create_detached_component(document, Button::new("Turn on"))
+                .unwrap();
+            cx.set_confirm_slots(
+                confirm,
+                ConfirmSlots {
+                    title_icon: None,
+                    body: None,
+                    footer: footer.map(|footer| footer.stable_id()),
+                    close_action: None,
+                    cancel: cancel.stable_id(),
+                    secondary: None,
+                    confirm: accept.stable_id(),
+                },
+            )
+            .unwrap();
+            let children = cx.world().node(confirm.stable_id()).unwrap().children;
+            let actions = vec![cancel.stable_id(), accept.stable_id()];
+            match footer {
+                Some(footer) => assert_eq!(
+                    children,
+                    [vec![footer.stable_id()], actions].concat(),
+                    "the footer comes before the actions"
+                ),
+                None => assert_eq!(children, actions),
+            }
+            cx.append_child(host, confirm).unwrap();
+            assert!(cx.activate_overlay(host, confirm).unwrap());
+            assert_eq!(
+                cx.world().focused(document),
+                Some(cancel.stable_id()),
+                "it opens on its first action"
+            );
+            let work = cx.take_system_work();
+            cx.resolve_styles(&work.style).unwrap();
+            let mut shaper = WrappingShaper;
+            cx.shape_text(&work.text, &mut shaper).unwrap();
+            cx.layout_document(document, crate::LayoutViewport::new(800.0, 600.0))
+                .unwrap();
+            let world = cx.world();
+            let crate::ComponentGeometry::ModalFrame { surface, .. } =
+                world.component_geometry(confirm.stable_id()).unwrap()
+            else {
+                panic!("confirm geometry")
+            };
+            Laid {
+                surface,
+                footer: footer.map(|footer| world.layout_box(footer.stable_id()).unwrap()),
+                cancel: world.layout_box(cancel.stable_id()).unwrap(),
+                accept: world.layout_box(accept.stable_id()).unwrap(),
+            }
+        }
+
+        let bare = lay_out(false);
+        let with = lay_out(true);
+        let footer = with.footer.expect("a footer box");
+        let recipe = nana_ui_core::DialogRecipe::DEFAULT;
+        assert_eq!(with.surface, bare.surface, "the footer adds no height");
+        assert_eq!((with.cancel, with.accept), (bare.cancel, bare.accept));
+        assert!((footer.x - (with.surface.x + recipe.footer.inline)).abs() < 0.01);
+        assert!((footer.y - with.cancel.y).abs() < 0.01);
+        assert!((footer.height - with.cancel.height).abs() < 0.01);
+        assert!(
+            (footer.x + footer.width - (with.cancel.x - recipe.action_gap)).abs() < 0.01,
+            "{footer:?} beside {:?}",
+            with.cancel
+        );
+    }
+
     #[test]
     fn confirm_initial_focus_and_busy_close_are_one_modal_authority() {
         let mut cx = AppContext::new();
@@ -2619,6 +2733,7 @@ mod tests {
             ConfirmSlots {
                 title_icon: None,
                 body: Some(body.stable_id()),
+                footer: None,
                 close_action: Some(close.stable_id()),
                 cancel: cancel.stable_id(),
                 secondary: None,

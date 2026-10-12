@@ -133,6 +133,12 @@ impl<K> El<ConfirmDialog, K> {
         self.slot(view, ConfirmDialog::body)
     }
 
+    /// Content at the start of the action row, beside the actions: a
+    /// "don't ask again" switch, say. One action tall.
+    pub fn footer(self, view: impl IntoView) -> Self {
+        self.slot(view, ConfirmDialog::footer)
+    }
+
     /// The affordance that dismisses the dialog, beside its title.
     pub fn close_action(self, view: impl IntoView) -> Self {
         self.slot(view, ConfirmDialog::close_action)

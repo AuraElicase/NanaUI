@@ -227,8 +227,9 @@ impl AppContext {
     /// Builds the cancel and confirm actions of a [`ConfirmDialog`] and places
     /// its slots, so the common case needs no slot plumbing.
     ///
-    /// Slots given to the dialog before (a view's `.body`, `.close_action`,
-    /// `.cancel`, `.secondary`, `.confirm`, or the matching builder methods)
+    /// Slots given to the dialog before (a view's `.body`, `.footer`,
+    /// `.close_action`, `.cancel`, `.secondary`, `.confirm`, or the matching
+    /// builder methods)
     /// are placed as they are; a missing cancel or confirm action is made from
     /// [`crate::ConfirmDialog::cancel_label`] / `confirm_label`. Idempotent:
     /// afterwards it refreshes the label and disabled state of the buttons it
@@ -314,6 +315,7 @@ impl AppContext {
             crate::ConfirmSlots {
                 title_icon: requested.title_icon,
                 body: requested.body,
+                footer: requested.footer,
                 close_action: requested.close_action,
                 cancel,
                 secondary: requested.secondary,

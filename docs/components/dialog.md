@@ -351,7 +351,7 @@ widget(Dialog::new("重命名").close_policy(DialogClosePolicy::requests_only())
 | `.footer` | 底栏，通常是按钮行 |
 | `.close_action` | 关闭位 |
 
-确认框是 `ConfirmDialog`。它的槽位是 `.title_icon`、`.body`、`.cancel` 和 `.confirm`。你没有提供的按钮，会用 `cancel_label` 或 `confirm_label` 生成。
+确认框是 `ConfirmDialog`。它的槽位是 `.title_icon`、`.body`、`.footer`、`.close_action`、`.cancel`、`.secondary` 和 `.confirm`，`.footer` 站在动作行左端。你没有提供的按钮，会用 `cancel_label` 或 `confirm_label` 生成。
 
 ## 参见
 

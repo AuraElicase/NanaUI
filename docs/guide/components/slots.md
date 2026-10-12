@@ -78,7 +78,7 @@ widget(Dialog::new("重命名"))
 
 槽在面板之前建好，所以 `.initial_focus_on(entity_ref)` 能在打开时聚焦槽里的控件。目标还没建出来时，保持面板自己的焦点。`Drawer` 和 `ConfirmDialog` 同样有这个方法。
 
-`ConfirmDialog::new(标题, 说明)` 的槽是 `.body`、`.close_action`、`.cancel`、`.secondary`、`.confirm`。没给的取消和确认按钮，用 `cancel_label` / `confirm_label` 生成，默认是「取消」和「确认」。
+`ConfirmDialog::new(标题, 说明)` 的槽是 `.title_icon`、`.body`、`.footer`、`.close_action`、`.cancel`、`.secondary`、`.confirm`。没给的取消和确认按钮，用 `cancel_label` / `confirm_label` 生成，默认是「取消」和「确认」。
 
 ## 表单、播放条和菜单
 

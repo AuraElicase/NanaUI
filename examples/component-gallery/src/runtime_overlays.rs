@@ -151,6 +151,7 @@ impl GalleryOverlaysRuntime {
                     ConfirmSlots {
                         title_icon: None,
                         body: Some(body.stable_id()),
+                        footer: None,
                         close_action: Some(close.stable_id()),
                         cancel: actions.0,
                         secondary: None,
