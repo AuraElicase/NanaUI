@@ -188,7 +188,7 @@ const SELECT_MENU_SURFACE_SLOT: u64 = 8;
 const RICH_EDITOR_SELECTION_BASE: usize = 1 << 16;
 /// Rich text tag backgrounds share that paint layer too (under the glyphs,
 /// over a selection), from this index on.
-const RICH_TAG_BASE: usize = 1 << 17;
+pub(crate) const RICH_TAG_BASE: usize = 1 << 17;
 
 /// A tag's fill by its kind: the application's marker kinds, cycled.
 fn tag_color(kind: u16) -> [f32; 4] {
@@ -1036,7 +1036,8 @@ fn inline_object_primitives(
                     corner_radius: [0.0; 4],
                 }
             }
-            nana_ui_core::RichObjectContent::Tag { kind, .. } => {
+            nana_ui_core::RichObjectContent::Tag { .. }
+            | nana_ui_core::RichObjectContent::Label { .. } => {
                 let Some(label) = layout
                     .labels
                     .iter()
@@ -1044,21 +1045,68 @@ fn inline_object_primitives(
                 else {
                     continue;
                 };
-                let pill = layout.page_rect(label.rect, box_width.max(bounds.width));
-                let pill = SceneRect {
-                    x: bounds.x + pill.x,
-                    y: top + pill.y,
-                    width: pill.width,
-                    height: pill.height,
+                let page = |rect| {
+                    let rect = layout.page_rect(rect, box_width.max(bounds.width));
+                    SceneRect {
+                        x: bounds.x + rect.x,
+                        y: top + rect.y,
+                        width: rect.width,
+                        height: rect.height,
+                    }
                 };
-                let mut style = VisualQuadStyle::solid(tag_color(*kind));
-                style.corner_radius = corner_radii(pill.height * 0.5);
+                let pill = page(label.rect);
+                let (fill, radius) = match &object.content {
+                    nana_ui_core::RichObjectContent::Label { style, .. } => (
+                        style.fill,
+                        style
+                            .radius_px
+                            .filter(|r| r.is_finite() && *r >= 0.0)
+                            .unwrap_or(pill.height * 0.5)
+                            .min(pill.height * 0.5),
+                    ),
+                    nana_ui_core::RichObjectContent::Tag { kind, .. } => {
+                        (tag_color(*kind), pill.height * 0.5)
+                    }
+                    _ => unreachable!("matched above"),
+                };
+                let mut style = VisualQuadStyle::solid(fill);
+                style.corner_radius = corner_radii(radius);
                 out.push(visual_quad(
                     context,
                     collection_slot(DOCUMENT_TEXT_SELECTION, RICH_TAG_BASE + index),
                     pill,
                     style,
                 ));
+                // A label's picture sits in the square its layout kept.
+                if let (Some(style), Some(icon)) = (object.label_style(), label.icon)
+                    && let Some(source) = &style.icon
+                {
+                    let icon = page(icon);
+                    let radius = if style.icon_round {
+                        icon.height * 0.5
+                    } else {
+                        icon.height * 0.2
+                    };
+                    out.push(ScenePrimitive {
+                        id: PrimitiveId {
+                            node: context.node,
+                            slot: collection_slot(TEXT_INLINE_OBJECTS, index),
+                        },
+                        node: context.node,
+                        bounds: icon,
+                        transform: context.transform,
+                        clips: Arc::clone(context.clips),
+                        opacity: context.opacity,
+                        z_index: context.z_index,
+                        document_order: context.document_order,
+                        kind: custom_paint::image_quad(
+                            source,
+                            nana_ui_runtime::ImageFit::Cover,
+                            nana_ui_core::ImageSampling::default(),
+                            corner_radii(radius),
+                        ),
+                    });
+                }
                 continue;
             }
             nana_ui_core::RichObjectContent::Chip { .. } => {

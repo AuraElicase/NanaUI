@@ -593,7 +593,10 @@ impl UiScene {
                         let held: Vec<crate::scene::GlyphObject> = objects
                             .iter()
                             .filter_map(|primitive| {
-                                let index = (primitive.id.slot & 0xffff_ffff) as usize;
+                                // A tag's pill and a label's picture move with
+                                // their object too.
+                                let index = (primitive.id.slot & 0xffff_ffff) as usize
+                                    & (crate::scene::RICH_TAG_BASE - 1);
                                 let placed = layout.layout.objects.get(index)?;
                                 Some(crate::scene::GlyphObject {
                                     slot: primitive.id.slot,

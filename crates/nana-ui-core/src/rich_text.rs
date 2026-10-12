@@ -534,6 +534,48 @@ pub enum RichObjectContent {
     /// the text is, so a display that must break lines like the editor
     /// leaves tags out of its text.
     Tag { label: Arc<str>, kind: u16 },
+    /// A styled label: a pill with `label` in it and, when the style names
+    /// one, a picture before the text (a person's avatar before their name).
+    /// Like a [`Self::Tag`] it takes the room its label needs and is drawn
+    /// wherever the text is; unlike one it is the application's to colour,
+    /// so a display shows it too.
+    Label {
+        label: Arc<str>,
+        style: Arc<RichLabelStyle>,
+    },
+}
+
+/// How a [`RichObjectContent::Label`] looks.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RichLabelStyle {
+    /// The pill, straight sRGB with alpha.
+    pub fill: [f32; 4],
+    /// The label's ink, straight sRGB with alpha.
+    pub text: [f32; 4],
+    /// Size relative to the text around the label.
+    pub scale: f32,
+    /// Weight; `None` takes the text's around it, held to 500..=700.
+    pub weight: Option<u16>,
+    /// Corner radius in physical px; `None` rounds the ends fully.
+    pub radius_px: Option<f32>,
+    /// A picture before the text, by URL (the sources CSS `url()` takes).
+    pub icon: Option<Arc<str>>,
+    /// Clip the picture to a circle rather than rounding its corners a little.
+    pub icon_round: bool,
+}
+
+impl Default for RichLabelStyle {
+    fn default() -> Self {
+        Self {
+            fill: [0.36, 0.52, 0.92, 0.92],
+            text: [1.0; 4],
+            scale: 0.62,
+            weight: None,
+            radius_px: None,
+            icon: None,
+            icon_round: true,
+        }
+    }
 }
 
 /// An object inline in the text: a sticker, an emote, an editor chip.
@@ -606,10 +648,35 @@ impl RichObject {
         }
     }
 
-    /// The label a tag shows.
+    /// A styled label (see [`RichObjectContent::Label`]). Its size is its
+    /// label's, so it has none of its own.
+    pub fn label(id: u64, label: impl Into<Arc<str>>, style: RichLabelStyle) -> Self {
+        Self {
+            id,
+            width_px: 0.0,
+            height_px: 0.0,
+            descent_px: 0.0,
+            content: RichObjectContent::Label {
+                label: label.into(),
+                style: Arc::new(style),
+            },
+        }
+    }
+
+    /// The label a tag or a styled label shows.
     pub fn tag_label(&self) -> Option<&Arc<str>> {
         match &self.content {
-            RichObjectContent::Tag { label, .. } => Some(label),
+            RichObjectContent::Tag { label, .. } | RichObjectContent::Label { label, .. } => {
+                Some(label)
+            }
+            _ => None,
+        }
+    }
+
+    /// A styled label's look.
+    pub fn label_style(&self) -> Option<&RichLabelStyle> {
+        match &self.content {
+            RichObjectContent::Label { style, .. } => Some(style),
             _ => None,
         }
     }

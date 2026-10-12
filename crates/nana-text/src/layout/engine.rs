@@ -224,7 +224,7 @@ impl Layouter {
                 .labels()
                 .iter()
                 .zip(request.labels)
-                .map(|(label, shaped)| (label.offset, Arc::clone(shaped)))
+                .map(|(label, shaped)| (label.offset, label.layout_bits(), Arc::clone(shaped)))
                 .collect(),
         );
         if let Some(hit) = self.cache.get(&key) {
@@ -438,10 +438,14 @@ struct LabelBox {
     inset_px: f32,
     /// Room kept clear either side of the tag.
     gap_px: f32,
+    /// The icon square: its margin inside the tag and its side.
+    icon: Option<(f32, f32)>,
 }
 
 fn label_box(request: &LayoutRequest<'_>, offset: usize) -> Option<LabelBox> {
-    let shaped = request.labels.get(request.source.label_index(offset)?)?;
+    let index = request.source.label_index(offset)?;
+    let shaped = request.labels.get(index)?;
+    let label = request.source.labels().get(index)?;
     let width: f32 = shaped.runs.iter().map(|run| run.advance_px).sum();
     let size = shaped
         .runs
@@ -462,12 +466,21 @@ fn label_box(request: &LayoutRequest<'_>, offset: usize) -> Option<LabelBox> {
     let pad_y = (size * 0.18).round();
     // A small gap either side keeps neighbouring text off the tag.
     let gap = (size * 0.2).round();
+    // The icon fills the tag's height less a thin margin, and the text
+    // starts a little after it.
+    let icon = label.icon.then(|| {
+        let margin = (size * 0.12).round().max(1.0);
+        let side = (ascent + descent + 2.0 * pad_y - 2.0 * margin).max(1.0);
+        (margin, side)
+    });
+    let lead = icon.map_or(pad_x, |(margin, side)| margin + side + (size * 0.3).round());
     Some(LabelBox {
-        width_px: width + 2.0 * (pad_x + gap),
+        width_px: width + lead + pad_x + 2.0 * gap,
         ascent_px: ascent + pad_y,
         descent_px: descent + pad_y,
-        inset_px: pad_x + gap,
+        inset_px: lead + gap,
         gap_px: gap,
+        icon,
     })
 }
 
@@ -502,16 +515,26 @@ fn placed_labels(
                 run
             })
             .collect();
+        let rect = TextRect::new(
+            object.rect.x + boxed.gap_px,
+            object.rect.y,
+            (object.rect.width - 2.0 * boxed.gap_px).max(0.0),
+            object.rect.height,
+        );
         placed.push(super::ir::PlacedLabel {
             offset: label.offset,
             line: object.line,
             baseline_y_px: line.metrics.baseline_y_px,
-            rect: TextRect::new(
-                object.rect.x + boxed.gap_px,
-                object.rect.y,
-                (object.rect.width - 2.0 * boxed.gap_px).max(0.0),
-                object.rect.height,
-            ),
+            icon: boxed.icon.map(|(margin, side)| {
+                TextRect::new(
+                    rect.x + margin,
+                    rect.y + (rect.height - side) * 0.5,
+                    side,
+                    side,
+                )
+            }),
+            color: label.color,
+            rect,
             runs,
         });
     }

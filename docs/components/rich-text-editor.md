@@ -90,7 +90,7 @@ widget(RichTextEditor::new(RichText::new("")))
 
 ## 内联对象
 
-贴纸和图片与文字一起换行。标记 chip（`RichObject::chip`）宽度为 0，只在编辑器里画成一道细标记，展示框不画，所以两边断行一致。点到对象发出 `ObjectActivated { id, offset }`；一次编辑删掉对象，发出 `ObjectRemoved { id, offset }`。
+贴纸和图片与文字一起换行。标记 chip（`RichObject::chip`）宽度为 0，只在编辑器里画成一道细标记，展示框不画，所以两边断行一致。`RichObject::label(id, "@名字", RichLabelStyle { fill, text, scale, icon, .. })` 是应用自己配色的标签（例如带头像的人名），编辑器和展示框画得一样、占一样的宽度，选区和删除都把它当一个字。点到对象发出 `ObjectActivated { id, offset }`；一次编辑删掉对象，发出 `ObjectRemoved { id, offset }`。
 
 ## 属性
 
