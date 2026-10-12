@@ -12,7 +12,7 @@ LiliaBilibili 迁到声明式视图时发现的第二批框架缺口。说明见
   - 给关闭钮留边的舞台几何（`attachment_geometry` 那种把舞台往下挪的写法）——内容铺满也盖不住关闭钮了。
   - 自己处理图集的 ← / → 和写在 `metadata` 里的「3 / 9 · ← → 切换图片」提示：设 `gallery`，听 `Previous` / `Next`，换图后把新位置写回。应用自己的键盘策略先于框架拿到按键，两边都处理会走两步。
   - 对话框正文区设成占满可给高度来绕开「长高后按旧高度裁剪与命中」。
-  - `FormField` 的 `.child_slot(control, FormField::control_child)` 可以写成 `.control(control)`（钉版 3afe5fa 里已经有，不是这批新增）。
+  - `FormField` 的 `.child_slot(control, FormField::control_child)` 可以写成 `.control(control)`（钉版 dab4626 里已经有，不是这批新增）。
   - 用 `flex-wrap` 时为了「放得下就并排」而写的按宽度切换排法的信号；`flex: 1 1 320px` 这样的写法现在就能换行。
   - 读布局盒来选响应式排法的代码：改听 `SizeChanged`。
   - 在框架建的 `Workspace` 节点上写 `workspace_corners`：写到 `DesktopShell::workspace_corners` 上，否则下一次装配会用壳上的值盖掉。

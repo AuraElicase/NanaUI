@@ -2,7 +2,7 @@
  "schema_version": 1,
  "phase": "card-update-ab",
  "note": "min over 3 interleaved rounds per side, 60 samples / 10 warmup, Apple M4, release",
- "base": "main bc0731206",
+ "base": "main cfe2a43d8",
  "cells": [
   {
    "operation": "label",

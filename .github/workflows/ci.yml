@@ -207,7 +207,7 @@ jobs:
       # nana-ui-vue pulls nana-ui-web-api, which pulls cpal for Web Audio, and
       # alsa-sys needs the ALSA headers to build. Without this the job dies in
       # its first cargo command and every invariant below it silently never
-      # runs -- which is how it stayed red from 3e365146b onwards.
+      # runs -- which is how it stayed red from 7e1f1d5aa onwards.
       - name: Install ALSA headers
         run: |
           sudo apt-get update

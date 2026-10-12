@@ -1,7 +1,7 @@
 # 四应用消费迁移与发布验收
 
 本轮覆盖 LiliaBilibili、LiliaCode、NanaLive、NanaShader。冻结基线为
-`6adf38db4bece07d6b67a1c36735f0eb18c509b5`；本文件记录未发布工作树的联调证据，
+`1ae24ecfe969cc71c66228ead1d45fedd6193840`；本文件记录未发布工作树的联调证据，
 不能作为最终 git pin 验收。初始各仓库 HEAD、status、binary diff 和 staged diff
 保存在 `/tmp/nanaui-consumer-upgrade-20260909/`，已有业务改动未重置。
 

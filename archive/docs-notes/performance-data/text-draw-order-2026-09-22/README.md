@@ -12,7 +12,7 @@ GPU 时间只引用负载低于 4 时交替跑、取 min 的数字。
 | `text-paint-ab-10k.json` | 一万标签 `static` / `mutate-random-1pct` / `mutate-1pct` / `transform`，前与最终交替 12 轮，CPU（`flush + batch + upload` p50）与 GPU（提交到完成 p50），附全部样本 |
 | `gpu-scene-text-*.json` | #8 的四道文本门禁与 #99 的 constraint-resize，全部 `ok`；retained 那道新增 `text_index_upload_bytes ≤ 4096`，实测 0 |
 
-「前」是 `git archive 81a61b7e8` 导出、独立 target 目录构建的同一个基准，只补了
+「前」是 `git archive 433d3d73b` 导出、独立 target 目录构建的同一个基准，只补了
 `text_pipeline_draws` 计数和 GPU / encode 两项计时，没有在共享工作区里切换文件。
 
 ## 怎么跑的

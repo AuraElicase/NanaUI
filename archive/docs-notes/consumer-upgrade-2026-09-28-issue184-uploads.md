@@ -1,6 +1,6 @@
 # Issue #184：帧上传与帧槽重写
 
-b187fb48b 的 upload arena 让每次上传发生两遍（先写进一个没人读的 arena，再照常 queue 写目标），arena 在连续出帧时永不回绕、不断翻倍；`begin_frame` 槽满时忙等，调用方持有全部未提交槽时会卡死；`GpuContext::write_texture` 每个区域单独开一帧提交。说明见 [GPU](../../docs/reference/gpu.md) 的“帧上传”与“帧槽”。
+507be43a0 的 upload arena 让每次上传发生两遍（先写进一个没人读的 arena，再照常 queue 写目标），arena 在连续出帧时永不回绕、不断翻倍；`begin_frame` 槽满时忙等，调用方持有全部未提交槽时会卡死；`GpuContext::write_texture` 每个区域单独开一帧提交。说明见 [GPU](../../docs/reference/gpu.md) 的“帧上传”与“帧槽”。
 
 ## 删除的 API
 

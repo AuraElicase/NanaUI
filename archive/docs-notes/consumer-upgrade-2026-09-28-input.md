@@ -96,7 +96,7 @@ input.advance(Duration::from_millis(16)); // 事件时间戳驱动双击、长�
 
 ## NanaLive 受影响位置
 
-锁定 rev 61c4edc41 之后升级时需要改：
+锁定 rev 671449c32 之后升级时需要改：
 
 - `crates/nanalive-control/src/native_ui/hotkeys.rs`：`InputEvent::Keyboard` → `InputPayload::Key`；测试里的 `"Code(..)"` 输入改成 W3C 名，保留读取旧存档的前缀剥离。
 - `crates/nanalive-control/src/native_ui/mod.rs`：约 12 处 `InputEvent::{Pointer, Wheel, Keyboard}` 匹配改为 `InputPayload`；键盘分支若读 `text`，改读随后的 `InputPayload::Text`。
