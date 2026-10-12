@@ -42,7 +42,6 @@ def machine_note() -> dict[str, Any]:
         "release": platform.release(),
         "machine": platform.machine(),
         "python": platform.python_version(),
-        "hostname": platform.node(),
         "fixed_benchmark_machine": False,
         "note": (
             "This is the host that invoked the runner. GitHub "
