@@ -184,6 +184,9 @@ fn menu_pressed<C: MenuField>(
     field: Entity<C>,
     pointer: NodePointer,
 ) -> HandledResult {
+    if pointer.button != 0 {
+        return Ok(false);
+    }
     let Some((menu, x, y)) = open_menu(cx, field, pointer.x, pointer.y)? else {
         return Ok(false);
     };

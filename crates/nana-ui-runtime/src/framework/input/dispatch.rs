@@ -109,6 +109,7 @@ impl AppContext {
         } = pointer;
         let pointer_id = &pointer.pointer_id.0;
         let held = (document, *pointer_id);
+        self.note_pointer_detail(document, pointer, now);
         match phase {
             PointerPhase::Down if (*is_primary && *button == 0) || *button == 1 => {
                 if self
@@ -322,7 +323,22 @@ impl AppContext {
                     return Ok(CONSUMED);
                 }
                 self.dismiss_detached_menus(target)?;
+                if let Some(target) = target
+                    && self.press_pointer_hook(
+                        *pointer_id,
+                        target,
+                        *x,
+                        *y,
+                        modifiers.shift,
+                        *button,
+                    )?
+                {
+                    return Ok(CONSUMED);
+                }
                 self.secondary_press_at(document, *x, *y)?.is_some()
+            }
+            PointerPhase::Up if *button == 2 => {
+                self.release_pointer_hook(document, *pointer_id, *x, *y, modifiers.shift, 2)?
             }
             PointerPhase::Down if (*is_primary && *button == 0) || *button == 1 => {
                 if self.dismiss_popovers_outside(target)? {
@@ -409,9 +425,15 @@ impl AppContext {
                     }
                 }
                 if let Some(target) = hit {
-                    if *button == 0
-                        && !activation_click
-                        && self.press_pointer_hook(*pointer_id, target, *x, *y, modifiers.shift)?
+                    if !activation_click
+                        && self.press_pointer_hook(
+                            *pointer_id,
+                            target,
+                            *x,
+                            *y,
+                            modifiers.shift,
+                            *button,
+                        )?
                     {
                         return Ok(CONSUMED);
                     }
@@ -519,7 +541,14 @@ impl AppContext {
                 if self.end_text_area_resize(document, *pointer_id, false)? {
                     return Ok(CONSUMED);
                 }
-                if self.release_pointer_hook(document, *pointer_id, *x, *y, modifiers.shift)? {
+                if self.release_pointer_hook(
+                    document,
+                    *pointer_id,
+                    *x,
+                    *y,
+                    modifiers.shift,
+                    *button,
+                )? {
                     return Ok(CONSUMED);
                 }
                 if optional_input!(
@@ -719,7 +748,14 @@ impl AppContext {
         *landed = overlay.target;
         if let Some(target) = overlay.target
             && let Some(hooks) = self.pointer_hooks(target)
-            && let Some(pointer) = self.node_pointer(target, wheel.pointer_id.0, *x, *y, false)
+            && let Some(pointer) = self.node_pointer(
+                target,
+                wheel.pointer_id.0,
+                *x,
+                *y,
+                wheel.modifiers.shift,
+                -1,
+            )
             && hooks.wheel(
                 self,
                 target,
@@ -730,6 +766,7 @@ impl AppContext {
                     delta_x: dx * scale,
                     delta_y: dy * scale,
                     ctrl: wheel.modifiers.control || wheel.modifiers.meta,
+                    modifiers: wheel.modifiers,
                 },
             )?
         {

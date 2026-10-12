@@ -257,7 +257,7 @@ slots / overlay 组装接口。`mount` 仍用于按 key 构造并销毁缺席组
 
 ### 节点指针（`NodePointerHooks`）
 
-一个控件要自己处理整个盒子上的指针时（图表、画布），给它的类型装一组 `NodePointerHooks`：`moved` 在指针经过节点、或节点持有捕获时调用；`left` 在指针离开或节点不再可达时调用；`pressed` 是主键按下，返回 `true` 就拿到捕获直到抬起；`released` 是这次捕获的抬起；`wheel` 返回 `false` 时滚轮照常滚动下面的容器。坐标都是节点自己的布局 px（盒子左上角是 `0, 0`）。`Chart` 用的就是这条路径。
+一个控件要自己处理整个盒子上的指针时（图表、画布），给它的类型装一组 `NodePointerHooks`：`moved` 在指针经过节点、或节点持有捕获时调用；`left` 在指针离开或节点不再可达时调用；`pressed` 是主键、中键或右键按下（`NodePointer::button`，编号同 DOM：0 主键、1 中键、2 右键），返回 `true` 就拿到捕获直到同一个键抬起，只处理主键的控件对其他键返回 `false`；`released` 是这次捕获的那个键的抬起；`wheel` 返回 `false` 时滚轮照常滚动下面的容器。坐标都是节点自己的布局 px（盒子左上角是 `0, 0`）。`NodePointer` 还带着按住的键（`buttons`，DOM 位）、全部修饰键（`modifiers`）、指针类型、压感与倾角，以及连击数 `click_count`（同一个键在 500 ms、4 px 内连按，双击是 2）；`NodeWheel` 带全部修饰键。`Chart` 用的就是这条路径。
 
 ### 节点自绘（`Painter`）
 
