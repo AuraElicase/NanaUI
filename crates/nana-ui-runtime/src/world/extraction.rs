@@ -141,10 +141,22 @@ impl UiWorld {
                 *loading = busy;
             }
         }
-        let component_geometry = standard_visual
+        let mut component_geometry = standard_visual
             .as_ref()
             .and_then(|visual| self.derive_component_geometry(id, visual, style.as_ref()))
             .map(Box::new);
+        if self.caret_hidden(id)
+            && let Some(crate::ComponentGeometry::TextInput {
+                caret,
+                additional_carets,
+                ..
+            }) = component_geometry.as_deref_mut()
+        {
+            // The hidden half of the blink. The caret's geometry stays
+            // where the IME and scrolling read it.
+            *caret = None;
+            additional_carets.clear();
+        }
         let standard_visual_foreground = standard_visual
             .as_ref()
             .map(|visual| self.standard_visual_foreground(visual, style.color));
@@ -264,12 +276,13 @@ impl UiWorld {
             editable: self.nodes.has_text_inputs() && self.nodes.text_input(id).is_some(),
             text_spans,
             rich_text,
-            // The caret shows only on the focused editor; its selection
-            // stays visible either way.
+            // The caret shows only on the focused editor, and not in the
+            // hidden half of its blink; its selection stays visible either
+            // way.
             glyph_presentation: self.nodes.glyph_presentation(id).cloned(),
             rich_editor: self.nodes.rich_editor_marks(id).map(|marks| {
                 let mut marks = marks.clone();
-                if self.focused(document) != Some(id) {
+                if self.focused(document) != Some(id) || self.caret_hidden(id) {
                     marks.caret = None;
                 }
                 marks

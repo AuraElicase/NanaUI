@@ -1,7 +1,7 @@
 //! A native window as an input source: its endpoint and stamps, and the
-//! host services the Runtime drives while routing its input. The IME is
-//! applied straight to the window, the clipboard is the process's one
-//! backend, and the cursor the Runtime asks for is composed here with the
+//! host services the Runtime drives while routing its input. The IME state
+//! is recorded while routing and applied to the window at the end of the
+//! turn, the clipboard is the process's one backend, and the cursor the Runtime asks for is composed here with the
 //! window's own frame edges and the program's override.
 
 use std::sync::OnceLock;
@@ -37,8 +37,10 @@ pub(super) struct WindowInputSource {
     pub(super) runtime_cursor: nana_ui_platform::CursorIcon,
     /// Icon and visibility last set on the native window.
     pub(super) applied_cursor: Option<(CursorIcon, bool)>,
-    /// Text-input state last applied to the native IME.
+    /// Text-input state the Runtime last asked for.
     pub(super) ime: Option<TextInputContext>,
+    /// The native IME session: the state last applied to the window.
+    pub(super) applied_ime: Option<TextInputContext>,
 }
 
 impl WindowInputSource {
@@ -49,6 +51,7 @@ impl WindowInputSource {
             runtime_cursor: nana_ui_platform::CursorIcon::Default,
             applied_cursor: None,
             ime: None,
+            applied_ime: None,
         }
     }
 
@@ -57,7 +60,15 @@ impl WindowInputSource {
     /// applied as a fresh enable, not diffed into an update of a session
     /// that is gone.
     pub(super) fn forget_ime(&mut self) {
-        self.ime = None;
+        self.applied_ime = None;
+    }
+
+    /// What the native IME needs to catch up with the state the Runtime
+    /// asked for, recorded as applied. `ImeApply::None` when it already has.
+    pub(super) fn take_ime_apply(&mut self) -> ImeApply {
+        let (apply, session) = ime_apply(self.applied_ime.as_ref(), self.ime.as_ref());
+        self.applied_ime = session;
+        apply
     }
 
     /// The pointer left: the window shows the default cursor, and so does
@@ -74,7 +85,6 @@ impl WindowInputSource {
 
 /// The host services of one window for one drain.
 pub(super) struct NativeWindowServices<'a> {
-    pub(super) window: &'a dyn winit::window::Window,
     pub(super) clipboard: &'a SharedClipboardHost,
     pub(super) runtime_cursor: &'a mut nana_ui_platform::CursorIcon,
     pub(super) ime: &'a mut Option<TextInputContext>,
@@ -86,7 +96,6 @@ pub(super) struct NativeWindowServices<'a> {
 impl<'a> NativeWindowServices<'a> {
     /// Services over `source`'s slots, leaving its endpoint free to drain.
     pub(super) fn of(
-        window: &'a dyn winit::window::Window,
         clipboard: &'a SharedClipboardHost,
         source: &'a mut WindowInputSource,
     ) -> (
@@ -99,7 +108,6 @@ impl<'a> NativeWindowServices<'a> {
         let generation = source.sequencer.generation();
         (
             Self {
-                window,
                 clipboard,
                 runtime_cursor: &mut source.runtime_cursor,
                 ime: &mut source.ime,
@@ -121,7 +129,10 @@ impl HostServices for NativeWindowServices<'_> {
     fn set_text_input(&mut self, state: Option<&TextInputContext>) {
         // Follow the focused editable field, not NSWindow key status: gating
         // on focus disables the IME while its own candidate panel is key.
-        apply_text_input(self.window, ime_apply(self.ime.as_ref(), state));
+        // Recorded only: routing runs inside the platform's key and IME
+        // messages, and an IME request made there re-enters the window
+        // procedure (winit's Win32 backend then waits on its own window
+        // lock). The host applies it once the turn's messages are handled.
         *self.ime = state.cloned();
     }
 
@@ -157,7 +168,7 @@ pub(super) fn native_cursor(cursor: nana_ui_platform::CursorIcon) -> (CursorIcon
     }
 }
 
-/// What to ask of the native IME to go from `previous` to `next`.
+/// What to ask of the native IME to go from its session to the next state.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum ImeApply {
     None,
@@ -213,28 +224,48 @@ fn ime_request_data(state: &TextInputContext) -> ImeRequestData {
 }
 
 pub(super) fn ime_apply(
-    previous: Option<&TextInputContext>,
+    applied: Option<&TextInputContext>,
     next: Option<&TextInputContext>,
-) -> ImeApply {
+) -> (ImeApply, Option<TextInputContext>) {
     let Some(next) = next else {
-        return if previous.is_some() {
-            ImeApply::Disable
-        } else {
-            ImeApply::None
-        };
+        let apply = applied.map_or(ImeApply::None, |_| ImeApply::Disable);
+        return (apply, None);
     };
-    let capabilities = ime_capabilities(next);
-    let data = ime_request_data(next);
-    let Some(previous) = previous else {
-        return ImeApply::Enable { capabilities, data };
+    let same_editor =
+        |applied: &TextInputContext| applied.owner == next.owner && applied.purpose == next.purpose;
+    // The same editor keeps its session: tearing it down cancels the
+    // composition being typed. A value the editor has no answer for this
+    // once (a caret not laid out yet) keeps the one the session has.
+    let session = match applied {
+        Some(applied) if same_editor(applied) => TextInputContext {
+            cursor_area: next.cursor_area.or(applied.cursor_area),
+            surrounding: next
+                .surrounding
+                .clone()
+                .or_else(|| applied.surrounding.clone()),
+            ..next.clone()
+        },
+        _ => next.clone(),
     };
-    // Another editor is a new session: whatever the IME was composing
-    // belongs to the field focus left.
-    if previous.owner != next.owner || ime_capabilities(previous) != capabilities {
-        ImeApply::Replace { capabilities, data }
-    } else {
-        ImeApply::Update(data)
-    }
+    let capabilities = ime_capabilities(&session);
+    let apply = match applied {
+        None => ImeApply::Enable {
+            capabilities,
+            data: ime_request_data(&session),
+        },
+        Some(applied) if *applied == session => ImeApply::None,
+        // Another editor is a new session: whatever the IME was composing
+        // belongs to the field focus left. A capability the session was
+        // enabled without is declared only by an enable.
+        Some(applied) if !same_editor(applied) || ime_capabilities(applied) != capabilities => {
+            ImeApply::Replace {
+                capabilities,
+                data: ime_request_data(&session),
+            }
+        }
+        Some(_) => ImeApply::Update(ime_request_data(&session)),
+    };
+    (apply, Some(session))
 }
 
 fn enable_ime(
@@ -291,7 +322,7 @@ mod tests {
     fn the_ime_enables_once_then_updates_its_caret() {
         let first = state(true, true);
         assert!(matches!(
-            ime_apply(None, Some(&first)),
+            ime_apply(None, Some(&first)).0,
             ImeApply::Enable { .. }
         ));
         let moved = TextInputContext {
@@ -299,9 +330,40 @@ mod tests {
             ..first.clone()
         };
         assert!(matches!(
-            ime_apply(Some(&first), Some(&moved)),
+            ime_apply(Some(&first), Some(&moved)).0,
             ImeApply::Update(_)
         ));
+    }
+
+    #[test]
+    fn an_unchanged_state_asks_nothing_of_the_ime() {
+        let first = state(true, true);
+        assert_eq!(
+            ime_apply(Some(&first), Some(&first)),
+            (ImeApply::None, Some(first.clone()))
+        );
+    }
+
+    #[test]
+    fn a_caret_missing_for_a_moment_keeps_the_session() {
+        // Typing into the same editor never tears the session down: that
+        // cancels the composition, and on Windows the IME calls back into
+        // the window while winit holds its state.
+        let first = state(true, true);
+        let (apply, session) = ime_apply(Some(&first), Some(&state(false, true)));
+        assert_eq!(apply, ImeApply::None);
+        assert_eq!(session, Some(first));
+    }
+
+    #[test]
+    fn the_state_is_applied_at_the_end_of_the_turn() {
+        let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
+        source.ime = Some(state(true, true));
+        assert!(matches!(source.take_ime_apply(), ImeApply::Enable { .. }));
+        assert_eq!(source.take_ime_apply(), ImeApply::None);
+        source.ime = None;
+        assert_eq!(source.take_ime_apply(), ImeApply::Disable);
+        assert_eq!(source.take_ime_apply(), ImeApply::None);
     }
 
     #[test]
@@ -312,7 +374,7 @@ mod tests {
             ..first.clone()
         };
         assert!(matches!(
-            ime_apply(Some(&first), Some(&other)),
+            ime_apply(Some(&first), Some(&other)).0,
             ImeApply::Replace { .. }
         ));
     }
@@ -333,25 +395,26 @@ mod tests {
     fn regaining_focus_enables_the_ime_afresh() {
         let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
         source.ime = Some(state(true, true));
+        assert!(matches!(source.take_ime_apply(), ImeApply::Enable { .. }));
         source.forget_ime();
-        assert!(matches!(
-            ime_apply(source.ime.as_ref(), Some(&state(true, true))),
-            ImeApply::Enable { .. }
-        ));
+        assert!(matches!(source.take_ime_apply(), ImeApply::Enable { .. }));
     }
 
     #[test]
     fn a_new_capability_replaces_the_ime_session() {
         assert!(matches!(
-            ime_apply(Some(&state(false, true)), Some(&state(true, true))),
+            ime_apply(Some(&state(false, true)), Some(&state(true, true))).0,
             ImeApply::Replace { .. }
         ));
     }
 
     #[test]
     fn leaving_the_field_disables_the_ime() {
-        assert_eq!(ime_apply(Some(&state(true, true)), None), ImeApply::Disable);
-        assert_eq!(ime_apply(None, None), ImeApply::None);
+        assert_eq!(
+            ime_apply(Some(&state(true, true)), None),
+            (ImeApply::Disable, None)
+        );
+        assert_eq!(ime_apply(None, None), (ImeApply::None, None));
     }
 
     #[test]

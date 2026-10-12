@@ -685,6 +685,9 @@ pub struct UiWorld {
     /// order: what a node's layout overlay reads instead of every animation.
     layout_length_tracks: HashMap<StableNodeId, Vec<AnimationId>, BuildIdHasher>,
     pub(crate) animation_now: Duration,
+    /// Editors whose caret is in the hidden half of its blink. Paint only:
+    /// extraction leaves their caret out; nothing else reads it.
+    hidden_carets: Vec<StableNodeId>,
     presentation: nana_ui_core::motion::PresentationStore,
     /// Input / a11y / focus queries increment this. Idle `advance_animations`
     /// must not, including compositor-only overlays.
@@ -961,6 +964,7 @@ impl UiWorld {
             animations: HashMap::new(),
             layout_length_tracks: HashMap::default(),
             animation_now: Duration::ZERO,
+            hidden_carets: Vec::new(),
             presentation: nana_ui_core::motion::PresentationStore::new(),
             presentation_query_samples: Cell::new(0),
             presentation_samples_at_advance: Cell::new(0),
@@ -1064,6 +1068,24 @@ impl UiWorld {
 
     pub fn contains(&self, id: StableNodeId) -> bool {
         self.nodes.contains(id)
+    }
+
+    /// Hide the carets of `carets` for the blink, showing any other one it
+    /// hid. Each editor that changes is drawn again; no text or layout work.
+    pub(crate) fn set_hidden_carets(&mut self, carets: &[StableNodeId]) {
+        if self.hidden_carets == carets {
+            return;
+        }
+        let previous = std::mem::replace(&mut self.hidden_carets, carets.to_vec());
+        for id in previous.into_iter().chain(carets.iter().copied()) {
+            if self.nodes.contains(id) {
+                self.mark(id, DirtyMask::RENDER);
+            }
+        }
+    }
+
+    pub(crate) fn caret_hidden(&self, id: StableNodeId) -> bool {
+        self.hidden_carets.contains(&id)
     }
 
     pub(crate) fn mark_layout(&mut self, id: StableNodeId) {

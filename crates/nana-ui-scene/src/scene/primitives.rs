@@ -369,7 +369,8 @@ impl UiScene {
             let component_owns_text =
                 component_geometry_owns_text(node.component_geometry.as_deref());
             if let Some(text) = node.text.as_ref().filter(|text| {
-                !text.value.is_empty()
+                // An empty rich editor has no glyphs but still its caret.
+                (!text.value.is_empty() || node.rich_editor.is_some())
                     && !component_owns_text
                     && !self.parent_already_paints_text(&node)
             }) {
@@ -497,7 +498,7 @@ impl UiScene {
                 for primitive in editor_selection {
                     self.insert_primitive(primitive);
                 }
-                self.insert_primitive(ScenePrimitive {
+                let glyphs = (!text.value.is_empty()).then(|| ScenePrimitive {
                     id: PrimitiveId { node: id, slot: 2 },
                     node: id,
                     bounds: text_bounds,
@@ -563,6 +564,9 @@ impl UiScene {
                         presentation: glyph_presentation.clone(),
                     },
                 });
+                if let Some(glyphs) = glyphs {
+                    self.insert_primitive(glyphs);
+                }
                 if let (Some(rich), Some(layout)) = (&node.rich_text, &node.text_layout)
                     && !rich.objects().is_empty()
                 {
