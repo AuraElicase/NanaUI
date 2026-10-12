@@ -216,6 +216,16 @@ pub struct ThemeMetrics {
     /// loads.
     #[serde(default)]
     pub switch: SwitchMetrics,
+    /// Tree row geometry beyond the row height (which is the small control
+    /// height): the gap between rows, the indent per level, the row inset and
+    /// the disclosure and icon boxes.
+    ///
+    /// Composed like [`Self::switch`], for the same reason: before this they
+    /// were constants in the tree view, so a compact theme could shrink a
+    /// tree's rows but not its indent. `serde(default)` so a metrics blob
+    /// written before this field still loads.
+    #[serde(default)]
+    pub tree: TreeMetrics,
     /// How every rounded corner is shaped, whatever its radius. Painted only:
     /// see [`CornerShape`]. `serde(default)` so a metrics blob written before
     /// this field still loads with round corners.
@@ -286,6 +296,36 @@ pub const SWITCH_METRICS: SwitchMetrics = SwitchMetrics {
 impl Default for SwitchMetrics {
     fn default() -> Self {
         SWITCH_METRICS
+    }
+}
+
+/// Tree row geometry; see [`ThemeMetrics::tree`].
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct TreeMetrics {
+    /// Space between two rows.
+    pub row_gap: f32,
+    /// How much further in each level starts.
+    pub indent: f32,
+    /// Space between a row's edges and its content.
+    pub inset: f32,
+    /// The disclosure triangle's square.
+    pub disclosure: f32,
+    /// A row icon's square.
+    pub icon: f32,
+}
+
+/// The tree geometry every built-in theme uses.
+pub const TREE_METRICS: TreeMetrics = TreeMetrics {
+    row_gap: space::XXS,
+    indent: space::XL,
+    inset: space::XS,
+    disclosure: type_scale::LINE,
+    icon: type_scale::META,
+};
+
+impl Default for TreeMetrics {
+    fn default() -> Self {
+        TREE_METRICS
     }
 }
 
@@ -522,7 +562,34 @@ pub const UI_METRICS: ThemeMetrics = ThemeMetrics {
     large_control_padding_x: space::XXL,
     scrollbar: crate::scrollbar::SCROLLBAR_METRICS,
     switch: SWITCH_METRICS,
+    tree: TREE_METRICS,
     corner_shape: CornerShape::Round,
+};
+
+/// A dense example: the 20 px rows of professional tools' panels (3D, audio,
+/// node editors). Controls, lists, trees and menus get shorter and tighter;
+/// colours, type sizes and radii stay. Install it with
+/// `ThemeDefinition::with_metrics(COMPACT_METRICS)`.
+pub const COMPACT_METRICS: ThemeMetrics = ThemeMetrics {
+    compact_control_height: 20.0,
+    control_height: 24.0,
+    compact_control_padding_x: space::SM,
+    control_padding_x: space::MD,
+    selection_height: 26.0,
+    icon_button_size: 20.0,
+    panel_padding_x: space::LG,
+    panel_padding_y: space::MD,
+    field_padding_x: space::MD,
+    list_item_padding_x: space::SM,
+    large_control_padding_x: space::XL,
+    tree: TreeMetrics {
+        row_gap: 0.0,
+        indent: space::LG,
+        inset: space::XXS,
+        disclosure: type_scale::META,
+        icon: type_scale::META,
+    },
+    ..UI_METRICS
 };
 
 impl Default for ThemeMetrics {

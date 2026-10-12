@@ -1301,8 +1301,11 @@ fn area_layout_resizes_splits_joins_maximizes_and_keeps_contents() {
         })
         .unwrap();
     let grab = center(context.world().component_layout_box(bar).unwrap());
+    // the divider grabs a few px either side of its 2 px seam
+    let beside = (grab.0 + 2.5, grab.1);
+    assert!(beside.0 > right.x, "over the viewport's edge");
     input
-        .route(&mut context, mouse(PointerPhase::Down, grab))
+        .route(&mut context, mouse(PointerPhase::Down, beside))
         .unwrap();
     input
         .route(&mut context, mouse(PointerPhase::Move, (201.0, grab.1)))

@@ -1205,6 +1205,11 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "tree view flattens visible disclosure rows",
     ),
     f(
+        Component::TreeView,
+        "compact",
+        "under the compact example metrics rows are 20 px, touch, and indent 10 px per level",
+    ),
+    f(
         Component::SidebarRow,
         "active",
         "sidebar row keeps a 14px leading icon without a selected plate",
