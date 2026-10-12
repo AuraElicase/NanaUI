@@ -1,0 +1,16 @@
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 144-150,166,261-278,811,1055,1171-1176,1194-1197,1210-1215,1218-1221,1224-1229,1274-1286
+crates/nana-ui-scene/tests/rich_preedit_pointer.rs
+  h_8e6780fc7b4bb1 1-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e3353f647c865115b93f0e30a7d3f095a559c321",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
