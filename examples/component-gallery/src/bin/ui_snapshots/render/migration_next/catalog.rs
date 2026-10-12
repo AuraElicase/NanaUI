@@ -1045,6 +1045,26 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "an editing scrub field shows its number input, focused with the value selected",
     ),
     f(
+        Component::AreaLayout,
+        "rest",
+        "four areas meet at two-pixel gaps, each with its header strip and content",
+    ),
+    f(
+        Component::AreaLayout,
+        "split-preview",
+        "a corner dragged sideways into the viewport area previews the vertical cut line",
+    ),
+    f(
+        Component::AreaLayout,
+        "join-preview",
+        "a corner dragged into the area below shades the area that the join removes",
+    ),
+    f(
+        Component::AreaLayout,
+        "maximized",
+        "the maximized viewport area fills the whole layout and the others are hidden",
+    ),
+    f(
         Component::AppMenuBar,
         "rest",
         "app menu bar draws its titles in a row in the theme's text color",

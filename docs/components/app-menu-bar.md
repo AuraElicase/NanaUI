@@ -17,7 +17,7 @@ let bar = MenuBar::new([
     ]),
     Menu::new("视图", [MenuEntry::item(3, "网格").checked(true)]),
 ]);
-widget(AppMenuBar::new(bar)).on(|_, e: &MenuBarActivated, _| { /* e.id */ })
+widget(AppMenuBar::new(bar)).on(|e: &MenuBarActivated| { /* e.id */ })
 ```
 
 选中项的 `id` 有两条出口：

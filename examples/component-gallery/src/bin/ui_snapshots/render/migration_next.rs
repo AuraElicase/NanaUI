@@ -30,8 +30,8 @@ use nana_ui::runtime::{
     ActionMenuItem as RuntimeActionMenuItem, Activate,
     AnchoredActionMenu as RuntimeAnchoredActionMenu, AppMenuBar as RuntimeAppMenuBar,
     AppShell as RuntimeAppShell, AppTitleBar as RuntimeAppTitleBar,
-    AppearanceSection as RuntimeAppearanceSection, Avatar as RuntimeAvatar,
-    Button as RuntimeButton, CalendarHeatmap as RuntimeCalendarHeatmap,
+    AppearanceSection as RuntimeAppearanceSection, AreaLayout as RuntimeAreaLayout,
+    Avatar as RuntimeAvatar, Button as RuntimeButton, CalendarHeatmap as RuntimeCalendarHeatmap,
     CalendarHeatmapDatum as RuntimeCalendarDatum, Card as RuntimeCard, Checkbox as RuntimeCheckbox,
     Chip as RuntimeChip, CommandPalette as RuntimeCommandPalette,
     ConfirmDialog as RuntimeConfirmDialog, ContextMenu as RuntimeContextMenu,
@@ -113,6 +113,7 @@ enum Component {
     RangeField,
     ScrubField,
     AppMenuBar,
+    AreaLayout,
     SegmentedControl,
     Tabs,
     StatusBadge,
@@ -196,6 +197,7 @@ impl Component {
             Self::RangeField => component_ids::RANGE_FIELD,
             Self::ScrubField => component_ids::SCRUB_FIELD,
             Self::AppMenuBar => component_ids::APP_MENU_BAR,
+            Self::AreaLayout => component_ids::AREA_LAYOUT,
             Self::SegmentedControl => component_ids::SEGMENTED_CONTROL,
             Self::Tabs => component_ids::TABS,
             Self::StatusBadge => component_ids::STATUS_BADGE,
@@ -452,6 +454,7 @@ fn fixture_size(fixture: Fixture) -> Size<u32> {
         (Component::XYPad, _) => Size::new(420, 88),
         (Component::ScrubField, _) => Size::new(420, 88),
         (Component::AppMenuBar, _) => Size::new(420, 220),
+        (Component::AreaLayout, _) => Size::new(520, 280),
         (Component::QrCode, _) => Size::new(280, 280),
         (Component::Select, "opened") => Size::new(420, 220),
         (Component::Popover | Component::ActionMenu, _) => Size::new(420, 200),
@@ -985,6 +988,32 @@ fn runtime_fixture(
                 context.begin_scrub_edit(field)?;
             }
             field.stable_id()
+        }
+        Component::AreaLayout => {
+            let (_, layout) = document
+                .context_mut()
+                .mount_view_detached(document_id, || {
+                    let layout = entity_ref::<RuntimeAreaLayout>();
+                    let pane = |key: &'static str, text: &'static str| {
+                        widget(RuntimeText::new(text).style(area_pane_style())).key(key)
+                    };
+                    let view = widget(
+                        RuntimeAreaLayout::new(area_layout_model()).style(area_layout_style()),
+                    )
+                    .entity_ref(layout)
+                    .children((
+                        pane("outliner:header", "Outliner"),
+                        pane("outliner", "Parts"),
+                        pane("viewport:header", "Viewport"),
+                        pane("viewport", "Canvas"),
+                        pane("params:header", "Parameters"),
+                        pane("params", "AngleX"),
+                        pane("props:header", "Properties"),
+                        pane("props", "Opacity"),
+                    ));
+                    with_refs(view, layout)
+                })?;
+            layout.stable_id()
         }
         Component::AppMenuBar => {
             let context = document.context_mut();
@@ -1526,6 +1555,12 @@ fn runtime_fixture(
             action,
         )?;
         (contract_ok, contract_ok, true)
+    } else if fixture.component == Component::AreaLayout {
+        (
+            exercise_area_layout(&mut document, viewport, &mut shaper, fixture, target)?,
+            true,
+            true,
+        )
     } else if fixture.component == Component::AppMenuBar {
         (
             exercise_app_menu_bar(&mut document, viewport, &mut shaper, fixture, target)?,
@@ -1657,6 +1692,111 @@ fn with_menu_items<C: nana_ui::runtime::ComponentView>(
         widget(RuntimeActionMenuItem::new("Rename")),
         widget(RuntimeActionMenuItem::new("Delete").danger(true)),
     ))
+}
+
+fn area_layout_model() -> nana_ui::runtime::AreaLayoutModel {
+    use nana_ui::runtime::{AreaAxis, AreaLayoutModel};
+    let mut model = AreaLayoutModel::single("outliner", "outliner");
+    model.split("outliner", AreaAxis::Horizontal, 0.24, "viewport");
+    model.set_editor("viewport", "viewport");
+    model.split("viewport", AreaAxis::Horizontal, 0.66, "params");
+    model.set_editor("params", "parameters");
+    model.split("params", AreaAxis::Vertical, 0.5, "props");
+    model.set_editor("props", "properties");
+    model
+}
+
+fn area_layout_style() -> NodeStyle {
+    let mut style = NodeStyle::default();
+    let layout = Arc::make_mut(&mut style.layout);
+    layout.position = nana_ui_core::PositionSpec::Relative;
+    layout.direction = Some(nana_ui_core::FlexDirection::Column);
+    layout.width = Some(LengthSpec::Fill);
+    layout.height = Some(LengthSpec::Px(240.0));
+    style
+}
+
+fn area_pane_style() -> NodeStyle {
+    let mut style = NodeStyle {
+        foreground: Some(SemanticColorRole::Text),
+        ..NodeStyle::default()
+    };
+    let layout = Arc::make_mut(&mut style.layout);
+    layout.padding_left = Some(LengthSpec::Px(nana_ui_core::space::SM));
+    layout.padding_top = Some(LengthSpec::Px(nana_ui_core::space::XS));
+    style
+}
+
+/// Drive the area layout into its state: a corner drag held mid-way shows
+/// its preview; maximize goes through the application call.
+fn exercise_area_layout(
+    document: &mut RuntimeDocument,
+    viewport: LayoutViewport,
+    shaper: &mut NanaTextShaper,
+    fixture: Fixture,
+    target: StableNodeId,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let document_id = document.document();
+    let layout = nana_ui::runtime::Entity::<RuntimeAreaLayout>::from_stable_id(target);
+    let mut adapter = SnapshotInput::default();
+    let boxes = document.context().area_layout_boxes(layout)?;
+    let area = |id: &str| {
+        boxes
+            .iter()
+            .find(|(area, _)| area == id)
+            .map(|(_, b)| *b)
+            .expect("laid out area")
+    };
+    let mut drag = |document: &mut RuntimeDocument,
+                    from: (f32, f32),
+                    to: (f32, f32)|
+     -> Result<(), Box<dyn std::error::Error>> {
+        adapter.dispatch(
+            document.context_mut(),
+            document_id,
+            &pointer(PointerPhase::Down, from.0, from.1),
+        )?;
+        adapter.dispatch(
+            document.context_mut(),
+            document_id,
+            &pointer(PointerPhase::Move, to.0, to.1),
+        )?;
+        document.flush(viewport, shaper)?;
+        Ok(())
+    };
+    match fixture.state {
+        "rest" => Ok(boxes.len() == 4),
+        "split-preview" => {
+            let b = area("viewport");
+            drag(
+                document,
+                (b.x + 6.0, b.y + 6.0),
+                (b.x + b.width * 0.55, b.y + 40.0),
+            )?;
+            Ok(document
+                .context()
+                .read(layout, |layout| layout.model.leaves().len() == 4)?)
+        }
+        "join-preview" => {
+            let from = area("params");
+            let into = area("props");
+            drag(
+                document,
+                (from.x + 6.0, from.y + 6.0),
+                (into.x + into.width / 2.0, into.y + into.height / 2.0),
+            )?;
+            Ok(true)
+        }
+        "maximized" => {
+            document
+                .context_mut()
+                .toggle_area_maximized(layout, Some("viewport"))?;
+            Ok(document
+                .context()
+                .read(layout, |layout| layout.model.maximized.is_some())?)
+        }
+        _ => Ok(false),
+    }
 }
 
 fn app_menu_bar_model() -> nana_ui_core::MenuBar {

@@ -648,9 +648,12 @@ pub(super) fn write_evidence(
             | Component::SidebarFooter
             | Component::SidebarSection
             | Component::OverlayHost
+            | Component::AreaLayout
+            | Component::AppMenuBar
     ) {
         hit.is_none_or(is_descendant)
-    } else if fixture.component == Component::Chip {
+    } else if matches!(fixture.component, Component::Chip | Component::ScrubField) {
+        // an editing scrub field is hit on its number input
         if expects_hit {
             hit.is_some_and(is_descendant)
         } else {
@@ -760,6 +763,10 @@ pub(super) fn write_evidence(
             | Component::SidebarSection
             | Component::OverlayHost
             | Component::ToastStack
+            // Composites assembled from plain boxes and text.
+            | Component::AreaLayout
+            | Component::AppMenuBar
+            | Component::ScrubField
     ) || geometry.is_some();
     let layout_ok = bounds.is_some_and(|bounds| match fixture.component {
         Component::Text if matches!(fixture.state, "wrap" | "ellipsis") => {

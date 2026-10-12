@@ -1198,6 +1198,277 @@ fn plugin_pointer_hooks_hear_every_button_modifiers_and_clicks() {
 }
 
 #[test]
+fn area_layout_resizes_splits_joins_maximizes_and_keeps_contents() {
+    use crate::view::widget;
+    use crate::{AreaAxis, AreaChange, AreaLayout, AreaLayoutChanged, AreaLayoutModel};
+    use nana_ui_input::{InputPayload, PointerInput, PointerPhase};
+
+    static HEARD: Mutex<Vec<AreaChange>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let root = context
+        .create_component(document, crate::Stack::fill_column(0.0))
+        .unwrap();
+    let mut model = AreaLayoutModel::single("left", "outliner");
+    assert!(model.split("left", AreaAxis::Horizontal, 0.25, "right"));
+    model.set_editor("right", "viewport");
+    context
+        .mount_view(root.stable_id(), move || {
+            widget(AreaLayout::new(model.clone()).min_size(40.0))
+                .on(|e: &AreaLayoutChanged| HEARD.lock().unwrap().push(e.change.clone()))
+                .children((
+                    widget(crate::Text::new("outliner")).key("left"),
+                    widget(crate::Text::new("Outliner")).key("left:header"),
+                    widget(crate::Text::new("viewport")).key("right"),
+                    widget(crate::Text::new("notes")).key("area-9"),
+                ))
+        })
+        .unwrap();
+    let layout = Entity::<AreaLayout>::from_stable_id(
+        context.world().node(root.stable_id()).unwrap().children[0],
+    );
+    let relayout = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(402.0, 300.0))
+            .unwrap();
+        context.rebuild_hit_test(document);
+    };
+    relayout(&mut context);
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let keyed = |context: &AppContext, key: &str| {
+        context
+            .assembled_child(layout.stable_id(), key)
+            .expect("keyed child")
+    };
+    let parts = |context: &AppContext| context.read(layout, |l| l.parts.clone()).unwrap().unwrap();
+    let area = |context: &AppContext, id: &str| {
+        parts(context)
+            .nodes
+            .into_iter()
+            .find_map(|part| match part {
+                crate::area_layout::AreaPart::Area {
+                    id: area,
+                    frame,
+                    header,
+                    content,
+                    corners,
+                } if area == id => Some((frame, header, content, corners)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no area {id}"))
+    };
+    let frame_box = |context: &AppContext, id: &str| {
+        context
+            .world()
+            .component_layout_box(area(context, id).0)
+            .unwrap()
+    };
+    let center = |b: crate::LayoutBox| (b.x + b.width / 2.0, b.y + b.height / 2.0);
+    let ratio = |context: &AppContext| match context.read(layout, |l| l.model.root.clone()).unwrap()
+    {
+        crate::AreaNode::Split { ratio, .. } => ratio,
+        crate::AreaNode::Area { .. } => panic!("not split"),
+    };
+
+    // contents and headers sit in their areas; a content without an area waits hidden
+    let (_, header, content, _) = area(&context, "left");
+    assert_eq!(
+        context.world().parent_id(keyed(&context, "left")),
+        Some(content)
+    );
+    assert_eq!(
+        context.world().parent_id(keyed(&context, "left:header")),
+        Some(header)
+    );
+    let notes = keyed(&context, "area-9");
+    let stash = parts(&context).stash;
+    assert_eq!(context.world().parent_id(notes), Some(stash));
+    let left = frame_box(&context, "left");
+    let right = frame_box(&context, "right");
+    assert_eq!((left.x, left.width), (0.0, 100.0), "a quarter of 400 px");
+    assert_eq!((right.x, right.width), (102.0, 300.0));
+
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let mouse = |phase, (x, y): (f32, f32)| InputPayload::Pointer(PointerInput::mouse(phase, x, y));
+
+    // the divider drags; each side keeps the minimum
+    let bar = parts(&context)
+        .nodes
+        .iter()
+        .find_map(|part| match part {
+            crate::area_layout::AreaPart::Split { bar, .. } => Some(*bar),
+            _ => None,
+        })
+        .unwrap();
+    let grab = center(context.world().component_layout_box(bar).unwrap());
+    input
+        .route(&mut context, mouse(PointerPhase::Down, grab))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Move, (201.0, grab.1)))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, (201.0, grab.1)))
+        .unwrap();
+    assert_eq!(ratio(&context), 0.5);
+    assert_eq!(take(), [AreaChange::Resized]);
+    relayout(&mut context);
+    assert_eq!(frame_box(&context, "left").width, 200.0);
+    let grab = center(context.world().component_layout_box(bar).unwrap());
+    input
+        .route(&mut context, mouse(PointerPhase::Down, grab))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Move, (3.0, grab.1)))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, (3.0, grab.1)))
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(frame_box(&context, "left").width, 40.0, "the minimum");
+    take();
+
+    // a corner dragged down into its own area splits it top and bottom, with a preview
+    let (_, _, _, corners) = area(&context, "right");
+    let corner = center(context.world().component_layout_box(corners[0]).unwrap());
+    input
+        .route(&mut context, mouse(PointerPhase::Down, corner))
+        .unwrap();
+    input
+        .route(
+            &mut context,
+            mouse(PointerPhase::Move, (corner.0 + 4.0, 200.0)),
+        )
+        .unwrap();
+    relayout(&mut context);
+    let preview = context
+        .world()
+        .component_layout_box(parts(&context).preview)
+        .unwrap();
+    assert_eq!(preview.height, 2.0, "the cut line");
+    assert!((preview.y - 199.0).abs() < 1.0, "{preview:?}");
+    input
+        .route(
+            &mut context,
+            mouse(PointerPhase::Up, (corner.0 + 4.0, 200.0)),
+        )
+        .unwrap();
+    assert_eq!(
+        take(),
+        [AreaChange::Split {
+            area: "right".into(),
+            new: "area-1".into()
+        }]
+    );
+    relayout(&mut context);
+    let top = frame_box(&context, "right");
+    let bottom = frame_box(&context, "area-1");
+    assert!((top.height - 199.0).abs() < 1.5, "{top:?}");
+    assert_eq!(bottom.y, top.y + top.height + 2.0);
+    assert_eq!(
+        context.world().parent_id(keyed(&context, "right")),
+        Some(area(&context, "right").2),
+        "the content moved into the new tree"
+    );
+
+    // a corner dragged into a non-sibling does nothing; into its sibling joins
+    let (_, _, _, corners) = area(&context, "left");
+    let corner = center(context.world().component_layout_box(corners[1]).unwrap());
+    input
+        .route(&mut context, mouse(PointerPhase::Down, corner))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Move, center(bottom)))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Up, center(bottom)))
+        .unwrap();
+    assert!(take().is_empty());
+    let (_, _, _, corners) = area(&context, "right");
+    let corner = center(context.world().component_layout_box(corners[0]).unwrap());
+    input
+        .route(&mut context, mouse(PointerPhase::Down, corner))
+        .unwrap();
+    input
+        .route(&mut context, mouse(PointerPhase::Move, center(bottom)))
+        .unwrap();
+    relayout(&mut context);
+    let preview = context
+        .world()
+        .component_layout_box(parts(&context).preview)
+        .unwrap();
+    assert_eq!(preview, bottom, "the area that goes is shaded");
+    input
+        .route(&mut context, mouse(PointerPhase::Up, center(bottom)))
+        .unwrap();
+    assert_eq!(
+        take(),
+        [AreaChange::Joined {
+            kept: "right".into(),
+            removed: "area-1".into()
+        }]
+    );
+    relayout(&mut context);
+    assert_eq!(context.read(layout, |l| l.model.leaves().len()).unwrap(), 2);
+
+    // maximize shows one area over the whole layout, and restores
+    context
+        .toggle_area_maximized(layout, Some("right"))
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(frame_box(&context, "right").width, 402.0);
+    let hidden = context
+        .read(
+            Entity::<crate::area_layout::AreaBox>::from_stable_id(area(&context, "left").0),
+            |frame| frame.style.layout.display,
+        )
+        .unwrap();
+    assert_eq!(hidden, Some(nana_ui_core::DisplaySpec::None));
+    context
+        .toggle_area_maximized(layout, Some("right"))
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(frame_box(&context, "left").width, 40.0);
+    assert_eq!(
+        take(),
+        [
+            AreaChange::Maximized(Some("right".into())),
+            AreaChange::Maximized(None)
+        ]
+    );
+
+    // another layout (a workspace) moves the contents; they keep their nodes
+    let outliner = keyed(&context, "left");
+    context
+        .set_area_layout(layout, AreaLayoutModel::single("area-9", "notes"))
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(
+        context.world().parent_id(notes),
+        Some(area(&context, "area-9").2)
+    );
+    assert_eq!(
+        context.world().parent_id(outliner),
+        Some(parts(&context).stash)
+    );
+    let saved = context.read(layout, |l| l.model.clone()).unwrap();
+    assert_eq!(saved.leaves(), ["area-9"]);
+    let mut back = AreaLayoutModel::single("left", "outliner");
+    back.split("left", AreaAxis::Horizontal, 0.5, "right");
+    context.set_area_layout(layout, back).unwrap();
+    relayout(&mut context);
+    assert_eq!(
+        keyed(&context, "left"),
+        outliner,
+        "the same node, its state kept"
+    );
+    assert_eq!(
+        context.world().parent_id(outliner),
+        Some(area(&context, "left").2)
+    );
+}
+
+#[test]
 fn app_menu_bar_opens_switches_cascades_and_reports_ids() {
     use crate::{AppMenuBar, MenuBarActivated};
     use nana_ui_core::{Menu, MenuBar, MenuEntry, MenuShortcut};

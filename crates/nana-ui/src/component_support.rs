@@ -120,6 +120,7 @@ component_catalog! {
     HOSTED_TEXTAREA => { id: "hosted-textarea", name: "HostedTextarea", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Ime, Accessibility] },
     RANGE_FIELD => { id: "range-field", name: "RangeField", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility] },
     SCRUB_FIELD => { id: "scrub-field", name: "ScrubField", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Ime, Accessibility] },
+    AREA_LAYOUT => { id: "area-layout", name: "AreaLayout", family: Workspace, feature: None, compiled: true, capabilities: [Render, Pointer, Accessibility, Persistence] },
     APP_MENU_BAR => { id: "app-menu-bar", name: "AppMenuBar", family: Navigation, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Accessibility, Overlay] },
     SELECT => { id: "select", name: "Select", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility, Overlay] },
     SEGMENTED_CONTROL => { id: "segmented-control", name: "SegmentedControl", family: Control, feature: None, compiled: true, capabilities: [Render, Pointer, Keyboard, Focus, Accessibility] },

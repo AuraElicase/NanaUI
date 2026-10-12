@@ -101,4 +101,4 @@ widget(Dock::new(DockNode::item("stage", None)).primary("stage").title("stage", 
 
 ## 参见
 
-[总览](index.md) · [控件](../reference/components.md) · [工作区](../reference/workspace.md)
+[AreaLayout](area-layout.md)（区域切分，和 Dock 怎么选见那一页） · [总览](index.md) · [控件](../reference/components.md) · [工作区](../reference/workspace.md)

@@ -16,8 +16,8 @@ widget(
         .label("X")
         .unit("px"),
 )
-.on(|_, e: &ScrubInput, _| { /* 拖动中的预览 */ })
-.on(|_, e: &ScrubChanged, _| { /* 提交：写进撤销历史 */ })
+.on(|e: &ScrubInput| { /* 拖动中的预览 */ })
+.on(|e: &ScrubChanged| { /* 提交：写进撤销历史 */ })
 ```
 
 字段左边画 `label`，右边画「数值 单位」。

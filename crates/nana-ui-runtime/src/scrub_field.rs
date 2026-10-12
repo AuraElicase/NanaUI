@@ -266,7 +266,7 @@ impl ComponentView for ScrubField {
             mutations,
             &self.effective_style(),
             InteractionState {
-                pointer_events: true,
+                pointer_events: !self.disabled,
                 focusable: !self.disabled && !self.editing,
             },
             AccessibilityState {

@@ -305,6 +305,7 @@ fn cursor_icon_for(spec: CursorSpec) -> CursorIcon {
         CursorSpec::NotAllowed => CursorIcon::NotAllowed,
         CursorSpec::Crosshair => CursorIcon::Crosshair,
         CursorSpec::EwResize => CursorIcon::EwResize,
+        CursorSpec::NsResize => CursorIcon::NsResize,
         CursorSpec::Help => CursorIcon::Help,
         CursorSpec::Wait => CursorIcon::Wait,
         CursorSpec::Progress => CursorIcon::Progress,
