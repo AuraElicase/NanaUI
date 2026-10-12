@@ -1,0 +1,28 @@
+crates/nana-ui-runtime/src/framework/modal.rs
+  h_8e6780fc7b4bb1 353-354
+crates/nana-ui-runtime/src/framework/modal_exit.rs
+  h_8e6780fc7b4bb1 1-289
+crates/nana-ui-runtime/src/world/menu_exit_tests.rs
+  h_8e6780fc7b4bb1 1-174
+crates/nana-ui-runtime/src/world/motion.rs
+  h_8e6780fc7b4bb1 1,4-6,361-371
+crates/nana-ui-runtime/src/world/motion_font_tests.rs
+  h_8e6780fc7b4bb1 1-490
+crates/nana-ui-runtime/src/world/motion_l3_tests.rs
+  h_8e6780fc7b4bb1 1-305
+crates/nana-ui-runtime/src/world/motion_surface_tests.rs
+  h_8e6780fc7b4bb1 1-331
+crates/nana-ui-runtime/src/world/surface_motion.rs
+  h_8e6780fc7b4bb1 1-349
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "303b6d0da806ff3b3e561947300e589c7e0c5d17",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
