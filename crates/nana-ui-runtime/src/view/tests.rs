@@ -4049,6 +4049,9 @@ fn a_confirm_dialog_places_the_actions_it_is_given_and_makes_the_rest() {
         cx.create_detached_component(document, Text::new("详情"))
             .unwrap()
             .stable_id(),
+        cx.create_detached_component(document, Text::new("不再询问"))
+            .unwrap()
+            .stable_id(),
         cx.create_detached_component(document, Button::new("关闭"))
             .unwrap()
             .stable_id(),
@@ -4067,10 +4070,11 @@ fn a_confirm_dialog_places_the_actions_it_is_given_and_makes_the_rest() {
         ConfirmSlots {
             title_icon: None,
             body: Some(parts[0]),
-            close_action: Some(parts[1]),
-            cancel: parts[2],
-            secondary: Some(parts[3]),
-            confirm: parts[4],
+            footer: Some(parts[1]),
+            close_action: Some(parts[2]),
+            cancel: parts[3],
+            secondary: Some(parts[4]),
+            confirm: parts[5],
         },
     )
     .unwrap();
@@ -4083,6 +4087,7 @@ fn a_confirm_dialog_places_the_actions_it_is_given_and_makes_the_rest() {
                     widget(ConfirmDialog::new("删除？", "不能撤销"))
                         .entity_ref(given)
                         .body(text("详情"))
+                        .footer(text("不再询问"))
                         .close_action(button("关闭"))
                         .cancel(button("算了"))
                         .secondary(button("稍后"))

@@ -101,7 +101,7 @@ widget(
 
 ## 插槽
 
-视图上的槽是 `.title_icon`、`.body`、`.close_action`、`.cancel`、`.secondary`、`.confirm`。
+视图上的槽是 `.title_icon`、`.body`、`.footer`、`.close_action`、`.cancel`、`.secondary`、`.confirm`。
 
 这是 `slot_assembler`：视图提交时会跑。
 
@@ -109,6 +109,7 @@ widget(
 | --- | --- |
 | `.title_icon` | 标题前的图标，排法见 [Dialog](dialog.md#口气与标题图标) |
 | `.body` | 正文不止一句话时放你的内容，装配不会拿默认正文换掉它 |
+| `.footer` | 动作行左端的内容，比如「不再询问」开关。高一个按钮，宽到最左边的按钮前留出 `action_gap` 为止；不加高卡片，也不挪按钮。Tab 顺序在按钮之前，打开时焦点仍落在第一个动作上 |
 | `.close_action` | 视图上的槽 |
 | `.cancel` | 视图上的槽。确认或取消槽还空着的时候，装配才建按钮 |
 | `.secondary` | 次要动作放进 `.secondary` |

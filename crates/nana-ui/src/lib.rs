@@ -265,6 +265,8 @@ pub use nana_ui_core::ControlSize;
 #[cfg(feature = "gpu")]
 pub use nana_ui_core::GpuWorkObservation;
 pub use nana_ui_core::ImageSampling;
+/// Which side of its row a `Switch` draws its track on (`Switch::control_position`).
+pub use nana_ui_core::SwitchControlPosition;
 pub use nana_ui_core::{AnchoredMenuPlacement, StatusTone, ToastTone, ValidationIntent};
 pub use nana_ui_core::{AppearanceEvent, CommandPaletteEvent, CommandPaletteItem};
 pub use nana_ui_core::{DrawerSide, PopoverAlignment, PopoverPlacement};
