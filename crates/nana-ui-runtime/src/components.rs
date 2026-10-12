@@ -1022,6 +1022,10 @@ pub enum StandardVisual {
     TreeView {
         rows: Arc<[crate::tree_view::TreeRowData]>,
         size: ControlSize,
+        /// The toggle columns' icons.
+        columns: Arc<[nana_ui_core::Icon]>,
+        /// Where a drag in progress would land.
+        drop: Option<crate::TreeDropIntent>,
     },
     CommandPalette {
         title: Arc<str>,
@@ -1737,6 +1741,7 @@ pub enum ComponentGeometry {
     },
     TreeView {
         rows: Vec<crate::tree_view::TreeRowGeometry>,
+        drop: Option<crate::tree_view::TreeDropMark>,
     },
     CommandPalette {
         scrim: LayoutBox,

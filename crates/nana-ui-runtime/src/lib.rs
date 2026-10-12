@@ -374,7 +374,7 @@ pub use range_span::{
 #[cfg(feature = "controls")]
 pub use reorder_list::{
     ReorderDragVisual, ReorderDropMark, ReorderItem, ReorderList, ReorderListEvent,
-    ReorderListPointer, ReorderRowPaint, TreeDropIntent, TreeDropPosition,
+    ReorderListPointer, ReorderRowPaint,
 };
 #[cfg(feature = "rich-text")]
 pub use rich_text::{
@@ -423,7 +423,10 @@ pub use text_node::{
 pub use thumbnail::{DEFAULT_ASPECT as THUMBNAIL_DEFAULT_ASPECT, Thumbnail, ThumbnailState};
 pub use toast::{Toast, ToastAction, ToastDismissed, ToastProgress, ToastTone};
 pub use toast_stack::ToastStack;
-pub use tree_view::TreeView;
+pub use tree_view::{
+    TreeDropIntent, TreeDropMark, TreeDropPosition, TreeDropRequested, TreeRenameRequested,
+    TreeSelectionChanged, TreeToggleChanged, TreeToggleColumn, TreeView,
+};
 pub use video::Video;
 pub use view_components::{
     Activate, Button, Card, Checkbox, CodeEditing, ComponentView, Dialog, DialogCloseRequested,

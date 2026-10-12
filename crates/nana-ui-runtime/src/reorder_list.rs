@@ -21,20 +21,7 @@ const DEFAULT_SPACING: f32 = nana_ui_core::space::XXS;
 const INSERT_INSET: f32 = nana_ui_core::space::XS;
 const INSERT_THICKNESS: f32 = nana_ui_core::space::XXS;
 
-/// Placement resolved for a tree drop target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TreeDropPosition {
-    Before,
-    Inside,
-    After,
-}
-
-/// Framework-owned tree drop intent. Applications keep node semantics.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TreeDropIntent {
-    pub target: Arc<str>,
-    pub position: TreeDropPosition,
-}
+pub use crate::tree_view::{TreeDropIntent, TreeDropPosition};
 
 /// Results published by [`ReorderList`]. Order and persistence stay with the
 /// application.

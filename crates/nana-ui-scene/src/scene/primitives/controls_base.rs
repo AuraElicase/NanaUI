@@ -1,5 +1,10 @@
 //! Geometry-to-primitive projection; has no Scene index or Runtime access.
 use super::*;
+
+/// First primitive slot of a tree's toggle icons; the drop mark takes the one
+/// below it.
+const TREE_TOGGLE_SLOTS: u64 = 1 << 32;
+
 pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(ScenePrimitive)) {
     let node = context.node;
     let bounds = context.bounds;
@@ -781,9 +786,35 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                 }
             }
         }
-        Some(ComponentGeometry::TreeView { rows }) => {
+        Some(ComponentGeometry::TreeView { rows, drop }) => {
             for (index, row) in rows.iter().enumerate() {
                 let index = u64::try_from(index).unwrap_or(u64::MAX);
+                // toggle columns: a slot range of their own, eight per row
+                for (column, (icon, icon_bounds, color)) in row.toggles.iter().enumerate() {
+                    let column = u64::try_from(column).unwrap_or(7).min(7);
+                    emit(ScenePrimitive {
+                        id: PrimitiveId {
+                            node: id,
+                            slot: TREE_TOGGLE_SLOTS
+                                .saturating_add(index.saturating_mul(8))
+                                .saturating_add(column),
+                        },
+                        node: id,
+                        bounds: scene_rect(*icon_bounds),
+                        transform,
+                        clips: clips.clone(),
+                        opacity,
+                        z_index: node.z_index,
+                        document_order: node_order,
+                        kind: ScenePrimitiveKind::Icon {
+                            icon: *icon,
+                            color: crate::scene::slot_color(
+                                matching_paint_color(node.style.paint_colors.color, Some(*color)),
+                                Some(*color),
+                            ),
+                        },
+                    });
+                }
                 if let Some(background) = row.background {
                     emit(visual_quad_with_paint(
                         &VisualPrimitiveContext {
@@ -863,6 +894,30 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                     clips.clone(),
                     opacity,
                     node_order,
+                ));
+            }
+            // where a dragged row would land: a line between rows, or the
+            // row it would go into outlined
+            if let Some(mark) = drop {
+                emit(visual_quad_with_paint(
+                    &VisualPrimitiveContext {
+                        node: id,
+                        transform,
+                        clips,
+                        opacity,
+                        z_index: node.z_index,
+                        document_order: node_order,
+                    },
+                    TREE_TOGGLE_SLOTS - 1,
+                    scene_rect(mark.bounds),
+                    VisualQuadStyle {
+                        background: (!mark.inside).then_some(mark.color),
+                        border_color: mark.inside.then_some(mark.color),
+                        border_width: if mark.inside { 2.0 } else { 0.0 },
+                        corner_radius: corner_radii(node.chrome_radii.sm),
+                    },
+                    None,
+                    None,
                 ));
             }
         }
