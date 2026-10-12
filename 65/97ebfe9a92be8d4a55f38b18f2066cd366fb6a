@@ -1,0 +1,42 @@
+crates/nana-diagnostics/src/framework.rs
+  h_8e6780fc7b4bb1 142-149
+crates/nana-ui-runtime/src/components.rs
+  h_8e6780fc7b4bb1 3921,3923-3924
+crates/nana-ui-runtime/src/framework.rs
+  h_8e6780fc7b4bb1 28,601-602,1885-1893,1919-1920,2025-2026
+crates/nana-ui-runtime/src/framework/frame.rs
+  h_8e6780fc7b4bb1 675,691
+crates/nana-ui-runtime/src/framework/input.rs
+  h_8e6780fc7b4bb1 209-223,558-559,848-849,897-898
+crates/nana-ui-runtime/src/framework/lifecycle.rs
+  h_8e6780fc7b4bb1 641-642
+crates/nana-ui-runtime/src/framework/rich_editor_caret.rs
+  h_8e6780fc7b4bb1 1-295
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 149-150,238-243,254,272,501,506,788,803-810
+crates/nana-ui-runtime/src/world.rs
+  h_8e6780fc7b4bb1 2853-2858
+crates/nana-ui-runtime/src/world/extraction.rs
+  h_8e6780fc7b4bb1 273
+crates/nana-ui-runtime/src/world/text.rs
+  h_8e6780fc7b4bb1 4160,4244,4248,4637-4638
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 881-897
+crates/nana-ui-scene/src/scene/primitives.rs
+  h_8e6780fc7b4bb1 369
+crates/nana-ui-scene/tests/rich_editor_caret.rs
+  h_8e6780fc7b4bb1 1-298
+docs/components/rich-text-editor.md
+  h_8e6780fc7b4bb1 7-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6597ebfe9a92be8d4a55f38b18f2066cd366fb6a",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
