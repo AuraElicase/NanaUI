@@ -55,9 +55,12 @@ widget(AreaLayout::new(model))
 | `toggle_area_maximized(布局, Some(区域))` | 最大化；对已经最大化的区域再调一次就还原，传 `None` 也是还原 |
 | `set_area_editor(布局, 区域, 编辑器)` | 换编辑器类型；内容由应用跟着换 |
 | `set_area_layout(布局, 模型)` | 换一整套布局，例如工作区预设 |
+| `set_area_labels(布局, [(编辑器, 名称)])` | 换各种编辑器在读屏里的名称，例如界面换了语言；布局不变 |
 | `area_layout_boxes(布局)` | 每个可见区域在布局后的盒子，用来在区域上放浮层 |
 
-每个调用都会发一次 `AreaLayoutChanged`，其中带新的模型，应用可以保存它。
+除 `set_area_labels` 外，每个调用都会发一次 `AreaLayoutChanged`，其中带新的模型，应用可以保存它。
+
+每个区域在无障碍树里是一个 `Region`。它的名称按编辑器类型 id 从 `.labels(...)` / `set_area_labels` 里查，没有给出时就是 id 本身。名称跟着界面语言走，不写进 `AreaLayoutModel`，模型仍然是与语言无关的数据。
 
 视图重新渲染时，`AreaLayout::new` 里的模型不会覆盖用户已经拖过的布局。要整体替换，调用 `set_area_layout`。
 
@@ -87,6 +90,7 @@ widget(AreaLayout::new(model))
 | `AreaLayout::new(model)` | `AreaLayoutModel` | 初始布局 |
 | `.gap(px)` | `f32` | 区域间隙，也是分隔条的宽度，默认 2 |
 | `.min_size(px)` | `f32` | 分隔条两侧、切开后两半的最小尺寸，默认 48 |
+| `.labels([(编辑器, 名称)])` | `(String, Arc<str>)` | 各种编辑器的区域在读屏里的名称，按编辑器类型 id；没给的用 id |
 | `.style(style)` | `NodeStyle` | 根节点样式，默认铺满父级 |
 
 ## 事件
