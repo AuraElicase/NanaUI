@@ -13,6 +13,7 @@
         </svg>
       </a>
       <a class="setup" href="/guide/quick-start">快速开始</a>
+      <a class="setup" href="/learn/">架构学习</a>
     </p>
   </section>
 
