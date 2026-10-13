@@ -2576,6 +2576,7 @@ impl UiWorld {
                 size,
                 columns,
                 drop,
+                ..
             } => Some(crate::tree_view::tree_view_geometry(
                 bounds,
                 rows,

@@ -33,6 +33,7 @@ const INTERACTIVE_ROLES: &[&str] = &[
     "switch",
     "tab",
     "text-input",
+    "tree-item",
 ];
 
 pub trait AgentSession {

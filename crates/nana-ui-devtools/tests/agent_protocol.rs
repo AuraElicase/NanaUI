@@ -66,6 +66,72 @@ fn accessibility_dump_carries_state_not_only_labels() {
     assert_eq!(slider.numeric_value, Some(4.0));
 }
 
+/// A tree's rows are nodes of their own: the tree names itself with
+/// `.label()`, each row carries its name, level, selection and, on a branch,
+/// whether it is open, and a click on a row selects it.
+#[test]
+fn accessibility_dump_carries_tree_rows() {
+    use nana_ui::runtime::{TreeNode, TreeView};
+    let mut session = session_with(|document, id| {
+        document
+            .context_mut()
+            .create_component(
+                id,
+                TreeView::new([
+                    TreeNode::branch(
+                        "scene".into(),
+                        "场景",
+                        true,
+                        [TreeNode::leaf("model".into(), "模型")],
+                    ),
+                    TreeNode::leaf("camera".into(), "相机").selected(true),
+                ])
+                .label("大纲"),
+            )
+            .unwrap();
+    });
+    session.flush().expect("flush");
+    let nodes = session.accessibility_dump();
+    let tree = nodes
+        .iter()
+        .find(|node| node.role == "tree")
+        .expect("tree projects");
+    assert_eq!(tree.label.as_deref(), Some("大纲"));
+    assert_eq!(tree.value, None);
+    let rows = nodes
+        .iter()
+        .filter(|node| node.role == "tree-item")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        tree.children,
+        rows.iter().map(|row| row.id).collect::<Vec<_>>()
+    );
+    let names = rows
+        .iter()
+        .map(|row| row.label.as_deref().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["场景", "模型", "相机"]);
+    assert!(rows.iter().all(|row| row.value.is_none()));
+    let levels = rows.iter().map(|row| row.level).collect::<Vec<_>>();
+    assert_eq!(levels, [Some(1), Some(2), Some(1)]);
+    let expanded = rows.iter().map(|row| row.expanded).collect::<Vec<_>>();
+    assert_eq!(expanded, [Some(true), None, None]);
+    let selected = rows.iter().map(|row| row.selected).collect::<Vec<_>>();
+    assert_eq!(selected, [Some(false), Some(false), Some(true)]);
+    let leaf = serde_json::to_string(rows[1]).expect("serialize");
+    assert!(!leaf.contains("expanded"), "a leaf cannot open: {leaf}");
+
+    let model = rows[1].id;
+    assert!(session.click_node(model).expect("click"));
+    let selected = session
+        .accessibility_dump()
+        .into_iter()
+        .filter(|node| node.role == "tree-item")
+        .map(|row| row.selected)
+        .collect::<Vec<_>>();
+    assert_eq!(selected, [Some(false), Some(true), Some(false)]);
+}
+
 /// Defaults must not bloat every node: a plain switch carries no `selection`,
 /// no `numeric_*` and no `modal` key on the wire.
 #[test]

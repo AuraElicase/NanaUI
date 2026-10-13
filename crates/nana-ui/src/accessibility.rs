@@ -358,12 +358,19 @@ impl AccessibilityProjector {
         // AccessKit has one focus id. A context-menu row is a virtual
         // descendant: keyboard focus stays on the trigger, and the highlighted
         // row is also marked focused. Virtual ids sort after retained ids, so
-        // the lowest id would leave the platform focus on the trigger.
+        // the lowest id would leave the platform focus on the trigger. A tree
+        // row is the same under its focused tree; an open menu wins over it.
         let id = self
             .focused
             .iter()
             .rev()
             .find(|id| nana_ui_runtime::decode_virtual_menu_item(**id).is_some())
+            .or_else(|| {
+                self.focused
+                    .iter()
+                    .rev()
+                    .find(|id| nana_ui_runtime::decode_virtual_tree_item(**id).is_some())
+            })
             .or_else(|| self.focused.first())
             .copied();
         id.map(node_id).unwrap_or_else(|| {
@@ -442,6 +449,23 @@ impl AccessibilityProjector {
                     nana_ui_runtime::AccessibilityAction::ActivateMenuItem { menu, slot }
                 }
                 Action::Focus => nana_ui_runtime::AccessibilityAction::Focus,
+                _ => return None,
+            };
+            return Some(nana_ui_runtime::AccessibilityActionRequest { target, action });
+        }
+        if nana_ui_runtime::decode_virtual_tree_item(target).is_some() {
+            if node.role != AccessibilityRole::TreeItem {
+                return None;
+            }
+            let action = match request.action {
+                Action::Click => nana_ui_runtime::AccessibilityAction::Click,
+                Action::Focus => nana_ui_runtime::AccessibilityAction::Focus,
+                Action::Expand if supports_expand(node) => {
+                    nana_ui_runtime::AccessibilityAction::Expand
+                }
+                Action::Collapse if supports_collapse(node) => {
+                    nana_ui_runtime::AccessibilityAction::Collapse
+                }
                 _ => return None,
             };
             return Some(nana_ui_runtime::AccessibilityActionRequest { target, action });
@@ -1085,8 +1109,18 @@ fn project_node(
     if node.role == AccessibilityRole::TextInput && !node.editable {
         projected.set_read_only();
     }
-    if node.selected == Some(true) {
-        projected.set_selected(true);
+    // A tree row is always selectable, so its unselected state is said too.
+    match node.selected {
+        Some(true) => projected.set_selected(true),
+        Some(false) if node.role == AccessibilityRole::TreeItem => projected.set_selected(false),
+        _ => {}
+    }
+    if let Some(level) = node.level.filter(|level| *level > 0) {
+        // AccessKit counts levels from zero, `aria-level` from one.
+        projected.set_level(level as usize - 1);
+    }
+    if let Some(expanded) = node.expanded {
+        projected.set_expanded(expanded);
     }
     if node.has_popup {
         projected.set_has_popup(HasPopup::Menu);
@@ -1191,6 +1225,7 @@ const fn supports_click(role: AccessibilityRole) -> bool {
             | AccessibilityRole::TextInput
             | AccessibilityRole::Tab
             | AccessibilityRole::ListItem
+            | AccessibilityRole::TreeItem
             | AccessibilityRole::MenuItem
             | AccessibilityRole::Radio
     )
@@ -1203,6 +1238,8 @@ const fn supports_focus(role: AccessibilityRole) -> bool {
             | AccessibilityRole::Checkbox
             | AccessibilityRole::Switch
             | AccessibilityRole::ListItem
+            | AccessibilityRole::Tree
+            | AccessibilityRole::TreeItem
             | AccessibilityRole::TextInput
             | AccessibilityRole::Slider
             | AccessibilityRole::ComboBox
@@ -1225,11 +1262,19 @@ fn supports_numeric_step(node: &AccessibilityNode) -> bool {
 }
 
 fn supports_expand(node: &AccessibilityNode) -> bool {
-    node.role == AccessibilityRole::ComboBox && node.selected != Some(true)
+    match node.role {
+        AccessibilityRole::ComboBox => node.selected != Some(true),
+        AccessibilityRole::TreeItem => node.expanded == Some(false),
+        _ => false,
+    }
 }
 
 fn supports_collapse(node: &AccessibilityNode) -> bool {
-    node.role == AccessibilityRole::ComboBox && node.selected == Some(true)
+    match node.role {
+        AccessibilityRole::ComboBox => node.selected == Some(true),
+        AccessibilityRole::TreeItem => node.expanded == Some(true),
+        _ => false,
+    }
 }
 
 fn projected_text_selection(
@@ -1298,6 +1343,8 @@ const fn project_role(role: AccessibilityRole, multiline: bool) -> Role {
         AccessibilityRole::ProgressIndicator => Role::ProgressIndicator,
         AccessibilityRole::List => Role::List,
         AccessibilityRole::ListItem => Role::ListItem,
+        AccessibilityRole::Tree => Role::Tree,
+        AccessibilityRole::TreeItem => Role::TreeItem,
         AccessibilityRole::Table => Role::Table,
         AccessibilityRole::Row => Role::Row,
         AccessibilityRole::Cell => Role::Cell,
@@ -1437,6 +1484,8 @@ mod tests {
             mixed: false,
             orientation: None,
             selected: None,
+            level: None,
+            expanded: None,
             has_popup: false,
             multiline: false,
             editable: false,
@@ -2231,6 +2280,147 @@ mod tests {
                     | nana_ui_runtime::AccessibilityAction::Focus
             ));
         }
+    }
+
+    #[test]
+    fn tree_rows_project_as_accesskit_tree_items_with_platform_focus() {
+        use nana_ui_runtime::{AppContext, DocumentId, TreeNode, TreeView};
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let tree = cx
+            .create_component(
+                document,
+                TreeView::new([
+                    TreeNode::branch(
+                        "scene".into(),
+                        "场景",
+                        true,
+                        [TreeNode::leaf("model".into(), "模型").selected(true)],
+                    ),
+                    TreeNode::branch("light".into(), "灯光", false, []),
+                ])
+                .label("大纲"),
+            )
+            .unwrap();
+        cx.layout_document(document, nana_ui_runtime::LayoutViewport::new(300.0, 300.0))
+            .unwrap();
+        cx.focus_node(document, tree.stable_id()).unwrap();
+        let row = |slot| nana_ui_runtime::virtual_tree_item_id(tree.stable_id(), slot).unwrap();
+        let (projector, update) =
+            AccessibilityProjector::new(cx.world().project_accessibility(document), true, 1.0);
+        let node = |id: StableNodeId| {
+            &update
+                .nodes
+                .iter()
+                .find(|(node, _)| *node == NodeId(id.get()))
+                .expect("projected node")
+                .1
+        };
+        let root = node(tree.stable_id());
+        assert_eq!(root.role(), Role::Tree);
+        assert_eq!(root.label(), Some("大纲"));
+        assert_eq!(
+            root.children(),
+            [
+                NodeId(row(1).get()),
+                NodeId(row(2).get()),
+                NodeId(row(3).get())
+            ]
+        );
+
+        let (scene, model, light) = (node(row(1)), node(row(2)), node(row(3)));
+        assert!(
+            [scene, model, light]
+                .iter()
+                .all(|row| row.role() == Role::TreeItem)
+        );
+        assert_eq!(scene.label(), Some("场景"));
+        // AccessKit counts levels from zero
+        assert_eq!(
+            (scene.level(), model.level(), light.level()),
+            (Some(0), Some(1), Some(0))
+        );
+        assert_eq!(scene.is_expanded(), Some(true));
+        assert_eq!(model.is_expanded(), None);
+        assert_eq!(light.is_expanded(), Some(false));
+        assert_eq!(model.is_selected(), Some(true));
+        assert_eq!(scene.is_selected(), Some(false));
+        // the platform focus is on the active row, not on the tree
+        assert_eq!(update.focus, NodeId(row(2).get()));
+
+        assert!(model.supports_action(Action::Click));
+        assert!(model.supports_action(Action::Focus));
+        assert!(!model.supports_action(Action::Expand));
+        assert!(!model.supports_action(Action::Collapse));
+        assert!(scene.supports_action(Action::Collapse));
+        assert!(!scene.supports_action(Action::Expand));
+        assert!(light.supports_action(Action::Expand));
+        let request = |target: StableNodeId, action| {
+            projector
+                .project_action_request(ActionRequest {
+                    action,
+                    target_tree: TreeId::ROOT,
+                    target_node: NodeId(target.get()),
+                    data: None,
+                })
+                .map(|request| request.action)
+        };
+        assert_eq!(
+            request(row(2), Action::Click),
+            Some(nana_ui_runtime::AccessibilityAction::Click)
+        );
+        assert_eq!(
+            request(row(2), Action::Focus),
+            Some(nana_ui_runtime::AccessibilityAction::Focus)
+        );
+        assert_eq!(
+            request(row(1), Action::Collapse),
+            Some(nana_ui_runtime::AccessibilityAction::Collapse)
+        );
+        assert_eq!(
+            request(row(3), Action::Expand),
+            Some(nana_ui_runtime::AccessibilityAction::Expand)
+        );
+        assert_eq!(request(row(1), Action::Expand), None);
+        assert_eq!(request(row(2), Action::Expand), None);
+        assert_eq!(request(row(2), Action::ScrollDown), None);
+    }
+
+    #[test]
+    fn an_open_menu_row_wins_platform_focus_over_a_tree_row() {
+        let menu_id = StableNodeId::new(5).unwrap();
+        let tree_id = StableNodeId::new(4).unwrap();
+        let menu_row = nana_ui_runtime::virtual_menu_item_id(menu_id, 1).unwrap();
+        let tree_row = nana_ui_runtime::virtual_tree_item_id(tree_id, 1).unwrap();
+        let mut tree = node(tree_id.get(), Some(1), &[tree_row.get()]);
+        tree.role = AccessibilityRole::Tree;
+        tree.focused = true;
+        let mut row = node(tree_row.get(), Some(tree_id.get()), &[]);
+        row.role = AccessibilityRole::TreeItem;
+        row.focused = true;
+        let mut menu = node(menu_id.get(), Some(1), &[menu_row.get()]);
+        menu.role = AccessibilityRole::Menu;
+        let mut item = node(menu_row.get(), Some(menu_id.get()), &[]);
+        item.role = AccessibilityRole::MenuItem;
+        item.focused = true;
+        let (_, update) = AccessibilityProjector::new(
+            vec![
+                node(1, None, &[tree_id.get(), menu_id.get()]),
+                tree.clone(),
+                row.clone(),
+                menu.clone(),
+                item,
+            ],
+            true,
+            1.0,
+        );
+        assert_eq!(update.focus, NodeId(menu_row.get()));
+        let (_, update) = AccessibilityProjector::new(
+            vec![node(1, None, &[tree_id.get()]), tree, row],
+            true,
+            1.0,
+        );
+        assert_eq!(update.focus, NodeId(tree_row.get()));
     }
 
     #[test]

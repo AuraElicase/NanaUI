@@ -21,6 +21,8 @@ fn node(value: u64) -> AccessibilityNode {
         mixed: false,
         orientation: None,
         selected: None,
+        level: None,
+        expanded: None,
         has_popup: false,
         multiline: false,
         editable: false,

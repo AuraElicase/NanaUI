@@ -452,6 +452,15 @@ impl UiWorld {
                     .filter_map(|slot| crate::virtual_menu_item_id(id, slot)),
             );
         }
+        if self.nodes.has_visuals()
+            && let Some(StandardVisual::TreeView { rows, .. }) = self.nodes.visual(id)
+        {
+            children.extend(
+                (0..rows.len())
+                    .map_while(|index| u16::try_from(index + 1).ok())
+                    .filter_map(|slot| crate::virtual_tree_item_id(id, slot)),
+            );
+        }
         Some(AccessibilityNode {
             id,
             parent,
@@ -479,6 +488,8 @@ impl UiWorld {
             mixed: state.mixed,
             orientation: state.orientation,
             selected: state.selected,
+            level: None,
+            expanded: None,
             has_popup: state.has_popup,
             multiline: state.multiline,
             editable: state.editable,
@@ -576,6 +587,8 @@ impl UiWorld {
                     mixed: false,
                     orientation: None,
                     selected: row.mark.selected(),
+                    level: None,
+                    expanded: None,
                     has_popup: false,
                     multiline: false,
                     editable: false,
@@ -598,6 +611,69 @@ impl UiWorld {
             .collect()
     }
 
+    /// The visible rows of a tree as `TreeItem` nodes under it. The row the
+    /// tree is on is focused while the tree has the focus.
+    fn project_virtual_tree_items(&self, tree: &AccessibilityNode) -> Vec<AccessibilityNode> {
+        let Some(StandardVisual::TreeView { rows, active, .. }) = self.nodes.visual(tree.id) else {
+            return Vec::new();
+        };
+        let geometry = match self.component_geometry(tree.id) {
+            Some(crate::ComponentGeometry::TreeView { rows, .. }) => rows,
+            _ => Vec::new(),
+        };
+        let count = rows.len().max(1) as f32;
+        rows.iter()
+            .enumerate()
+            .filter_map(|(index, row)| {
+                let slot = u16::try_from(index + 1).ok()?;
+                let id = crate::virtual_tree_item_id(tree.id, slot)?;
+                let bounds = geometry
+                    .get(index)
+                    .map(|row| row.bounds)
+                    .unwrap_or_else(|| LayoutBox {
+                        x: tree.bounds.x,
+                        y: tree.bounds.y + tree.bounds.height * index as f32 / count,
+                        width: tree.bounds.width,
+                        height: tree.bounds.height / count,
+                    });
+                Some(AccessibilityNode {
+                    id,
+                    parent: Some(tree.id),
+                    children: Vec::new(),
+                    role: crate::AccessibilityRole::TreeItem,
+                    label: Some(Arc::clone(&row.label)),
+                    value: None,
+                    description: None,
+                    role_description: None,
+                    disabled: row.disabled,
+                    checked: None,
+                    mixed: false,
+                    orientation: None,
+                    selected: Some(row.selected),
+                    level: Some(u32::from(row.depth) + 1),
+                    expanded: row.branch.then_some(row.expanded),
+                    has_popup: false,
+                    multiline: false,
+                    editable: false,
+                    selection: None,
+                    modal: false,
+                    busy: false,
+                    invalid: false,
+                    live: None,
+                    numeric_minimum: None,
+                    numeric_maximum: None,
+                    numeric_step: None,
+                    numeric_value: None,
+                    scroll_x: None,
+                    scroll_y: None,
+                    focused: tree.focused && active.as_ref() == Some(&row.id),
+                    bounds,
+                    writing: tree.writing,
+                })
+            })
+            .collect()
+    }
+
     fn project_accessibility_entries(
         &self,
         id: StableNodeId,
@@ -607,6 +683,14 @@ impl UiWorld {
         let Some(node) = self.project_accessibility_node(id, plain, memo) else {
             return Vec::new();
         };
+        if self.nodes.has_visuals()
+            && matches!(self.nodes.visual(id), Some(StandardVisual::TreeView { .. }))
+        {
+            let rows = self.project_virtual_tree_items(&node);
+            let mut entries = vec![node];
+            entries.extend(rows);
+            return entries;
+        }
         let open_context_menu = self.nodes.has_visuals()
             && matches!(
                 self.nodes.visual(id),
@@ -701,6 +785,19 @@ impl UiWorld {
     pub(crate) fn virtual_menu_row_index(&self, menu: StableNodeId, slot: u16) -> Option<usize> {
         match self.nodes.visual(menu) {
             Some(StandardVisual::MenuSurface { rows, .. }) => crate::menu_row_index(rows, slot),
+            _ => None,
+        }
+    }
+
+    /// The visible row of `tree` that holds accessibility `slot` now.
+    pub(crate) fn virtual_tree_row(
+        &self,
+        tree: StableNodeId,
+        slot: u16,
+    ) -> Option<crate::tree_view::TreeRowData> {
+        let index = usize::from(slot).checked_sub(1)?;
+        match self.nodes.visual(tree) {
+            Some(StandardVisual::TreeView { rows, .. }) => rows.get(index).cloned(),
             _ => None,
         }
     }

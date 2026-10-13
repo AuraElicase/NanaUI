@@ -477,13 +477,7 @@ impl AppContext {
         if let Some(index) = crate::tree_view::tree_disclosure_at(&rows, x, y) {
             let id = Arc::clone(&rows[index].id);
             return self.update_component(entity, |tree, cx| {
-                let event = crate::TreeViewEvent::Toggle(id);
-                if tree.apply_event(event.clone()) {
-                    cx.emit(event);
-                    true
-                } else {
-                    false
-                }
+                crate::tree_view::apply_tree_event(tree, cx, crate::TreeViewEvent::Toggle(id))
             });
         }
         if let Some(index) = crate::tree_view::tree_row_at(&rows, x, y) {
@@ -492,13 +486,7 @@ impl AppContext {
             }
             let id = Arc::clone(&rows[index].id);
             return self.update_component(entity, |tree, cx| {
-                let event = crate::TreeViewEvent::Select(id);
-                if tree.apply_event(event.clone()) {
-                    cx.emit(event);
-                    true
-                } else {
-                    false
-                }
+                crate::tree_view::apply_tree_event(tree, cx, crate::TreeViewEvent::Select(id))
             });
         }
         Ok(false)

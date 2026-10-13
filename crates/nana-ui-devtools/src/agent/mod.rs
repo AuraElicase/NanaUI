@@ -125,6 +125,12 @@ pub struct AccessibilityDumpNode {
     pub orientation: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected: Option<bool>,
+    /// A tree row's depth, from 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+    /// Whether a branch tree row is open; absent on rows that cannot open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expanded: Option<bool>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub multiline: bool,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -207,6 +213,8 @@ fn dump_accessibility_node_with(
         mixed: node.mixed,
         orientation: node.orientation.map(orientation_name).map(String::from),
         selected: node.selected,
+        level: node.level,
+        expanded: node.expanded,
         multiline: node.multiline,
         editable: node.editable,
         selection: node.selection.map(selection_dump),
@@ -283,6 +291,8 @@ fn accessibility_role_name(role: AccessibilityRole) -> &'static str {
         AccessibilityRole::ProgressIndicator => "progress",
         AccessibilityRole::List => "list",
         AccessibilityRole::ListItem => "list-item",
+        AccessibilityRole::Tree => "tree",
+        AccessibilityRole::TreeItem => "tree-item",
         AccessibilityRole::Table => "table",
         AccessibilityRole::Row => "row",
         AccessibilityRole::Cell => "cell",

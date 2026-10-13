@@ -12,6 +12,12 @@
 //! accept or not. [`TreeView::renamable`] opens an in-place text input on F2
 //! or a double click: Enter or leaving commits ([`TreeRenameRequested`]),
 //! Escape cancels.
+//!
+//! For assistive technology the tree is a `Tree` named by
+//! [`TreeView::label`], and each visible row is a virtual `TreeItem` under it
+//! (#349, [`crate::virtual_tree_item_id`]) with its level, expansion and
+//! selection. Click, Focus, Expand and Collapse on a row do what a click, the
+//! arrow keys and the disclosure do.
 
 use std::sync::Arc;
 
@@ -130,6 +136,8 @@ pub struct TreeView {
     pub reorderable: bool,
     /// F2 or a double click renames a row in place.
     pub renamable: bool,
+    /// The tree's name for assistive technology: `Layers`.
+    pub label: Option<Arc<str>>,
     pub(crate) active: Option<Arc<str>>,
     pub(crate) anchor: Option<Arc<str>>,
     pub(crate) gesture: Option<TreeGesture>,
@@ -194,6 +202,7 @@ impl TreeView {
             columns: Vec::new(),
             reorderable: false,
             renamable: false,
+            label: None,
             active: None,
             anchor: None,
             gesture: None,
@@ -226,6 +235,13 @@ impl TreeView {
 
     pub fn renamable(mut self, renamable: bool) -> Self {
         self.renamable = renamable;
+        self
+    }
+
+    /// Name the tree for assistive technology. Rows are named by their
+    /// labels.
+    pub fn label(mut self, label: impl Into<Arc<str>>) -> Self {
+        self.label = Some(label.into());
         self
     }
 
@@ -395,6 +411,7 @@ impl ComponentView for TreeView {
             size: self.size,
             columns: self.columns.iter().map(|column| column.icon).collect(),
             drop: self.drop.clone(),
+            active: self.active_id().cloned(),
         };
         if world.standard_visual(id) != Some(visual.clone()) {
             mutations.set_standard_visual(id, Some(visual));
@@ -429,8 +446,8 @@ impl ComponentView for TreeView {
                 focusable: true,
             },
             AccessibilityState {
-                role: AccessibilityRole::List,
-                label: self.active_id().cloned(),
+                role: AccessibilityRole::Tree,
+                label: self.label.clone(),
                 disabled: false,
                 ..AccessibilityState::default()
             },
@@ -772,10 +789,7 @@ fn tree_pressed(
     if let Some(index) = tree_disclosure_at(&rows, x, y) {
         let id = Arc::clone(&rows[index].id);
         cx.update_component(tree, |tree, view| {
-            let event = TreeViewEvent::Toggle(id);
-            if tree.apply_event(event.clone()) {
-                view.emit(event);
-            }
+            apply_tree_event(tree, view, TreeViewEvent::Toggle(id))
         })?;
         return Ok(true);
     }
@@ -946,16 +960,36 @@ fn tree_released(
                 });
             }
         } else if select_on_release {
-            let before = tree.selected_ids();
-            if tree.select_only(&row) {
-                view.emit(TreeViewEvent::Select(Arc::clone(&row)));
-            }
-            if tree.selected_ids() != before {
-                view.emit(tree.selection_event());
-            }
+            select_alone(tree, view, &row);
         }
     })?;
     Ok(true)
+}
+
+/// Apply `event` and report it when it changed the tree: a disclosure
+/// press, a step of the arrow keys.
+pub(crate) fn apply_tree_event(
+    tree: &mut TreeView,
+    view: &mut crate::ViewContext<'_, TreeView>,
+    event: TreeViewEvent<Arc<str>>,
+) -> bool {
+    if tree.apply_event(event.clone()) {
+        view.emit(event);
+        true
+    } else {
+        false
+    }
+}
+
+/// Select `id` alone, as a plain click does, and report what changed.
+fn select_alone(tree: &mut TreeView, view: &mut crate::ViewContext<'_, TreeView>, id: &Arc<str>) {
+    let before = tree.selected_ids();
+    if tree.select_only(id) {
+        view.emit(TreeViewEvent::Select(Arc::clone(id)));
+    }
+    if tree.selected_ids() != before {
+        view.emit(tree.selection_event());
+    }
 }
 
 /// What a drag from `row` carries: the selection when `row` is in it.
@@ -990,6 +1024,55 @@ fn set_toggle(
 }
 
 impl AppContext {
+    /// An assistive-technology action on the virtual node of visible row
+    /// `slot` of `tree`. Click selects the row as a click on it does and
+    /// Focus moves the active row there as the arrow keys do, both with the
+    /// tree taking the focus; Expand and Collapse open or close a branch as
+    /// its disclosure does. A row that is gone or disabled, and an action
+    /// the row cannot take, are refused.
+    pub(crate) fn apply_tree_item_action(
+        &mut self,
+        document: DocumentId,
+        tree: StableNodeId,
+        slot: u16,
+        action: &crate::AccessibilityAction,
+    ) -> Result<bool, FrameworkError> {
+        let Some(entity) = self.view_entity::<TreeView>(tree) else {
+            return Ok(false);
+        };
+        let Some(row) = self.world().virtual_tree_row(tree, slot) else {
+            return Ok(false);
+        };
+        if row.disabled {
+            return Ok(false);
+        }
+        let id = row.id;
+        match action {
+            crate::AccessibilityAction::Click => {
+                self.focus_node(document, tree)?;
+                self.update_component(entity, |tree, view| select_alone(tree, view, &id))?;
+                Ok(true)
+            }
+            crate::AccessibilityAction::Focus => {
+                let focused = self.focus_node(document, tree)?;
+                let moved = self.update_component(entity, |tree, view| {
+                    apply_tree_event(tree, view, TreeViewEvent::Select(id))
+                })?;
+                Ok(focused || moved)
+            }
+            crate::AccessibilityAction::Expand | crate::AccessibilityAction::Collapse => {
+                let expand = matches!(action, crate::AccessibilityAction::Expand);
+                if !row.branch || row.expanded == expand {
+                    return Ok(false);
+                }
+                self.update_component(entity, |tree, view| {
+                    apply_tree_event(tree, view, TreeViewEvent::Toggle(id))
+                })
+            }
+            _ => Ok(false),
+        }
+    }
+
     /// Rename `id` in place: an input over its label takes the focus with
     /// the label selected.
     pub fn begin_tree_rename(
@@ -1266,6 +1349,376 @@ mod tests {
             labels[1] - labels[0],
             compact.tree.indent - compact.tree.disclosure
         );
+    }
+
+    type Heard = Arc<std::sync::Mutex<Vec<String>>>;
+
+    /// A laid-out tree, and every selection and disclosure event it reports.
+    fn heard_tree(tree: TreeView) -> (AppContext, Entity<TreeView>, Heard) {
+        let mut context = AppContext::new();
+        let entity = context.create_component(document(), tree).unwrap();
+        let heard = Heard::default();
+        let events = Arc::clone(&heard);
+        context
+            .on(entity, move |_, event: &TreeViewEvent<Arc<str>>, _| {
+                events.lock().unwrap().push(format!("{event:?}"));
+            })
+            .unwrap();
+        let events = Arc::clone(&heard);
+        context
+            .on(entity, move |_, event: &TreeSelectionChanged, _| {
+                events.lock().unwrap().push(format!("{event:?}"));
+            })
+            .unwrap();
+        context
+            .layout_document(document(), crate::LayoutViewport::new(300.0, 300.0))
+            .unwrap();
+        context.rebuild_hit_test(document());
+        (context, entity, heard)
+    }
+
+    fn take(heard: &Heard) -> Vec<String> {
+        std::mem::take(&mut *heard.lock().unwrap())
+    }
+
+    fn row_node(tree: Entity<TreeView>, slot: u16) -> StableNodeId {
+        crate::virtual_tree_item_id(tree.stable_id(), slot).unwrap()
+    }
+
+    fn act(
+        context: &mut AppContext,
+        target: StableNodeId,
+        action: crate::AccessibilityAction,
+    ) -> bool {
+        context
+            .apply_accessibility_action(
+                document(),
+                crate::AccessibilityActionRequest { target, action },
+            )
+            .unwrap()
+    }
+
+    /// The tree's own node and its rows' virtual nodes, in row order.
+    fn semantics(
+        context: &AppContext,
+        tree: Entity<TreeView>,
+    ) -> (crate::AccessibilityNode, Vec<crate::AccessibilityNode>) {
+        let nodes = context.world().project_accessibility(document());
+        let root = nodes
+            .iter()
+            .find(|node| node.id == tree.stable_id())
+            .cloned()
+            .expect("tree semantics");
+        let rows = root
+            .children
+            .iter()
+            .filter(|child| crate::decode_virtual_tree_item(**child).is_some())
+            .map(|child| {
+                nodes
+                    .iter()
+                    .find(|node| node.id == *child)
+                    .cloned()
+                    .expect("a row node for every row child")
+            })
+            .collect();
+        (root, rows)
+    }
+
+    fn row_geometry(context: &AppContext, tree: Entity<TreeView>) -> Vec<TreeRowGeometry> {
+        match context.world().component_geometry(tree.stable_id()) {
+            Some(crate::ComponentGeometry::TreeView { rows, .. }) => rows,
+            _ => panic!("tree geometry"),
+        }
+    }
+
+    fn mid(bounds: LayoutBox) -> (f32, f32) {
+        (
+            bounds.x + bounds.width / 2.0,
+            bounds.y + bounds.height / 2.0,
+        )
+    }
+
+    fn pointer_click(context: &mut AppContext, (x, y): (f32, f32)) {
+        use nana_ui_input::{InputPayload, PointerInput, PointerPhase};
+        let mut input = crate::HeadlessInput::bind(context, document());
+        for phase in [PointerPhase::Down, PointerPhase::Up] {
+            input
+                .route(
+                    context,
+                    InputPayload::Pointer(PointerInput::mouse(phase, x, y)),
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn rows_project_as_tree_items_with_level_and_state() {
+        let (mut context, tree, _) = heard_tree(sample().label("文件"));
+        let (root, rows) = semantics(&context, tree);
+        assert_eq!(root.role, crate::AccessibilityRole::Tree);
+        assert_eq!(root.label.as_deref(), Some("文件"));
+        let labels = rows
+            .iter()
+            .map(|row| row.label.as_deref().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(labels, ["src", "lib.rs", "main.rs", "README.md"]);
+        assert!(
+            rows.iter()
+                .all(|row| row.role == crate::AccessibilityRole::TreeItem
+                    && row.parent == Some(tree.stable_id()))
+        );
+        let levels = rows.iter().map(|row| row.level).collect::<Vec<_>>();
+        assert_eq!(levels, [Some(1), Some(2), Some(2), Some(1)]);
+        let expanded = rows.iter().map(|row| row.expanded).collect::<Vec<_>>();
+        assert_eq!(expanded, [Some(true), None, None, None]);
+        let selected = rows.iter().map(|row| row.selected).collect::<Vec<_>>();
+        assert_eq!(
+            selected,
+            [Some(true), Some(false), Some(false), Some(false)]
+        );
+        let bounds = row_geometry(&context, tree)
+            .into_iter()
+            .map(|row| row.bounds)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rows.iter().map(|row| row.bounds).collect::<Vec<_>>(),
+            bounds
+        );
+        assert!(rows.iter().all(|row| !row.focused), "the tree has no focus");
+
+        // with the focus, the active row is the focused one
+        context.take_system_work();
+        context.focus_node(document(), tree.stable_id()).unwrap();
+        let (_, rows) = semantics(&context, tree);
+        let focused = rows.iter().map(|row| row.focused).collect::<Vec<_>>();
+        assert_eq!(focused, [true, false, false, false]);
+
+        // a selection that moves nothing on screen still reaches the delta
+        context.take_system_work();
+        context
+            .update_component(tree, |tree, _| tree.select_only(&Arc::from("main")))
+            .unwrap();
+        let work = context.take_system_work();
+        let delta = context.world().project_accessibility_delta(&work);
+        let main = delta
+            .updated
+            .iter()
+            .find(|node| node.id == row_node(tree, 3))
+            .expect("the newly active row is projected again");
+        assert_eq!(main.selected, Some(true));
+        assert!(main.focused);
+
+        // collapsing the branch takes its rows out, in the next delta too
+        context.take_system_work();
+        context
+            .update_component(tree, |tree, _| {
+                tree.apply_event(TreeViewEvent::Toggle(Arc::from("src")))
+            })
+            .unwrap();
+        let work = context.take_system_work();
+        let delta = context.world().project_accessibility_delta(&work);
+        let projected = delta
+            .updated
+            .iter()
+            .find(|node| node.id == tree.stable_id())
+            .expect("the tree is projected again when its rows change");
+        let children = projected
+            .children
+            .iter()
+            .copied()
+            .filter(|child| crate::decode_virtual_tree_item(*child).is_some())
+            .collect::<Vec<_>>();
+        assert_eq!(children, [row_node(tree, 1), row_node(tree, 2)]);
+        let readme = delta
+            .updated
+            .iter()
+            .find(|node| node.id == row_node(tree, 2))
+            .expect("the rows come with the tree");
+        assert_eq!(readme.label.as_deref(), Some("README.md"));
+        assert_eq!(readme.level, Some(1));
+        let (_, rows) = semantics(&context, tree);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].expanded, Some(false));
+    }
+
+    #[test]
+    fn a_tree_without_a_label_has_no_name() {
+        let (context, tree, _) = heard_tree(sample());
+        let (root, _) = semantics(&context, tree);
+        assert_eq!(root.label, None, "the active row's id is no name");
+    }
+
+    #[test]
+    fn click_on_a_row_node_reports_what_a_click_on_the_row_does() {
+        let (mut pointer, pointer_tree, pointer_heard) = heard_tree(sample());
+        let main = mid(row_geometry(&pointer, pointer_tree)[2].bounds);
+        pointer_click(&mut pointer, main);
+        let clicked = take(&pointer_heard);
+        assert_eq!(clicked.len(), 2, "{clicked:?}");
+
+        let (mut reader, reader_tree, reader_heard) = heard_tree(sample());
+        assert!(act(
+            &mut reader,
+            row_node(reader_tree, 3),
+            crate::AccessibilityAction::Click
+        ));
+        assert_eq!(take(&reader_heard), clicked);
+        assert_eq!(
+            reader.world().focused(document()),
+            Some(reader_tree.stable_id()),
+            "the tree takes the focus as a click gives it"
+        );
+        let (_, rows) = semantics(&reader, reader_tree);
+        assert_eq!(rows[2].selected, Some(true));
+        assert!(rows[2].focused);
+    }
+
+    #[test]
+    fn focus_on_a_row_node_moves_the_active_row_as_the_arrow_keys_do() {
+        use nana_ui_input::{
+            InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey,
+        };
+        let (mut keyboard, keyboard_tree, keyboard_heard) = heard_tree(sample());
+        keyboard
+            .focus_node(document(), keyboard_tree.stable_id())
+            .unwrap();
+        let mut input = crate::HeadlessInput::bind(&mut keyboard, document());
+        input
+            .route(
+                &mut keyboard,
+                InputPayload::Key(KeyInput {
+                    physical: PhysicalKey("ArrowDown".into()),
+                    logical: LogicalKey("ArrowDown".into()),
+                    state: KeyState::Pressed,
+                    repeat: false,
+                    modifiers: InputModifiers::empty(),
+                }),
+            )
+            .unwrap();
+        let stepped = take(&keyboard_heard);
+        assert_eq!(stepped, [r#"Select("lib")"#]);
+
+        let (mut reader, reader_tree, reader_heard) = heard_tree(sample());
+        assert!(act(
+            &mut reader,
+            row_node(reader_tree, 2),
+            crate::AccessibilityAction::Focus
+        ));
+        assert_eq!(take(&reader_heard), stepped);
+        assert_eq!(
+            reader.world().focused(document()),
+            Some(reader_tree.stable_id())
+        );
+        assert_eq!(
+            reader
+                .read(reader_tree, |tree| tree.active_id().cloned())
+                .unwrap(),
+            Some(Arc::from("lib"))
+        );
+        let (_, rows) = semantics(&reader, reader_tree);
+        let focused = rows.iter().map(|row| row.focused).collect::<Vec<_>>();
+        assert_eq!(focused, [false, true, false, false]);
+        // already there: nothing moves
+        assert!(!act(
+            &mut reader,
+            row_node(reader_tree, 2),
+            crate::AccessibilityAction::Focus
+        ));
+        assert!(take(&reader_heard).is_empty());
+    }
+
+    #[test]
+    fn expand_and_collapse_on_a_row_node_toggle_as_its_disclosure_does() {
+        let (mut pointer, pointer_tree, pointer_heard) = heard_tree(sample());
+        let disclosure = row_geometry(&pointer, pointer_tree)[0]
+            .disclosure
+            .expect("a branch has a disclosure");
+        pointer_click(&mut pointer, mid(disclosure));
+        let toggled = take(&pointer_heard);
+        assert_eq!(toggled, [r#"Toggle("src")"#]);
+
+        let (mut reader, tree, heard) = heard_tree(sample());
+        let src = row_node(tree, 1);
+        assert!(!act(&mut reader, src, crate::AccessibilityAction::Expand));
+        assert!(act(&mut reader, src, crate::AccessibilityAction::Collapse));
+        assert_eq!(take(&heard), toggled);
+        assert_eq!(semantics(&reader, tree).1.len(), 2);
+        assert!(!act(&mut reader, src, crate::AccessibilityAction::Collapse));
+        // README.md is the second row now, and a leaf
+        assert!(!act(
+            &mut reader,
+            row_node(tree, 2),
+            crate::AccessibilityAction::Expand
+        ));
+        assert!(act(&mut reader, src, crate::AccessibilityAction::Expand));
+        assert_eq!(take(&heard), toggled);
+        assert_eq!(semantics(&reader, tree).1.len(), 4);
+    }
+
+    #[test]
+    fn row_node_actions_refuse_wrong_targets() {
+        let (mut context, tree, heard) = heard_tree(TreeView::new([
+            TreeNode::leaf(Arc::from("a"), "a"),
+            TreeNode::leaf(Arc::from("b"), "b").disabled(true),
+        ]));
+        let click = || crate::AccessibilityAction::Click;
+        // past the last row, a disabled row, another node's rows
+        assert!(!act(&mut context, row_node(tree, 3), click()));
+        assert!(!act(&mut context, row_node(tree, 2), click()));
+        assert!(!act(
+            &mut context,
+            row_node(tree, 2),
+            crate::AccessibilityAction::Focus
+        ));
+        let elsewhere = StableNodeId::new(tree.stable_id().get() + 1000).unwrap();
+        assert!(!act(
+            &mut context,
+            crate::virtual_tree_item_id(elsewhere, 1).unwrap(),
+            click()
+        ));
+        // an action a row cannot take, and a row of another document
+        assert!(!act(
+            &mut context,
+            row_node(tree, 1),
+            crate::AccessibilityAction::Increment
+        ));
+        assert!(
+            !context
+                .apply_accessibility_action(
+                    DocumentId::new(2).unwrap(),
+                    crate::AccessibilityActionRequest {
+                        target: row_node(tree, 1),
+                        action: click(),
+                    },
+                )
+                .unwrap()
+        );
+        assert!(take(&heard).is_empty());
+        assert!(act(&mut context, row_node(tree, 1), click()));
+    }
+
+    #[test]
+    fn menu_rows_and_tree_rows_never_decode_as_each_other() {
+        for owner in [1, 0x1234, 0x3fff_ffff_ffff] {
+            let owner = StableNodeId::new(owner).unwrap();
+            for slot in [1, 0x8000, u16::MAX] {
+                let menu = crate::virtual_menu_item_id(owner, slot).unwrap();
+                let tree = crate::virtual_tree_item_id(owner, slot).unwrap();
+                assert_ne!(menu, tree);
+                assert_eq!(crate::decode_virtual_menu_item(menu), Some((owner, slot)));
+                assert_eq!(crate::decode_virtual_tree_item(menu), None);
+                assert_eq!(crate::decode_virtual_tree_item(tree), Some((owner, slot)));
+                assert_eq!(crate::decode_virtual_menu_item(tree), None);
+            }
+            assert_eq!(crate::virtual_tree_item_id(owner, 0), None);
+            assert_eq!(crate::virtual_menu_item_id(owner, 0), None);
+        }
+        let too_large = StableNodeId::new(0x4000_0000_0000).unwrap();
+        assert_eq!(crate::virtual_menu_item_id(too_large, 1), None);
+        assert_eq!(crate::virtual_tree_item_id(too_large, 1), None);
+        let retained = StableNodeId::new(42).unwrap();
+        assert_eq!(crate::decode_virtual_menu_item(retained), None);
+        assert_eq!(crate::decode_virtual_tree_item(retained), None);
     }
 
     #[test]
