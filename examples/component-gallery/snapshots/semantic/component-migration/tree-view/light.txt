@@ -2,7 +2,7 @@ component: tree-view
 mode: light
 state: expanded
   target: 20.00,20.00 240.00x88.00
-  a11y: role=List disabled=false checked=None selected=None mixed=false
+  a11y: role=Tree disabled=false checked=None selected=None mixed=false
   quad #2/11 20.00,50.00 240.00x28.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
   text #2/40 24.00,26.00 16.00x16.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
   text #2/110 40.00,20.00 216.00x28.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
@@ -10,7 +10,7 @@ state: expanded
   text #2/112 24.00,80.00 232.00x28.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
 state: multi
   target: 20.00,20.00 240.00x118.00
-  a11y: role=List disabled=false checked=None selected=None mixed=false
+  a11y: role=Tree disabled=false checked=None selected=None mixed=false
   quad #2/11 20.00,50.00 240.00x28.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
   quad #2/13 20.00,110.00 240.00x28.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
   text #2/40 24.00,26.00 16.00x16.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
@@ -24,7 +24,7 @@ state: multi
   text #2/113 24.00,110.00 216.00x28.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=600 line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
 state: drag-preview
   target: 20.00,20.00 240.00x118.00
-  a11y: role=List disabled=false checked=None selected=None mixed=false
+  a11y: role=Tree disabled=false checked=None selected=None mixed=false
   quad #2/11 20.00,50.00 240.00x28.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
   quad #2/13 20.00,110.00 240.00x28.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
   text #2/40 24.00,26.00 16.00x16.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
@@ -39,7 +39,7 @@ state: drag-preview
   quad #2/4294967295 20.00,20.00 240.00x28.00 opacity=1.00 bg=none border=#4991d7ff border_width=2.00 radius=6.00/6.00/6.00/6.00 shadow=none
 state: renaming
   target: 20.00,20.00 240.00x118.00
-  a11y: role=List disabled=false checked=None selected=None mixed=false
+  a11y: role=Tree disabled=false checked=None selected=None mixed=false
   quad #2/12 20.00,80.00 240.00x28.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
   text #2/40 24.00,26.00 16.00x16.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
   icon #2/4294967296 244.00,28.00 12.00x12.00 opacity=1.00 icon=Icon("eye") color=#5a616eff
@@ -56,7 +56,7 @@ state: renaming
   quad #3/4 64.50,86.00 1.00x16.00 opacity=1.00 bg=#1a1a1fff border=none border_width=0.00 radius=0.00/0.00/0.00/0.00 shadow=none
 state: compact
   target: 20.00,20.00 240.00x60.00
-  a11y: role=List disabled=false checked=None selected=None mixed=false
+  a11y: role=Tree disabled=false checked=None selected=None mixed=false
   quad #2/11 20.00,40.00 240.00x20.00 opacity=1.00 bg=#e2e2e2ff border=none border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
   text #2/40 22.00,24.00 12.00x12.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
   text #2/110 34.00,20.00 224.00x20.00 opacity=1.00 color=#1a1a1fff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false

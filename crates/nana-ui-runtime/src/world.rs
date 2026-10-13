@@ -297,6 +297,28 @@ pub(crate) fn menu_surface_accessibility_changed(
     }
 }
 
+/// A tree's rows are virtual accessibility children too: its semantics follow
+/// the visible rows and the active one.
+pub(crate) fn tree_view_accessibility_changed(
+    previous: Option<&StandardVisual>,
+    next: Option<&StandardVisual>,
+) -> bool {
+    match (previous, next) {
+        (
+            Some(StandardVisual::TreeView {
+                rows: previous_rows,
+                active: previous_active,
+                ..
+            }),
+            Some(StandardVisual::TreeView { rows, active, .. }),
+        ) => previous_rows != rows || previous_active != active,
+        (Some(StandardVisual::TreeView { .. }), _) | (_, Some(StandardVisual::TreeView { .. })) => {
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Whether a menu surface with `visual` hides its child `child`: a closed
 /// surface hides its items, never the content that draws its trigger.
 pub(crate) fn closed_menu_hides(visual: Option<&StandardVisual>, child: StableNodeId) -> bool {

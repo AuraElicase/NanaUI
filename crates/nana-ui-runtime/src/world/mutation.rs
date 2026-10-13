@@ -1781,6 +1781,8 @@ impl UiWorld {
                         text_folds_changed,
                     )
                 };
+                let tree_accessibility_changed =
+                    super::tree_view_accessibility_changed(self.nodes.visual(*id), visual.as_ref());
                 let text_path_changed = super::text_visual_key(self.nodes.visual(*id))
                     != super::text_visual_key(visual.as_ref());
                 let select_fit_changed =
@@ -1889,6 +1891,9 @@ impl UiWorld {
                 }
                 if menu_accessibility_changed && !menu_state_changed {
                     self.mark_subtree(*id, DirtyMask::ACCESSIBILITY);
+                }
+                if tree_accessibility_changed {
+                    self.mark(*id, DirtyMask::ACCESSIBILITY);
                 }
                 if modal_state_changed {
                     self.mark_subtree(

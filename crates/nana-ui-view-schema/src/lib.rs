@@ -216,6 +216,7 @@ macro_rules! for_each_control {
             with { on_change: TabsEvent };
             TreeView => tree_view() for TreeView {
                 nodes: Vec<TreeNode<Arc<str>>> = set,
+                label: Option<Arc<str>> = set,
             };
             ColorField => color_field() for ColorField {
                 value: [f32; 4] = builder,

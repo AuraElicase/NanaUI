@@ -1026,6 +1026,9 @@ pub enum StandardVisual {
         columns: Arc<[nana_ui_core::Icon]>,
         /// Where a drag in progress would land.
         drop: Option<crate::TreeDropIntent>,
+        /// The active row: the one assistive technology is on while the
+        /// tree has the focus.
+        active: Option<Arc<str>>,
     },
     CommandPalette {
         title: Arc<str>,
@@ -3171,6 +3174,11 @@ pub enum AccessibilityRole {
     ProgressIndicator,
     List,
     ListItem,
+    /// A hierarchical list whose rows expand and collapse: a `TreeView`.
+    Tree,
+    /// One row of a [`Self::Tree`], carrying its level and, for a branch,
+    /// whether it is expanded.
+    TreeItem,
     Table,
     Row,
     Cell,
@@ -3266,6 +3274,12 @@ pub struct AccessibilityNode {
     pub mixed: bool,
     pub orientation: Option<crate::SelectionOrientation>,
     pub selected: Option<bool>,
+    /// Depth in a hierarchy, starting at 1 for a top-level tree row
+    /// (`aria-level`). `None` where levels do not apply.
+    pub level: Option<u32>,
+    /// Whether a disclosure is open (`aria-expanded`): set only on nodes that
+    /// can expand, such as a branch row of a tree.
+    pub expanded: Option<bool>,
     /// Opens a menu; see [`AccessibilityState::has_popup`].
     pub has_popup: bool,
     pub multiline: bool,
@@ -3351,31 +3365,54 @@ pub fn menu_row_index(rows: &[SelectOptionData], slot: u16) -> Option<usize> {
         .position(|candidate| *candidate == slot)
 }
 
-/// The virtual accessibility node of the row in `slot` of `menu`'s rows (see
-/// [`menu_row_slots`]).
-pub fn virtual_menu_item_id(menu: StableNodeId, slot: u16) -> Option<StableNodeId> {
-    if slot == 0 {
+/// Bit 63 marks a virtual descendant; bit 62 tells a tree row from a menu row.
+const VIRTUAL_NODE: u64 = 0x8000_0000_0000_0000;
+const VIRTUAL_TREE_ITEM: u64 = 0x4000_0000_0000_0000;
+/// The largest owner id a virtual descendant can encode.
+const VIRTUAL_OWNER_MAX: u64 = 0x3fff_ffff_ffff;
+
+fn virtual_descendant_id(kind: u64, owner: StableNodeId, slot: u16) -> Option<StableNodeId> {
+    let owner = owner.get();
+    if slot == 0 || owner > VIRTUAL_OWNER_MAX {
         return None;
     }
-    let menu = menu.get();
-    if menu > 0x7fff_ffff_ffff {
-        return None;
-    }
-    StableNodeId::new(0x8000_0000_0000_0000 | (menu << 16) | u64::from(slot))
+    StableNodeId::new(VIRTUAL_NODE | kind | (owner << 16) | u64::from(slot))
 }
 
-/// The menu and row slot a virtual menu row node stands for.
-pub fn decode_virtual_menu_item(id: StableNodeId) -> Option<(StableNodeId, u16)> {
+fn decode_virtual_descendant(kind: u64, id: StableNodeId) -> Option<(StableNodeId, u16)> {
     let raw = id.get();
-    if raw & 0x8000_0000_0000_0000 == 0 {
+    if raw & (VIRTUAL_NODE | VIRTUAL_TREE_ITEM) != VIRTUAL_NODE | kind {
         return None;
     }
     let slot = (raw & u64::from(u16::MAX)) as u16;
     if slot == 0 {
         return None;
     }
-    let menu = StableNodeId::new((raw >> 16) & 0x7fff_ffff_ffff)?;
-    Some((menu, slot))
+    let owner = StableNodeId::new((raw >> 16) & VIRTUAL_OWNER_MAX)?;
+    Some((owner, slot))
+}
+
+/// The virtual accessibility node of the row in `slot` of `menu`'s rows (see
+/// [`menu_row_slots`]).
+pub fn virtual_menu_item_id(menu: StableNodeId, slot: u16) -> Option<StableNodeId> {
+    virtual_descendant_id(0, menu, slot)
+}
+
+/// The menu and row slot a virtual menu row node stands for.
+pub fn decode_virtual_menu_item(id: StableNodeId) -> Option<(StableNodeId, u16)> {
+    decode_virtual_descendant(0, id)
+}
+
+/// The virtual accessibility node of a visible `TreeView` row. `slot` is the
+/// row's position among the visible rows plus one, so only the first
+/// `u16::MAX` rows have one.
+pub fn virtual_tree_item_id(tree: StableNodeId, slot: u16) -> Option<StableNodeId> {
+    virtual_descendant_id(VIRTUAL_TREE_ITEM, tree, slot)
+}
+
+/// The tree and row slot a virtual tree row node stands for.
+pub fn decode_virtual_tree_item(id: StableNodeId) -> Option<(StableNodeId, u16)> {
+    decode_virtual_descendant(VIRTUAL_TREE_ITEM, id)
 }
 
 #[derive(Debug, Clone, PartialEq)]

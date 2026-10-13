@@ -3152,6 +3152,12 @@ impl AppContext {
         document: DocumentId,
         request: AccessibilityActionRequest,
     ) -> Result<bool, FrameworkError> {
+        if let Some((tree, slot)) = crate::decode_virtual_tree_item(request.target) {
+            if self.world.document_of(tree) != Some(document) {
+                return Ok(false);
+            }
+            return self.apply_tree_item_action(document, tree, slot, &request.action);
+        }
         let owner = match &request.action {
             AccessibilityAction::ActivateMenuItem { menu, .. } => *menu,
             AccessibilityAction::Click => crate::decode_virtual_menu_item(request.target)
