@@ -4,150 +4,143 @@ title: 端到端数据流
 
 # 端到端数据流
 
-前面各章按子系统切开讲。这一章反过来:选四条贯穿多层的链路,从头到尾走一遍。每一步都标出所在的 crate 与关键类型——这是检验你是否真的理解这个框架的最好方式。
+前面各章按子系统纵向拆解了内部实现。本章反过来，挑选四条横跨多层的关键数据流，从输入源头一直追踪到屏幕像素或应用回调。每一步均标出所在 crate、核心类型与源码行号锚点——这是检验是否真正贯通整套框架的最佳方式。
 
-## 流程一:一次状态变更如何变成像素
+## 流程一：一次状态变更如何变成屏幕像素
 
-场景:应用代码改了树(或 Vue 提交了一批 host ops),到屏幕上出现新像素。
+场景：应用代码修改了保留树（或 Vue 提交了一批 host ops），直到窗口 Surface 上呈现出新像素。
 
 ```text
-① 变更入队    nana-ui-runtime   UiMutation(Create/Insert/Detach/SetStyle/…)
+① 变更入队    nana-ui-runtime   UiMutation（Create / Insert / Detach / SetStyle / …）
                                  crates/nana-ui-runtime/src/mutation.rs:15
-                                 Vue 路径先攒在 PendingHostOps
-                                 (crates/nana-ui-vue/src/tree.rs:220),帧边界 commit
-② 帧调度      nana-ui           FrameDemand(OnDemand / 截止时间 / Continuous)
+                                 Vue 路径先暂存在 PendingHostOps
+                                 （crates/nana-ui-vue/src/tree.rs:220），在帧边界原子 commit
+② 帧调度      nana-ui           FrameDemand（OnDemand / 截止时间 / Continuous）
                                  crates/nana-ui/src/runtime_host.rs:1035
-                                 宿主按需求决定这帧画不画;没有变更 flush 空转
-③ 消息消化    nana-ui           run_runtime_scene 把 dispatch_program 的消息
-                                 交给 RuntimeProgram::update(开窗/换 GPU/持久化)
+                                 宿主按需求决定本帧是否重绘；无变更时 flush 空转返回
+③ 消息消化    nana-ui           run_runtime_scene 将 dispatch_program 的消息
+                                 交给 RuntimeProgram::update（开窗 / 换 GPU / 持久化）
                                  crates/nana-ui/src/scene_host.rs:99
-④ 备纹理      nana-ui           prepare_window_frame:宿主把最新纹理准备好
-⑤ flush       nana-ui-scene     RuntimeDocument::flush:样式 → 文字 → 布局 →
-                                 命中 → 抽取,一次做完
+④ 准备纹理    nana-ui           prepare_window_frame：应用准备好本帧要采样的最新纹理
+⑤ flush 事务  nana-ui-scene     RuntimeDocument::flush：样式 → 文本整形 → 布局 →
+                                 命中索引 → 无障碍投影 → 脏节点抽取，单次事务收敛
                                  crates/nana-ui-scene/src/runtime_document.rs:109
-⑥ 取 Surface  nana-ui           获取窗口 Surface;外部资源生产编进 FramePlan,
-                                 与 UI 同一宿主 encoder,失败整帧丢弃
-⑦ 绘制        nana-ui           SceneWgpuPainter::paint_target:可见操作按文档
-                                 顺序画进目标
+⑥ 获取表面    nana-ui           获取窗口 Surface；外部资源生产者编入 FramePlan，
+                                 与 UI 共用同一宿主 encoder（任一失败则整帧丢弃并回滚）
+⑦ 录制绘制    nana-ui           SceneWgpuPainter::paint_target：可见操作按文档顺序录制进目标
                                  crates/nana-ui/src/scene_paint/mod.rs:899
-⑧ 提交        nana-gpu          queue.submit + submitted + present,每目标一份
-                                 NanaUI 提交(FrameContext 管理 encoder 生命周期)
-⑨ 收尾        nana-ui           window_frame_presented:现在才能丢上一帧纹理;
-                                 bind_window 按需再填内容
+⑧ 提交上屏    nana-gpu          FrameContext::submit（合并 UploadRing 上传批）+ present
+                                 crates/nana-gpu/src/frame.rs:148
+⑨ 帧后收尾    nana-ui           window_frame_presented：此时才可安全释放上一帧退役的旧纹理；
+                                 bind_window 按需为新就绪窗口挂载后续内容
 ```
 
-要点:
+关键要点：
 
-- `RuntimeDocument` 定义在 **nana-ui-scene**(`crates/nana-ui-scene/src/runtime_document.rs:18`),它同时持有 `AppContext`(树)与 `UiScene`(绘制图)——flush 就是把前者推进后者。
-- 动画与实时 GPU 画面的唤醒与普通 UI 分开:`UiScene::compositor_needs_tick` 只把该窗口接到轻量 `FrameDemand::Continuous` present,不强制全局 schedule。
-- 被遮挡/最小化的窗口:宿主仍调 `prepare_window_frame`,但不 flush、不取 Surface、不 present。
+- `RuntimeDocument` 定义在 **`nana-ui-scene`**（`crates/nana-ui-scene/src/runtime_document.rs:18`），它同时持有 `AppContext`（保留树）与 `UiScene`（保留绘制图）——`flush` 就是将前者的脏变更推进到后者。
+- 合成器动画与实时 GPU 画面的唤醒同普通 UI 隔离：`UiScene::compositor_needs_tick` 仅将当前窗口切入轻量的 `FrameDemand::Continuous` 呈现，不触发全局样式或布局重算。
+- 被遮挡或最小化的窗口：宿主仍按节拍调用 `prepare_window_frame`，但跳过 `flush`、不获取 Surface、不 `present`。
 
-## 流程二:一次点击如何变成回调
+## 流程二：一次点击如何变成应用回调
 
-场景:用户按下按钮,操作系统事件到达应用回调。
+场景：用户在窗口中按下按钮，从操作系统原生事件一直到达应用注册的回调闭包。
 
 ```text
-① 系统事件    nana-window/winit 原生窗口事件(平台相关形状)
-② 降维        nana-ui-input     宿主把它降维成 CanonicalInputEvent
-                                 (InputPayload / KeyInput / PointerInput,
-                                 crates/nana-ui-input/src/canonical.rs)
-③ 排序        nana-ui-input     InputSequencer 盖序列号、维持规范顺序
-                                 (crates/nana-ui-input/src/canonical.rs:333)
-④ 服务合同    nana-ui-input     HostServices:剪贴板、IME 等宿主能力经此注入
-                                 (crates/nana-ui-input/src/host_services.rs:97)
-⑤ 路由        nana-ui-runtime   AppContext::route_input —— 全仓唯一定义
-                                 crates/nana-ui-runtime/src/framework/input.rs:397
-⑥ 命中+焦点   nana-ui-runtime   用 flush 阶段维护的命中结构与焦点链决定目标节点
-⑦ 监听器      nana-ui-runtime   Runtime 事件监听器(event_flags 在此层)触发
-⑧ 应用回调    应用 / nana-ui-vue Rust:cx.on(button, |_, Activate, cx| …)
-                                 Vue:observe_routed_input 翻译成页面事件
-                                 (crates/nana-ui-vue/src/hosted_adapter.rs:446)
-                                 —— Vue 观察的是已路由结果,不是第二套路由
+① 原生事件    nana-window / winit 操作系统窗口事件（平台相关结构）
+② 边界降维    nana-ui-input       宿主在边界处将其降维为 CanonicalInputEvent
+                                   （InputPayload / KeyInput / PointerInput，
+                                   crates/nana-ui-input/src/canonical.rs:44）
+③ 序列盖章    nana-ui-input       InputSequencer 盖上严格递增序列号与动画域时间戳
+                                   （crates/nana-ui-input/src/canonical.rs:333）
+④ 宿主服务    nana-ui-input       HostServices：光标、IME 与剪贴板能力经此合同回调
+                                   （crates/nana-ui-input/src/host_services.rs:97）
+⑤ 唯一路由    nana-ui-runtime     AppContext::route_input —— 全仓唯一路由实现
+                                   crates/nana-ui-runtime/src/framework/input.rs:397
+⑥ 命中与焦点  nana-ui-runtime     查询增量命中索引（world/hit_test.rs）与焦点链定位目标节点
+⑦ 触发监听器  nana-ui-runtime     触发 NodeStore 的 event_listeners 侧表（event_flags 权威所在）
+⑧ 应用回调    应用 / nana-ui-vue  Rust：cx.on(button, |_, Activate, cx| …) 或 .on_activate(...)
+                                   Vue：observe_routed_input 将已路由结果翻译为页面事件
+                                   （crates/nana-ui-vue/src/hosted_adapter.rs:446）
 ```
 
-要点:
+关键要点：
 
-- headless 测试走 `HeadlessInput::route_shaped`(`crates/nana-ui-runtime/src/framework/input/headless.rs:119`),注入已成型的输入序列。
-- devtools 复用同一通道(`agent/runtime.rs:120` 调 runtime HeadlessInput),所以工具看到的输入语义与生产一致。
+- 无头测试走 `HeadlessInput::route_shaped`（`crates/nana-ui-runtime/src/framework/input/headless.rs:119`），直接向同一个 `route_input` 注入确定性的输入序列。
+- `nana-ui-devtools` 的 Agent 会话复用同一条无头通道（`agent/runtime.rs:120`），因此自动化测试观测到的输入行为与生产窗口完全一致。
 
-## 流程三:一段文字如何变成像素
+## 流程三：一段文字如何变成屏幕像素
 
-场景:`Text` 组件显示一个字符串。
+场景：`Text` 组件显示一段字符串，从样式与文本源一直到字形图集（Glyph Atlas）上屏。
 
 ```text
-① 输入        nana-ui-core      字符串 + TextStyle(TextKind、字号、字体轴、
-                                 跨度)构成 TextSource
-② 引擎合同    nana-text         TextEngine::layout(kind, source, base,
-                                 constraints, counters) → Arc<TextLayout>
-                                 crates/nana-text/src/engine.rs:36
-③ 整形        nana-text         Shaper::shape(fonts: &mut FontSystem,
-                                 request: &ShapeRequest) → Arc<ShapedText>
-                                 crates/nana-text/src/shaping/shaper.rs:116
-                                 (OpenType 整形:shaping/opentype.rs:73)
-④ 排版        nana-text         Layouter 按 TextConstraints 折行/截断(省略号
-                                 也是普通字符,同样整形)产出 TextLayout
-⑤ 缓存        nana-text         布局不可变:同文本同约束返回同一个 Arc;
-                                 FontGeneration 每次字体集变更 +1,旧代际布局作废
-⑥ 共享        nana-ui           SharedTextEngine = Arc<Mutex<NativeTextEngine>>
-                                 crates/nana-text/src/engine.rs:50
-                                 全进程一个引擎:一个 label 的整形结果,
-                                 其他副本直接复用
-⑦ 布局消费    nana-ui-runtime   RuntimeLayoutEngine 布局时向文本要固有尺寸
-                                 (how-it-works:flush 调宿主文字整形)
-⑧ 绘制        nana-ui-scene→ui  文本进 UiScene;painter 对 glyph 栅格化上屏
+① 文本源      nana-ui-core        字符串 + TextStyle（TextKind、字号、变体轴、富文本跨度）构成 TextSource
+② 引擎入口    nana-text           TextEngine::layout(kind, source, base, constraints, counters) → Arc<TextLayout>
+                                   crates/nana-text/src/engine.rs:36
+③ 文本整形    nana-text           Shaper::shape(fonts: &mut FontSystem, request: &ShapeRequest) → Arc<ShapedText>
+                                   crates/nana-text/src/shaping/shaper.rs:116
+                                   （HarfRust OpenType 整形位于 shaping/opentype.rs:73）
+④ 段落排版    nana-text           Layouter 按 TextConstraints 折行与截断（省略号同样经标准路径整形），
+                                   产出不可变的 TextLayout（crates/nana-text/src/layout/ir.rs:182）
+⑤ 分级缓存    nana-text           同文本同约束直接返回缓存中的同一个 Arc<TextLayout>；
+                                   仅宽度变化时重跑第 ④ 步而不重跑第 ③ 步整形；
+                                   FontGeneration 每次字体集变更 +1，自动作废旧代际布局
+⑥ 进程级共享  nana-ui             SharedTextEngine = Arc<Mutex<NativeTextEngine>>
+                                   crates/nana-text/src/engine.rs:50
+                                   全进程共享唯一引擎实例：一个标签的整形结果可供所有副本直接复用
+⑦ 布局测量    nana-ui-runtime     RuntimeLayoutEngine 在布局阶段向文本引擎查询固有尺寸，
+                                   并将生成的 TextLayoutId 世代句柄留在节点上（TextLayoutStore）
+⑧ 栅格化上屏  nana-ui-scene → ui  保留句柄随 ExtractedNode 进入 UiScene；
+                                   NanaRenderer::text 直接绘制保留布局，将字形栅格化进多页 GPU 图集上屏
 ```
 
-要点:
+关键要点：
 
-- 文本是**保留布局**:不是每帧重排,而是按(文本,约束)缓存;这就是 AGENTS.md 说 nana-text 是「产品文本测量、整形与保留文本布局权威」的含义。
-- 字体轴动画(`font_axis`)按脏图重新 shaping,与 CSS `font-variation-settings` 编译成同一种逐轴 track。
+- 文本布局是**保留式（Retained）**的：不是每帧从字符串重排，而是按句柄与缓存键跨帧复用；纯颜色、不透明度或几何变换改动完全不触碰文本引擎。
+- 可变字体轴动画（`font_axis` / `font-variation-settings`）编译为逐轴轨道，按 `SHAPE_STYLE` 脏图驱动真实字形重新整形与栅格化，绝不用几何缩放伪造。
 
-## 流程四:一块 GPU 实时画面如何挂到树上
+## 流程四：一块 GPU 实时画面如何挂到树上
 
-场景:应用把一段着色器输出或一个视频放进界面,它要能被布局、裁剪、遮挡、点击。
+场景：应用将一段着色器渲染结果或视频流放进界面，要求它像普通按钮一样参与布局、受圆角裁剪、可被上层弹窗遮挡、可响应点击。
 
 ```text
-① 生产        应用/nana-frame-exchange   画面画到可采样纹理;生产者帧经
-                                    nana-frame-exchange 运输(它不拥有设备)
-② 登记        nana-ui               HostTextureRegistry::slot("同一字符串 slot")
-                                    → TextureSlot
-                                    crates/nana-ui/src/gpu_texture.rs:555,766
-③ 挂树        nana-ui-runtime       树上挂 GpuTextureView(同一字符串 slot)
-                                    crates/nana-ui-runtime/src/gpu_slots.rs:203
-④ 树的待遇    nana-ui-runtime       与 Button 完全一样:参与布局、被裁剪、
-                                    可命中、按文档序合成——它不是洞也不是覆盖层
-⑤ 更新通知    nana-ui               纹理内容更新经 TextureSlot 通知引用该资源
-                                    的窗口;0 维仍然 prepare,尺寸可画才 encode
-⑥ 提取        nana-ui-scene         flush 时进 UiScene(GPU 内容用
-                                    CustomRenderNode 或普通 HostTexture 节点表示)
-⑦ 绘制        nana-ui               paint_target 按文档序画进宿主的帧;
-                                    多层画面就是相邻几张 GpuTextureView
-⑧ 生命周期    nana-ui               present 之后才丢上一帧纹理(流程一步⑨),
-                                    换纹理升 generation,不拆节点
+① 画面生产    应用 / frame-exchange  将画面画到可采样 GpuTexture（跨线程生产者经 nana-frame-exchange 传递，
+                                     不拥有 UI 设备或提交权）
+② 槽位登记    nana-ui                HostTextureRegistry::slot("preview") → TextureSlot
+                                     crates/nana-ui/src/gpu_texture.rs:555, 766
+③ 挂载节点    nana-ui-runtime        在界面树上挂载 GpuTextureView::new("preview")（模板标签 <Texture>）
+                                     crates/nana-ui-runtime/src/gpu_slots.rs:203
+④ 树的待遇    nana-ui-runtime        与 Button 完全一致：参与 Flexbox/Grid 布局、受父级圆角与 overflow 裁剪、
+                                     进入增量命中索引、按文档顺序参与遮挡
+⑤ 更新通知    nana-ui                纹理内容更新时通过 TextureSlot 仅唤醒引用了该槽位的窗口；
+                                     窗口 0 尺寸时仍执行 prepare，尺寸可画时才编码 producer
+⑥ 场景抽取    nana-ui-scene          flush 时作为 CustomRenderNode（renderer = "nana.host-texture"）进入 UiScene
+⑦ 文档序绘制  nana-ui                SceneWgpuPainter::paint_target 在当前目标 pass 内按文档顺序就地采样；
+                                     多层实时画面只需并排挂载多张 GpuTextureView
+⑧ 生命周期    nana-ui                直到 window_frame_presented（流程一第 ⑨ 步）才释放上一帧被替换的旧纹理；
+                                     更换纹理尺寸或对象时递增 generation，不销毁重建 Runtime 节点
 ```
 
-要点:
+关键要点：
 
-- 两条 GPU 内容通道:`GpuTextureView`(有中间纹理的默认做法)与 `GpuView`(`u64` slot,没有中间纹理时;它不是 registry 键)。
-- 高级路径 `CustomRenderNode`:GPU 槽位声明在 Runtime(`crates/nana-ui-runtime/src/gpu_slots.rs`),绘制管线在 nana-ui——声明与执行分离,树始终完整。
-- `<video data-nana-video>` 走 `video:{id}` 这条 HostTexture,有槽时不叠 poster。
+- 两条 GPU 内容接入路径：有中间纹理的默认路径使用 `GpuTextureView`（字符串槽位名）；无中间纹理、需直接编码进当前 UI pass 的高级路径使用 `GpuView`（`u64` 槽位号，配合显式注册的 `SceneGpuRenderer`）。
+- 声明与执行解耦：GPU 槽位声明位于 `nana-ui-runtime`（不依赖 WGPU），实际管线采样与录制位于 `nana-ui`。
 
-## 四条流的公共结构
+## 四条数据流的共同结构
 
-把四条流叠起来看,会看到同一个形状:
+把上面四条流叠在一起，可以看到 NanaUI 全仓一致的五层漏斗模型：
 
-| 阶段 | 所在层 | 特征 |
+| 阶段 | 所在层 | 结构特征 |
 | --- | --- | --- |
-| 生产/输入 | 最外层(应用、OS、JS) | 形状各异:事件、字符串、纹理 |
-| 规范化 | 边界 crate(input/text/gpu/css) | 降维成框架合同:CanonicalInputEvent、TextSource、TextureSlot |
-| 汇合 | nana-ui-runtime(UiWorld) | 全部变成树上的节点与变异 |
-| 投影 | nana-ui-scene(UiScene) | 布局/命中/抽取,一次 flush |
-| 呈现 | nana-ui(painter) | 按文档序画进宿主拥有的帧 |
+| **1. 外部输入 / 生产** | 最外层（应用、操作系统、V8 JS） | 形态各异：原生窗口事件、字符串、样式文本、GPU 纹理 |
+| **2. 规范化降维** | 边界 crate（`input` / `text` / `gpu` / `css`） | 在边界处一次性翻译为框架合同：`CanonicalInputEvent`、`TextSource`、`TextureSlot`、`LayoutStyle` |
+| **3. 权威汇合** | `nana-ui-runtime`（`UiWorld`） | 全部汇合为保留树上的节点状态与原子 `UiMutation` |
+| **4. 场景投影** | `nana-ui-scene`（`UiScene`） | 单次有界 `flush` 事务完成布局、命中、无障碍与绘制图增量更新 |
+| **5. 帧内呈现** | `nana-ui`（`SceneWgpuPainter`） | 按文档顺序录制进宿主拥有的 `FrameContext` 并提交上屏 |
 
-**边界 crate 只做翻译,权威只在 UiWorld,呈现只在 painter。** 记住这句,新读任何模块都能定位它站在哪一层、该向谁负责。
+**边界 crate 只做翻译，状态权威只在 `UiWorld`，上屏呈现只在 `SceneWgpuPainter`。** 抓住这句话，阅读任何模块都能立刻判断它处于哪一层、该向谁负责。
 
 ## 接着读
 
-- [保留树](/learn/runtime-tree) / [Scene 提取](/learn/scene-extraction):汇合点与投影的内部
-- [GPU 与帧](/learn/gpu-frame):FrameContext 与提交守卫
-- [框架如何运行](/reference/how-it-works):应用作者视角的同一张图
+- [保留树：UiWorld](/learn/runtime-tree) · [Scene 提取](/learn/scene-extraction)：汇合点与绘制图投影的内部细节
+- [GPU 与帧生命周期](/learn/gpu-frame)：`FrameContext`、上传环、提交守卫与 35 步重绘全序
+- [框架如何运行（参考）](/reference/how-it-works)：面向应用开发者的同款运行模型

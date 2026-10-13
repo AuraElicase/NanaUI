@@ -1,138 +1,116 @@
-# 视觉
+# 视觉与主题规范
 
-NanaUI 的默认外观是给桌面产品用的。它有深色和浅色，间距紧凑，分隔很弱。
+NanaUI 的默认视觉面向桌面生产力软件设计：同时提供深色与浅色外观，采用紧凑的间距与克制的弱分隔。强调色（Accent）仅用于主操作或值本身带有强调语义的控件（如主按钮、开启的开关、带有效值的滑杆）。切换深浅色只替换调色板颜色，不改变控件尺寸，也不改变交互状态的分层方式。
 
-强调色只出现在主操作上，或者值本身就是强调的控件上。主按钮、打开的开关、有值的滑杆属于这一类。
+宿主在 `RuntimeProgram::theme` 中返回当前激活的 `Arc<CompiledTheme>`。内置的 `Light`（`nana.light`）与 `Dark`（`nana.dark`）只是两套预制主题；应用可以通过 `ThemeDefinition` 在 `ThemeRegistry` 中注册任意自定义 `ThemeId`。所有内置控件只读取语义 token，不依赖具体的主题名称。
 
-深色和浅色只换颜色。尺寸不换。状态怎么分层也不换。
+## 尺寸与字阶体系
 
-宿主在 `RuntimeProgram::theme` 返回已注册的 `Arc<CompiledTheme>`。Light 和 Dark
-只是两个预制主题；应用可以用 `ThemeDefinition` 注册任意 `ThemeId`，组件只依赖
-语义 token，不依赖主题名称。
+### 控件高度与间距网格
 
-## 尺寸
+单行交互控件提供三档标准高度，通过 `ControlSize` 生效：
 
-单行控件有三档高度。它们经 `ControlSize` 生效：
-
-| 档位 | 高度 | 用在 |
+| 档位 | 高度 | 典型场景 |
 | --- | ---: | --- |
-| 小 | 28px | 导航、菜单、列表、紧凑图标 |
-| 中 | 32px | 表单、按钮、选择、常规操作 |
-| 大 | 36px | 需要强调、由你显式选的场合 |
+| 小（`Small`） | 28 px | 导航行、菜单项、密集列表、紧凑图标按钮 |
+| 中（`Medium`） | 32 px | 表单输入、常规按钮、下拉选择、默认操作 |
+| 大（`Large`） | 36 px | 需要突出强调、由应用显式指定的主操作 |
 
-标准正文是 13px。它就是 `UI_BASE_TEXT_SIZE`，也就是 `type_scale::BODY`。
+桌面壳层固定尺寸：标题栏高度为 `36 px`（`TITLE_BAR_HEIGHT`），窗口控制按钮为 `28 px`，侧栏导航行为 `28 px`。多行容器的高度随内容增长，但其内部的单行操作控件仍遵循上述三档高度。
 
-产品字号阶梯是 `nana_ui::theme::type_scale`。`HINT` 是 11，`META` 是 12，`BODY` 是 13，`SECTION` 是 14，`HEADING` 是 16，`TITLE` 是 18，`DISPLAY` 是 20。字重是 `REGULAR` 400、`MEDIUM` 500、`SEMIBOLD` 600、`BOLD` 700。
+间距标度集中在 `nana_ui::theme::space`，基于 **2 px 网格**定义（1、3、5、7 不单独设档，分别归入 `XXS`、`XS`、`SM`）。`1 px` 细描边使用 `HAIRLINE` 常量，不属于间距档位。
 
-间距走 `nana_ui::theme::space`。这是 2px 网格。1、3、5、7 不新增档，接到 `XXS`、`XS`、`SM`。
+### 排版字阶与字重
 
-1px 描边走 `HAIRLINE`。它不是 spacing 档。
+产品字阶与字重定义在 `nana_ui::theme::type_scale`。标准正文尺寸为 `13 px`（即 `UI_BASE_TEXT_SIZE` / `type_scale::BODY`）：
 
-标题栏是 36px。窗口按钮是 28px。侧栏导航行是 28px。多行内容按内容长。里面的单行操作仍走这三档。
+| 字阶常量 | 字号 | 字重常量 | 数值 |
+| --- | ---: | --- | ---: |
+| `HINT` | 11 px | `REGULAR` | 400 |
+| `META` | 12 px | `MEDIUM` | 500 |
+| `BODY` | 13 px | `SEMIBOLD` | 600 |
+| `SECTION` | 14 px | `BOLD` | 700 |
+| `HEADING` | 16 px | | |
+| `TITLE` | 18 px | | |
+| `DISPLAY` | 20 px | | |
 
-## 颜色
+## 颜色、高对比度与阴影
 
-面板是一层表面。输入和未激活项更弱一层。悬停、按下、选中再往上走。文字分主、次、更弱。
+界面表面按层级递进：面板是一层基础表面，输入框与未激活项退后一层，悬停（hover）、按下（pressed）与选中（selected）依次抬升；文本相应分为主要（primary）、次要（muted）与弱化（faint）三档。输入框聚焦时增加一圈中性描边而不改变底色；校验错误优先使用危险色（danger）。卡片默认不画描边，需要区分层级时使用阴影；选中态卡片使用柔和的选中底色，不用强调色包边。
 
-输入框聚焦时加一圈中性描边。底色不改。错误优先用危险色。
+Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-shadow`（仅 outset）已接入渲染管线：inset 阴影使用内阴影 SDF 绘制；当容器带有子节点时，自动通过目标合成组（dest group）以 overlay 方式叠在内容之上，而不是把外阴影画进盒子里充数。
 
-不要用任意业务色去改框架 token。主题色走已安装主题的 `SemanticPalette`，
-外观设置只负责 policy overlay。系统高对比打开时，原生宿主调用
-`AppContext::set_high_contrast(true)`：已装主题改用同明暗的高对比调色板绘制。深色主题换成
-`SemanticPalette::high_contrast()`（黑底、白字、黄强调、青高亮），浅色主题换成
-`SemanticPalette::high_contrast_light()`（白底、黑字、深蓝强调）。muted 和 faint 是与正文区分开的灰，禁用文字不会看起来像可用。已装主题本身不被改写：关掉高对比就原样回来，期间新装的主题也同样被覆盖。
+### 主题定义与高对比度覆盖
 
-卡片默认没有描边。需要抬起来时用阴影。选中卡片用柔和的选中底，不用强调色包边。
+颜色统一来自共享的 `ThemeTokens` 与 `SemanticPalette`（位于 `nana_ui::theme`），而不是每个控件各自维护一套样式表。请不要把任意业务硬编码颜色写进框架 token：
 
-Vue CSS 的单层 `box-shadow`（outset 与 inset）和 `text-shadow`（仅 outset）已经映射到绘制。inset 走内阴影 SDF。有子节点时用 dest 合成组 overlay。这不是把 outset 画进盒子里冒充。
+- **自定义整套主题**：构造一份 `ThemeDefinition`（可从 `ThemeDefinition::NANA_DARK` 或 `NANA_LIGHT` 派生，只修改需要定制的档位，但必须填齐所有组件配方槽位），调用 `nana_ui::theme::install_theme_definition(&mut context, &definition)` 或交由宿主的 `ThemeRegistry` 注册。它会一次性替换颜色、尺寸、排版、动效时长、阴影与组件配方。
+- **系统高对比度**：当操作系统开启高对比度模式时，原生宿主调用 `AppContext::set_high_contrast(true)`。此时已安装的深色主题自动改用 `SemanticPalette::high_contrast()`（黑底、白字、黄强调、青高亮），浅色主题改用 `SemanticPalette::high_contrast_light()`（白底、黑字、深蓝强调）；`muted` 与 `faint` 保持与正文可区分的灰度，避免禁用态文字看起来像可用状态。高对比度是渲染期的策略覆盖（policy overlay），不改写已安装主题本身——关闭高对比度即可原样恢复，期间新安装的主题也会自动套用高对比度覆盖。
+- **公共导出面**：`nana_ui::theme` 导出了构成主题定义的全部 token 与配方类型，包括 `ThemeMetrics`、`SwitchMetrics`、`TreeMetrics`、`TypographyTokens`、`MotionTokens`、`EffectTokens`、`SpacingTokens`、`BorderTokens`、`OpacityTokens`、`SurfaceTokens`、`AccentRamp`、`ComponentThemeRegistry`、各类 recipe draft（如 `ButtonVariantDraft`）、组件配方（如 `DialogRecipe`、`ToastRecipe` 及其 `ToastIndicator` / `ToastGlyphs` / `ToastProgressRecipe` / `ToastMotion`），以及 `ThemeId`、`ThemeSchemaVersion`、`ThemeGeneration`。节点级命名尺寸使用的 `RadiusTier`、`ControlHeight`、`ControlPadding`、`SurfacePadding`、`SquareSize` 与 `SemanticColorMix` 同样从这里导入，应用无需直接依赖 `nana-ui-core`。
 
-颜色来自共享的 `ThemeTokens` 和 `SemanticPalette`（`nana_ui::theme`）。不是每个控件一份样式表。
+> 如果你要修改框架自身的主题架构或审计组件硬编码，请先阅读维护者文档 [主题审计记录](theme.md)。
 
-间距标度是 `nana_ui::theme::space`。字号和字重是 `nana_ui::theme::type_scale`。你不要直接依赖 `nana-ui-core`，也不要复制字面量。
+## 字体、语言与排版特性
 
-要整套换掉时，装一个 `ThemeDefinition`。换掉的不只是颜色和尺寸，还有排版、动效时长、阴影和组件配方。调用 `nana_ui::theme::install_theme_definition(&mut context, &definition)`。
+启用 `bundled-fonts` feature 时，宿主会自动注册 Noto Sans SC 的四档字重，并将其设为默认的 `sans-serif` 界面字体。关闭该 feature 则回退到系统字体（注意：视觉快照与设计基线核对必须使用捆绑字体，不能拿系统字体替代）。
 
-可以从 `ThemeDefinition::NANA_DARK` 或 `NANA_LIGHT` 派生，只改你要改的那几档，
-再交给宿主的 `ThemeRegistry` 注册。缺一个 recipe 槽位时主题不会安装。
+### 宿主字体注册与热卸载
 
-`nana_ui::theme` 把构成一份定义的 token 结构体都导出了。其中包括 `ThemeMetrics`、`SwitchMetrics`、`TypographyTokens`、`MotionTokens`、`EffectTokens`、`SpacingTokens`、`BorderTokens`、`OpacityTokens`、`SurfaceTokens`、`AccentRamp`、`ComponentThemeRegistry`，以及 `ButtonVariantDraft` 一类的 recipe draft，`DialogRecipe`、`ToastRecipe`（连同 `ToastIndicator`、`ToastGlyphs`、`ToastProgressRecipe`、`ToastMotion`）这些组件配方，还有 `ThemeId`、`ThemeSchemaVersion`、`ThemeGeneration`。节点级命名尺寸要用的 `RadiusTier`、`ControlHeight`、`ControlPadding`、`SurfacePadding`、`SquareSize` 和 `SemanticColorMix` 也在这里。
+应用可以通过以下两种粒度将自有字体载入同一个 `FontSystem`，与捆绑的 Noto 字体并列使用（未命中的字形仍回退到捆绑字体或系统字体）：
 
-你从这里拿。不要直接依赖 `nana-ui-core`。
+1. **进程级常驻字体**：调用 `register_host_font_bytes` 或 `register_host_font_file`，注册后的字体保留至进程结束。
+2. **可卸载的作用域字体（皮肤 / 主题包）**：使用 `HostFontScope`，其 `add_bytes`、`add_file`、`add_face` 方法各返回一份带字体族名的 `HostFontRegistration`；调用 `clear()` 或 drop 该 scope 即可一次性撤回其注册的全部字体（单份注册也可用 `register_host_font_source*` 配合 `unregister_host_font` 手动管理）。撤回字体会推进一次新的字体代际（`FontGeneration`）：凡是用过这些字体的文本会在下一次 `flush` 时自动重新测量，旧代际的字形位图不会再被采样。
 
-要改框架本身的主题架构，先读 [主题与样式](theme.md)。那篇是这套合同当前的完整清单和基线，包括哪些 token 装了却没人读。
+在 CSS 路径中，`@font-face` 在解析样式表时只收集规则；`url(...)` 的实际加载与字体注册发生在宿主适配器（`scene-view`）的 `inject_stylesheet` 阶段。CSS `font-family`、字重与斜体样式会映射到刚载入的字体面（face）；损坏的 `src` 会直接丢弃该字体面，不会静默拿系统字体顶替。
 
-## 字体
+### OpenType 整形、中日文标点挤压与竖排
 
-`bundled-fonts` 开启时，宿主注册 Noto Sans SC 的四档字重，并设为 sans-serif 默认。这是界面字体。
+- **字距与可变字体轴**：字距（tracking）与 `font-feature-settings`、`font-kerning` 直接进入 `nana-text` 的整形器（shaper），不是排版后的事后平移。`font-variation-settings` 会兑现字体中实际存在的变体轴：`wght` 并入 `font-weight`，`wdth` 与自定义轴（如 `BEVL`）进入同一份 `FontVariations`；字体本身没有的轴会被跳过，不会谎报或改写成 `wght`。
+- **断行与中日文排版**：`word-break: break-all | break-word` 与 `line-break: anywhere` 会改变折行策略（不支持 `keep-all`，声明后会被跳过）；`line-break: strict | loose` 按中日文规则裁剪断点。当语言（`lang`）为中文（`zh`）或日文（`ja`）时，默认挤压行首、行尾及相邻标点；`text-spacing-trim: space-all` 可关闭挤压，`auto` 则让放不下的行先挤压标点再折行。`text-autospace`、`text-align: justify` + `text-justify`、`text-wrap-style: pretty` 可按需开启。
+- **语言声明（`lang`）与 `locl` 字形替换**：应用级默认语言通过 `AppContext::set_default_language` 声明，局部子树通过 `MutationQueue::set_language` 声明；若未声明且文本引擎无兜底语言，则文本不携带语言标签，也不触发标点挤压。与浏览器的 HTML `lang` 一致，语言标签还会按每段文本的 script 选择字体内置的 OpenType 语言系统（如 `locl`）：例如捆绑的 Noto Sans SC 在无语言或 `en` / `ja` 下会把拉丁数字 `0–9` 和 `…` 替换成较矮的字形，而在声明 `zh-CN`（或 `zh-Hans`）后数字保持标准高度、直引号 `"` `'` 相应抬高（与 Chrome 渲染 `lang="zh-CN"` 的行为完全一致）。
+- **竖排书写（`writing-mode`）**：在 `writing-mode: vertical-rl | vertical-lr` 下，文本按列自上而下排列，中日韩文字直立、拉丁字母侧卧，文本编辑器同样支持在竖排列中就地编辑。
 
-未启用该 feature 时回落系统字体。快照和设计对照不能拿系统字体当真。
+## 组件专属度量与节点命名尺寸
 
-你也可以关掉捆绑字体，用 `register_host_font_bytes` 或 `register_host_font_file` 把自有字体载入同一套 FontSystem。它们和捆绑的 Noto 并列。未注册的仍回落捆绑字体或系统字体。
+单行控件的三档高度和内边距存放在 `ThemeMetrics` 中，而特定组件的专属几何则作为组合子结构挂在 `ThemeMetrics` 下——这样既避免把单个控件的内部数字和全局 `control_height` 混排，又能保证它们随已安装的主题一起切换：
 
-这两个函数注册的字体活到进程结束。皮肤、主题包这类要换掉的字体用 `HostFontScope`：`add_bytes` / `add_file` / `add_face` 各返回一份 `HostFontRegistration`（带它的字体族名）。`clear()` 或丢掉这个 scope，就把它注册的字体全部撤回。单份注册也可以用 `register_host_font_source*` 加 `unregister_host_font` 自己管。撤回是一次新的字体代际：用过这些字体的文本在下一次 flush 重新测量，旧代际的字形位图不会再被采样。
+- **`ThemeMetrics::switch`（`SwitchMetrics`）**：默认 `30×16 px` 轨道，配 `8 px` 标签间距。无标签的 `Switch` 会直接按已安装主题的轨道宽度定宽，不额外加内边距，因此放进设置行尾时无需手动计算宽度。
+- **`ThemeMetrics::scrollbar`**：管理滚动条车道、静止与激活滑块厚度及内缩；其配色、动效和显隐策略则位于 `ScrollbarRecipe`。
+- **`ThemeMetrics::tree`（`TreeMetrics`）**：管理 `TreeView` 的行间距（`row_gap`）、每层缩进（`indent`）、行内边距（`inset`）、展开三角方块（`disclosure`）与行图标方块（`icon`），默认常量 `TREE_METRICS` 为 `2 / 12 / 4 / 16 / 12`。
+- **紧凑密度预设（`COMPACT_METRICS`）**：面向专业工具检查器与高密度面板（20 px 小号控件、24 px 中号控件，内边距收紧，树行无间距、每层缩进 10 px），可通过 `ThemeDefinition::with_metrics(nana_ui::theme::COMPACT_METRICS)` 安装。
 
-字距走 `nana-text` 的 shaping。这是 tracking，不是事后平移。
+### 用命名档位代替硬编码数字
 
-`font-feature-settings` 和 `font-kerning` 进入 shaper。`font-variation-settings` 兑现已经声明、并且字体里存在的轴。`wght` 并进 `font-weight`。`wdth` 和自定义轴（例如 `BEVL`）走同一份 `FontVariations`。字体没有的轴会跳过，不会改写成 `wght`。
+给节点设置尺寸与圆角时，应使用 `NodeStyle` 上的命名档位方法：`radius`、`corner_radii`、`control_height`、`control_padding_x`、`square`。**不要在构造节点时把 `UI_METRICS.radius_lg` 这类具体浮点数直接写进 `layout`**——那等于在构造期就把 token 展开成了死数字，后续无论安装什么主题都无法改变它。
 
-`word-break: break-all|break-word` 和 `line-break: anywhere` 会改 wrap。`keep-all` 不支持，声明了也会被跳过。`line-break: strict|loose` 按中日文规则裁剪断点。中文、日文（`lang` 为 zh / ja，含继承的）默认挤压行首行尾与相邻的标点；`text-spacing-trim: space-all` 关掉，`auto` 让放不下的行先挤标点再断行。`text-autospace`、`text-align: justify` + `text-justify`、`text-wrap-style: pretty` 按需打开。
+使用命名档位时注意两条规则：
 
-语言相当于 HTML 的 `lang`：整个应用用 `AppContext::set_default_language` 声明，一棵子树用 `MutationQueue::set_language`。哪里都没声明、文本引擎也没有兜底语言时，文字没有语言，也就不挤压标点。语言和浏览器里的 `lang` 一样，还按每段文字的 script 选字体自己的 OpenType 语言系统（`locl` 等），拉丁字母和数字也一样，只是不换字体。捆绑的 Noto Sans SC 就有这样的差别：没有语言，或者字体里没有这个语言的语言系统（`en`、`ja` 都是）时，拉丁文字里的数字 0–9 和 `…` 换成矮一些的字形；声明 `zh-CN`（或 `zh-Hans`）以后数字保持原样，直引号 `"` `'` 升高。Chrome 用这份字体画 `lang="zh-CN"` 也是这样。
+1. **`control_padding_x` 会覆盖节点自身的左右内边距**。若某个容器需要退出标准控件水平内边距（例如 `sidebar.rs`），需先将 `control_padding_x` 设为 `None`，再设置自定义 `padding`。
+2. **`square` 只是未显式指定尺寸时的默认方盒**（写入 `min_width` / `min_height`）。只要节点在某一轴上显式设置了 `width` 或 `height`，方盒在该轴上的最小值就会自动让位，因此给图标按钮指定 `22×22` 时无需先清空 `square`。
 
-`writing-mode: vertical-rl | vertical-lr` 下，文字按列排。CJK 直立，拉丁侧卧。编辑器也在列里编辑。
+当两个块拼接成一个整体时，用 `corner_radii` 按「左上、右上、右下、左下」分别指定四个角的档位（`None` 表示直角）：外侧保留圆角，**接缝处必须设为直角（`None`）**——哪怕给接缝处留了极小的 `Xs` 圆角，两段圆弧交界处也会露出缺口。
 
-`@font-face` 在 stylesheet 解析时只收集规则。`url(...)` 的加载和字体注册发生在 `inject_stylesheet`。那是宿主适配器，`scene-view`，不在 CSS parse 里。
+## 圆角档位与超椭圆（CornerShape）
 
-CSS `font-family`（以及 weight 和 style）会映射到刚载入的 face。坏的 src 丢掉该 face。不用系统字体顶替。
+`AppearanceSettings` 暴露四级基础圆角：微型（xs）、控件（sm）、卡片（md）、页面（lg），默认值分别为 `2`、`6`、`10`、`14`（`standard_radius` 仍是 `md = 10` 的兼容别名，只改它不会重算其余三档；仅含 `standard_radius` 的旧版 JSON 仍按 ±4 / ±8 兼容推导）。在此之上还有两档跟随页面档位派生的浮层与大表面圆角：
 
-## 控件尺寸
+- **`RadiusTier::Xl`（默认 20 px）**：用于浮在页面之上的轨道表面，始终比卡片圆一档。
+- **`RadiusTier::Xxl`（默认 24 px，`ThemeMetrics::radius_xxl`）**：用于媒体播放条、详情大卡片等独立大块表面（对应 CSS `--radius-2xl`，Paint 脚本中名为 `"xxl"`）。
 
-单行控件的三档高度和内边距在 `ThemeMetrics` 里。switch 的轨道在 `ThemeMetrics::switch`（`SwitchMetrics`：30×16 轨道，加上 8 的标签间距）。scrollbar 的在 `ThemeMetrics::scrollbar`（车道、静止与激活滑块、内缩）；它的颜色、动效和显隐策略在 `ScrollbarRecipe`。
+应用可通过 `save_to_store` 与 `restore_from_store` 将外观设置持久化到独立的 `Settings` 命名空间。当主区域紧贴展开的侧栏时，靠近侧栏的那两个角会由工作区表面自动收成直角，另一侧保留页面圆角。
 
-两者都是组合进来的子结构。理由一样：某控件专属的几个数字不该和 `control_height` 并排，但它们确实属于已经安装的主题。
+### 圆角形状：`CornerShape`
 
-节点级尺寸用命名档位：`NodeStyle::radius`、`corner_radii`、`control_height`、`control_padding_x`、`square`。不要把 `UI_METRICS.radius_lg` 这类数字写进 `layout`。那是在构造期把 token 花掉。之后装什么主题都推不动它。
+圆角的几何曲线由主题中的 `ThemeMetrics.corner_shape` 控制，通过 `ThemeDefinition::with_corner_shape` 配置并随 `set_theme_definition` 安装到文档：
 
-`control_padding_x` 会盖掉节点自己的左右内边距。这是「用命名档位，而不是花掉数字」的代价。要退出，就把它设成 `None`，再自己写 padding。`sidebar.rs` 就是这么做的。
+- `CornerShape::Round`（默认）：标准圆弧。
+- `CornerShape::SQUIRCLE`：对应 CSS `corner-shape: superellipse(2)`。
+- `CornerShape::Superellipse(k)`：对应 `superellipse(k)`（`k` 取值范围为 `1..=4`）。
 
-`square` 不一样。它只是没人给尺寸时的方盒，写成 `min_width` / `min_height`。节点自己写了 `width` 或 `height` 的那一轴，方盒不再写最小值，写的尺寸生效。给图标按钮定 22×22 不必先把 `square` 置空。
+`corner_shape` 作用于该文档中由 GPU 绘制的每一个圆角：控件与卡片表面、描边、阴影、`overflow` 圆角裁剪、毛玻璃、HostTexture、`Painter` 中无裁剪的实心圆角矩形、全圆胶囊，以及 `clip-path: inset() round`。在 CPU 上三角化的圆角（如 `Painter` 在裁剪内、渐变或非等比缩放下绘制的圆角矩形，以及原生窗口阴影）仍保持标准圆弧。每份文档按各自安装的主题独立绘制，多窗口与离屏会话互不干扰；仅切换 `corner_shape` 只触发重绘，不触发重新布局。
 
-四个角不同档的形状，用 `corner_radii`。两块拼成一体时，外侧是圆角，接缝是直角。四个值按左上、右上、右下、左下。`None` 是直角。
+## 动效与浮层交互细节
 
-接缝处不要给圆角。哪怕是 `Xs`，两段弧分开的地方都会露出缺口。
-
-没有标签的 `Switch` 自己按安装的轨道宽度定宽，不加内边距。行尾开关不用再算宽度。
-
-## 圆角
-
-`AppearanceSettings` 暴露四级圆角：微型、控件、卡片、页面。默认是 2、6、10、14。
-
-`RadiusTier::Xl`（默认 20）给浮在页面上的轨道用。它比卡片圆一档。它不是单独的设置，始终跟在页面档之上。
-
-`RadiusTier::Xxl` 是 2xl 档（默认 24，`ThemeMetrics::radius_xxl`），给播放条、详情卡这类独立的大块表面用，比轨道再圆一档。它也不是单独的设置，和 `Xl` 一样跟在页面档之上。照 CSS `--radius-2xl` 写的主题，把那个值给 `radius_xxl`。Paint 脚本里档位名是 `"xxl"`。
-
-`standard_radius` 仍是 md（10）的别名。只改这一档，不会重算另外三档。
-
-遗留 JSON 若只有 `standard_radius`，仍按旧规则一次推导 ±4 和 ±8。
-
-你可以用 `save_to_store` 和 `restore_from_store` 把这份设置写进独立的 Settings namespace。旧的 `nana.appearance.*` 只迁移一次。
-
-主区域贴着展开的侧栏时，挨着侧栏的那两个角收成直角。另一侧保持页面圆角。这由工作区表面统一画。不靠页面自己设相同的圆角。
-
-圆角的形状是主题的一项：`ThemeMetrics.corner_shape`。默认 `CornerShape::Round`，是圆弧。`CornerShape::SQUIRCLE` 是 CSS `corner-shape: superellipse(2)`；`CornerShape::Superellipse(k)` 对应 `superellipse(k)`，`k` 取 1 到 4。用 `ThemeDefinition::with_corner_shape` 设，经 `set_theme_definition` 装进文档。它管这份文档里 GPU 画出的每一个圆角：控件和卡片自己的角、描边、阴影、`overflow` 圆角裁剪、毛玻璃、HostTexture、`Painter` 里没有裁剪的实心圆角矩形，全圆的胶囊也跟着变。`clip-path: inset() round` 同样跟着变，这一点和 CSS 不同。在 CPU 上三角化的圆角仍是圆弧：`Painter` 在裁剪里、用渐变或在非等比缩放下画的圆角矩形，以及窗口阴影。每份文档按自己的主题画，两扇窗口、离屏会话互不影响。只改形状不重排，只重画。
-
-## 运动与浮层
-
-Runtime 侧栏折叠是 260ms。分组展开也是 260ms。缓动是 EaseInOutCubic。
-
-只有动画在跑时才要帧。反向从当前进度接着走。
-
-Vue 路径的 `@keyframes` 编译进同一条 Motion IR。`opacity` 和 `transform` 走 compositor overlay。`color` 和 `filter` 走 Paint-class CPU。它们都不是布局条件。
-
-`width` 和 `height` 仍是 Layout-class。`font-variation-settings` 按轴编译成 Layout-class track。每一帧都是真实的字形变体，会重新 shaping，也会重新栅格。这不是缩放。
-
-菜单默认和触发它的控件起始边对齐。靠近窗口边缘时，由控件自己收回来。你不要算坐标。
-
-可拖的 Tab 和列表：按下后移动超过 4px 才算拖。点击仍然只是选中。
-
-命令面板宽 680px。打开后，输入框必须拿到焦点。
+- **壳层过渡**：Runtime 侧栏折叠与分组展开时长均为 `260 ms`，缓动曲线为 `EaseInOutCubic`。只有动画进行中才请求帧，中途反向操作会从当前进度平滑接续。
+- **Motion IR 分流**：Vue 路径的 `@keyframes` 同样编译进 `nana-ui-core::motion` 的 Motion IR。`opacity` 与 `transform` 走合成器 overlay；`color` 与 `filter` 走 Paint 类 CPU 插值；`width`、`height` 与逐轴的 `font-variation-settings` 走 Layout 类轨道（可变字体轴每帧生成真实的字形变体、重新整形并栅格化，绝不用几何缩放伪造）。
+- **浮层与拖拽阈值**：菜单默认与触发控件的起始边对齐，靠近窗口边缘时由框架自动收回视口内，应用无需手算坐标。可拖拽的 Tab 与列表在按下后移动超过 `4 px` 才进入拖拽态，未越过阈值仍视为普通点击选中。命令面板（`CommandPalette`）标准宽度为 `680 px`，打开后输入框自动获取焦点。

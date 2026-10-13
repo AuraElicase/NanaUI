@@ -1,178 +1,81 @@
-# Window-independent presentation
+# 窗口外输出（ExternalSurface）
 
-`nana_ui::output` is the output boundary for applications that produce a
-presentation without making an OS Window the owner of rendering. It is
-available with the `gpu` feature and does not require `hosted` or `winit`.
+`nana_ui::output` 是无窗口呈现（不让操作系统窗口独占渲染目标）的输出边界。启用 `gpu` feature 即可使用，不要求开启 `hosted` 或 `winit`。
 
-A window presents to its own surface directly. Anything else that consumes
-the same scene, such as a Spout sender, a recorder or a nested host, takes an
-output: the scene is painted a second time into an `ExternalSurface` inside
-the frame the window records anyway (see *Window outputs* below). There is no
-topology planner and no CPU fallback; a consumer that needs the pixels on
-another device or in another process gets them through native sharing.
+普通窗口直接呈现到它自己的 Surface。任何需要消费同一场景的其他目标（如 Spout 发送端、录屏器或嵌套宿主）走**输出（Output）**路径：在窗口本来就要录制的那一帧里，把同一份场景再往 `ExternalSurface` 里画一遍（见下文「窗口输出」）。这里没有拓扑协商器，也没有 CPU 回退路径；需要在另一块设备或另一个进程里拿到像素的消费方，通过原生共享句柄接收。
 
-`ExternalSurface` owns a bounded set of persistent GPU textures and uses the
-same `SceneWgpuPainter` as a Window. `render` compares the Scene projection,
-host revision, texture registry revision, viewport, and target generation. An
-unchanged presentation returns `Reused` before starting a frame, so it does
-not allocate, encode, copy, submit, or read pixels. A submitted revision is
-published only after the queue completion callback runs. `sample` returns a
-lease to the last completed texture; dropping the lease releases its slot
-without waiting on the CPU. `GpuContext::poll` and `ExternalSurface::poll`
-only drive non-blocking completion callbacks.
+## ExternalSurface 与 EmbeddedSurfaceNode
 
-`EmbeddedSurfaceNode` is the nested-consumer seam. It keeps a child
-`ExternalFrame` lease while the parent records its scene and can bind that
-lease to the parent's `GpuSubmission`; the completion callback retires the
-child slot after the parent has finished sampling it. Logical and texture
-extents, device/resource generations, and content revision are carried as
-explicit metadata, so parent transforms and clipping stay in
-the parent scene. A `HostTextureRegistry` slot retains a clone of the child
-handle, so the parent must replace or remove that slot when the node is no
-longer used; otherwise a later child revision could recycle the target while
-the old slot is still registered.
+`ExternalSurface` 持有一组有界的持久 GPU 纹理，并使用与窗口相同的 `SceneWgpuPainter`。调用 `render` 时会比对 Scene 投影版本、宿主版本、纹理注册表版本、视口尺寸和目标设备代际：
 
-`render` is `prepare` → `record` → `bind_submission` in a frame of the
-surface's own. A host that already records a frame uses the three steps
-directly: `prepare` answers `Reused`, `Deferred` or `Record(plan)` without
-recording anything; `record` paints the plan's slot into the caller's
-`FrameContext`, with the surface's own painter or, for a surface created with
-`ExternalSurface::with_host_painter`, with a painter the host passes in (the
-`target_namespace` keeps its slot ids apart from the painter's other
-targets; remove `target_ids()` from that painter when the surface goes);
-`bind_submission` marks the slot in flight on that frame's `GpuSubmission`.
-`plan_texture` is the slot's texture, for work appended in the same frame.
+- 若呈现内容未变化，在开始一帧之前直接返回 `Reused`——不分配、不编码、不复制、不提交，也不回读像素。
+- 提交后的版本只在队列完成回调触发后才对外发布。
+- `sample` 返回最近一次已完成纹理的租约（lease）；drop 租约即归还槽位，不在 CPU 上等待。
+- `GpuContext::poll` 与 `ExternalSurface::poll` 只驱动非阻塞完成回调。
 
-The external target is an in-process same-device resource. On Windows/DX12
-the `native-export` feature adds the one native exchange NanaUI ships (see
-*DX12 shared textures* below). The first Vulkan/Linux interop review found
-that wgpu 30 can import some DMA-BUF images through its HAL, but does not
-expose external semaphore import/export or a memory export contract, and
-queue ownership barriers would be outside the safe Nana GPU contract; native
-exchange stays unsupported there. Set `copy_source` when a consumer copies
-the output texture on the GPU.
+`EmbeddedSurfaceNode` 是嵌套消费方的接缝：在父级录制自身场景期间持有子级的 `ExternalFrame` 租约，并可将该租约绑定到父级的 `GpuSubmission`，待父级完成采样后由完成回调回收子级槽位。逻辑与纹理尺寸、设备/资源代际以及内容修订号作为显式元数据传递，父级的变换与裁剪仍留在父级场景中。注意 `HostTextureRegistry` 槽位会持有一份子级句柄克隆，因此不再使用该节点时，父级必须替换或移除该槽位，避免后续子级修订复用目标时旧槽位仍挂在注册表里。
 
-The producer must include revisions for GPU producers or host textures that
-are not represented by `UiScene::projection_revision`. A resize or device
-replacement first creates the new resources; a failed creation leaves the old
-completed surface available. All target resources carry `DeviceGeneration`,
-and the surface rejects a different device rather than sending stale handles
-to the painter.
+`render` 等价于在表面自有的帧里依次执行 `prepare` → `record` → `bind_submission`。已经在录制帧的宿主可以直接分三步调用：
 
-Output work is observable through `OutputWorkObservation`, the surface's
-`last_work()` snapshot, `WorkCounters`'s `output_*` fields, and
-`nana_diagnostics::framework::gpu::OUTPUT_*` metrics. Frame drivers fold a
-surface snapshot into the frame's counters with `record_last_work`.
+1. `prepare`：不录制任何命令，直接回答 `Reused`、`Deferred` 或 `Record(plan)`；
+2. `record`：用表面自己的 painter（或通过 `ExternalSurface::with_host_painter` 创建时传入的宿主 painter）将 `plan` 的槽位画进调用方的 `FrameContext`。`target_namespace` 将其槽位 ID 与 painter 的其他目标隔开；表面销毁时用 `target_ids()` 从 painter 中移除；
+3. `bind_submission`：在该帧的 `GpuSubmission` 上标记槽位在飞（in-flight）。`plan_texture` 即该槽位的纹理，可用于同一帧内追加后续 GPU 工作。
 
-## Window outputs
+外部目标是同进程、同设备的资源。在 Windows / DX12 下，`native-export` feature 提供 NanaUI 内置的原生跨进程/跨 API 交换（见下文「DX12 共享纹理」）。Linux / Vulkan 侧经评估：wgpu 30 虽可通过 HAL 导入部分 DMA-BUF 图像，但未暴露外部信号量导入/导出及内存导出合同，且队列所有权屏障超出 Nana GPU 的安全合同范围，因此暂不支持原生导出。当消费方在同设备 GPU 上复制输出纹理时，设置 `copy_source`。
 
-A window can be painted a second time into an offscreen output for a consumer
-outside it (a Spout sender, a recorder). `RuntimeProgram::window_output(id)`
-returns a `WindowOutputConfig` (or `ApplicationWindow::output` for an
-`ApplicationState`); the host reads it every frame and `None` stops the output.
+生产端必须把未被 `UiScene::projection_revision` 覆盖的 GPU 生产者或宿主纹理修订号一并计入。尺寸变化或设备替换会先创建新资源；若创建失败，旧的已完成表面继续可用。所有目标资源均携带 `DeviceGeneration`，表面遇到不同代际的设备会直接拒绝，不会把过期句柄交给 painter。
+
+输出侧的工作量可通过 `OutputWorkObservation`、表面的 `last_work()` 快照、`WorkCounters` 的 `output_*` 字段以及 `nana_diagnostics::framework::gpu::OUTPUT_*` 指标观测。帧驱动器可用 `record_last_work` 将表面快照并入当帧计数。
+
+## 窗口输出（Window outputs）
+
+一扇窗口可以把自己的场景在离屏输出里再画一份，交给外部消费方（Spout 发送端、录制器）。`RuntimeProgram::window_output(id)` 返回 `Option<WindowOutputConfig>`（`ApplicationState` 则通过 `ApplicationWindow::output` 配置）；宿主每帧读取该配置，返回 `None` 即停止输出。
 
 ```rust
 fn window_output(&self, id: WindowId) -> Option<WindowOutputConfig> {
-    (id == TYPEWRITER).then(|| WindowOutputConfig::default() // 1920x1080, Contain
+    (id == TYPEWRITER).then(|| WindowOutputConfig::default() // 默认 1920x1080, Contain
         .with_extent(WindowOutputExtent::Fixed { width: 1920, height: 1080 })
         .with_export(WindowOutputExport::Native))
 }
 fn window_output_frame(&mut self, id: WindowId, frame: &WindowOutputFrame, cx: &RuntimeProgramContext<Msg>) {
-    // frame.texture(): same device, BGRA8_UNORM, sRGB-encoded, premultiplied
-    // frame.take_native(): the DX12 token below (Windows, native-export)
+    // frame.texture(): 同一设备，BGRA8_UNORM，sRGB 编码，预乘 alpha
+    // frame.take_native(): 下述 DX12 令牌（Windows，开启 native-export）
 }
 fn window_output_status(&mut self, id: WindowId, status: WindowOutputStatus, cx: &RuntimeProgramContext<Msg>) {}
 ```
 
-- **Same scene, same frame.** The host paints the window's own `UiScene` into
-  the output inside the `FrameContext` it records for the window, after the
-  window's paint and before the submit, with the host's shared painter for
-  the output profile (separate `RenderTargetId`s, grayscale text,
-  `AlphaEncoding::Gamma`, SDR parameters). Nothing is laid out twice.
-- **Nothing changes, nothing is recorded.** The output is an
-  `ExternalSurface`; a frame whose projection, host textures, images and
-  viewport are unchanged is `Reused` and produces no output frame and no
-  submit. Custom GPU renderers and compositor animation count as changing
-  every frame.
-- **Hidden windows.** With `while_hidden` (the default) a window that cannot
-  present (hidden, minimised, occluded) ticks at `max_fps` (30 by default):
-  the host drains its messages, flushes the document, and records only the
-  output (and the window's scene producers) in a frame of its own. A hidden
-  static window records nothing. A window whose size is 0 produces nothing.
-- **Size and fit.** `Fixed { width, height }` (the default, 1920×1080),
-  `MatchWindow`, or `Scale(f)` of the window's physical size. The painter
-  scales uniformly and the scene is not laid out for the output, so content
-  of another aspect ratio is placed with `Contain` (whole window, centred,
-  transparent around it) or `Cover` (filled, cropped). A non-uniform stretch
-  is not offered.
-- **Alpha.** `Premultiplied` (gamma-space, what OBS's "Premultiplied" Spout
-  setting expects) or `Straight`, which adds one small pass dividing colour
-  by alpha into a texture of its own.
-- **Lifetime of a frame.** `WindowOutputFrame::texture` is valid for GPU work
-  submitted to the host's device from the callback on (queue order); the
-  output recycles the texture two frames later. Nothing waits for the GPU.
-- **Status.** `WindowOutputStatus` is reported once per change: `Active`,
-  `NativeUnavailable`, `NativeDeferred`, `NativeRetired`, `Failed`, `Stopped`.
-  `max_fps` throttles produced frames; a throttled change is produced when it
-  comes due.
+- **同一场景，同一帧。** 宿主在为该窗口录制的同一个 `FrameContext` 内，于窗口自身绘制之后、`submit` 之前，使用宿主共享的输出配置专用 painter（独立的 `RenderTargetId`、灰度抗锯齿文本、`AlphaEncoding::Gamma`、SDR 参数）把窗口的 `UiScene` 画进输出目标。不会做第二次布局。
+- **无变更则零录制。** 输出底层就是 `ExternalSurface`；若投影、宿主纹理、图片和视口均未变化，直接返回 `Reused`，不产出输出帧也不提交。自定义 GPU 渲染器与合成器动画视为每帧变化。
+- **隐藏窗口。** 开启 `while_hidden`（默认开启）时，无法呈现到屏幕的窗口（隐藏、最小化、被遮挡）按 `max_fps`（默认 30）节拍运行：宿主排空消息、flush 文档，并在独立帧中只录制该输出（以及窗口的场景生产者）。隐藏的静态窗口什么都不录；尺寸为 0 的窗口不产出帧。
+- **尺寸与适配（Size and fit）。** 支持 `Fixed { width, height }`（默认 1920×1080）、`MatchWindow` 或窗口物理尺寸的 `Scale(f)`。painter 做等比缩放，场景不会为输出尺寸重新布局；宽高比不同时按 `Contain`（完整居中，四周透明）或 `Cover`（铺满裁切）放置，不提供非等比拉伸。
+- **Alpha 编码。** 支持 `Premultiplied`（gamma 空间，直接匹配 OBS Spout 的「Premultiplied」选项）或 `Straight`（追加一个小型 pass 将颜色除以 alpha 写入独立纹理）。
+- **帧生命周期。** `WindowOutputFrame::texture` 从回调起对提交到宿主设备的后续 GPU 工作有效（按队列顺序）；输出在两帧后回收该纹理。全程无 CPU 等待。
+- **状态通知。** `WindowOutputStatus` 每次状态变化上报一次：`Active`、`NativeUnavailable`、`NativeDeferred`、`NativeRetired`、`Failed`、`Stopped`。`max_fps` 负责节流；被节流的变更会在到期时产出。
 
-## DX12 shared textures (`native-export`)
+## DX12 共享纹理（`native-export`）
 
-`nana_gpu::NativeExportPool` (feature `native-export`, Windows, a DX12
-device; `GpuCapability::NativeTextureExport`) owns three committed
-`DXGI_FORMAT_B8G8R8A8_UNORM` textures created with `D3D12_HEAP_FLAG_SHARED`
-and render-target use (D3D11 refuses to open a shared D3D12 texture without
-it), each exported as an NT handle, and one shared fence. They are wrapped as
-`COPY_DST`-only textures on the host's own device; no second device or queue
-exists. `stage` records a copy of a rendered texture into the next slot of the
-caller's frame; `FrameContext::submit` signals that frame's *ready* value on
-the device queue right after `queue.submit`, under the submission guard;
-`finish` turns the submitted copy into a `NativeFrameToken`. A window output
-with `WindowOutputExport::Native` does this for every produced frame.
+`nana_gpu::NativeExportPool`（需启用 `native-export` feature，仅限 Windows + DX12 设备；对应能力位 `GpuCapability::NativeTextureExport`）持有三张带 `D3D12_HEAP_FLAG_SHARED` 和渲染目标标志创建的 `DXGI_FORMAT_B8G8R8A8_UNORM` 提交纹理（缺少渲染目标标志时 D3D11 拒绝打开共享 D3D12 纹理），每张纹理导出为一个 NT 句柄，并配一把共享围栏（shared fence）。它们在宿主自己的设备上包装为仅 `COPY_DST` 的纹理，不存在第二个设备或队列：
 
-Frame `k` (counting from 0) is ready at fence value `2k + 1` and released at
-`2k + 2`. The consumer contract:
+- `stage`：在调用方当帧中录制一次从已渲染纹理到下一个槽位的拷贝；
+- `FrameContext::submit`：在提交守卫保护下，紧随 `queue.submit` 之后在设备队列上 signal 当帧的 *ready* 围栏值；
+- `finish`：将已提交的拷贝包装为 `NativeFrameToken`。配置了 `WindowOutputExport::Native` 的窗口输出会对每个产出帧执行此流程。
 
-1. Open the pool once per `token.pool_generation()`: create a D3D11 device on
-   the adapter `token.adapter_luid()` names (`IDXGIFactory4::EnumAdapterByLuid`),
-   `ID3D11Device1::OpenSharedResource1` every `token.texture_handle(slot)` for
-   `slot < NATIVE_EXPORT_SLOTS`, and `ID3D11Device5::OpenSharedFence` the
-   `token.fence_handle()`. The handles stay open while any token of that pool
-   lives; the opened objects are the consumer's own.
-2. For each token: `token.accept_release()`, then on the consumer's context
-   `ID3D11DeviceContext4::Wait(fence, token.ready_value())`, read
-   `textures[token.slot()]` (for example `CopyResource` into the sender's
-   texture), `Signal(fence, token.release_value())`, `Flush`.
-3. Signal release only on the GPU timeline after the wait. A release
-   signalled before the producer's ready signal ran would move the fence
-   backwards when that one lands, and the pool would then defer forever.
-4. A token dropped without `accept_release` is released by the producer on its
-   own queue, ordered after the ready signal; a consumer may skip frames by
-   dropping their tokens.
+第 `k` 帧（从 0 起算）在围栏值 `2k + 1` 时就绪（ready），在 `2k + 2` 时释放（released）。消费方合同如下：
 
-Nobody waits on the CPU. While the consumer has not released the previous
-frame, `stage` answers `Deferred(ConsumerBusy)` and records nothing; a window
-output then reports `NativeDeferred` and keeps producing same-device frames.
-A consumer that has not released for 2 seconds gets the pool retired and a new
-one (`NativeRetired`). A resize, an alpha/export change and a device switch
-also retire the pool; the next token names a new `pool_generation`. The
-content is sRGB-encoded with premultiplied alpha unless the output asked for
-`Straight`. The export path performs no CPU readback; the D3D11 readback in
-the tests and in `window-output-probe` is verification only.
+1. **按 `token.pool_generation()` 打开池（每个代际一次）**：在 `token.adapter_luid()` 指定的适配器上创建 D3D11 设备（`IDXGIFactory4::EnumAdapterByLuid`），对 `slot < NATIVE_EXPORT_SLOTS` 的每个 `token.texture_handle(slot)` 调用 `ID3D11Device1::OpenSharedResource1`，并对 `token.fence_handle()` 调用 `ID3D11Device5::OpenSharedFence`。只要该池还有任何 token 存活，句柄就保持有效；打开后的对象归消费方自己持有。
+2. **消费每一帧 token**：先调 `token.accept_release()`，随后在消费方上下文上依次执行 `ID3D11DeviceContext4::Wait(fence, token.ready_value())` → 读取 `textures[token.slot()]`（例如 `CopyResource` 到发送端纹理）→ `Signal(fence, token.release_value())` → `Flush`。
+3. **只能在 Wait 之后的 GPU 时间线上 signal release。** 若在生产端的 ready 信号落地前就提前 signal 了 release，生产端信号到达时会把围栏值往回拉，导致池永久挂起（defer）。
+4. **未调用 `accept_release` 就直接 drop 的 token** 会由生产端在自己的队列上（排在 ready 信号之后）自动释放；消费方可以直接 drop token 来跳帧。
+
+全程没有 CPU 等待。当消费方尚未释放上一帧时，`stage` 返回 `Deferred(ConsumerBusy)` 且不录制任何命令；窗口输出此时上报 `NativeDeferred`，并继续产出同设备纹理帧。若消费方超过 2 秒未释放，旧池退役并换新池（上报 `NativeRetired`）。尺寸变化、alpha/导出模式切换或设备重建同样会退役旧池，下一枚 token 将携带新的 `pool_generation`。除显式要求 `Straight` 外，像素均为 sRGB 编码、预乘 alpha。导出路径不做任何 CPU 回读；测试与 `window-output-probe` 中的 D3D11 回读仅用于验收核对。
 
 ```powershell
 cargo test -p nana-gpu --features native-export --test native_export
 cargo run -p nana-ui --example window-output-probe --features hosted,bundled-fonts,native-export
 ```
 
-The tests export frames, open them on a D3D11 device of the same adapter,
-copy and compare every byte, check that an unreleased frame defers the next,
-that a dropped token releases itself, that a discarded frame leaves the pool
-unchanged and that retiring closes the handles once the last token is gone.
-`window-output-probe` runs a transparent composition window through four
-phases (visible/hidden × animated/static) and consumes every native token on
-a D3D11 device. On 2026-10-08 (Windows 11, RTX 5060 Ti, DX12) it produced 62
-frames visible and 76 hidden while animated, 0 in both static phases, every
-token was consumed, and the read-back box texel matched the window
-(BGRA 51,76,229,255). Not covered: the D3D12 debug layer, and a cross-process
-consumer.
+测试覆盖：导出帧并在同一适配器的 D3D11 设备上打开、逐字节复制比对、未释放帧使下一帧 defer、drop token 自释放、丢弃帧不污染池，以及最后一枚 token 释放后退役池关闭句柄。`window-output-probe` 让一扇透明合成窗口跑过四个阶段（可见/隐藏 × 动画/静态），并在 D3D11 设备上消费每一枚原生 token。
+
+## 参见
+
+- [实时画面](gpu.md) · [窗口](window.md) · [架构合同](architecture.md) · [GPU 与帧生命周期](/learn/gpu-frame)

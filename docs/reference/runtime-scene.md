@@ -1,195 +1,84 @@
-# Runtime 与 Scene
+# Runtime 与 Scene 渲染抽取合同
 
-这篇给改保留树或绘制抽取的人。你做应用开发，看 [框架如何运行](how-it-works.md)。入口类型看 [应用 API](application-api.md)。
+本文面向修改 `nana-ui-runtime`（保留树）或 `nana-ui-scene`（绘制图抽取与合成）的框架维护者。应用层心智模型请见 [框架如何运行](how-it-works.md)，宿主入口签名请见 [应用 API](application-api.md)。
 
-产品路径是 `UiWorld`，再到 `ExtractedNode`，再到 `UiScene`，再到 `SceneWgpuPainter`。
+产品主线严格保持单向：`UiWorld` → `ExtractedNode` → `UiScene` → `SceneWgpuPainter`。`nana-ui-runtime` 与 `nana-ui-scene` 均**不依赖 WGPU**；`nana-ui-scene` 不持有任何应用业务状态、窗口句柄或 GPU 设备对象。
 
-`nana-ui-runtime` 不依赖 WGPU。`nana-ui-scene` 也不依赖 WGPU。Scene crate 不持有应用状态，不持有窗口，也不持有 Device。
+## 1. `UiWorld` 的单一权威边界
 
-## 权威
+`UiWorld` 是以下全部状态的唯一权威：节点身份（`StableNodeId`）、文档归属（`DocumentId`）、父子层级、节点种类、计算样式、文本与已提交选区、未滚动的布局盒（`LayoutResult` / `LayoutBox`）、滚动偏移（`scroll_offset`）、指针 hover / press / capture 状态、事件路由表、焦点链与 IME、无障碍投影、文本呈现器（text presenter）以及自定义渲染槽声明。
 
-`UiWorld` 是唯一权威。它管 identity、document 归属、层级、节点类型、样式、文本、已提交选区、未滚动的 layout、scroll offset、指针的 hover / press / capture、事件路由、焦点和 IME、无障碍、text presenter，以及 render content。
+- **外部身份隔离**：对外只暴露 `StableNodeId` 与类型化的 `Entity<V>`；内部节点表存储结构的演进不得使 JS 句柄、诊断记录或持久化数据失效。
+- **原子批式提交**：结构变更先排入帧内的 `MutationQueue`，整批校验通过后才一次性 commit；校验失败不会留下半成品层级，已销毁节点的 ID 永不复用。Vue 节点的句柄直接映射到 `StableNodeId`，其 DOM 外观层仅保留兼容查询元数据，绝不构成第二棵权威树。
 
-对外你只用 `StableNodeId` 或 `Entity<V>`。内部存储换了实现，也不能作废 JS handle、诊断或持久化数据。
+## 2. 增量帧调度与动效生命周期
 
-结构变更先进入帧内的 mutation 队列。整批验证成功之后，一次 commit。失败不发布局部层级结果。销毁后的 ID 不再复用。
+Runtime 按节点的脏标记（`DirtyMask`）确定性地生成各阶段工作列表（样式、文本整形、布局、命中索引、焦点与 IME、无障碍、渲染抽取）。静止的 `UiWorld` 返回空工作集，不请求持续重绘；局部变异只向语义上受影响的节点传播，遇到已处于相同脏状态的节点即停止。
 
-Vue 节点的 handle 与 `StableNodeId` 对应。DOM facade 只留兼容元数据。它不能成为第二权威源。
+`RuntimeDocument::flush` 在单次有界帧事务中调用宿主的 `TextShaper`，再由 `RuntimeLayoutEngine` 根据视口、样式与整形度量写回布局。当视口尺寸变化时，仅将文档根、`position: fixed` 节点及消费了变化轴约束（如 `vw` / `vh`）的盒子作为种子做增量重排，未受影响的子树直接复用保留缓存。若帧事务未收敛，已取出的脏工作会退回调度器，在 settle 之前不对外发布 Scene 或无障碍增量。
 
-## 增量
+### 统一 Motion IR 与完成事件保证
 
-Runtime 按脏组件产生确定性的工作。工作包括样式、文字、布局、命中、焦点和 IME、无障碍、抽取。
+所有动画（Rust L3 的 `ViewContext::transition`、`Spring::to`、`Timeline::parallel | sequence`，内置控件的 hover / switch / spinner / sidebar 过渡，以及 CSS 动效）统一编译进 `nana-ui-core::motion` 的 `AnimationSpec`，由宿主传入单调时钟求值，Runtime 自身不创建计时线程：
 
-静止的 world 返回空工作。它不要求持续 redraw。
+- **完成事件精确送达**：每一条已启动的动画都保证以**恰好一次** `Finished` 或 `Cancelled` 事件收尾。被同 ID 新动画中途替换的轨道上报 `Cancelled`（对齐 CSS `transitioncancel`），已到达终点但尚未被 `advance_animations` 回收的轨道上报 `Finished`。由提交触发的结束（`stop_animation`、`finish_animation`、替换、节点移除或停放）会一直保留到被消费为止（后续再有其他提交也不会冲掉它们）；只要还有未送达的结束事件，`next_animation_deadline` 就会报告当前动画时间以唤醒宿主派发，不依赖窗口是否正在 present。对于比估算 settle 时间略慢的弹簧动画，到达估算点后若尚未落定会按下一帧间隔继续检查，不会卡死在 `Duration::MAX`。
+- **常驻节点的显隐生命周期（`PresenceLifecycle`）**：用于管理通过淡入淡出（可附带位移）切换显隐的常驻节点（如工具窗面板、浮动卡片、临时工具栏）。它复用视图层的 `Transition` 描述进出场，调用 `set_shown(cx, shown, now)` 时从当前呈现值直接出发（中途反向即 retarget），**只写合成器轨道而不改逻辑样式**；开始隐藏时立即将 `pointer-events` 设为 `none` 并移出内部焦点，开始显示时恢复 `pointer-events`（首次挂载需静默隐藏时用 `set_shown_at_once`）。将每帧的 `AnimationFrame` 喂给 `apply_events(cx, &frame.events)` 后，它会在最后一条轨道结束时返回 `PresenceSettled::Shown` 或 `Hidden`；落定隐藏后自动将节点设为 `visibility: hidden`（移出绘制、命中与无障碍树，但保留布局身份）。在系统开启“减少动态效果”时自动以零时长、无位移执行并照常上报落定。
+- **稀疏采样与唤醒分离**：`advance_animations` 对 CPU / Layout / Paint 类轨道按 `frame_interval` 采样，对合成器安全（`AnimationClass::Compositor`）轨道仅注册启动与结束两个 deadline。`compositor_needs_tick` 只把存在活动合成轨道的那扇窗口切入轻量 present，不进入 CPU 动画 deadline，也不触发其他窗口重绘。
 
-`RuntimeDocument::flush` 在一次帧事务里调用宿主的 `TextShaper`。`RuntimeLayoutEngine` 按 viewport、样式和 shaping 写回 layout。
+### 动画属性分类表
 
-viewport 变化时，即使你没有应用 mutation，也会触发布局。脏集合是 document roots，加上 `position: fixed` 的节点，再加上 `vw` 和 `vh` 节点。未移动的子树复用 retained cache。不会丢掉整棵树。
+逻辑值存放在 `UiWorld`，瞬态呈现值存放在 `PresentationStore`（通过 `UiWorld::presentation_pair` 或 `applied_value()` 查询，严禁每帧把 `transform` 或 `opacity` 写回 `UiWorld`）：
 
-系统失败时，已经消费的工作回到调度器。Scene 和无障碍增量在 settle 之前不发布。
-
-局部 mutation 只传播到语义上受影响的节点。遇到已经是同样脏状态的节点，就停。
-
-动画用 Runtime 持有的稳定 ID 注册。宿主传入单调时间。Runtime 不建计时线程。
-
-`AnimationSpec` 是 Motion IR 的 timing 子集。进度经 `evaluate_progress` 求值。不要另开一套 timeline。
-
-Rust L3 的 `ViewContext::transition`、`node().motion(Spring::to)`、`node().timeline(Timeline::parallel|sequence)` 都编译成同一份 `AnimationSpec`。
-
-内建的 hover、switch、spinner、surface、skeleton、sidebar、workspace、loading 不再维护平行的逐帧时钟。compositor-safe 属性走 overlay。switch 的 thumb 和 sidebar 的高度保持 Layout。完成事件走 deadline。
-
-**完成事件的保证。** 每一条开始了的动画，都以恰好一个 `Finished` 或 `Cancelled` 结束。被同 id 的新动画在途中替换的那条报 `Cancelled`（同 CSS 的 `transitioncancel`），已经走到终点但还没被 advance 收走的报 `Finished`。提交产生的结束（`stop_animation`、`finish_animation`、替换、节点移除或停放）留到送达为止：之后再有提交也不会把它们丢掉；`take_animation_events` 或下一次 `advance_animations` 交出它们，各一次。还有未送达的结束时，`next_animation_deadline` 报当前动画时间，宿主据此醒来送达，不靠绘制，也不靠窗口在不在 present。内建控件自己的时间线（spinner、hover 等）没有框架外的等待者，它们的结束随下一次 advance 一起带出，不单独唤醒宿主。估算终点已过却还没落定的动画（比 settle 估算慢一点的 spring）下一个帧间隔再看一次，不会停在 `Duration::MAX` 上永远不报。
-
-**显隐生命周期。** `PresenceLifecycle` 管一个靠淡入淡出（可带位移）显示和隐藏的节点：一张卡片、一条临时 chrome、工具窗口里的内容。它用视图层同一个 `Transition` 描述：enter 半边是从静止隐藏处显示时的起点、时长和曲线，leave 半边是隐藏的终点；`Presence::ease_transform` 让位移用自己的曲线（例如显示时带一点回弹，透明度不跟着越过 1）。`set_shown(cx, shown, now)` 从当前呈现值出发（中途反向就是 retarget），只写合成器轨道，不写逻辑样式；开始隐藏时立刻把 `pointer-events` 设成 `none`、把节点内的焦点拿走，显示时恢复原来的 `pointer-events`。`set_shown_at_once` 不播动画直接落定（例如挂载时先藏起来，让第一次显示有动画）。把节点所在文档的每个 `AnimationFrame` 交给 `apply_events(cx, &frame.events)`：它按上面的完成保证数自己开过的动画，最后一条报完结束时返回 `PresenceSettled::Shown` 或 `Hidden`；落定隐藏时节点设为 `visibility: hidden`，离开绘制、命中和无障碍树，布局保留。不需要自己的截止时间兜底。工具窗口里的卡片一样用：宿主不管窗口在不在 present 都按 deadline 推进它的动画。减少动态效果时它零时长、不位移，照样报落定。
-
-`advance_animations` 仍按稀疏 deadline 采样。CPU、Layout、Paint 类的 track 用 `frame_interval`。compositor-safe 的 presentation track 只用 start 和 completion 的 deadline。`animations_considered` 和 `animation_deadlines_scanned` 的语义不变。
-
-查询走 `UiWorld::presentation_pair` 或 `applied_value()`。禁止每帧把 transform 或 opacity 写进 `UiWorld`。
-
-Compositor overlay 只给 `AnimationClass::Compositor`。对应的 `MotionDescriptor` 用 generational handle 绑定。稳态求值不重建 slab。
-
-动画、实时 GPU 和普通 UI 的唤醒是分开的。`compositor_needs_tick` 接到该窗口的轻量 present。它不进入 CPU animation deadline。
-
-多窗口只因为自己的 active motion 被 redraw。device 或 surface 重建之后，调用 `set_surface_generation`。
-
-`WorkspaceModel`、`SplitPaneModel`、`DockWorkspace` 各自持有持久布局。它们只接受显式的 `Duration`。
-
-host adapter 做 Instant 到 Duration 的转换，也做指针转换。它不另存一份产品状态。
-
-### 动画属性分类
-
-逻辑值和 base 在 `UiWorld`。呈现值在 `PresentationStore`。
-
-完成事件走 deadline。不靠逐帧的 CPU sample。
-
-默认 Class 是 `AnimatableProperty::animation_class()`。组件不能改。没有 filter GPU，也没有 Mesh GPU evaluate。
-
-| 属性 | 默认 Class | 执行路径 | fallback / 性能含义 |
+| 属性 | 默认分类 | 执行路径 | 回退与性能边界 |
 | --- | --- | --- | --- |
-| `transform` / `opacity` | Compositor | overlay；Quad（含 QuadBatch / QuadColorBatch）剥 overlay 走 GPU `evaluate()`；Text / Icon / Mesh / HostTexture 走 CPU overlay | 稳态不写 `UiWorld`；非 Quad 仍是 CPU presentation |
-| `clip` / `clip-path` | Compositor | overlay；`compositor_gpu_motion_ids` 目前只绑 transform/opacity | 稳态不写 `UiWorld`；clip 呈现仍 CPU overlay |
-| `shader-parameter` | Compositor | overlay；需注册 typed codec | 无默认 Quad GPU 路径；图表不走它（见「图表呈现时钟」） |
-| `color` / `background` / `blur` / `filter` / `shadow` | Paint | CPU 插值（`frame_interval` 稀疏采样） | 可能每 sample 脏 paint/extract；不是 filter GPU |
-| `width` / `height` / `padding` / `margin` | Layout | CPU layout，采样写 px 并脏 LAYOUT | 每 sample layout；不要偷成 scale |
-| `font-size` / `font-axis` | Layout | 非 compositor（排版 / 绘制也会受影响） | [#85](https://github.com/sena-nana/NanaUI/issues/85) 不强制 GPU |
-| `display` | Discrete | `snap_discrete`：结束前保持 from，结束时 rest | 不插值 |
+| `transform` / `opacity` | `Compositor` | 呈现 overlay；Quad（含 `QuadBatch` / `QuadColorBatch`）剥离 overlay 走 GPU `evaluate()`；Text / Icon / Mesh / HostTexture 走 CPU overlay | 稳态不写 `UiWorld`；仅 Quad 走 GPU 求值，避免剥离了 overlay 却无法在着色器还原 |
+| `clip` / `clip-path` | `Compositor` | 呈现 overlay（`compositor_gpu_motion_ids` 当前仅绑定 transform / opacity） | 稳态不写 `UiWorld`；裁剪呈现走 CPU overlay |
+| `shader-parameter` | `Compositor` | 呈现 overlay（需注册类型化编解码器） | 无默认 Quad GPU 路径；图表动画走专用呈现时钟（见下节） |
+| `color` / `background` / `blur` / `filter` / `shadow` | `Paint` | CPU 插值（按 `frame_interval` 稀疏采样） | 每次采样可能标脏 paint / extract；无 GPU 滤镜求值 |
+| `width` / `height` / `padding` / `margin` | `Layout` | CPU 布局求值，采样写入 px 并标脏 `LAYOUT` | 子树测量与命中均使用真实几何，严禁用 `scale` 伪造 |
+| `font-size` / `font-axis` | `Layout` | 非合成器路径（触发文本整形与排版） | [#85](https://github.com/sena-nana/NanaUI/issues/85) 不强制走 GPU |
+| `display` | `Discrete` | `snap_discrete`（结束前保持起点，结束时切到终点） | 不做连续插值 |
 
-`#8` 的 `animations_considered` 和 `animation_deadlines_scanned` 语义不变。compositor-only 的稳态结构门禁见 [`perf/README.md`](../../perf/README.md) 的 `compositor-steady`。
+## 3. Scene 抽取、合成层滞回与像素吸附
 
-开发诊断用 `AnimatableProperty::diagnostic_hint()` 和 `UiWorld::inspect_motion()`。hint 文案以代码为准。文档不硬编码整句。
+`flush` 将脏节点抽取为 `ExtractedNode` 增量并交给 `UiScene::apply_delta` 更新保留绘制图。合成器类的呈现属性（`transform`、`opacity`、`clip`、`shader-parameter`）不烤进 `ExtractedNode` 的逻辑样式，而是由 `UiScene::apply_presentation` 直接从 `PresentationStore` 与 `MotionDescriptorStore` 引用绑定到 `CompositorLayer`（严禁每帧克隆描述符表，仅时间推进绝不触发重新抽取）。
 
-## 抽取与绘制
+- **合成层提升与降级滞回（Hysteresis）**：层的身份即节点的 `StableNodeId`。`LAYER_PROMOTE_HOLD` 为 `16 ms`（低于一帧的瞬时闪烁不提升），`LAYER_DEMOTE_HOLD` 为 `120 ms`（动画结束后保留层 120 ms 再降级，避免连续动画频繁建拆层）。`OpacityGroup` 与 `FilterGroup` 是目标纹理（dest）隔离组，不等同于 motion layer。
+- **模态框（Dialog / ConfirmDialog / Drawer）的支点与遮罩分离**：模态框在单个节点内同时生成背景遮罩（scrim）与中心卡片图元。其 motion layer 作用于**卡片**：卡片及插槽内容绕卡片中心（`ComponentGeometry::presentation_pivot`）做位移、缩放与淡入（命中测试、CPU 呈现与 GPU `evaluate()` 共用同一支点）；而遮罩图元不叠加节点自身的 opacity 轨道（仅继承外层祖先不透明度），改按几何中的 `scrim_opacity` 独立淡入，并向外预留卡片位移与缩放的最大外扩边距以始终铺满窗口（查询单图元呈现使用 `UiScene::compositor_primitive_opacity` / `compositor_primitive_encode`）。
+- **列表重排 FLIP**：在终点（Last）布局已提交后，仅播放一条合成器平移轨道（L3 为 `node().flip(first, last)`，可选配 `animate_size()` 另开一条 Layout 类宽高轨道；Vue `TransitionGroup` 的 `setPaintTransform` 共用同一条 Motion IR）。
+- **设备像素吸附（Pixel Snapping）**：画笔将图元及其每一级裁剪区的**最终合成纯平移分量**吸附到整数设备像素（`clip::paint_transform`，旋转、缩放与透视分量保持不变）。滚动偏移、CSS `translate` 与冻结行列反向平移会先合成为总平移再一次性吸附，从而保证同一滚动容器下的 Quad、图标、文字、路径网格、HostTexture 与裁剪边永远同步移动相同数量的整像素；同时 `ScrollOffset`、命中测试与无障碍边界仍保留浮点数精度，因此触控板的亚像素横向滚动不会触发文本重新解析（#223）。
 
-flush 把变更抽成 `ExtractedNode` 增量。`UiScene::apply_delta` 更新绘制图。
+## 4. 图表专用呈现时钟（Chart Presentation Clock）
 
-`CustomRenderNode` 是一等抽取字段。`GpuTextureView`（默认）和 `GpuView` 都和 Button 一样进入 document order。
+图表（`Chart`）的入场、数据更新过渡与悬停高亮不经过通用 Motion IR：布局阶段直接为每个图元写好起点 `from` 与终点 `to`（由 `ChartMarks::transition` 记录起始时刻、时长与缓动，悬停记录 `HoverState::since`；连续更新数据时，新布局的 `from` 直接取上一布局在当前时刻的瞬时插值位置，因此连续刷新平滑无跳变）。
 
-Compositor-class 的 overlay 不写进 `ExtractedNode` 的逻辑样式。这些属性是 `transform`、`opacity`、`clip`、`shader-parameter`。
+图表 WGSL 着色器直接按 `motion_time` 算出插值进度——当一帧中只有时间推进时，Runtime 不写 `UiWorld`、Scene 不重新抽取、painter 也不重新上传顶点数据。Scene 通过 `chart_live` 记录动画到期时刻并汇入 `compositor_needs_tick()`，在到期前驱动窗口轻量出帧并跳过 dest 缓存复用。
 
-Scene 用 `UiScene::apply_presentation`，从活的 `PresentationStore` 和 `MotionDescriptorStore` 引用，绑定 `CompositorLayer`。flush 不得每帧 clone slab。
+## 5. 裁剪路径（`clip-path`）、投影滤镜与背景毛玻璃
 
-层的 identity 是节点的 `StableNodeId`。子树 primitive 只在 topology 或 primitive 变化时 invalidate（`cache_generation`）。仅时间推进不得 re-extract。
+### CSS `clip-path` 与圆角 `overflow`
 
-Promotion 阈值：`LAYER_PROMOTE_HOLD` 是 16ms，`LAYER_DEMOTE_HOLD` 是 120ms。overlay 结束后，2ms 到 119ms 仍保持层。满 120ms 才 demote。
+祖先节点的 `clip-path` 与圆角 `overflow` 进入 `UiScene::ClipRegion` 链，并按复杂度分流到硬件 Scissor、片元着色器 SDF 或目标合成组（dest group）：
 
-`clear_compositor_layer_request` 经 extract 把 `request_layer=false` 写回 scene，摘掉 `requested`，再走 demote hold。
+- **轴对齐矩形**：走硬件 GPU Scissor + 顶点 `FragmentClip`。
+- **`clip-path: inset(... round R)` 与圆角 `overflow`**：圆角半径写入 `FragmentClip.corner_radius`（非平移变换或旋转下仍保留精确的圆角矩形 SDF，不会把半径清零；HostTexture 同样通过 `clip_inv_ef.z` 共用同一套圆角 SDF）。单层圆角裁剪留在顶点属性中完成；多层嵌套圆角或带旋转的外层裁剪自动升级进 dest 合成组。节点自身表面（slot 0）只挂直角裁剪，避免对本身已是圆角的填充和描边重复抗锯齿。
+- **`clip-path: polygon(...)`**：Scene 同时保存轴对齐包围盒（AABB）与局部多边形顶点。节点自身的 Quad 在片元着色器内直接做点在多边形内测试；子节点、文本与 HostTexture 则通过 dest 合成组在合成 pass 中执行环绕数（winding）多边形裁剪。
 
-模态框（对话框、确认框、抽屉）一个节点画遮罩和卡片，它的 motion layer 是**卡片的**：卡片和插槽内容跟着节点自己的 opacity / transform 层淡入、移动，transform 绕卡片中心（`ComponentGeometry::presentation_pivot`），命中测试、CPU 呈现和 GPU `evaluate()` 用同一个支点。遮罩那块 primitive 不吃节点自己的 opacity 层（祖先的照吃），按几何里的 `scrim_opacity` 淡入；它仍随卡片的位移走，所以卡片要动时遮罩往外多铺出位移和缩放能拉进来的那一圈，始终盖满窗口。查询用 `UiScene::compositor_primitive_opacity` / `compositor_primitive_encode`，按 primitive 而不是按节点。
+### CSS `filter: drop-shadow(...)`
 
-`OpacityGroup` 和 `FilterGroup` 仍是 dest 隔离组。它们不是 motion layer。
+`filter: drop-shadow(offset-x offset-y blur color)` 通过 dest 合成组实现：先将子树绘制到独立的 group 纹理层，合成时采样该层的 **alpha 轮廓**，按偏移平移 UV 后用与 `filter: blur()` 相同的 5×5 高斯核模糊并着色（模糊半径上限为 `16 px`），最后以 source-over 垫在原图下方。多层 `drop-shadow`、`spread`、`inset` 及未知滤镜函数严格按 fail-closed 跳过。
 
-Layer 上的 `CompositorMotionBinding { track_id, index, generation }` 对齐 D 的 `MotionHandle`。`generation == 0` 表示没有 live descriptor。
+### CSS `backdrop-filter: blur(Npx)`
 
-## 图表呈现时钟
+`backdrop-filter: blur(Npx)` 是**逐节点**的实时背景模糊效果（与 `nana-window` 的整窗系统级 Mica / Acrylic 材质无关）：
 
-图表的入场、数据更新和悬停强调不经 Motion IR。布局给每个元素写好 `from` 和 `to`，`ChartMarks::transition` 记开始时刻、时长和缓动；悬停记 `HoverState::since`。chart 着色器按 `motion_time` 求进度，所以一帧里只有时间在走时，Runtime 不写 `UiWorld`、Scene 不重新抽取、painter 不重新上传。
+- 在绘制该节点自身填充之前，painter 从当前目标纹理（`dest.color` 或外层 opacity-group 层）采样该节点包围盒背后已按文档顺序绘制的全部内容（包括排在它前面的 Quad、HostTexture 与自定义 GPU 节点），经可分离高斯模糊（separable Gaussian blur）后再按节点的圆角、`clip-path` 与 `mask-image` 合成回节点区域，最后叠上节点自身的半透明填充或渐变。
+- **降采样金字塔与边缘延展**：模糊半径 `r` 为逻辑像素标准差（自动乘 DPI 缩放到设备像素，采样核覆盖 $3\sigma$ 并利用双线性采样合并相邻纹素，杜绝条纹伪影）。当标准差超过 `8` 个设备像素时，先将待模糊区域按 2 的幂次盒式平均缩小，在缩小的副本上执行模糊后再双线性放大，因此即使 `64 px` 的大半径模糊在任何缩放下也只需几十次采样；采样边界向外按边缘像素延展（clamp-to-edge），不会在边缘渗入透明黑边。
+- **与节点不透明度联动**：模糊后的背景与节点填充一起受节点自身 `opacity` 控制——半透明毛玻璃呈现半强度的模糊，淡入的模态遮罩会让背景模糊一起平滑淡入，而不是在第一帧突兀地整块变糊。
+- **MSAA 与目标交错策略**：包含 HostTexture、自定义 GPU 节点、dest 合成组或 `backdrop-filter` 的帧统一使用单采样目标交错合成（`sample_count = 1`）；纯矢量/文本 UI 帧则可使用 `4x MSAA` 绘制方块与网格，并在 resolve 之后绘制清晰文本（绝不在自定义 GPU 节点两侧反复 resolve）。
 
-Scene 用 `chart_live` 按节点记到期时刻，并入 `compositor_needs_tick()`，宿主在到期前持续出帧；painter 在到期前不复用画好的 dest。数据更新时，新布局的 `from` 取上一份布局在那一刻显示的位置（过渡中途也算），所以连续更新不会跳。
+## 6. 文本高亮呈现（`TextPresenter`）
 
-Painter 按 `presentation_epoch` 失效 dest 缓存。有 live GPU descriptor 时，跳过 dest blit 复用。稳态帧只写 shared time uniform，不重传整表。
+代码高亮等富文本着色通过声明式的 `HighlightRequest` 与 `TextPresentation` 表达，具体词法分析算法由按名称注册的 `TextPresenter`（经 `ExtensionRegistrar::register_presenter` 安装）提供。Presenter 仅读取已提交的 UTF-8 文本，IME 组字（preedit）期间保持单色；当语言未知或对应 presenter 未注册时，Scene 安全退回单色文本。
 
-**只有** Quad 类 primitive 会剥掉 overlay，并用 `motion.wgsl` 的 `evaluate()`。Text、Icon、Mesh、HostTexture 仍用 CPU presentation。这样不会剥掉 overlay 却无法用 GPU 还原。
-
-width 和 height 这类 Layout overlay 不 promote。
-
-Layout-class 的 `width`、`height`、`padding`、`margin` 走 CPU。每帧采样写成 px，并弄脏 LAYOUT。子树量测和命中用真实几何。
-
-FLIP（`FlipRect`、`layout_flip_*`、Vue 的 `setPaintTransform`）在 Last 布局已经提交之后，只播 compositor translate。逻辑 `LayoutBox` 停在 Last。视觉从 Invert 回到 identity。命中跟随 presentation transform。
-
-L3 写成 `node().flip(first, last)`。可选的 `animate_size()` 另开一条 Layout-class 的宽高。那不是 scale。Vue 的 TransitionGroup move 和这条 FLIP track 共用同一条 Motion IR。
-
-画笔把图元，以及它每个裁剪的最终纯平移，吸附到设备像素（`clip::paint_transform`）。旋转、缩放、透视不动。
-
-滚动偏移、CSS translate，以及冻结行列的反向平移，合成之后才吸附。所以同一滚动下的 quad、图标、文字、路径网格、HostTexture、CustomRender 和裁剪边，挪同样多的整像素。自带 GPU transform 动画的 quad，叠加量除外。
-
-`ScrollOffset`、hit test 和无障碍边界保留小数。它们和画面相差不到半个设备像素。
-
-触控板的小数横向滚动因此不再让文字重新解析。这是 #223，见 [文本引擎](text-engine.md)。
-
-多行编辑器的滚动不是滚动容器的平移。沿 x 的那部分由 `ComponentGeometry::TextInput::scroll` 交给 scene。值、光标、选区，以及其上的标记，画成平移，同样吸附。
-
-`SceneWgpuPainter` 建在宿主的 `GpuContext` 上。它画进宿主的 `FrameContext`。在当前 dest pass 里按节点顺序编码。
-
-HostTexture 不攒到帧尾。也不为每个 GPU 槽单独开 pass。
-
-含 HostTexture 或自定义 GPU 节点的帧，使用 `sample_count = 1`。没有 GPU 节点的帧可以用 4x MSAA 画方块和网格。文字在 resolve 之后画。
-
-不要在自定义节点两侧反复 resolve。
-
-高级的 `SceneResourceProducer` 在采样前录进同一帧，随 UI 一起提交。冲突的 revision 拒绝整帧。
-
-无障碍增量带同一 generation 的更新节点，以及稳定 ID 的删除。平台 adapter 不维护另一棵权威语义树。
-
-默认程序不声明无障碍动作。只有显式接通的 `RuntimeProgram::accessibility_action` 才暴露。
-
-### CSS clip-path
-
-祖先的 `clip-path` 进入 `UiScene::ClipRegion` 链，并投影为 `FragmentClip`：
-
-- **GPU scissor** 仍只用轴对齐包围盒。精确 clip 走顶点 `FragmentClip`（Quad、Mesh、Text、HostTexture），或走 **dest opacity-group 合成**。后者用于外层旋转 clip、**`clip-path: polygon(...)`**，以及需要和 MSAA 交错的多层 rounded overflow。
-- **`clip-path: inset(... round R)`**：圆角半径写入 `FragmentClip.corner_radius`。非平移 transform 下仍保留 SDF 圆角。不再在旋转时把 radius 清零。
-- **`clip-path: polygon(...)`**：Scene 存 AABB，加上局部顶点。**自身 quad** 在 fragment 里做点内多边形测试。**子项、文本、HostTexture** 通过 dest-group，在合成 pass 里做 winding 多边形测试。不是只测 AABB。
-- **HostTexture**：祖先 inset-round overflow clip 的 `corner_radius` 经 `clip_inv_ef.z` 传入 host-texture shader。它和 quad 共用 rounded-box SDF。
-- **圆角 `overflow`**：两轴都裁剪的祖先，按自身 `border-radius` 生成带 `corner_radius` 的 `ClipRegion`。四角取最小的那个。后代的 Quad、Text、Mesh、HostTexture 都走同一条 fragment clip。节点自己的表面（slot 0）只挂直角版本，避免对已经是圆角的填充和边框再做一次抗锯齿。只有一层圆角时，留在顶点属性里。多层嵌套才进 dest 合成组。
-
-### CSS filter drop-shadow
-
-`filter: drop-shadow(offset-x offset-y blur color)` 走 dest 合成组。
-
-子树先画进 group 层。合成时采样该层的 **alpha 轮廓**。UV 按 offset 平移。再用和元素 `filter: blur()` 相同的 5×5 核模糊并着色。然后 source-over 到原图之下。
-
-这不是 `box-shadow` 的 rounded-box SDF quad。也不新开 backdrop 的 ping-pong pipeline。
-
-blur 半径的上限是 16px。多层 `drop-shadow`、spread 和 `inset` 仍 fail closed。未知的 `filter` 函数仍整表 fail closed。
-
-### CSS backdrop-filter
-
-`backdrop-filter: blur(Npx)` 是**逐节点**效果。
-
-在绘制该节点填充之前，从当前 dest 纹理采样它 bounds 背后已经画过的内容。纹理是 `sample_count = 1` 的 `dest.color`，或 opacity-group 层。采样范围按 blur 核扩展。
-
-背后的内容是 document order 里排在该节点之前的 Quad、HostTexture、自定义 GPU 槽等。它们经 separable Gaussian 模糊，再合成回节点区域。圆角、clip-path 和 mask-image 仍然生效。最后才画半透明的 fill 或 gradient。
-
-`blur(r)` 照 CSS：`r` 是高斯的标准差（逻辑 px，乘缩放到设备 px），模糊伸到大约三倍远，采样范围也扩三倍。核读到三倍标准差以内的每一个纹素（相邻两个纹素合成一次双线性读取），不会跨着纹素取样，所以宽的模糊也不出条纹。标准差超过 8 个设备像素时，先把要模糊的区域按 2 的幂缩小，每个纹素是它代表的那一块设备像素的平均，再在缩小的副本上模糊、合成时双线性放大；最宽的 64px 在任何缩放下都只读几十个纹素。区域的边缘往外按边缘像素延伸，而不是淡成透明的黑。
-
-模糊后的背景是节点绘制的一部分，和填充一起吃节点的不透明度：CSS 的 `opacity` 连 `backdrop-filter` 的结果一起作用，半透明的毛玻璃只铺一半的模糊，完全透明就一点不画。淡入的遮罩因此是连模糊一起淡入，而不是一开始就整块模糊。
-
-这和 Windows `nana-window` 的整窗 Mica / Acrylic 无关。也和 Appearance 的 `backdrop_*` 无关。
-
-含 HostTexture、自定义 GPU 节点、dest 组或 backdrop-filter 的帧，走 interleaved dest（`sample_count = 1`）。仅含 CSS `url()` 的 quad 仍走 4× MSAA。
-
-带**任意 affine transform**（含旋转）的节点：copy 和 blur 的区域用变换后的 AABB。composite 顶点在逻辑 quad 的 UV 上应用 `quad_abcd` 和 `quad_ef`，映射到 dest 像素，再采样模糊纹理。
-
-opacity group 里的 backdrop 从该 group 层采样，而不是 dest 根纹理。
-
-composite pass 的祖先 `FragmentClip`（含 inset-round 和 polygon）与 quad 共用同一套 `inside_fragment_clip`。
-
-## 文本呈现
-
-`HighlightRequest` 和 `TextPresentation` 是 intent。算法是按名注册的 `TextPresenter`。
-
-扩展经 `ExtensionRegistrar::register_presenter` 安装。Presenter 只读已经提交的 UTF-8。IME preedit 保持单色。
-
-未知语言，或 presenter 还没注册时，Scene 退回单色文本。
-
-`HighlightRequest::with_overlay` 带宿主给的语义段。重叠处 overlay 盖过 presenter 的基础层。presenter 没注册时只画 overlay。`SelectableRichText` 的 `RichSpan::color` 走这一条：各段仍拼成一段文本、一个文本图元，带色的段按 UTF-8 字节区间写进 overlay，颜色在抽取时按当前色板解析。
+`HighlightRequest::with_overlay` 允许宿主叠加额外的语义着色区间（重叠处以 overlay 优先）。`SelectableRichText` 的 `RichSpan::color` 即复用该通道：所有分段仍合并为同一段连续文本与单个文本图元，带色分段按 UTF-8 字节区间写入 overlay，并在 Scene 抽取时按当前激活主题的调色板解析为最终颜色。

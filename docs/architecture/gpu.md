@@ -1,23 +1,21 @@
-# 实时画面
+# 实时画面（GPU 内容集成）
 
-实时画面是树上的一块内容。它有位置，会被裁切，可以被点。不是盖在界面上的一层，也不是抠出来的洞。合成顺序就是文档顺序。
+在 NanaUI 中，实时画面（着色器输出、预览视口、视频流、离屏渲染纹理）是界面树上的一等节点：它占据布局尺寸、受父级圆角和滚动区域裁切、参与指针命中测试，并且严格按**文档顺序（document order）**与周围的按钮、卡片、浮层合成——既不是窗口上抠出的“洞”，也不是最后盖在界面顶上的 HUD 层。
 
-它仍走同一条路径：应用状态在 `UiWorld`，flush 成 `UiScene`，`SceneWgpuPainter` 画进宿主 Surface。宿主只有一份 `GpuContext`。这一帧的 `FrameContext` 也是宿主的。painter 往里面录，不另开 Device，也不把像素读回 CPU。
-
-WGPU 是唯一正式后端。`wgpu-interop` 交出的是合同背后同一份对象，不会创建第二套设备。普通路径只用 `nana-gpu` 的类型。全文在 [实时画面](../reference/gpu.md)。
+宿主进程只持有一份 `GpuContext`（WGPU 是唯一正式图形后端），每一帧的 `FrameContext` 也归宿主所有；`SceneWgpuPainter` 直接往宿主的帧里录制绘制命令，不创建第二套 `Device` / `Queue`，也不把画面读回 CPU。完整技术合同见 [实时画面参考](../reference/gpu.md)。
 
 ::: warning
-不要再 `request_device`。附加窗口、逃生口和跨线程换帧，用的都是宿主这一份 `GpuContext`。
+切勿在应用或插件里额外调用 `request_device`。多窗口、自定义渲染器（`wgpu-interop`）以及跨线程帧交换（`FrameExchange`）全部复用宿主这一份 `GpuContext`。
 :::
 
-## 从纹理到节点
+## 默认路径：从 `HostTexture` 到 `GpuTextureView` 节点
 
-先把画面画到可采样纹理，再挂到树上。Vue 用 `NanaGpu` / `<nana-gpu>`。默认就是这条。
+90% 以上的场景都走这条默认路径：先把画面画到一张可采样纹理（`GpuTexture`）上，再作为 `GpuTextureView`（模板标签 `<Texture>`，Vue 为 `NanaGpu` / `<nana-gpu>`）挂进界面树。
 
 :::api
 
 ```rust view
-// 树上：和 Button 一样占布局
+// 树上：和 Button 一样占据布局、受裁剪、可点击
 let preview = cx
     .mount_view_root(document_id, || view! {
         <Texture resource="preview" />
@@ -26,7 +24,7 @@ let preview = cx
 ```
 
 ```rust rust
-// 树上：和 Button 一样占布局
+// 树上：和 Button 一样占据布局、受裁剪、可点击
 let preview = cx
     .mount_view_root(document_id, || widget(GpuTextureView::new("preview")))?
     .root::<GpuTextureView>();
@@ -34,93 +32,67 @@ let preview = cx
 
 :::
 
-`GpuTextureView::new("preview")` 占一块布局，和别的控件一样。`host_textures()` 用同一个字符串登记这个 slot。`prepare_window_frame` 里用 `context.gpu()` 更新纹理。
+整条数据流由四部分配合完成：
 
 ```text
-GpuTextureView::new("preview")     树上的节点
-host_textures()                    登记同一个 slot
-HostTexture                        包住可采样的 GpuTexture
-prepare_window_frame               这一帧的像素或换纹理
+GpuTextureView::new("preview")   ──► 界面树上的节点（参与布局、裁剪、命中）
+host_textures()                  ──► 用同一个字符串键 "preview" 登记槽位
+HostTexture                      ──► 包装带代际（generation）与版本（version）的 GpuTexture
+prepare_window_frame             ──► 在每帧 flush 前写入像素或替换纹理
 ```
 
-`create_texture` / `write_texture` 在交给后端前就校验设备代次、usage、尺寸和字节长度。出错返回 `GpuError`，不会进到 WGPU 的校验 panic。CPU 像素用 `write_texture` 写入。
+- **前置参数校验**：`GpuContext::create_texture` 与 `write_texture` 在调用底层后端前就会校验设备代际、usage、尺寸上限与行字节对齐，出错直接返回结构化的 `GpuError`，绝不触发 WGPU 校验 panic。
+- **更新内容 vs 替换纹理**：可以通过 `registry.slot("preview")` 保留一份 `TextureSlot`。当同一张纹理的内容更新时调用 `invalidate()`；当纹理尺寸或对象本身更换时调用 `replace()`（递增 `generation`）——NanaUI 只会重建纹理绑定并唤醒引用了该槽位的窗口，**无需改动或重建 Runtime 节点**。
+- **按文档顺序采样与设备代际防护**：纹理在主渲染通道中按节点出现的顺序就地采样（渲染器键为 `"nana.host-texture"`），多层实时画面只需并排挂载多张 `GpuTextureView`。若设备发生丢失重建而某张 `HostTexture` 仍停留在旧的 `device_generation()`，painter 会以 `ScenePaintError::StaleHostTexture` 拒绝整帧，绝不把过期句柄送进新设备。
+- **按需读取实际绘制尺寸**：`HostTextureRegistry::painted_extent(slot)` 只读返回该槽位在最近一次完整绘制中各消费节点所需的最大物理像素尺寸（已计入 `ContentFit`、节点变换与 DPI 缩放），供生产端按真实清晰度准备纹理。
 
-`HostTexture` 用稳定 slot 和 generation 包住这张 `GpuTexture`。你替换或改尺寸时加上 generation。NanaUI 只重建绑定，不拆布局。换掉纹理用 `replace_texture`。同一张纹理的内容变了，用 `HostTexture::invalidate()`。
+## 无中间纹理路径：`GpuView` 与 `SceneGpuRenderer`
 
-你也可以留下 `registry.slot("preview")` 返回的 `TextureSlot`。内容更新调用 `invalidate()`，替换纹理调用 `replace()`。通知只唤醒引用这个 slot 的目标。两条路都不要改 Runtime 节点。
+只有在**没有中间纹理、必须把绘制命令直接录进当前 UI 渲染通道**时，才使用 `GpuView`。`GpuView::new(slot_id)` 投影出渲染器键为 `"gpu-view"` 的 `CustomRenderNode`（注意此处的 `slot_id` 是 `u64`，不是 `HostTextureRegistry` 的字符串键）。
 
-采样发生在主 pass 里、这个节点该出现的位置。renderer 键是 `"nana.host-texture"`。多层就是相邻的几张 `GpuTextureView`。不要绕过树去直写窗口 Surface。
+应用需通过 `scene_gpu_renderers()` 显式注册对应的 `SceneGpuRenderer` 实现：
 
-`HostTexture::device_generation()` 是纹理所在的设备。它和 painter 的设备不同时（设备换过、却没有在 `rebuild_gpu` 里重建），整帧以 `ScenePaintError::StaleHostTexture` 拒绝。不会把旧设备的纹理交给后端。
+- `GpuViewMode::Inline` 直接复用当前目标正在打开的渲染通道（pass）；`Standalone` 则在同一帧、同一目标上另开一个独立的 pass。
+- 当连续多个同类型 `GpuView` 节点在文档顺序上紧邻时，渲染器可通过 `draw_batch_in_pass` 将它们合并为一次实例化绘制；但一旦中间穿插了任何普通 Quad、文本、图标、HostTexture 或合成组边界，批次就会在此截断——因此**合批只减少 draw call 次数，绝不改变文档遮挡顺序**。
 
-丢失只记在 `GpuContext::is_lost()`。这个状态是粘性的。替换设备就是换一个新的 `GpuContext`。`rebuild_gpu` 里只在 `context.gpu()` 上重建依赖旧设备的资源。程序实例还在。
+## 跨线程最新帧交换：`FrameExchange` 与 `FrameBinding`
 
-`HostTextureRegistry::painted_extent(slot)` 返回这个 slot 当前的绘制需求：最近一次全新绘制里，各节点设备像素尺寸逐边取最大。它是只读的。登记多大的纹理仍由你决定。还没有节点画到它时返回 `None`。
+当模型渲染、视频解码或合成跑在独立工作线程时，使用 `nana-frame-exchange` 的 `FrameExchange` 将完成的帧交给 UI 窗口，并在窗口侧用 `FrameBinding` 绑定到宿主纹理槽（生产端只需依赖 `nana-frame-exchange`，无需依赖 `nana-ui`）：
 
-## 没有中间纹理
+- **GPU 内部拷贝、双方无锁**：`copy_from` 在同一 `GpuContext` 上执行一次 `copy_texture_to_texture`（不回读 CPU）；纹理池满时直接返回 `PoolFull` 丢弃当前生产帧，UI 侧永远只取最新完成的帧，双方互不阻塞等待。
+- **租约（Lease）生命周期**：窗口在 `prepare_window_frame` 中调用 `binding.prepare(...)` 换上新帧，被替换的旧帧会一直保留到 `window_frame_presented` 触发后才归还池槽，确保正在呈现的画面绝不被覆写。设备重建后，需在 `rebuild_gpu` 中基于新的 `GpuContext` 重建 `FrameExchange` 与 `FrameBinding`。
 
-必须写进当前界面 pass、没有中间纹理时，才用 `GpuView`。`GpuView::new(slot_id)` 投影 `CustomRenderNode`，renderer 键是 `"gpu-view"`。这里的 `slot_id` 是 `u64`，不是 `HostTextureRegistry` 的键。`HostTexture::id` 也不是这个 slot。
+## 各类媒体与画布节点的槽位映射
 
-你要显式登记自己的 `SceneGpuRenderer`。`scene_gpu_renderers()` 返回 `None` 或空表时，未注册的 renderer 会报错。Renderer 不得 `request_device`，也不得提交宿主正在录的那一帧。
-
-`GpuViewMode::Inline` 复用当前目标 pass。`Standalone` 在同一帧、同一目标上另开 pass。
-
-可以批，但批的是文档顺序上连续的一段。中间任何一条 Quad、文字、图标、HostTexture 或合成组边界都会把这段切开。这不是把 GPU 内容攒到帧尾。和逐个画相比，文档顺序不变，变的只是 draw 次数。
-
-## 另一个线程上的画面
-
-模型、解码或合成若在别的线程，用 `FrameExchange` 把完成的帧交给窗口，用 `FrameBinding` 绑到上面的 slot。两者都在宿主那一个 `GpuContext` 上。生产端不必依赖 `nana-ui`。
-
-这是 GPU 里的一次复制，不是零拷贝，也不回读 CPU。源纹理要在同一设备上，并且能被复制。池满时 `copy_from` 返回 `PoolFull`，丢掉这一帧，不等。界面侧只取最新一帧。
-
-`prepare` 换帧之后，旧帧留到 `presented` 才释放。`window_frame_presented` 之前，不要丢掉仍可能被采样的帧。不要在界面线程上等生产端或 GPU 完成。
-
-设备重建之后，用新的 `GpuContext` 重建 exchange 和 binding。代次不同的 inbox 不会被绑上。
-
-## 这些节点用哪一个槽
-
-| 节点 | 槽 | 结果 |
+| 节点 / 接口 | 底层槽位键 | 行为说明 |
 | --- | --- | --- |
-| `<nana-gpu>` | `"nana.host-texture"` + 你登记的名字 | `GpuTextureView` |
-| `<nana-gpu-view>` | `"gpu-view"` + 十进制 `slot_id` | `GpuView`。你要登记对应的 painter |
-| `<canvas data-nana-canvas>` | `canvas:{id}` | 同一套 HostTexture |
-| `getContext("webgpu")` | `webgpu-canvas:{id}` | 同一套 HostTexture，不是第二套 Device |
-| `<video data-nana-video>` | `video:{id}` | 有槽时不画 poster |
+| `<Texture>` / `<nana-gpu>` | `"nana.host-texture"` + 登记的槽位名 | 标准 `GpuTextureView` 宿主纹理节点 |
+| `<nana-gpu-view>` | `"gpu-view"` + 十进制 `slot_id` | `GpuView` 直写节点（宿主需注册对应 `SceneGpuRenderer`） |
+| `<canvas data-nana-canvas="{id}">` | `canvas:{id}` | 走同一套 `HostTexture` 上传路径（未带该属性的 `<canvas>` 为空盒子） |
+| `canvas.getContext("webgpu")` | `webgpu-canvas:{id}` | 复用宿主同一份 GPU 设备并输出到 `HostTexture` |
+| `<video data-nana-video="{id}">` | `video:{id}` | 宿主推帧显示视频（有槽位时不画 `poster`；无槽位仅显示静态 `poster`） |
 | `<iframe>` | 无 | 显式跳过，不加载 `src` |
-| `BrowserView` | Runtime 锚点，外加宿主的原生子视图 | 见下一节 |
+| `BrowserView` | Runtime 布局锚点 + 宿主原生子视图 | 见下节「BrowserView 原生子视图例外」 |
 
-没有这些标记的 `<canvas>` 是空盒子。没有槽、也没有 poster 的 `<video>` 同样是空盒子。有 poster、但没有槽时，只显示 poster，不解码。
+## `BrowserView` 原生子视图例外
 
-## BrowserView
+`BrowserView` 是框架中唯一允许在窗口内嵌入原生网页子视图的宿主例外：Runtime 节点仍然负责布局占位、无障碍、可见性与生命周期，而宿主在原生窗口上创建并管理子视图（当前仅支持 macOS `WKWebView`，Windows 与 Linux 明确返回 `Unsupported`，不会创建占位浏览器）。
 
-`BrowserView` 是宿主上的原生内容例外。Runtime 节点仍拥有布局、可访问性、可见性和生命周期。宿主创建并管理原生子视图。它不是 `GpuTextureView`，不复制 `UiWorld`，也不创建第二个 GPU 设备。
-
-当前正式实现只有 macOS，后端是 `WKWebView`。Windows 和 Linux 返回明确的 `Unsupported`，不会创建占位浏览器。窗口、文件对话框和别的原生内容能力不受这条边界影响。
-
-原生子视图不进入 Runtime / Scene 的离屏截图。非矩形裁剪、透明度或滤镜组，以及被后面的 Runtime 内容盖住时，由宿主隐藏。不要在界面画完之后再把原生子视图盖回窗口上。
-
-## 不要做的
-
-- 为界面另开一套 Device / Queue
-- 把画面读回 CPU，编码成图片再贴回去
-- 在界面画完之后往 Surface 上盖一层实时画面
-- 把 GPU 内容攒到帧尾，打乱它和旁边控件的前后关系
-- 同一资源在一帧里提交互相冲突的 revision。整帧会失败，不会挑一个用
-- 把 `GpuTextureView` 或 `<iframe>` 当成会加载 `src` 的节点
+原生子视图不属于 `GpuTextureView`，不会进入离屏截图；当节点遇到非矩形裁剪、透明度/滤镜合成组或被排在后面的 Runtime 控件遮挡时，宿主会自动隐藏原生子视图，防止它穿透遮挡上层菜单与对话框。
 
 ## 接着读
 
 <div class="next-steps">
   <a class="next-step" href="/architecture/text">
     <p class="next-step-link">文本</p>
-    <p class="next-step-caption">测量、整形和留在树上的文本布局。</p>
+    <p class="next-step-caption">字体选择、整形与保留在树上的文本布局。</p>
   </a>
   <a class="next-step" href="/reference/gpu">
-    <p class="next-step-link">实时画面合同</p>
-    <p class="next-step-caption">换帧、直写 pass 和离屏生产的全文。</p>
+    <p class="next-step-link">实时画面参考合同</p>
+    <p class="next-step-caption">HDR 参数、帧上传环、跨线程交换与无头 WebSurface 全文。</p>
   </a>
   <a class="next-step" href="/architecture/frame">
     <p class="next-step-link">一帧</p>
-    <p class="next-step-caption">纹理在 flush 之前准备，present 之后才能释放。</p>
+    <p class="next-step-caption">纹理在 flush 前准备、在 present 后释放的完整时序。</p>
   </a>
 </div>

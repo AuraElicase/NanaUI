@@ -1,76 +1,45 @@
-# 宿主边界
+# Vue 宿主边界
 
-同一棵树上，Vue 标签能落到什么、本地化文字怎么写、网络和存储有哪些、扩展控件怎么登记。接入步骤在 [Vue](vue.md)，多窗口在 [窗口](vue-windows.md)。
+本文规定 Vue 路径在同一棵 `UiWorld` 上支持的标签映射、响应式容器查询、本地化文字、Web API 子集、网络/存储白名单以及自定义控件扩展方式。基础接入见 [Vue 宿主接入](vue.md)，多窗口管理见 [Vue 多窗口与上下文隔离](vue-windows.md)。
 
 ## 两种写法，同一棵树
 
-**Nana 控件。** `NanaButton`、`NanaInput`、`NanaDialog` 直接表达语义。Vue 标签和 Rust 的 `create_component` 通过同一份 `ComponentRegistry` 解析组件类型。
+在 Vue 模板中可以混合使用显式的 Nana 控件与标准 HTML 骨架标签，它们最终都通过 `ComponentRegistry` 和 Style Model 落入同一棵保留树：
 
-**普通标签和 CSS。** `div`、flex、间距、字号这一类网页习惯可以用。但只覆盖 [布局](layout.md) 列出的子集。适合结构骨架。不适合冒充完整浏览器。
+1. **显式 Nana 控件**：`NanaButton`、`NanaInput`、`NanaDialog` 等组件直接映射到对应的 Runtime 控件。对话框、抽屉、上下文菜单等浮层请务必使用对应的 Nana 控件，**不要用 `position: fixed` 手搭网页式浮层**。
+2. **HTML 语义标签与骨架标签**：
+   - 与 Runtime 控件语义一致的 HTML 标签直接落为对应控件：`button`、`a`、`input`（含 `checkbox`、`radio`、`range`、`number`）、`textarea`、`select` + `option`、`ul` / `ol` / `menu` / `li`、`table` / `tr` / `td` / `th`、`progress`、`meter`、`hr`、`dialog`、`details` / `summary`。
+   - 结构与文本骨架标签落为 `Column` 或 `Text`：如 `div`、`section`、`figure`、`figcaption`、`hgroup`、`address`、`picture`、`datalist`、`slot`、`map`。
+   - 未识别的未知标签或已退役的旧别名会直接报错，不会静默退化为普通布局盒；自定义插件标签必须先在 Rust 侧调用 `register_component` 注册。
+   - `v-html` 会将片段解析为保留树子节点；`Teleport to="body|html"`、`Transition`、`KeepAlive`、`Suspense` 均通过同一套 host ops 工作，不存在第二棵树。
 
-**`@container`。** 支持的写法见 [布局](layout.md#能用的) 的 `@container` 一段。一个元素命中的容器规则编成一条 Runtime 响应式规则。容器缩放时由 Runtime 换桶，不重跑 CSS。
+### 媒体、替换元素与无障碍地标（Landmark）
 
-规则改的字号、颜色这类继承的文字属性，由 Runtime 往下传，元素里的文字跟着变。下面用 `em` 写的字号仍按桶外的字号算。`direction`、`writing-mode`、`text-decoration`、`overflow-wrap` 不往下传。
+- **媒体与替换元素**：`<video>` 与 `nana-video` 在带有 `data-nana-video` 时走宿主推帧通道（`nana.video`，槽位为 `video:{id}`，有槽位时不画 `poster`）。`<iframe>`、`<audio>`、`<embed>`、`<object>` 不伪造浏览器行为，仅作为不可见布局盒（PCM 音频播放请使用下文的 `AudioContext` 子集）；`<source>`、`<track>`、`<area>`、`<col>`、`<colgroup>` 显式跳过。应用内网页内容只能使用 Runtime `BrowserView` 的宿主原生例外（当前仅 macOS 后端，详见 [实时画面 · 应用内浏览器](gpu.md#应用内浏览器)）。
+- **无障碍地标角色**：HTML 地标标签自动携带对应的无障碍角色——`nav` 为 `navigation`，`main` 为 `main`，`aside` 为 `complementary`，`search` 为 `search`，`header` 为 `banner`、`footer` 为 `contentinfo`（当 `header` / `footer` 位于 `article`、`aside`、`main`、`nav`、`section` 内部时除外）；`section` 与 `form` 仅在拥有可访问名称（来自 `aria-label`、`aria-labelledby` 或自身文本）时才成为 `region` 或 `form`。显式的 `role` 属性或语义类名（如 `<nav role="tablist">`）优先于标签推断。注意 `<search>` 与 `<form>` 在视觉上仍是普通布局盒，搜索下拉与表单行控件请用 `search-dropdown` 与 `form-field`。
 
-一个元素的规则问到两个容器或两条轴时，全部不生效，和其它不支持的 CSS 一起报出。
+### `@container` 容器查询与单一输入路由
 
-和 Runtime 同语义的 Vue 标签会落到对应控件。这些标签是 `button`、`a`、`input`（含 `checkbox`、`radio`、`range`、`number`）、`textarea`、`select` 加 `option`、`ul` / `ol` / `menu` / `li`、`table` / `tr` / `td` / `th`、`progress`、`meter`、`hr`、`dialog`、`details` / `summary`。
+- **`@container` 响应式规则**：元素命中的 `@container` 规则（支持子集见 [布局（CSS 子集）](layout.md#能用的)）会被编译为一条 Runtime 响应式规则；容器缩放时由 Runtime 直接切换尺寸桶，无需重跑 CSS 引擎。容器规则修改的字号、颜色等可继承文本属性由 Runtime 向下传递（但后代用 `em` 声明的字号仍按桶外字号换算；`direction`、`writing-mode`、`text-decoration`、`overflow-wrap` 不向下传递）。若单个元素的规则同时查询两个容器或两条轴，则整条规则不生效并记入不支持的 CSS 报告。
+- **单一输入路由**：原生窗口输入、`VueHostedRuntime::runtime_input` 以及 `VueHost` 的 `dispatch_*` / `commit_text` 全部**先经过 Runtime 路由**，随后页面才收到 `pointer*`、`key*`、`wheel`、`input`、`composition*` 事件。因此焦点、Tab 遍历顺序（仅注册为控件的标签可聚焦，`tabindex` 不参与）、滚动和文本编辑均由 Runtime 裁决；页面在 `wheel` 或 `keydown` 中调用 `preventDefault` 无法拦截已经发生的滚动或输入。
 
-布局和文本骨架标签落到 Column 或 Text。例如 `div`、`section`、`figure`、`figcaption`、`hgroup`、`address`、`picture`、`datalist`、`slot`、`map`。
+## 长列表上的 Hover 与输入成本
 
-未识别的标签，以及退役的 `nana-button` 一类的别名，会报错。不会当成布局盒。插件 tag 须先 `register_component`。
+在 Vue 路径中，单次指针事件的派发成本本身是常数（约 `0.062 ms`，Rust L3 约为 `0.0003 ms`），不随树规模增长。唯一容易在长列表上写出 $O(N)$ 耗时的是**让拥有整列 `v-for` 的渲染函数响应 hover 状态**：
 
-`v-html` 会把片段解析成子节点。`Teleport to="body|html"`、`Transition`、`KeepAlive`、`Suspense` 走同一套 host ops。没有第二棵树。
+- 模板中的 `v-for` 编译后属于同一个组件的 render function；若 `onPointerenter` 修改了参与该组件渲染的 `ref`，Vue 会重建整列的 vnode（实测 2,000 行时单次鼠标移动耗时约 `4.8–8.6 ms`）。
+- 将每一行拆分为独立子组件并各自持有 hover `ref`，可省去外层列表的 vnode diff（2,000 行耗时降至约 `1.8 ms`）。
+- 若希望长列表上的指针移动保持纯粹的 $O(1)$ 常数开销，请使用 CSS `:hover` / 组件内置交互态，或让 JS 监听器只修改不参与视图重渲染的状态。完整实测与优化记录见 [输入成本](input-cost.md)。
 
-语义不同就换名。`search-dropdown` 不是 HTML `<search>`。`nana-scroll-view` 不是随便一个 `div`。
+## Markdown 与本地化文字（`<T>` / `Nana.i18n`）
 
-`<iframe>`、`<audio>`、`<embed>`、`<object>` 不伪造浏览器。它们落为不可见的布局盒。
+### Markdown（`NanaMarkdown`）
 
-`<video>` 和 `nana-video` 在有 `data-nana-video` 时走宿主推帧（`nana.video`，槽是 `video:{id}`）。无槽才显示 `poster`。
+`NanaMarkdown` 通过 `modelValue` 或 `value` 接收原始 Markdown 文本（需启用 `rich-text` feature）。当源码未变化时保留解析结果与文本选区；源码变化后重新解析，代码高亮走共享的 Runtime 呈现绑定路径。
 
-网页内容使用 Runtime `BrowserView` 的宿主原生例外。不要通过 Vue `webview` 加载。也不要通过 `<iframe>` 加载。当前只有 macOS 后端。见 [应用内浏览器](gpu.md#应用内浏览器)。
+### 本地化文字（`<T>` 与 `Nana.i18n`）
 
-`<audio>` 不解码，也不写空视频帧。PCM 播放走上面的 `AudioContext` 子集。
-
-`<source>`、`<track>`、`<area>` 没有自身视觉。`<col>` 和 `<colgroup>` 在 Runtime Table 里没有列定义。它们都显式跳过。
-
-地标标签携带 a11y landmark role。`nav` 是 navigation。`main` 是 main。`aside` 是 complementary。`search` 是 search。`header` 是 banner。`footer` 是 contentinfo。`header` 和 `footer` 是 `article`、`aside`、`main`、`nav`、`section` 的后代时除外。
-
-`section` 和 `form` 只有带可访问名时才是 region 或 form。名字可以来自 `aria-label`、`aria-labelledby`，或自身文本内容。
-
-class 和 role hints 把地标标签改成具体控件时，保留控件角色。例如 `<nav role="tablist">`。显式 `role` 属性优先于标签推断。
-
-这只影响读屏，以及 agent 的 a11y dump。`<search>` 和 `<form>` 仍是布局盒。搜索和表单控件仍用 `search-dropdown` 和 `form-field`。
-
-两种写法可以混在同一棵界面里。对话框、抽屉、菜单请用对应的 Nana 控件。不要用 `position: fixed` 自己搭网页浮层。
-
-输入只有一条路。原生窗口、`VueHostedRuntime::runtime_input`，以及 `VueHost` 自己的 `dispatch_*` 和 `commit_text`，都先把事件交给 Runtime 路由。页面再收到 `pointer*`、`key*`、`wheel`、`input`、`composition*`。
-
-所以焦点、Tab 顺序、滚动和文字编辑按 Runtime 的规则走。可聚焦的是注册成控件的标签。`tabindex` 不参与。页面对 `wheel` 或 `keydown` 调用 `preventDefault`，拦不住已经发生的滚动和输入。焦点离开时，未完成的组字被取消。
-
-## 长列表上的 hover
-
-一个 render function 拥有整列时，hover 处理器改一个参与渲染的 `ref`，会让 Vue 重建整列的 vnode。
-
-实测 2,000 行时，一次鼠标移动是 9 ms，超过半帧。这是同一棵树、没有处理器时的 140 倍。
-
-模板里的 `v-for` 编译出来就是这个形状。它不生成子组件。这是长列表上最容易写出来的写法。也是这条路径上目前唯一还随树增长的成本。
-
-把行拆成各自的组件，能省 39%。2,000 行从 8.6 ms 到 5.3 ms。但**不会变成常数**。剩下的在 Runtime 的脏帧路径上。2 个脏节点在 2,000 节点的树上要 1.5 ms。那是 Issue #8 一直未过的门禁。这和 Vue 怎么写无关。见 [输入成本](input-cost.md)。
-
-今天就能拿到常数的写法，是让 hover 只改不参与渲染的状态。
-
-事件本身不贵。Vue 每个指针事件是常数，约 0.062 ms，不随树增长。Rust L3 是 0.0003 ms，也是常数。数据和四轮改动的经过见 [输入成本](input-cost.md)。
-
-## Markdown
-
-`NanaMarkdown` 用 `modelValue` 或 `value` 传入原始 Markdown。需要启用 `rich-text`。
-
-源码未变化时，保留解析结果和选区。源码变化后，重新解析。高亮由共享的 Runtime 绑定路径处理。
-
-## 本地化文字
-
-模板里用 `<T>` 写本地化文字。它来自 `@nanaui/nanavue-components`，也叫 `NanaT`：
+在模板中使用 `@nanaui/nanavue-components` 导出的 `<T>`（别名 `NanaT`）声明本地化文本：
 
 ```vue
 <script setup>
@@ -82,22 +51,16 @@ import { T } from "@nanaui/nanavue-components";
 </template>
 ```
 
-`id` 是消息在目录里的名字。别的属性是消息的参数，属性名照写就是参数名：`:fileCount="n"` 对应 `{fileCount}`。`class`、`style`、`lang`、`dir`、`locale`、`data-*`、`aria-*` 和监听器除外，它们留在元素上。和这些同名的参数放进 `args`：`<T id="greeting" :args="{ class: role }" />`。`args` 里的参数盖过同名属性。
+- **属性与参数传递**：`id` 为消息目录中的键名，其余属性直接作为消息参数（如 `:fileCount="n"` 对应模式串中的 `{fileCount}`）。`class`、`style`、`lang`、`dir`、`locale`、`data-*`、`aria-*` 及事件监听器保留在元素自身上；若参数名与这些保留属性重名，请放进 `:args="{ class: role }"`（`args` 优先于同名属性）。
+- **Runtime 原地解析**：`<T>` 渲染为一个携带消息键与参数的 `<nana-text>` 节点，由 Runtime 按该节点所在作用域的 `locale` 直接解析。切换语言时由 Runtime 原地重算文本并仅重排受影响的盒子，**Vue 组件本身不需要重新渲染**。
+- **参数类型与格式化**：
+  - 数字（用于 `plural` 与 `{n, number}`）必须动态绑定 `:count="3"`（写 `count="3"` 会被当作字符串）；
+  - 布尔值序列化为 `"true"` / `"false"` 供 `select` 分支匹配；
+  - 日期支持 `Date` 实例（取本地年月日时分秒）或纯日期对象 `{ year, month, day }`（月份从 1 开始）；
+  - 货币金额传入 `{ amount, currency }`（`currency` 为 ISO 4217 代码）；
+  - `null` 与 `undefined` 视为缺失参数，输出中保留占位参数名。ICU 模式串语法详见 [文本引擎](text-engine.md)。
 
-`<T>` 渲染一个 `<nana-text>`，它带着消息的名字和参数。消息由 Runtime 按节点所在作用域的 locale 解析。切换 locale 时 Runtime 重新解析，Vue 不重新渲染。译文变长或变短，只有这段文字和装着它的盒子重新排版。参数没变时 `<T>` 重新渲染也不碰宿主。
-
-参数的类型决定格式：
-
-- 数字给 `plural` 和 `{n, number}` 用。要绑定成数字：`:count="3"`。`count="3"` 是字符串。
-- 字符串原样写出。
-- 布尔值写成 `"true"` 或 `"false"`，给 `select` 用。
-- `Date` 取它本地的年月日和时分秒。只有日期时写 `{ year, month, day }`，月份从 1 开始。
-- 金额写 `{ amount, currency }`，`currency` 是 ISO 4217 代码。
-- `null` 和 `undefined` 不传。输出里写出缺的参数名。
-
-模式串的写法、回退链和格式化在 [文本引擎](text-engine.md) 的「本地化文字与 locale 作用域」一节。
-
-目录和 locale 是应用的。`Nana.i18n` 设置它们。它们到达每一扇窗口，之后打开的窗口也从它们开始：
+应用级消息目录与默认语言通过 `Nana.i18n` 配置（也可以在脚本执行前由 Rust 宿主的 `VueRuntime::set_message_catalog` / `set_default_locale` / `set_fallback_locale` 预设）：
 
 ```js
 Nana.i18n.setCatalog(
@@ -105,46 +68,29 @@ Nana.i18n.setCatalog(
     "en-US": { files: "{count, plural, one {# file} other {# files}}" },
     "zh-CN": { files: "{count} 个文件" },
   },
-  { fallback: "en-US" },
+  { fallback: "en-US", missing: "key" }, // missing 可选 "key"（默认）或 "keep-previous"
 );
-Nana.i18n.setLocale("zh-CN");
+if (!Nana.i18n.locale) {
+  Nana.i18n.setLocale("zh-CN");
+}
 ```
 
-嵌套的对象用点连成消息名。`{ settings: { title: "…" } }` 是 `settings.title`。
+`setLocale` 接收语言标签字符串，或细粒度配置对象 `{ messages, language, direction, formatting }`（分别控制消息表、OpenType 排版语言 `locl`、排版方向与数字/日期格式；未指定的项跟随 `messages`）。局部子树可通过 `<section locale="ar">` 覆盖语言与排版方向（而 HTML `lang` 属性仅影响字体回退与 `locl`，不切换消息目录）。注意 `<T>` 生成的是 `<nana-text>` 子节点，因此可用于按钮等渲染子节点的容器，但不能用于只读取纯字符串属性的槽位（如标题栏标题字符串或按钮自身的 `accessible_name` 属性）。
 
-`fallback` 是每次查找最后落到的 locale。`missing` 决定哪个 locale 都没有的消息显示什么：`"key"` 显示消息名，是默认；`"keep-previous"` 保留原来显示的内容。没有 locale 也没有 `fallback` 时，本地化文字显示消息名。
+## 它提供的 Web API 子集，以及明确不提供的能力
 
-`setLocale` 接受一个语言标签，或 `{ messages, language, direction, formatting }`。四部分各自变化：选哪套消息、按哪种语言排版、往哪个方向排、数字和日期按哪个 locale 格式化。没写的部分跟着 `messages`。`null` 去掉应用的 locale。`Nana.i18n.locale` 读回应用 locale 的消息标签，没有时是 `null`。
+这些 Web 兼容接口旨在让熟悉的组件代码顺畅跑在桌面窗口里，而不是为了复刻完整的浏览器内核：
 
-窗口自己的 locale 在 [窗口](vue-windows.md)。子树的 locale 写 `locale` 属性：`<section locale="ar">`。里面的本地化文字按它解析，子树按它的方向排版。`dir` 和 CSS `direction` 仍然优先。
+| 类别 | 已提供的子集能力 | 明确不提供的浏览器/Tauri 能力 |
+| --- | --- | --- |
+| **DOM / 全局** | `window` / `document` 受限子集、事件、定时器、`requestAnimationFrame`、桌面剪贴板 | 完整 DOM / CSSOM、Cookie、浏览器 CORS 预检、Service Worker |
+| **网络** | 受白名单管控的流式 `fetch`（含 `ReadableStream`、`FormData`）、`WebSocket` | 流式**请求**体（`duplex`）、BYOB reader、无白名单的任意外网访问 |
+| **存储** | 应用命名空间内的 `localStorage` 与 JSON 助手 `Nana.storage`（注入 `FileStore` 后落盘） | `IndexedDB`（调用抛 `NotSupportedError`）、跨命名空间枚举或篡改框架状态 |
+| **音频 / 媒体** | Web Audio PCM 子集（`AudioContext`、`AudioBuffer`、`AudioBufferSourceNode`、`GainNode`、`ScriptProcessorNode`；桌面端需启用 `native-audio` feature 走 cpal） | 完整 Web Audio 节点图、空间化音频、`AudioWorklet`、`decodeAudioData`、`<audio>` 解码器、Tauri `invoke`/插件协议 |
 
-`lang` 只决定文字按哪种语言排版（字体回退、`locl`）。它不选消息。
+### 流式 `fetch`、`FormData` 与 `WebSocket`
 
-同一份目录装第二次，什么都不做。隔离窗口会把应用脚本重新执行一遍，目录不会因此重新解析。脚本开头的 `setLocale` 也会再执行一遍，会把用户切过的 locale 改回去。先读一下：
-
-```js
-if (!Nana.i18n.locale) Nana.i18n.setLocale("en-US");
-```
-
-Rust 宿主可以在脚本执行前设好：`VueRuntime::set_message_catalog`（任何 `MessageCatalog`）、`set_default_locale`、`set_fallback_locale`、`set_missing_message`、`set_window_locale`。`VueHostedRuntime` 有同名方法。
-
-`message-args` 不是 JSON，或某个参数的类型不对时，诊断输出一条 `nana.i18n` 警告。消息照常显示，缺的参数写出名字。
-
-本地化文字是 `<nana-text>` 自己的文字。放进会显示子节点的控件里，比如按钮，它就画在那里。从子节点复制文字的地方读不到它：设置行的标签槽、标题栏的标题、按钮自己的无障碍名称。
-
-## 它提供的 Web 面，以及明确没有的
-
-这些面是为了让熟悉的写法落到桌面窗口。不是为了复刻浏览器。
-
-有这些：`window` 和 `document` 的一个子集、事件、定时器、`requestAnimationFrame`、本地存储（应用 namespace；默认内存，宿主注入 `FileStore` 后主上下文可落盘）、`Nana.storage`（应用 namespace 上的 JSON 助手）、桌面剪贴板、`fetch`（响应头到了就 resolve，正文可以边到边读）、Web Audio 的 PCM 子集（`AudioContext`、从 `Float32Array` 填充的 `AudioBuffer`、`AudioBufferSourceNode`、`GainNode`、`destination`、`ScriptProcessorNode` / `onaudioprocess`）。
-
-桌面输出在启用 `native-audio` 特性时走 cpal；最小构建默认不携带系统音频后端。没有宿主、未启用该特性或没有输出设备时，构造 `AudioContext` 抛 `NotSupportedError`。测试注入 mock sink，不依赖扬声器。这条路径不写 HostTexture。
-
-没有这些：完整 DOM 和 CSSOM、流式**请求**体、cookie、浏览器 CORS、Service Worker、IndexedDB（`indexedDB.open`、`deleteDatabase`、`databases`、`cmp` 抛 `NotSupportedError`。结构化持久数据走 `Nana.storage`，或你注册的 `HostApiRegistry`）、Tauri invoke、插件、窗口协议、完整 Web Audio 节点图、空间化、`AudioWorklet`、`decodeAudioData`。
-
-还没有的 `fetch` 选项会报错，不会假装成功。`duplex` 仍在拒绝之列。请求侧的流式正文需要分块上传，宿主协议还没有这条路。`<audio>` 仍只是播放态 shim，不解码进 mixer。
-
-`fetch()` 在响应**头**到达时就 resolve。和浏览器一样。正文随后分块到达。每一块在 `pump_frame` 里交给 JS。回调不离开引擎线程。`response.body` 是 `ReadableStream`：
+`fetch(url)` 在收到**响应头**时即 resolve，响应体随后分块在每帧 `pump_frame` 中送达引擎线程，可通过 `response.body.getReader()` 流式读取（`text()`、`json()`、`arrayBuffer()`、`blob()` 与 `clone()` 仍保持标准完整读取语义；一旦调用了 `getReader()`，再调 `text()` 或 `clone()` 会按标准抛出 `TypeError`；`101 / 204 / 205 / 304` 响应的 `body` 为 `null`）：
 
 ```js
 const response = await fetch(url);
@@ -152,72 +98,20 @@ const reader = response.body.getReader();
 for (;;) {
   const { value, done } = await reader.read();
   if (done) break;
-  // value 是 Uint8Array，这一块现在就能用
+  // value 为 Uint8Array 分块
 }
 ```
 
-`text()`、`json()`、`arrayBuffer()`、`blob()` 仍然读完整份再 resolve。写法不用改。
+两点边界说明：
+1. **无反向背压**：为支持 `clone()` 各自独立消费，`BodySource` 会保留已到达的分块，`desiredSize` 仅反映尚未读走的分块数；
+2. **共享累计字节上限**：流式读取旨在尽早开始处理数据，不能绕过宿主的 `FetchPolicy` 响应体积上限（内置 `NativeFetchHost` 默认 `16 MiB`），累计超出上限会在流中途以 `ResponseTooLarge` 终止。
 
-`clone()` 也照旧。已经到达的分块会留着。两份可以各读各的。
+`FormData` 可直接作为 `fetch` 请求体（自动编码为 `multipart/form-data` 并生成 boundary，文件项传入 `Blob`；不支持 `new FormData(formElement)`）。`WebSocket` 由桌面端内置的 `NativeWebSocketHost` 驱动，默认 `SocketPolicy` 同样为空白名单，需通过 `MountOptions.socket_host` 或 `WebApiState::set_socket_host` 注入允许的源。
 
-但**拿了 reader 就不能再走缓冲读法**。`getReader()` 之后，`text()` 和 `clone()` 抛 `TypeError`。和浏览器一致。读干净之后也一样。`bodyUsed` 会变真。
+## 网络安全策略、持久化存储与宿主命令
 
-101、204、205、304，以及无正文的 `new Response()`，它们的 `body` 是 `null`。不是一个永远空的流。
-
-`ReadableStream` 也装成全局。`new ReadableStream({ start, pull, cancel })` 三个回调都接着。`controller` 有 `enqueue`、`close`、`error`、`desiredSize`。
-
-两点限制说在前面。**没有真正的背压。** `BodySource` 会留着全部分块，好让 clone 各读各的。所以 `desiredSize` 报的是「还没被读走多少」。不会反过来卡住生产。**BYOB reader 不支持。** `getReader({ mode: "byob" })` 直接报错。它需要调用方自己的缓冲区。宿主通道没有这条路。
-
-流式是为了**早点开工**。不是为了绕开上限。上限按**累计**字节算。超了，就在中途以 `ResponseTooLarge` 中断这条流。不会因为分块就放行更大的正文。
-
-上限的具体数值来自**执行这次请求的宿主自己的** `FetchPolicy`。内置 `NativeFetchHost` 是 16 MiB。
-
-宿主侧的对应接口是 `FetchHost::fetch_streaming`。默认实现回落到缓冲式，并把整份正文当成一块发出。所以只实现了 `fetch` 的应用宿主照常能用，只是不会流。默认实现同样会按该宿主 `policy()` 声明的上限裁剪。不会因为它没实现流式，就把上限漏掉。
-
-`FormData` 可以直接当 `fetch` 的正文。`append`、`set`、`get`、`getAll`、`has`、`delete` 和迭代都在。编码为 `multipart/form-data`。boundary 由框架生成，并写进 `content-type`。你自己写了 `content-type`，就不覆盖。
-
-文件项传 `Blob`。字节走已有的资源对象通道。`new FormData(formElement)` 不支持。它要走真实表单控件。直接报错，而不是发一个空正文。
-
-`WebSocket` 由桌面端内置的 `NativeWebSocketHost` 提供传输。支持 ws 和 wss URL、`send`、`close`，以及 `onopen`、`onmessage`、`onclose`、`onerror`。
-
-默认 `SocketPolicy` 仍是空白名单。你必须通过 `MountOptions.socket_host` 注入配置了 `SocketPolicy` 源白名单的 host。或调用 `WebApiState::set_socket_host` 替换默认 host。未授权的源会在连接前失败。
-
-网络 I/O 在线程中执行。入站消息和连接状态事件在下一帧泵里送达回调。
-
-桌面端到端验收使用真实 V8 加 Vue，以及本地 loopback 服务端。覆盖白名单拒绝、`onopen` 中的 `send`、消息和关闭事件的分帧与同帧回调、Vue 状态更新，以及关闭应答：
-
-```bash
-cargo test -p nana-js-v8 --features engine --locked vue_native_websocket -- --test-threads=1
-```
-
-## 网络与宿主命令
-
-网络默认全关。你必须列出允许的源。格式是 `scheme://host[:port]`。localhost 不会自动放行。
-
-跨源跳转时，即使目标在白名单里，授权类请求头仍会被拿掉。默认超时 30 秒。请求和响应各 16 MiB。最多 5 次重定向。
-
-受管的不只是 JS。同一个 `fetch_host` 也是这个文档在引擎里的资源出口。按 mount 或窗口各自生效。不是进程级。
-
-`url()` 图片、`<img src>`、`mask-image`、`border-image` 走的是同一份 `FetchPolicy`。同样逐跳复核重定向。也同样可取消。painter 拆掉，或图片不再被引用时，在飞的请求会被 shutdown。不会挂到超时才收场。
-
-没注入 host，就一张远程图都不取。`data:`、`file:` 和相对路径不受影响。
-
-`@font-face` 不取远程。只认 `local()`、`data:`，以及 jail 内的本机文件。
-
-NanaUI 不内置登录，也不内置任何产品业务。
-
-存储由宿主注入物理 `KvBackend`。默认是内存。`FileStore::open(app_data_dir("YourApp")?)` 落成目录里的 `local-storage.bin`。
-
-`localStorage` 和 `Nana.storage` 只访问应用 namespace。Dock 和窗口恢复由 `ViewStateStore` 负责。Appearance 由 Settings namespace 负责。
-
-旧 key 只迁移一次。JS 无法枚举、清除或伪造 framework state。隔离窗口仍是私有的应用 KV。
-
-你还可以注册自己的命令（`HostApiRegistry`），交给 Vue 调用。框架自带的接口名和你注册的名字不能冲突。冲突时启动失败。
-
-```js
-await Nana.storage.set("session", { user: "nana" });
-const session = await Nana.storage.get("session"); // { user: "nana" } 或 null
-```
+- **网络默认全关（Fail-closed）**：必须显式按 `scheme://host[:port]` 格式登记允许的 origin（`localhost` 不会自动放行）。跨源重定向会自动剥离授权类请求头；默认超时 `30 s`，请求与响应上限各 `16 MiB`，最多 `5` 次重定向。同一个 `fetch_host` 同时管控 JS `fetch()` 与样式/页面中的 `url()`、`<img src>`、`mask-image`、`border-image`（未注入 host 时拒绝一切远程图片，仅放行 `data:`、`file:` 与 jail 内相对路径；`@font-face` 永远不走远程网络）。
+- **物理存储注入**：默认存储位于内存中；通过 `FileStore::open(app_data_dir("YourApp")?)` 注入持久化后端后，主上下文的 `localStorage` 与 `Nana.storage` 落盘为 `local-storage.bin`，且严格限制在应用自己的命名空间内（Dock 与窗口几何归 `ViewStateStore`，外观设置归 `Settings` 命名空间）：
 
 ```rust
 VueRuntimeProgram::run_with_store(
@@ -229,10 +123,8 @@ VueRuntimeProgram::run_with_store(
 )?;
 ```
 
-## 扩展控件
+- **自定义宿主命令**：应用可通过 `HostApiRegistry` 注册自定义命令供前端调用（不可与框架内置宿主接口重名，否则启动直接报错）。
 
-要让一种新控件进入布局、点击和绘制，在 Rust 里 `register_component`。Vue tag 等于 `ComponentTypeId` 去掉 `nana.` 前缀。`nana.preview-card` 变成 `preview-card`。
+## 扩展自定义控件
 
-和 HTML 同语义，就用原生标签。例如 `button`，以及 `table`、`tr`、`td`。语义不同就换名。例如 `search-dropdown`，不是 HTML `<search>`。
-
-只暴露 JS 命令时，走 `NativeComponentRegistry`。两张表不是同一条 ABI。只登记其中一张，另一条路径不会生效。见 [控件](components.md)。
+若要让新增的自定义控件完整参与布局、命中与绘制，请在 Rust 侧实现并调用 `register_component`：其在 Vue 模板中的标签名即为 `ComponentTypeId` 去掉 `nana.` 前缀（例如 `nana.preview-card` 对应 `<preview-card>`）。如果只需要向 JS 暴露一组命令而不需要新的保留树控件类型，才使用 `NativeComponentRegistry`——两张注册表分属不同边界，只登记其中一张不会在另一条路径上生效（详见 [控件合同](components.md)）。
