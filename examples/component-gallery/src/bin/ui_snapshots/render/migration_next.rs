@@ -67,10 +67,10 @@ use nana_ui::runtime::{
     TabOption as RuntimeTabOption, Tabs as RuntimeTabs, Text as RuntimeText,
     TextArea as RuntimeTextArea, TextDiagnosticSeverity, TextDiagnosticSpan,
     TextHorizontalAlignment, TextInput as RuntimeTextInput, TextSelection, TextSignatureHelp,
-    TextVerticalAlignment, Thumbnail as RuntimeThumbnail, Toast as RuntimeToast,
-    ToastProgress as RuntimeToastProgress, ToastStack as RuntimeToastStack, TreeNode,
-    TreeView as RuntimeTreeView, ValidationMessage as RuntimeValidationMessage, ValueEmphasis,
-    Workspace as RuntimeWorkspace, XYPad as RuntimeXYPad,
+    TextVerticalAlignment, Thumbnail as RuntimeThumbnail, TimelineEditor as RuntimeTimelineEditor,
+    Toast as RuntimeToast, ToastProgress as RuntimeToastProgress, ToastStack as RuntimeToastStack,
+    TreeNode, TreeView as RuntimeTreeView, ValidationMessage as RuntimeValidationMessage,
+    ValueEmphasis, Workspace as RuntimeWorkspace, XYPad as RuntimeXYPad,
 };
 use nana_ui::{
     ActionId, AppearanceSettings, CardKind, CommandPaletteItem, ComponentId, ControlSize,
@@ -115,6 +115,7 @@ enum Component {
     AppMenuBar,
     AreaLayout,
     PropertyGrid,
+    TimelineEditor,
     SegmentedControl,
     Tabs,
     StatusBadge,
@@ -200,6 +201,7 @@ impl Component {
             Self::AppMenuBar => component_ids::APP_MENU_BAR,
             Self::AreaLayout => component_ids::AREA_LAYOUT,
             Self::PropertyGrid => component_ids::PROPERTY_GRID,
+            Self::TimelineEditor => component_ids::TIMELINE_EDITOR,
             Self::SegmentedControl => component_ids::SEGMENTED_CONTROL,
             Self::Tabs => component_ids::TABS,
             Self::StatusBadge => component_ids::STATUS_BADGE,
@@ -458,6 +460,7 @@ fn fixture_size(fixture: Fixture) -> Size<u32> {
         (Component::AppMenuBar, _) => Size::new(420, 220),
         (Component::AreaLayout, _) => Size::new(520, 280),
         (Component::PropertyGrid, _) => Size::new(360, 240),
+        (Component::TimelineEditor, _) => Size::new(560, 220),
         (Component::QrCode, _) => Size::new(280, 280),
         (Component::Select, "opened") => Size::new(420, 220),
         (Component::Popover | Component::ActionMenu, _) => Size::new(420, 200),
@@ -1039,6 +1042,52 @@ fn runtime_fixture(
                     with_refs(view, grid)
                 })?;
             grid.stable_id()
+        }
+        Component::TimelineEditor => {
+            use nana_ui::runtime::{
+                TimelineKey, TimelineKeyRef, TimelineMode, TimelineTrack, TimelineView,
+            };
+            let key = TimelineKey::new;
+            let mut editor = RuntimeTimelineEditor::new([
+                TimelineTrack::new("head", "Head", []).expanded(true),
+                TimelineTrack::new(
+                    "x",
+                    "Angle X",
+                    [
+                        key(0.0, 0.0),
+                        key(0.5, 30.0),
+                        key(1.0, -30.0),
+                        key(1.5, 0.0),
+                    ],
+                )
+                .depth(1),
+                TimelineTrack::new("y", "Angle Y", [key(0.25, 0.0), key(1.25, 10.0)]).depth(1),
+                TimelineTrack::new(
+                    "blink",
+                    "Eye Blink",
+                    [key(0.8, 1.0), key(0.9, 0.0), key(1.0, 1.0)],
+                ),
+            ])
+            .fps(30.0)
+            .playhead(0.6)
+            .header_width(120.0)
+            .label("Animation");
+            editor.selection = vec![
+                TimelineKeyRef { track: 1, key: 1 },
+                TimelineKeyRef { track: 3, key: 1 },
+            ];
+            editor.view = TimelineView {
+                start: -0.1,
+                pixels_per_second: 240.0,
+                value_min: -40.0,
+                value_max: 40.0,
+                scroll: 0.0,
+            };
+            if fixture.state == "curves" {
+                editor = editor.mode(TimelineMode::Curves);
+            }
+            let context = document.context_mut();
+            context.create_component(document_id, editor)?.stable_id()
         }
         Component::AreaLayout => {
             let (_, layout) = document

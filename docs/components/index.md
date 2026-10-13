@@ -20,6 +20,7 @@
 - [Checkbox](checkbox.md) — 勾选。`model` 绑定 `checked`。
 - [Switch](switch.md) — 开关。比复选框多一个 `loading`。
 - [RangeField](range-field.md) — 滑块。模板标签是 `<Slider>`，函数是 `slider(min, max, step)`。
+- [TimelineEditor](timeline-editor.md) — 可编辑的时间底座：帧 / 秒标尺与播放头、可折叠轨道、关键点的选择与拖动（吸附到帧）、贝塞尔曲线视图与切线手柄；内容归应用，编辑通过事件回报。
 - [PropertyGrid](property-grid.md) — 检查器式两列属性面板：可折叠的组、共用且可拖动的标签列、混合值与带原因的禁用行；控件按行 id 放入。
 - [ScrubField](scrub-field.md) — 在数字上左右拖动改值的属性字段，单击后可键入，支持混合值。
 - [RangeSpanField](range-span-field.md) — 双滑块区间，可横可竖，轨道上可标实时值。模板标签是 `<RangeSpan>`，函数是 `range_span(min, max, step)`。
