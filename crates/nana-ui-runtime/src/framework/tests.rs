@@ -1382,6 +1382,193 @@ fn property_grid_places_controls_drags_its_column_folds_and_disables() {
 }
 
 #[test]
+fn timeline_editor_scrubs_selects_drags_keys_and_handles_and_zooms() {
+    use crate::view::widget;
+    use crate::{
+        TIMELINE_ROW, TIMELINE_RULER, TimelineEditor, TimelineHandleMoved, TimelineKey,
+        TimelineKeyRef, TimelineKeysMoved, TimelineMode, TimelinePlayheadChanged,
+        TimelineSelectionChanged, TimelineTrack, TimelineTrackToggled, TimelineViewChanged,
+    };
+    use nana_ui_input::{
+        InputModifiers, InputPayload, PointerInput, PointerPhase, WheelInput, WheelUnit,
+    };
+
+    static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let root = context
+        .create_component(document, crate::Stack::fill_column(0.0))
+        .unwrap();
+    context
+        .mount_view(root.stable_id(), move || {
+            widget(
+                TimelineEditor::new([
+                    TimelineTrack::new("head", "Head", []).expanded(true),
+                    TimelineTrack::new(
+                        "x",
+                        "Angle X",
+                        [TimelineKey::new(0.0, 0.0), TimelineKey::new(1.0, 30.0)],
+                    )
+                    .depth(1),
+                    TimelineTrack::new("blink", "Blink", [TimelineKey::new(0.5, 1.0)]),
+                ])
+                .fps(30.0)
+                .header_width(100.0),
+            )
+            .on(|e: &TimelinePlayheadChanged| {
+                HEARD
+                    .lock()
+                    .unwrap()
+                    .push(format!("playhead {:.4} {}", e.time, e.committed))
+            })
+            .on(|e: &TimelineSelectionChanged| {
+                HEARD.lock().unwrap().push(format!("select {:?}", e.keys))
+            })
+            .on(|e: &TimelineKeysMoved| {
+                HEARD
+                    .lock()
+                    .unwrap()
+                    .push(format!("move {:.4} {:.2} {}", e.dt, e.dv, e.committed))
+            })
+            .on(|e: &TimelineHandleMoved| {
+                HEARD.lock().unwrap().push(format!(
+                    "handle {} {:.3} {}",
+                    e.out, e.handle[0], e.committed
+                ))
+            })
+            .on(|e: &TimelineTrackToggled| {
+                HEARD
+                    .lock()
+                    .unwrap()
+                    .push(format!("toggle {} {}", e.track, e.expanded))
+            })
+            .on(|e: &TimelineViewChanged| {
+                HEARD
+                    .lock()
+                    .unwrap()
+                    .push(format!("view {:.1}", e.view.pixels_per_second))
+            })
+        })
+        .unwrap();
+    let editor = Entity::<TimelineEditor>::from_stable_id(
+        context.world().node(root.stable_id()).unwrap().children[0],
+    );
+    context
+        .layout_document(document, crate::LayoutViewport::new(500.0, 200.0))
+        .unwrap();
+    context.rebuild_hit_test(document);
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let mouse = |phase, (x, y): (f32, f32)| InputPayload::Pointer(PointerInput::mouse(phase, x, y));
+    let mut drag = |context: &mut AppContext, from: (f32, f32), to: (f32, f32)| {
+        input
+            .route(context, mouse(PointerPhase::Down, from))
+            .unwrap();
+        input.route(context, mouse(PointerPhase::Move, to)).unwrap();
+        input.route(context, mouse(PointerPhase::Up, to)).unwrap();
+    };
+    let x_of = |context: &AppContext, t: f64| context.read(editor, |e| e.time_to_x(t)).unwrap();
+
+    // the ruler scrubs the playhead onto frames
+    let at = x_of(&context, 0.5) + 1.0;
+    let to = x_of(&context, 1.0) + 1.0;
+    drag(&mut context, (at, 10.0), (to, 10.0));
+    assert_eq!(
+        take(),
+        [
+            "playhead 0.5000 false",
+            "playhead 1.0000 false",
+            "playhead 1.0000 true"
+        ]
+    );
+
+    // a key: selected, dragged by whole frames, committed on release
+    let row1 = TIMELINE_RULER + TIMELINE_ROW * 1.5;
+    let key = (x_of(&context, 1.0), row1);
+    drag(&mut context, key, (key.0 + 13.0, row1));
+    let one = TimelineKeyRef { track: 1, key: 1 };
+    // 13 px at 120 px/s is 0.108 s: 3 frames
+    assert_eq!(
+        take(),
+        [
+            format!("select {:?}", [one]),
+            "move 0.1000 0.00 false".to_owned(),
+            "move 0.1000 0.00 true".to_owned(),
+        ]
+    );
+
+    // a box from 0.4 s to past 1 s takes the two keys there
+    let (from, to) = (x_of(&context, 0.4), x_of(&context, 1.05));
+    drag(&mut context, (from, TIMELINE_RULER + 2.0), (to, 199.0));
+    assert_eq!(
+        take(),
+        [format!(
+            "select {:?}",
+            [one, TimelineKeyRef { track: 2, key: 0 }]
+        )]
+    );
+
+    // the branch's disclosure folds it
+    drag(
+        &mut context,
+        (8.0, TIMELINE_RULER + TIMELINE_ROW / 2.0),
+        (8.0, TIMELINE_RULER + TIMELINE_ROW / 2.0),
+    );
+    assert_eq!(take(), ["toggle 0 false"]);
+    assert_eq!(
+        context.read(editor, |e| e.visible_tracks()).unwrap(),
+        [0, 2]
+    );
+
+    // the curve view: a selected key's out handle drags, aligned
+    context
+        .update_component(editor, |e, _| {
+            e.tracks[0].expanded = Some(true);
+            e.mode = TimelineMode::Curves;
+            e.view.value_min = -10.0;
+            e.view.value_max = 40.0;
+            e.selection = vec![one];
+        })
+        .unwrap();
+    let (h, y) = context
+        .read(editor, |e| {
+            let k = e.tracks[1].keys[1];
+            (
+                e.time_to_x(k.time + k.out_handle[0]),
+                e.value_to_y(k.value + k.out_handle[1], 200.0),
+            )
+        })
+        .unwrap();
+    drag(&mut context, (h, y), (h + 12.0, y));
+    let heard = take();
+    assert_eq!(heard.len(), 2, "{heard:?}");
+    assert!(heard[0].starts_with("handle true 0.433 false"), "{heard:?}");
+    assert!(heard[1].ends_with("true"), "{heard:?}");
+
+    // the wheel zooms about the time under the pointer
+    let before = context.read(editor, |e| e.x_to_time(300.0)).unwrap();
+    input
+        .route(
+            &mut context,
+            InputPayload::Wheel(WheelInput {
+                pointer_id: nana_ui_input::PointerId(0),
+                x: 300.0,
+                y: 100.0,
+                delta_x: 0.0,
+                delta_y: -100.0,
+                unit: WheelUnit::Pixels,
+                modifiers: InputModifiers::default(),
+            }),
+        )
+        .unwrap();
+    let heard = take();
+    assert_eq!(heard.len(), 1, "{heard:?}");
+    let after = context.read(editor, |e| e.x_to_time(300.0)).unwrap();
+    assert!((after - before).abs() < 1e-9);
+    assert!(context.read(editor, |e| e.view.pixels_per_second).unwrap() > 120.0);
+}
+
+#[test]
 fn tree_view_selects_toggles_drags_and_renames() {
     use crate::{
         TreeDropIntent, TreeDropPosition, TreeDropRequested, TreeRenameRequested,

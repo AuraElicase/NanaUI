@@ -651,6 +651,7 @@ pub(super) fn write_evidence(
             | Component::AreaLayout
             | Component::AppMenuBar
             | Component::PropertyGrid
+            | Component::TimelineEditor
     ) {
         hit.is_none_or(is_descendant)
     } else if matches!(fixture.component, Component::Chip | Component::ScrubField) {
@@ -769,6 +770,7 @@ pub(super) fn write_evidence(
             | Component::AppMenuBar
             | Component::ScrubField
             | Component::PropertyGrid
+            | Component::TimelineEditor
     ) || geometry.is_some();
     let layout_ok = bounds.is_some_and(|bounds| match fixture.component {
         Component::Text if matches!(fixture.state, "wrap" | "ellipsis") => {

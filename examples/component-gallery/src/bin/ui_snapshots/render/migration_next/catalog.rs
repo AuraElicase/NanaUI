@@ -1055,6 +1055,16 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "under the compact example metrics the rows are 20 px and the panel denser",
     ),
     f(
+        Component::TimelineEditor,
+        "rest",
+        "a dope sheet: ruler in frames with the playhead at frame 18, a head branch over Angle X / Y and Eye Blink, two keys selected",
+    ),
+    f(
+        Component::TimelineEditor,
+        "curves",
+        "the curve view: Bezier segments between the keys, the selected Angle X key with its tangent handles",
+    ),
+    f(
         Component::AreaLayout,
         "rest",
         "four areas meet at two-pixel gaps, each with its header strip and content",

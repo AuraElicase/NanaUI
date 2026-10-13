@@ -140,6 +140,7 @@ mod text_node;
 pub mod text_shape_stats;
 mod text_width;
 mod thumbnail;
+mod timeline;
 mod toast;
 mod toast_stack;
 mod tree_view;
@@ -425,6 +426,12 @@ pub use text_node::{
     RetainedTextLayout, TextDirty, TextRevisions, TextWork, apply_used_typography, nana_font_family,
 };
 pub use thumbnail::{DEFAULT_ASPECT as THUMBNAIL_DEFAULT_ASPECT, Thumbnail, ThumbnailState};
+pub use timeline::{
+    TIMELINE_ROW, TIMELINE_RULER, TimelineEditor, TimelineHandleMoved, TimelineHit, TimelineKey,
+    TimelineKeyRef, TimelineKeysMoved, TimelineMode, TimelinePlayheadChanged,
+    TimelineSelectionChanged, TimelineTick, TimelineTrack, TimelineTrackToggled, TimelineUnit,
+    TimelineView, TimelineViewChanged,
+};
 pub use toast::{Toast, ToastAction, ToastDismissed, ToastProgress, ToastTone};
 pub use toast_stack::ToastStack;
 pub use tree_view::{
