@@ -4,103 +4,102 @@ title: 代码阅读指南
 
 # 代码阅读指南
 
-这一章回答一个很实际的问题:**这个仓库该从哪里开始读,按什么顺序读,读到哪一步算「懂了」**。它是一张地图,不是教程——教程在前面各章。
+本章回答一个实际问题：**面对包含 28 个工作区 crate 的仓库，应该从哪个文件开始读、按什么顺序读、怎么跑最小验证、读到哪一步算真正掌握了主干**。
 
-## 先读文档,再读代码
+## 第一步：按顺序读完这五份短文档
 
-按这个顺序建立心智模型,每篇都很短:
+在一头扎进几千行的源码文件之前，先按以下顺序花 20 分钟建立全局坐标系：
 
-| 顺序 | 文件 | 给你什么 |
+| 顺序 | 文档路径 | 为你建立什么认知 |
 | --- | --- | --- |
-| 1 | `AGENTS.md`(仓库根) | 全部架构合同的浓缩:产品路径、支撑边界、不可协商条款 |
-| 2 | `docs/reference/how-it-works.md` | 心智模型:一棵树、宿主拥有 GPU、一帧的 8 步 |
-| 3 | `docs/reference/architecture.md` | crate 边界与所有权表 |
-| 4 | 本板块 [模块与分层](/learn/modules-and-layers) | 28 个 crate 的依赖层级实读 |
-| 5 | [合同与不变量](/learn/contracts-and-invariants) | 9 条不变量及其核查方法 |
+| 1 | `AGENTS.md`（仓库根目录） | 全仓架构合同的最高浓缩：唯一产品路径、支撑边界与九条非协商红线 |
+| 2 | [`docs/reference/how-it-works.md`](/reference/how-it-works) | 核心运行模型：一棵保留树、宿主拥有 GPU、一帧的 8 步生命周期 |
+| 3 | [`docs/reference/architecture.md`](/reference/architecture) | Crate 边界、Motion IR 分流表与全局对象所有权表 |
+| 4 | [模块与分层](/learn/modules-and-layers) | 28 个 crate 的依赖深度层级与 77 条普通依赖边实读 |
+| 5 | [合同与不变量](/learn/contracts-and-invariants) | 九条非协商合同的设计因果与只读验证命令 |
 
-`AGENTS.md` 值得反复回看:仓库里几乎所有「为什么这段代码长这样」的答案,最后都指回其中一条合同。
+`AGENTS.md` 值得在阅读源码时随时对照：仓库里几乎所有「为什么这段代码要分两步、为什么不直接传句柄」的设计，最终都对应其中一条非协商合同。
 
-## 仓库地形
+## 仓库目录地形图
 
 ```text
 NanaUI/
-├── Cargo.toml            workspace:28 个 crate + tools + platform + 8 个示例
-├── AGENTS.md             架构合同(最重要的一份文件)
-├── crates/               全部框架 crate(见下表)
-├── examples/             8 个 workspace 成员示例(component-gallery、vue-v8、
-│                         vue-counter、vue-hosted-acceptance、native-rhi-probe、
-│                         runtime-host-fixture、package-fixture、reactive-sfc)
-├── crates/nana-ui/examples/   16 个最小示例文件(counter/gpu/window 各种 probe)
-├── docs/                 本文档站(VitePress)
-├── packages/             JS 侧运行时包(nanavue-runtime 等,Vue 路径用)
-├── platform/android      Android 宿主
-├── tools/css-parity      CSS 子集一致性测试
-├── perf/                 性能基线与门禁
-└── scripts/check-engine-boundary.py   wgpu 边界静态检查
+├── Cargo.toml                  Workspace 根清单：28 个核心 crate + tools + platform + 8 个示例
+├── AGENTS.md                   架构合同与开发守则（最重要的一份根文档）
+├── crates/                     全部 28 个框架 crate（全表见 /learn/coverage-matrix）
+├── examples/                   8 个独立工作区示例包（component-gallery、vue-v8、vue-counter、
+│                               vue-hosted-acceptance、native-rhi-probe、runtime-host-fixture、
+│                               package-fixture、reactive-sfc）
+├── crates/nana-ui/examples/    16 个单文件最小专题示例（计数器、GPU 视图、透明窗、Splash、无障碍等）
+├── docs/                       VitePress 文档站源码（含 :::api 双写法校验脚本）
+├── packages/                   前端 JS 运行时与组件包（nanavue-runtime、nanavue-components）
+├── platform/android/           Android 实验性 GameActivity 宿主
+├── tools/css-parity/           CSS 子集布局一致性测试夹具与比对工具
+├── perf/                       性能基准场景与门禁定义
+└── scripts/                    架构边界与合规检查脚本（check-engine-boundary.py 等）
 ```
 
-## 推荐阅读路线
+## 三条推荐源码阅读路线
 
-### 路线一:一帧的生命周期(渲染主线)
+### 路线一：一帧的渲染主线（状态 → 像素）
 
-1. `docs/reference/how-it-works.md` 的「一帧」一节——8 步总览。
-2. [Scene 提取](/learn/scene-extraction):树怎么变成绘制图。
-3. [GPU 与帧](/learn/gpu-frame):`GpuContext`/`FrameContext` 合同与 `SceneWgpuPainter`。
-4. 对应源码:`crates/nana-ui-scene/src/`(绘制图)→ `crates/nana-gpu/src/`(合同)→ `crates/nana-ui/src/`(painter 与宿主适配)。
+1. 先读 [端到端数据流](/learn/flows) 的「流程一」与 [框架如何运行](/reference/how-it-works) 的「一帧」章节；
+2. 读 [Scene 提取](/learn/scene-extraction)，对应源码：`crates/nana-ui-scene/src/runtime_document.rs:109`（`RuntimeDocument::flush`）与 `crates/nana-ui-scene/src/scene.rs:1672`（`UiScene::apply_delta`）；
+3. 读 [GPU 与帧生命周期](/learn/gpu-frame)，对应源码：`crates/nana-gpu/src/context.rs`（`GpuContext`）、`crates/nana-gpu/src/frame.rs`（`FrameContext`）、`crates/nana-ui/src/scene_paint/mod.rs`（`SceneWgpuPainter`）以及 `crates/nana-ui/src/scene_host/present.rs:114`（宿主 `redraw` 35 步全序）。
 
-### 路线二:一棵树怎么被改动(状态主线)
+### 路线二：保留树与增量布局主线（变异 → 几何）
 
-1. [保留树](/learn/runtime-tree):`UiWorld`、`UiMutation`、flush 顺序。
-2. [布局引擎](/learn/runtime-layout):样式怎么变成几何。
-3. 对应源码:`crates/nana-ui-runtime/src/`(从 `lib.rs` 的模块声明进,`mutation.rs:15` 的 `UiMutation` 枚举是树操作的完整词表)。
+1. 读 [保留树：UiWorld](/learn/runtime-tree)，从 `crates/nana-ui-runtime/src/mutation.rs:15` 的 `UiMutation` 枚举开始，看清保留树允许的全部操作词表，再到 `world/mutation.rs:2915` 看 `UiWorld::commit`；
+2. 读 [布局引擎](/learn/runtime-layout)，从 `crates/nana-ui-runtime/src/layout_engine.rs:89`（`RuntimeLayoutEngine`）与 `layout_frontier.rs`（依赖图与增量种子传播）看增量布局如何只重排受影响的子树。
 
-### 路线三:一个点击怎么变成回调(输入主线)
+### 路线三：输入路由主线（原生事件 → 回调）
 
-1. [输入链路](/learn/runtime-input)。
-2. 锚点源码:`crates/nana-ui-input/src/canonical.rs`(规范事件)→ `crates/nana-ui-runtime/src/framework/input.rs:397`(`AppContext::route_input`,唯一路由入口)。
+1. 读 [输入链路](/learn/runtime-input)；
+2. 打开 `crates/nana-ui-input/src/canonical.rs:44`（`CanonicalInputEvent` 与 `InputEndpoint`），然后直接跳到全仓唯一的路由入口 `crates/nana-ui-runtime/src/framework/input.rs:397`（`AppContext::route_input`）与四条分发链 `framework/input/dispatch.rs`。
 
-## 最小可运行示例
+## 运行最小示例亲自观察
+
+`crates/nana-ui/examples/*.rs` 下的每个单文件示例都只聚焦演示一个特性，是极佳的动态阅读入口：
 
 ```bash
-# Rust 入口示例(how-it-works.md 引用的完整示例)
-cargo run -p nana-ui --example application-counter
+# 1. 全量内置控件与工作区画廊
+cargo run -p component-gallery
 
-# 其他小示例都在这里
-ls crates/nana-ui/examples/
+# 2. 最小应用壳计数器（ApplicationState 模式）
+cargo run -p nana-ui --example application-counter --features hosted,bundled-fonts
 
-# Vue 路径
-cargo run -p vue-counter        # examples/vue-counter
+# 3. 声明式视图计数器（view! 宏模式）
+cargo run -p nana-ui --example reactive-counter --features hosted,bundled-fonts,view-macro
+
+# 4. 实时 GPU 画面与普通控件同窗混排
+cargo run -p nana-ui --example hosted-gpu-demo --features hosted,bundled-fonts,wgpu-interop
+
+# 5. 两阶段启动与原生 Early Splash 探针
+cargo run -p nana-ui --example startup-splash --features hosted,bundled-fonts -- --probe
 ```
 
-16 个 `crates/nana-ui/examples/*.rs` 每个都只演示一件事:`gpu-view-demo`(GPU 内容挂树)、`transparent-window`(透明窗口)、`startup-splash`(两阶段启动)、`accessibility-hidden-probe`(无障碍)……名字即目录。
+## 调试、诊断与边界检查工具
 
-## 调试与诊断
+- **框架诊断与性能指标**：帧路径严禁打日志或做文件 I/O，排查帧耗时、缓存命中率或丢帧时请查看 `nana-diagnostics` 的静态指标与 `.nlog` 导出（见 [诊断与应用路径](/reference/diagnostics) 与 [诊断码](/reference/errors)）。
+- **静态架构守门脚本**：修改代码后可随时运行以下只读脚本验证是否触碰了架构红线：
+  ```bash
+  python3 scripts/check-engine-boundary.py
+  python3 scripts/check-api-convergence.py
+  python3 scripts/check-package-boundary.py
+  python3 scripts/audit-framework-strings.py
+  ```
+- **提交前卫生检查**：按照 `AGENTS.md` 规范，提交代码前运行 `cargo fmt --all -- --check`；修改文档后运行 `cd docs && npm run build` 与 `git diff --check`。
 
-- **框架诊断**走 `nana-diagnostics` 的 `event!` / `metric!` / `fault!`,静态描述符、ID 只增不减;诊断码表见 `/reference/errors`,机制见 `/reference/diagnostics`。帧路径上没有日志 crate、没有 `eprintln!`、没有 IO——找问题时先想到 metric 而不是日志。
-- **热重载**:开发面见 `/guide/scaling/hot-reload` 与 `/reference/hot-reload`(nana-ui-dev)。
-- **边界检查**:`python scripts/check-engine-boundary.py` 强制 `wgpu::*` 只在允许的 crate 公共签名出现、且必须开 `wgpu-interop`——改 GPU 相关代码后跑它。
-- **CSS 一致性**:`tools/css-parity` 对照浏览器行为。
+## 三个自测问题检验理解程度
 
-## 验证你的理解
+读完本板块后，可以用以下三个问题做快速自检（答案均在对应章节中）：
 
-读到这里,用三个问题自测(答案都在本板块):
-
-1. 一个 `Button` 的点击,从操作系统事件到 `on_activate` 回调,经过哪些 crate?(答:[输入链路](/learn/runtime-input))
-2. 一块实时 GPU 画面为什么会被其他控件遮挡、还能被点到?(答:[GPU 与帧](/learn/gpu-frame))
-3. 为什么 runtime 的依赖表里没有 nana-ui-css,Vue 却能写 CSS?(答:[CSS 引擎](/learn/css-engine))
-
-## 修改代码前
-
-`AGENTS.md` 的「Change and validation hygiene」一节列了完整清单。最低限度:
-
-```bash
-cargo fmt --all -- --check
-git diff --check          # 文档/技能改动
-```
-
-公开或跨层合同变化时,检查消费者、文档、features、manifest、lockfile 与测试——这不是风格建议,是合同。
+1. 为什么在按钮点击回调里不应该调用 `mount_view_root` 重新渲染整页？一次点击从操作系统事件到触发 `on_activate` 依次经过了哪几个 crate？（见 [L3 建树](/reference/l3-authoring) 与 [输入链路](/learn/runtime-input)）
+2. 为什么一块实时 GPU 画面（`GpuTextureView`）既能被父容器的圆角裁切，又能被后方的下拉菜单遮挡，还能响应鼠标点击？（见 [Scene 提取](/learn/scene-extraction) 与 [GPU 与帧生命周期](/learn/gpu-frame)）
+3. 为什么 `nana-ui-runtime` 的依赖表里根本没有 `nana-ui-css`，但无论是 Rust 的 `view!` 还是 Vue 组件都能使用 CSS 样式？（见 [CSS 引擎](/learn/css-engine) 与 [作者工具链](/learn/toolchain)）
 
 ## 接着读
 
-- [端到端数据流](/learn/flows):四条完整链路串起全部章节
-- [覆盖矩阵](/learn/coverage-matrix):28 个 crate 四要素速查
+- [端到端数据流](/learn/flows)：四条完整链路串起全部子系统
+- [28 crate 覆盖矩阵](/learn/coverage-matrix)：全部 28 个工作区 crate 的四要素速查表
+- [证据清单](/learn/evidence-checklist)：用只读命令亲手核验每一条架构断言

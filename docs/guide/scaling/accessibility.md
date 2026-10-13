@@ -47,9 +47,15 @@ settings_row("静音").control(switch(""))
 
 控件自己有非空名字时用它自己的，例如 `switch("静音")`。空名字（`switch("")`、滑块、下拉选择）才用行标签。行标签改了，控件的无障碍节点跟着重新投影。`Select` 被这样命名之后，无障碍名字不是当前显示的选项；选项是它的值。没人给它起名时，仍按显示的文字命名。
 
-`Switch` 的角色说明是「开关」。当前 Windows 适配把开关映射成按钮控件类型，本地化控件类型读的是这段角色说明。
+开关（`Switch`）默认不写 `role_description`，平台无障碍层会按系统语言念出“开关”或 “switch”（细节见 [框架文案](../../reference/framework-strings.md#开关的读法)）。
 
 `settings_row` 没有模板标签。分组里哪一行是首行、末行，由你按数据算好再绑定。
+
+## 虚拟子节点与区域名称
+
+像 `TreeView` 和打开的菜单这类自绘单节点控件，框架会把每个可见行投影为无障碍树下的虚拟子节点（例如 `AccessibilityRole::Tree` 下的 `TreeItem`，带 `level`、`expanded`、`selected`、`disabled` 和行矩形边界；折叠后子行从无障碍树中移除），读屏的 `Click` / `Focus` / `Expand` / `Collapse` 与指针键盘走同一份状态更新（见 [TreeView](../../components/tree-view.md#无障碍)）。
+
+`AreaLayout` 中的每个区域在无障碍树里是一个 `Region`，名称通过 `.labels([(编辑器, 名称)])` 或切换语言时的 `AppContext::set_area_labels` 提供，不污染可序列化的布局模型（见 [AreaLayout](../../components/area-layout.md)）。
 
 ## 播报变化
 

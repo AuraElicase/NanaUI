@@ -1,173 +1,121 @@
 # 框架如何运行
 
-这篇是 NanaUI 的心智模型。读完之后，你应能判断三件事：状态放哪，一帧里谁在做事，实时画面怎么进树。
+本文建立 NanaUI 的核心运行模型。读完后你应能清楚判断三件事：**业务状态放在哪里**、**一帧之内各层按什么顺序协作**，以及**实时 GPU 画面如何作为普通节点融进界面树**。
 
-函数签名见 [应用 API](application-api.md)。实现细节见 [Runtime 与 Scene](runtime-scene.md)。
+具体函数签名见 [应用 API](application-api.md)，保留树与绘制图的底层提取细节见 [Runtime 与 Scene](runtime-scene.md)。
 
-## 三个事实
+## 三个核心事实
 
-1. **界面是一棵保留树。** `Text`、`Button`、侧栏、对话框、一块实时画面，都是节点。框架记住这棵树，做布局、命中、焦点和绘制。你不写控件的像素坐标。
-2. **窗口和 GPU 是你的。** 你的应用拥有 Window、Surface、Device 和 Queue。`run_runtime` 代你做的那层宿主也一样。NanaUI 画进去。它不另开一套设备，也不把画面拷到 CPU 再贴回 GPU。
-3. **实时画面是树上的成员。** 它不是洞，也不是覆盖层。它占据布局位置，会被裁切，会被挡住，也可以被点。合成顺序就是文档顺序。
+1. **界面是一棵保留树（Retained Tree）。** `Text`、`Button`、侧栏、对话框以及实时 GPU 画面都是树上的节点。框架负责维护这棵树并完成布局、命中测试、焦点管理与绘制，应用从不手写控件的像素坐标。
+2. **窗口与 GPU 归宿主（你的应用）所有。** 应用持有 `Window`、`Surface`、`Device` 和 `Queue`（由 `run_runtime` 托管的默认宿主同样遵循这一所有权）。NanaUI 只往宿主的帧里录制绘制命令：既不创建第二套 GPU 设备，也不把画面读回 CPU 再贴回 GPU。
+3. **实时画面是一等树节点。** 着色器输出或预览视口既不是窗口上挖出的“洞”，也不是盖在界面顶上的 HUD 浮层——它像 `Button` 一样占据布局尺寸、受父容器裁剪、可被后续节点遮挡、按同一套命中规则接收点击，合成顺序严格遵循文档顺序（document order）。
 
-## 谁拥有什么
+## 职责与所有权边界
 
 ```text
-应用
-  业务状态、配置、鉴权
-  每个 Region / Dock pane 里放什么
-  这一帧着色器 / 视口画成哪张纹理
-  窗口恢复可由应用自管，或通过 `persist_key` 交给 NanaUI 的
-  `ViewStateStore`（物理 backend 由宿主注入）
+应用（Application）
+  ├─ 业务状态、配置存储、鉴权与导航路由
+  ├─ 每个 Region / Dock 窗格 / AreaLayout 区域内展示的具体内容
+  ├─ 当前帧着色器或视口渲染到哪张纹理
+  └─ 窗口与 Dock 布局恢复：可由应用自管，或通过 persist_key 交给框架的 ViewStateStore（物理后端由宿主注入）
 
-NanaUI
-  控件语义与交互
-  布局、滚动、命中、焦点、IME、无障碍增量
-  把树抽成 UiScene，画进你的 Surface
+NanaUI（Runtime + Scene + Painter）
+  ├─ 控件语义、组装与交互状态
+  ├─ 布局求解、滚动、命中测试、焦点链、IME 与无障碍增量投影
+  └─ 将脏节点抽取为 UiScene，并由 SceneWgpuPainter 画进宿主的 Surface
 
-nana-window
-  系统材质（Vibrancy / Mica / Acrylic）和标题栏拖拽 / 客户区 chrome
-  普通控件拿不到 HWND / NSWindow
+nana-window（平台原生边界）
+  ├─ 系统材质（Vibrancy / Mica / Acrylic）、标题栏拖拽与客户区 chrome
+  └─ 隔离原始窗口句柄（HWND / NSWindow），普通控件永远拿不到原生句柄
 ```
 
-`Workspace`、`Dock`、`Settings` 提供桌面壳的结构。结构是区域、分隔、折叠和 Tab。区域里的文档、资源列表和预览内容，仍是你的应用的。
+`Workspace`、`Dock`、`AreaLayout` 与 `Settings` 提供桌面壳层的可复用骨架（区域、分隔条、折叠、页签），而每个区域里放什么文档、资源列表或预览视口，始终由你的应用决定。
 
-## 你怎么接到这棵树上
+## 应用如何接入这棵树
 
-普通 Rust 应用实现 `ApplicationState`，通过 `RuntimeApplication<State>` 调用 `run_runtime`。容器默认处理文档路由、GPU 注册表和窗口生命周期。
+普通 Rust 应用通常实现高层的 `ApplicationState`，并通过 `RuntimeApplication<State>` 调用 `run_runtime`——容器会自动管理文档路由、GPU 注册表与窗口生命周期（完整最小示例见 `crates/nana-ui/examples/application-counter.rs`）。
 
-完整示例是 `crates/nana-ui/examples/application-counter.rs`。
-
-嵌入式宿主和 Vue 适配继续实现低层的 `RuntimeProgram`：
+需要精细控制多窗口、嵌入式事件循环或桥接 Vue 的宿主，则直接实现底层的 `RuntimeProgram`：
 
 ```text
-initialize     建 RuntimeDocument，build { child / on }
+initialize                   创建 RuntimeDocument 并挂载初始视图树
 with_document / with_document_mut
-               按 WindowId 在访问闭包中交出那棵树
-update         只处理宿主级消息（开窗、换 GPU、持久化）
-               按钮点击不要走这里，用 on / observe
+                             按 WindowId 在闭包中向宿主借出对应的 RuntimeDocument
+update                       仅处理宿主级消息（开窗、切换 GPU 资源、持久化）
+                             —— 按钮点击等控件交互请直接用 .on / .observe，不要绕道 update
 host_textures / prepare_window_frame / window_frame_presented
-               默认：把已有纹理挂上树，flush 前更新，present 后再释放
+                             默认 GPU 路径：将可采样纹理挂上树，flush 前更新，present 后回收旧纹理
 scene_gpu_renderers / scene_resource_producers
-               高级：第一次接入可忽略，见 gpu.md
+                             高级 GPU 路径：同 pass 直写或按图离屏生产（首次接入可忽略，见 gpu.md）
 ```
 
-控件交互写成 `AppContext::on(button, |_, Activate, cx| { ... })`。
+控件交互直接绑定在视图节点上（如 `.on_activate(...)` 或 `AppContext::on`）。只有在需要开窗、换纹理等跨宿主操作时，才在事件回调里调用 `cx.dispatch_program(Message)`，交由下一帧开头的 `update` 处理。`update` 应保持轻量；填充新窗口内容等操作放在 `present` 之后的 `bind_window` 中执行。完整可运行代码见 [创建应用](../guide/essentials/application.md)。
 
-需要开窗或换纹理时，在闭包里 `cx.dispatch_program(Message)`。下一帧进入 `update`。
+## 一帧的执行顺序
 
-`update` 保持便宜。把页面内容填进树，放在 `bind_window`，也就是 present 之后。
-
-完整程序见 [创建应用](../guide/essentials/application.md)。
-
-## 一帧
-
-`run_runtime` 内部（`run_runtime_scene`）对每扇需要重绘的窗口，大致走这些步：
+在 `run_runtime`（底层为 `run_runtime_scene`）中，每一扇需要重绘的窗口按以下 8 步顺序推进：
 
 ```text
-1. 消化 dispatch_program 的消息 → RuntimeProgram::update
-2. prepare_window_frame          → 你把最新纹理准备好
-3. RuntimeDocument::flush        → 样式、文字、布局、命中、抽取
-4. 获取 Surface；外部资源生产    → FramePlan，同一宿主 encoder，失败整帧丢弃
-5. SceneWgpuPainter::paint_target → 可见操作按文档顺序画进目标
-6. queue.submit + submitted + present → 每目标一份 NanaUI 提交
-7. window_frame_presented        → 现在才能丢掉上一帧的纹理
-8. bind_window                   → 需要的话再填内容
+1. 消化 dispatch_program 消息  → RuntimeProgram::update
+2. prepare_window_frame        → 应用准备好本帧要采样的最新纹理
+3. RuntimeDocument::flush      → 样式、文本整形、布局、命中索引、无障碍与 Scene 增量抽取
+4. 获取 Surface + 外部资源生产  → 编译 FramePlan，共用同一宿主 encoder（失败则整帧丢弃并回滚）
+5. SceneWgpuPainter::paint_target → 按文档顺序将可见图元录制进目标
+6. queue.submit + present      → 每个目标一次提交并上屏
+7. window_frame_presented      → 此时才可安全释放上一帧退役的纹理
+8. bind_window                 → 按需为新就绪窗口绑定后续内容
 ```
 
-没有变更时，flush 是空转。宿主不应空刷。
+- **无变更不空刷**：当树没有变化时，`flush` 是微秒级空转，宿主不会空刷帧。静态窗口保持 `FrameDemand::OnDemand`。
+- **唤醒通道分离**：动画、实时 GPU 画面与普通 UI 变更的唤醒彼此独立。一块实时纹理更新（通过 `HostTextureRegistry::slot` 返回的 `TextureSlot` 通知引用它的窗口）或一条合成器动画推进，不会迫使整棵 `UiWorld` 重新跑样式与布局。
+- **遮挡与零尺寸窗口**：当窗口被最小化、遮挡或尺寸为 0 时，宿主仍按程序声明的 `FrameDemand` 调用 `prepare_window_frame`（当尺寸可画时仍编码离屏 producer），但跳过 UI `flush`、不获取 Surface、不 `present`，也不调用 `window_frame_presented`。
+- **应用不手写布局**：`flush` 内部统一调用宿主的 `NanaTextShaper` 与 `RuntimeLayoutEngine`，应用切勿自行跑第二套布局或往树里硬塞像素坐标。对外公开身份只有 `DocumentId`、`StableNodeId` 和类型化的 `Entity<V>`。
 
-动画、实时 GPU 和普通 UI 的唤醒是分开的。一块实时画面在动，不该迫使整棵 Runtime 全量更新。
+## 动画与呈现分离（Motion IR）
 
-Motion 意图在 `nana-ui-core::motion`。同一条 track，加上同一个时间戳，CPU 可以确定性地求值。spring 和 decay 按绝对时间解析。它们不依赖上一帧的积分。
+动画意图统一编译进 `nana-ui-core::motion`（Motion IR）。无论 Rust L3 的 `node.transition()`、`Spring::to`、`Timeline::parallel / sequence`，还是 CSS 的 `transition` 与 `@keyframes`，最终都落到同一套轨道表示上：
 
-逻辑目标状态在 `UiWorld`。呈现值在 `PresentationStore` 的 overlay 里，按 node 加 property 按需查询。
+- **逻辑值与呈现值分离**：`UiWorld` 保存的是逻辑目标状态；过渡途中的瞬时值保存在 `PresentationStore` 的 overlay 中，按「节点 + 属性」在给定时间戳下确定性求值（spring 与 decay 均按绝对时间求解析解，不依赖上一帧积分）。L3 transition 结束后会保持终点值，直到该属性下一次被写入不同的逻辑值。
+- **列表重排（FLIP）**：通过显式的呈现变换 `node.flip(first, last)`（或 Vue `TransitionGroup` 的 `setPaintTransform`）完成——逻辑布局盒直接停在终点（Last），视觉从反向偏移（Invert）平滑回到单位变换。
+- **合成器稳态零写回**：`Compositor` 类轨道的 `MotionDescriptor` 只在启动、改目标（retarget）或取消时写入代际表（generational slab）；稳态帧只推进时间 uniform，`SceneWgpuPainter` 在 Quad 着色器的 `evaluate()` 中直接求值（非 Quad 图元仍读取 CPU overlay），产品 `present` 路径绝不回读 GPU。
+- **按需连续刷新**：CPU 与 Layout 动画通过稀疏的 `next_animation_deadline` 调度；`UiScene::compositor_needs_tick` 仅将当前窗口切入轻量的 `FrameDemand::Continuous` 呈现，不触发 Vue patch，也不触发 `UiWorld` 样式或布局重算。窗口最小化或被遮挡时不追赶隐藏的 GPU 帧，恢复可见后按绝对时间直接求值；设备或 Surface 重建后由宿主调用 `UiScene::set_surface_generation`。
 
-Rust L3 用 `node.transition().opacity().transform().duration().ease()`、`Spring::to`，以及 `Timeline::parallel` 或 `sequence`，编译进这条 IR。
+各属性的默认动画分类由 `AnimatableProperty::animation_class()` 决定，组件不可覆盖：
 
-`width` 和 `height` 走 Layout-class CPU。不要改成 scale。
-
-字体轴用 `.font_axis(*b"wdth", 125.0)`。也可以用 `Spring` 的 `.font_axis(tag)`，或 `Timeline` 里的 `FontAxis(tag)` track。它们和 CSS `font-variation-settings` 的 transition、`@keyframes` 编译成同一种逐轴 track。采样叠到计算样式的轴上。文字按 #88 的脏图重新 shaping。
-
-L3 transition 结束后保持终点，直到该属性下一次被写成不同的值。
-
-列表 FLIP 是显式的 presentation transform。写成 `node.flip(first, last)`，或 Vue TransitionGroup 的 `setPaintTransform`。逻辑框停在 Last。视觉从 Invert 回到 identity。
-
-Compositor track 的 `MotionDescriptor` 在 start、retarget、cancel 时写入 generational slab。稳态只推进时间。
-
-`SceneWgpuPainter` 把 descriptor 放到 storage buffer。Quad shader 的 `evaluate()` 复现同一套闭合解。非 Quad 的 primitive 仍用 CPU overlay。产品 present 不回读。
-
-CPU 和 Layout 动画走 `next_animation_deadline`。`UiScene::compositor_needs_tick` 只把**该窗口**接到轻量的 `FrameDemand::Continuous` present。它不强制 Vue patch，不强制 `UiWorld` 的全局 schedule，也不强制 Style 或 Layout。
-
-静态窗口保持 `OnDemand`。最小化或被遮挡时，compositor 不按 Hidden-GPU 追帧。恢复后按绝对时间求值。
-
-device 或 surface 重建之后，宿主调用 `UiScene::set_surface_generation`。完成事件同样靠 deadline。不靠逐帧的 CPU sample。
-
-默认执行类由 `AnimatableProperty::animation_class()` 决定。组件不能改：
-
-| 属性 | 默认 Class | 执行路径 | fallback / 性能含义 |
+| 属性 | 默认分类 | 执行路径 | 回退与性能边界 |
 | --- | --- | --- | --- |
-| `transform` / `opacity` | Compositor | overlay；Quad 走 GPU `evaluate()`；非 Quad 走 CPU overlay | 稳态不写 `UiWorld`；非 Quad 仍是 CPU presentation |
-| `clip` / `clip-path` | Compositor | overlay；shader 目前只绑 transform/opacity 的 `motion_id` | 稳态不写 `UiWorld`；clip 呈现仍 CPU overlay |
-| `shader-parameter` | Compositor | overlay；需注册 typed codec | 无默认 Quad GPU 路径 |
-| `color` / `background` / `blur` / `filter` / `shadow` | Paint | CPU 插值 | 可能每 sample 脏 paint/extract；不是 filter GPU |
-| `width` / `height` / `padding` / `margin` | Layout | CPU layout | 每 sample layout；不要偷成 scale |
-| `font-size` / `font-axis` | Layout | 非 compositor（排版 / 绘制也会受影响） | [#85](https://github.com/sena-nana/NanaUI/issues/85) 不强制 GPU |
-| `display` | Discrete | snap | 不插值 |
+| `transform` / `opacity` | `Compositor` | 呈现 overlay；Quad 走 GPU `evaluate()`，非 Quad 走 CPU overlay | 稳态不写 `UiWorld`；文本/图标/Mesh/HostTexture 仍走 CPU overlay |
+| `clip` / `clip-path` | `Compositor` | 呈现 overlay（着色器当前仅绑定 transform / opacity 的 `motion_id`） | 稳态不写 `UiWorld`；裁剪呈现走 CPU overlay |
+| `shader-parameter` | `Compositor` | 呈现 overlay（需注册类型化编解码器） | 无默认 Quad GPU 路径 |
+| `color` / `background` / `blur` / `filter` / `shadow` | `Paint` | CPU 稀疏采样插值 | 每次采样标脏 paint / extract；无 GPU 滤镜轨道 |
+| `width` / `height` / `padding` / `margin` | `Layout` | CPU 布局求值 | 每次采样触发局部布局；严禁用 `scale` 伪造尺寸变化 |
+| `font-size` / `font-axis` | `Layout` | 逐轴轨道叠入计算样式的 `font_variations`，触发 `nana-text` 重新整形 | 每个变化的采样都是真实字形变体，不退化为几何缩放 |
+| `display` | `Discrete` | 离散跳变（snap） | 不做插值 |
 
-`#8` 的 `animations_considered` 和 `animation_deadlines_scanned` 稀疏门禁仍然有效。compositor-only 的稳态结构门禁见 [`perf/README.md`](../../perf/README.md) 的 `compositor-steady`。
+## 实时画面如何挂入树中
 
-开发诊断走 `AnimatableProperty::diagnostic_hint()`。文档不硬编码整句。
+默认产品路径是将实时画面渲染到可采样纹理，在树上挂载 `GpuTextureView`，并使用**同一个字符串槽位名**在 `host_textures()` 中登记。多层画面只需挂载相邻的多张 `GpuTextureView`；`<video data-nana-video>` 同样走 `video:{id}` 宿主纹理槽（有槽位时不叠加 poster）。更换纹理尺寸或对象时递增 `generation` 即可，切勿销毁重建 Runtime 节点。
 
-`FrameDemand` 指定按需、截止时间，或持续刷新。
+只有在完全没有中间纹理、必须直接画进当前 UI 渲染通道时，才使用 `GpuView`（以 `u64` 槽位号匹配已注册的 `SceneGpuRenderer`，不同于 `HostTextureRegistry` 的字符串键）。详细接入规范见 [实时画面](gpu.md)。
 
-窗口被遮挡或最小化时，宿主仍按程序自己的 `FrameDemand` 调用 `prepare_window_frame`。这时不 flush，不获取 Surface，也不 present。
-
-0 维仍然 prepare。producer 的 encode 只在尺寸可画时才跑。
-
-纹理内容更新时，通过 `HostTextureRegistry::slot` 取得的 `TextureSlot`，通知引用该资源的窗口。
-
-已落地的范围和性能证据见 [高刷新重构](../../archive/docs-notes/high-refresh-refactor.md)。
-
-你的应用**不要**自己跑一套布局，也不要把控件坐标写进树。`flush` 会调宿主的文字整形（`NanaTextShaper`）和 `RuntimeLayoutEngine`。
-
-对外身份是 `DocumentId` 和 `StableNodeId`，以及类型化的 `Entity<V>`。内部节点存储不是 API。
-
-## 实时画面怎么成为节点
-
-默认做法：画面画到可采样纹理，树上挂 `GpuTextureView`，用**同一字符串 slot** 在 `host_textures()` 登记。它和 Button 一样被布局、裁剪和命中。
-
-多层就是相邻的几张 `GpuTextureView`。没有中间纹理时才用 `GpuView`。那是 `u64` slot，不是 registry 键。
-
-`<video data-nana-video>` 走 `video:{id}` 这条 HostTexture。有槽时不叠 poster。
-
-按图离屏见 [gpu.md](gpu.md#按图离屏)。换纹理时升 generation。不要拆节点。细则见 [实时画面](gpu.md)。
-
-## Vue 是输入，不是另一套窗口
-
-Rust 控件、Vue 的 HTML 1:1 控件、`nana-*` 组件，以及有限的 HTML/CSS 子集，写的是同一套样式模型。模型是 token、语义和布局。它们进同一棵 `UiWorld`。
-
-CSS 只有一个引擎，就是 `nana-ui-css`。Vue 路径在运行时用它。L3 视图的 `<style>` 和 `css!` 在构建时用它，编译成 Style Model 数据。
+## Vue 是输入适配器，不是另一套窗口
 
 ```text
-Rust  build / create_component ──┐
-Vue   button / input / ul / table / nana-*  ─┼─► UiWorld ─► UiScene ─► SceneWgpuPainter
-Vue   div + CSS 子集                         ─┘
+Rust 声明式视图 / create_component ──┐
+Vue HTML 1:1 控件 / nana-* 组件     ─┼─► Style Model ─► UiWorld ─► UiScene ─► SceneWgpuPainter
+Vue div + CSS 子集                  ─┘
 ```
 
-没有整窗 WebView 壳。`createApp()` 把 Vue 3 的 Custom Renderer 接到宿主。JavaScript 跑在嵌入的 V8 里。
+Rust 控件、Vue 的 HTML 语义标签、`nana-*` 组件以及受支持的 CSS 子集，全部写入同一套 Style Model（Tokens + Semantics + Layout）并汇入同一棵 `UiWorld`。全框架只有一个 CSS 引擎 `nana-ui-css`：Vue 路径在运行时调用它，Rust `view!` 的 `<style>`、`stylesheet!` 与 `css!` 则在构建时调用它并编译为 Style Model 补丁数据。
 
-Vue + JS 与 Rust L3 共用 Runtime，也共用组件合同。见 [Vue](vue.md)。
+NanaUI **没有整窗 WebView 壳**：`@nanaui/nanavue-runtime` 的 `createApp()` 将 Vue 3 Custom Renderer 接到宿主的 V8 引擎上，与 Rust L3 共用同一个 Runtime 和组件注册表（详见 [Vue](vue.md)）。若业务确实需要在窗口局部嵌入真实网页，只能使用显式的宿主原生例外 `runtime::BrowserView`（Runtime 节点负责布局、无障碍与生命周期，宿主管理原生 `WKWebView` 子视图，当前仅支持 macOS，且不进入离屏截图）。
 
-应用内网页内容只能通过明确的 `runtime::BrowserView` 宿主例外接入。Runtime 节点负责布局、可访问性和生命周期。原生浏览器由宿主创建。当前只有 macOS 后端，且不进入离屏的 Runtime/Scene 截图。
+## 非协商红线（不要做的事）
 
-## 不要做的
+以下条款是框架架构合同，而非编码风格建议：
 
-这些是合同，不是风格建议：
-
-- 为界面再 `request_device` 一次，或让实时内容用另一套 Queue 提交，却期望和 UI 对齐
-- 把 GPU 画面读回 CPU、编码成图，再当图标贴回去
-- 在 UI 画完之后，再往 Surface 上盖一层实时画面
-- 让控件拿窗口句柄去调系统 API
-- 把整窗 WebView 当成 NanaUI 的壳，或在 UI 画完后把原生 WebView 盖在窗口上
-- 把 crate 根上的旧控件再导出，或把 `nana_ui::dock::*` 适配器，当成第二套产品 API。新代码从 `nana_ui::runtime` 进。产品 Dock 是 Runtime 的 `Dock` 和 `DockWorkspace`
+- **禁止创建第二套 `Device` / `Queue`**，或让实时内容在另一条独立队列上提交却期望与 UI 帧严格对齐。
+- **禁止产品路径 CPU 回读**：不要把 GPU 画面拷回 CPU、编码成图片再塞回界面树。
+- **禁止帧尾盖层**：不要在 UI 绘制完成后再往窗口 Surface 上强行盖一层实时画面或原生 WebView。
+- **禁止控件触碰原生窗口句柄**：普通控件绝不直接调用平台窗口 API。
+- **禁止使用已废弃的根路径导出**：新代码统一从 `nana_ui::runtime` 导入控件；产品级停靠使用 Runtime 的 `Dock` 与 `DockWorkspace`（`nana_ui::dock::*` 仅是宿主适配器）。

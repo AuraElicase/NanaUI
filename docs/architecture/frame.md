@@ -1,91 +1,66 @@
-# 一帧
+# 一帧的生命周期
 
-一帧做的是把已经在 `UiWorld` 里的状态画上你的 Surface。路径不换：应用状态进入 `nana-ui-runtime` 的 `UiWorld`，flush 得到 `nana-ui-scene` 的 `UiScene`，`nana-ui` 的 `SceneWgpuPainter` 画进宿主 Surface。
+一帧的工作是将已经在 `UiWorld` 里的状态变化结算并画上宿主的 Surface。路径始终唯一：应用状态进入 `nana-ui-runtime` 的 `UiWorld`，经 `flush` 抽取为 `nana-ui-scene` 的 `UiScene`，再由 `nana-ui` 的 `SceneWgpuPainter` 录制进宿主的 `FrameContext`（不另开 `Device`，也不回读 CPU）。
 
-Window、Surface、`GpuContext`，以及这一帧的 `FrameContext`，都属于宿主。`run_runtime` 可以代你做这层宿主。`SceneWgpuPainter` 只往这个 `FrameContext` 里录。它不另开 Device，也不把画面读回 CPU。
-
-`run_runtime` 内部，每扇需要重绘的窗口大致按这个顺序走。全文在 [框架如何运行](../reference/how-it-works.md)。
+在 `run_runtime` 内部，每扇需要重绘的窗口按以下 8 个步骤走完一帧（完整参考见 [框架如何运行](../reference/how-it-works.md)）：
 
 ```text
-1. 消化 dispatch_program 的消息 → RuntimeProgram::update
-2. prepare_window_frame          → 你把最新纹理准备好
-3. RuntimeDocument::flush        → 样式、文字、布局、命中、抽取
-4. 获取 Surface；外部资源生产    → FramePlan，同一宿主 encoder，失败整帧丢弃
-5. SceneWgpuPainter::paint_target → 可见操作按文档顺序画进目标
-6. queue.submit + submitted + present → 每目标一份 NanaUI 提交
-7. window_frame_presented        → 现在才能丢掉上一帧的纹理
-8. bind_window                   → 需要的话再填内容
+1. 消化 dispatch_program 消息  → RuntimeProgram::update
+2. prepare_window_frame        → 应用准备好本帧要采样的最新纹理
+3. RuntimeDocument::flush      → 样式、文本整形、布局、命中索引、无障碍与 Scene 抽取
+4. 获取 Surface + 外部资源生产  → 编译 FramePlan，共用同一宿主 encoder（失败整帧丢弃）
+5. SceneWgpuPainter::paint_target → 可见图元按文档顺序录制进目标
+6. queue.submit + present      → 每个目标一次提交并上屏
+7. window_frame_presented      → 此时才可安全释放上一帧退役的纹理
+8. bind_window                 → 按需为新窗口绑定后续内容
 ```
 
-下面按消息、纹理、flush、present 说明这张表。遮挡和零尺寸是这张表的例外，不是插在中间的新步骤。
+下面按「消息与变更提交」「纹理准备」「flush 事务」「present 与回收」四个阶段说明关键约束。
 
-## 消息
+## 1. 消息与变更提交
 
-控件点击不要放进 `update`。用 `on` / `observe`。需要开窗或换纹理时，在闭包里 `dispatch_program`。这条消息下一帧才进入 `update`。`update` 只处理宿主级消息，保持便宜。页面内容不要在这里填，放到 present 之后的 `bind_window`。
+控件的普通点击与输入不要绕道 `RuntimeProgram::update`，请直接使用节点上的 `.on` / `.observe` 或信号绑定。只有当点击需要触发开窗、切换 GPU 资源或写盘等宿主级操作时，才在闭包内调用 `cx.dispatch_program(msg)`——该消息会在下一帧开头的第 1 步进入 `update`。`update` 应保持轻量，新窗口的初始页面内容放在 `present` 之后的 `bind_window` 中挂载。
 
-结构变更先进入这一帧的 mutation 队列。整批验证成功才一次 commit。失败不发布半棵树。销毁后的 ID 不再复用。
+树结构的修改会先进入当前帧的 `MutationQueue`，整批校验通过后才一次性原子提交（commit），绝不会发布半棵树；已销毁节点的 `StableNodeId` 永不复用。Vue 路径同样不在 JS 调用瞬间直接改树：host op 先排入 `PendingHostOps`，在帧边界由 `flush_host_frame` 统一提交。
 
-Vue 也不在调用的那一刻改树。host op 进待提交队列，`PendingHostOps` 在帧边界由 `flush_host_frame` 提交。DOM facade 不复制树拓扑。`event_flags` 的权威是 `UiWorld` 的 `EventListeners`。GPU 槽的权威是 Runtime 的 `CustomRenderNode`。
+## 2. 纹理准备（`prepare_window_frame`）
 
-## 纹理
+`prepare_window_frame` 在 `flush` 之前执行，应用在此处准备好本帧要采样的最新纹理。更换纹理对象或尺寸时只需递增 `HostTexture` 的 `generation`，切勿为了换画面而去销毁或重建 Runtime 节点（详见 [实时画面](./gpu.md)）。
 
-`prepare_window_frame` 在 flush 之前。你在这里把这一帧要采样的纹理准备好。换纹理升 generation，不要为了换内容去改 Runtime 节点。细节在 [实时画面](./gpu.md)。
-
-窗口被遮挡、最小化，或尺寸为零（即使它仍可见）时，`FrameDemand` 到期仍会调用 `prepare_window_frame`。这一拍不 flush 界面、不获取 Surface、不 present，也不调用 `window_frame_presented`。尺寸还可以画时，外部资源生产者在一个不带 Surface 的 `FrameContext` 上编码，并立刻提交。这里的 `submitted()` 只表示这次编码已经入队，不是采样这张纹理的界面帧已经呈现。尺寸为 0 时仍然 prepare，但不跑这次编码。
-
-不能 present 的时候也会走到 prepare。不要假定后面一定有 Surface。上一帧的纹理要等到真正的 `window_frame_presented` 之后才能释放。
-
-## flush
-
-`RuntimeDocument::flush` 在一次帧事务里做样式、文字、布局、命中和抽取。它调用宿主文字整形（`NanaTextShaper`），再由 `RuntimeLayoutEngine` 按 viewport、样式和 shaping 写回布局。你不要自己再跑一套布局，也不要把控件坐标写进树。
-
-系统失败时，已经消费的工作回到调度器。Scene 和无障碍增量在 settle 之前不发布。
-
-没有变更时，flush 是空转。宿主不该为了空转去刷一整帧。动画、实时画面和普通界面的唤醒是分开的。一块纹理在动，不该迫使整棵 `UiWorld` 全量更新。
-
-viewport 变了，即使没有应用这边的 mutation，也会触发布局。document root 按 viewport 变化的轴重新布局，往下只有消费这条轴约束的盒子跟着重新测量；`position: fixed` 和 `vw` / `vh` 节点按自己的尺寸变化处理。其余子树复用保留的缓存：不读 viewport 的盒子，它的测量缓存和布局计划不因 viewport 变化失效。
-
-滚动不写回 Runtime 的布局盒。JS 查询用的盒子是绘制阶段的投影。`LayoutBoxStore` 是这份投影，不是另一份布局权威。
-
-`UiWorld` 保存的是逻辑状态。过渡中的透明度和变换留在 `PresentationStore` 上，按节点和属性去查。绘制、命中、焦点和无障碍在需要时，按同一个时间戳取呈现值。查询走 `presentation_pair` / `applied_value()`。对外身份是 `DocumentId`、`StableNodeId`，以及类型化的 `Entity<V>`。内部怎么存节点，不是 API。
-
-同一条轨道、同一个时间戳，求值是确定的。spring 和 decay 按绝对时间解析，不靠上一帧的积分。`width` / `height` 走布局，采样写成像素，不改成 scale。Quad 上的合成轨道由着色器按这个时间求值。文字、图标、Mesh 和 HostTexture 仍用 CPU 上的呈现值。
-
-::: warning
-不要把合成采样写回基础样式。那样会把过渡中的瞬时值当成逻辑状态。呈现停在 overlay 上。
+::: tip 遮挡与零尺寸窗口的纹理节拍
+当窗口被最小化、遮挡或尺寸为 0 时，只要 `FrameDemand` 到期，宿主仍会调用 `prepare_window_frame`（若尺寸非零，按图离屏生产者仍会在无 Surface 的 `FrameContext` 上编码并立即提交；此处的 `submitted()` 仅代表离屏编码已入队，不代表采样它的 UI 帧已上屏）。但这一拍会跳过 UI `flush`、不获取 Surface、不 `present`，也不调用 `window_frame_presented`。因此**永远不要在 `prepare_window_frame` 里假定后面一定有 `present`；上一帧仍可能被采样的旧纹理必须留到真正的 `window_frame_presented` 之后才能释放**。
 :::
 
-`transform` / `opacity` 这类合成轨道不得每帧改 `UiWorld`。描述符在开始、改目标和取消时写入。稳态帧只推进时间。完成靠 deadline，不靠逐帧采样才知道结束。产品 present 不把画面读回 CPU。
+## 3. `flush`：样式、文本、布局、命中与抽取
 
-flush 把变更抽成 `ExtractedNode`，`UiScene` 收下这份绘制图。`GpuTextureView` 和 `GpuView` 跟其他节点一样进入文档顺序。合成类的 overlay 不写进抽取节点的逻辑样式。只有时间在走，不得因此重新抽取。
+`RuntimeDocument::flush` 在一次有界帧事务中依次完成样式解析、宿主文本整形（`NanaTextShaper`）、增量布局（`RuntimeLayoutEngine`）、命中测试索引更新、无障碍增量投影与 `ExtractedNode` 抽取。若帧事务未收敛或失败，已排出的脏工作会还原回调度器，不会对外发布半成品 Scene 或无障碍增量。
 
-## present
+- **无变更即空转**：没有脏节点时 `flush` 直接空转返回，宿主不会为此空刷一帧。动画、实时 GPU 画面与普通界面变更的唤醒通道彼此独立。
+- **视口缩放（Viewport Resize）增量布局**：当窗口视口尺寸变化时，即使应用未提交任何树变更也会触发布局。但只有文档根、消费了变化轴约束的子树、`position: fixed` 以及使用 `vw` / `vh` 单位的盒子会重新测量，不依赖视口变化轴的子树直接复用保留的测量缓存与布局计划。
+- **滚动不改写布局盒**：滚动偏移（`scroll_offset`）不写回 Runtime 的 `LayoutBox`；JS 查询拿到的绘制后几何来自投影表 `LayoutBoxStore`，而非第二份布局权威。
+- **合成器动画不写回基础样式**：`UiWorld` 保存逻辑目标值，过渡中的 `transform` / `opacity` 留在 `PresentationStore` overlay 上（弹簧与衰减均按绝对时间戳确定性求值，完成事件靠 deadline 触发而非逐帧采样）。稳态动画帧只推进时间，既不标脏 `UiWorld`，也不触发重新抽取。
 
-flush 之后，宿主获取 Surface。按图生产的外部资源录进宿主这一帧的 `FrameContext`，和界面绘制合在同一次提交里。编码或绘制失败时，整帧丢弃。生产者不能自己提交，也不能提前报告完成。
+## 4. `present`：录制、提交与资源回收
 
-`SceneWgpuPainter::paint_target` 把可见操作按文档顺序画进目标。实时纹理在它该出现的位置采样，不攒到帧尾。
+`flush` 完成后，宿主获取当前窗口的 Surface，并将按图生产的外部资源（`SceneResourceProducer`）与 `SceneWgpuPainter::paint_target` 的界面绘制录制进**同一个宿主 `FrameContext`**，在单次提交中一并送入队列：
 
-提交和丢弃只由 `FrameContext` 负责。每个目标一份 NanaUI 提交，然后 present。`submit` 结清这一帧。帧被丢掉时，painter 登记过的保留写入会回滚。不要在丢弃之后还假定内容已经上屏。前一帧画过某个目标、还没提交也没丢弃时再画它，会得到 `ScenePaintError::TargetInFlight`。
-
-`window_frame_presented` 之后，才能丢掉上一帧仍可能被采样的纹理。需要再填页面内容时，放在随后的 `bind_window`。
-
-静态窗口保持按需刷新。只有该窗口自己的合成轨道需要连续 present 时，才接到轻量的 `FrameDemand::Continuous`。这不强制 Vue 补丁，也不跑全局的样式和布局。采样仍不写回基础样式。
-
-最小化或遮挡期间，合成器不去追隐藏的 GPU 帧。窗口回来之后按绝对时间求值。设备或 Surface 重建之后，宿主调用 `UiScene::set_surface_generation`。
+- **提交与回滚单一权威**：提交（`submit`）与丢弃（`discard` / drop）均由 `FrameContext` 独占负责。一旦编码或绘制出错，整帧立即丢弃，painter 登记在该帧上的保留状态写入会自动回滚；若前一帧画过某个渲染目标但尚未提交也未丢弃，再次绘制该目标会返回 `ScenePaintError::TargetInFlight`。
+- **纹理释放时点**：直到 `window_frame_presented` 回调触发后，应用才可以安全释放或复用上一帧被替换下来的纹理。
+- **按需刷新与隐藏恢复**：静态窗口保持 `FrameDemand::OnDemand`；当某扇窗口存在活动合成器轨道时，仅将该窗口切入轻量的 `FrameDemand::Continuous`。窗口最小化或被遮挡期间不空跑隐藏 GPU 帧，恢复可见后按绝对时间直接求值；设备或 Surface 重建后由宿主调用 `UiScene::set_surface_generation`。
 
 ## 接着读
 
 <div class="next-steps">
   <a class="next-step" href="/architecture/gpu">
     <p class="next-step-link">实时画面</p>
-    <p class="next-step-caption">纹理怎样作为节点留在树上。</p>
+    <p class="next-step-caption">纹理如何作为普通节点留在树上并按文档顺序合成。</p>
   </a>
   <a class="next-step" href="/reference/how-it-works">
     <p class="next-step-link">框架如何运行</p>
-    <p class="next-step-caption">状态放哪、谁拥有窗口和设备。</p>
+    <p class="next-step-caption">状态归属、宿主接口与 Motion IR 分流全表。</p>
   </a>
   <a class="next-step" href="/reference/runtime-scene">
     <p class="next-step-link">Runtime 与 Scene</p>
-    <p class="next-step-caption">flush 怎样抽出绘制图。</p>
+    <p class="next-step-caption">flush 内部如何抽取图元、处理裁剪与背景模糊。</p>
   </a>
 </div>

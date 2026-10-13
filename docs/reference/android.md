@@ -1,67 +1,44 @@
-# Android
+# Android 实验宿主
 
-Android 是实验宿主路径。它不是当前产品目标。它也不是第二套产品绘制核。
+Android（`platform/android`）是仓库内的**实验性 ARM64 宿主路径**，并非当前正式产品交付目标，也不是第二套产品渲染内核——请勿将其写入面向用户的跨平台承诺。
 
-不要把它写进你的平台承诺。
+在 Android 宿主上，界面同样进入 `nana-ui-runtime`（`UiWorld`）与 `nana-ui-scene`（`UiScene`），并由同一个 `SceneWgpuPainter` 绘制；窗口与 Vulkan 图形设备由宿主的 Android `Activity` 持有（不调用桌面端的 `run_runtime`），Vue + JS 路径也复用同一份 Runtime 合同。
 
-界面仍然进入 Runtime 和 UiScene，由 `SceneWgpuPainter` 绘制。窗口和图形设备由宿主 Activity 掌握。这条路径不调用桌面的 `run_runtime`。
+## Phase 2 平台合同（基于 `GameActivity`）
 
-Vue + JS 仍然是同一份 Runtime 合同。
+相较于早期的 `NativeActivity`，当前 Android 宿主基于 `android-activity` 的 `game-activity` feature 构建（`NanaActivity` 继承自 `GameActivity`，从而具备 `InputConnection` 与 `GameTextInput`）：
 
-Phase 2 合同（相对 NativeActivity）：
+- **输入法（IME）**：组字更新映射为 `CompositionInput::Update`，提交映射为 `Commit`，删除上下文映射为 `DeleteSurrounding`；它们与触摸、按键事件一样，由控制槽的输入源盖上序列号后统一走 `AppContext::route_input`，不维护第二套 Android 文本状态机。`EditorInfo` 从当前聚焦的编辑器镜像 `password` 与 `multiline` 标志（`PlatformCapabilities::android_mvp().ime = true` 仅表示该通道已接通，不等同于桌面级完整验收）。
+- **系统剪贴板**：通过 JNI 调用系统 `ClipboardManager` 实现 `ClipboardHost`，并接入 `default_shared_clipboard()` 的 Android 分支；Web API 与控制槽的 `HostServices`（`read_shared_clipboard` / `write_shared_clipboard`）共用同一后端（`clipboard = true`）。
+- **应用数据目录**：`app_data_dir` 在 Android 上直接返回沙箱内的 `Context.getFilesDir()`（忽略 `app_id` 参数）；由宿主自行调用 `FileStore::open` 后注入，框架不私自写盘。
+- **无障碍（TalkBack）**：接入 `Click`、`Focus`、`SetValue`、`SetSelection` 动作投影后，`Button`、`Switch` 与 `TextInput` 可被激活（`TextInput` 的 `Click` 会请求焦点以拉起软键盘；滚动与虚拟列表投影留待后续阶段）。
 
-- **Activity**：用 `android-activity` 的 `game-activity` feature。`NanaActivity` 继承 `GameActivity`，因此存在 `InputConnection` 和 GameTextInput。
-- **IME**：composing 变成 `CompositionInput::Update`，commit 变成 `Commit`，删除变成 `DeleteSurrounding`。它们和触摸、按键一样，经 slot 的输入源盖戳后走 `AppContext::route_input`。不要另造一套 Android 文本状态机。`EditorInfo` 从焦点编辑器镜像 password 和 multiline。`PlatformCapabilities::android_mvp().ime = true` 表示这条路径已经接通。它不是桌面同款验收。
-- **剪贴板**：JNI `ClipboardManager` 实现 `ClipboardHost`。`default_shared_clipboard()` 的 Android 分支使用它。web-api 与 slot 的 `HostServices`（`read_shared_clipboard` / `write_shared_clipboard`）走同一后端。`clipboard = true`。
-- **数据目录**：`app_data_dir` 在 Android 上返回 `Context.getFilesDir()`。应用已经在沙箱里，所以忽略 `app_id`。宿主自行 `FileStore::open` 之后再注入。框架不会自己写盘。
-- **TalkBack**：Click、Focus、SetValue、SetSelection 投影之后，Button、Switch 和 TextInput 可以激活。TextInput 的 Click 会聚焦，以便唤起 IME。滚动和虚拟列表仍留到后期。
+## 交叉编译与 APK 打包
 
-交叉编译，以及桌面侧的 `nana-android-host --lib` 单测，只覆盖编译和动作合同。你不能把它们当成已经具备真机 CJK 候选框、系统剪贴板或 TalkBack 画面。
-
-没有 V8 预编译库时，宿主可以先不链引擎，只验证能编过。要在设备上跑 Vue，你需要自行准备对应架构的 V8 档案（`RUSTY_V8_ARCHIVE`）。网络仍然默认全关。
+本机交叉编译与桌面端运行的 `nana-android-host --lib` 单元测试仅验证 Rust 侧的动作队列、输入/IME 映射与无障碍投影合同，**不能替代真机上的中日韩输入法候选框、系统剪贴板或 TalkBack 触摸浏览验收**。
 
 ```bash
+# 1. 仅做 ARM64 交叉编译检查（无 RUSTY_V8_ARCHIVE 时使用 V8 stub，已在 CI android-arm64-cross 中自动执行）
 ./scripts/check-android-arm64.sh
-```
 
-这条 check 现在也挂在 push / PR 的 `android-arm64-cross` job 上。那是 V8 stub 分支，不做多小时的 GN 构建。交叉编译断掉会在 PR 上直接红，而不是等到有人手动跑。
-
-没有 `RUSTY_V8_ARCHIVE` 时，该 job 只证明 stub 能链。它不证明设备上的 V8。
-
-要出可安装的 APK，你必须走 `dist` 档，并且用 GameActivity 的 Gradle 包装。需要 `androidx.games:games-activity:4.4.0`。不要开 prefab。
-
-```bash
+# 2. 构建 dist 档并打包可安装的 APK（需配置 Android NDK 与 GameActivity 4.4.0 Gradle 包装，勿开启 prefab）
 ./scripts/check-android-arm64.sh --build --dist
 ./scripts/package-android-host-apk.sh
 ```
 
-dev 档会把约 390 MB 的 DWARF，以及约 46 MB 的符号表，内嵌进 `.so`。`package-android-host-apk.sh` 仍会对 stripped `.so` 设 60 MiB 上限。
+构建注意事项：
+- 要在真机上运行 Vue 路径，需准备对应架构的预编译 V8 档案并设置环境变量 `RUSTY_V8_ARCHIVE`（网络策略依然默认全关）。
+- 打包 APK 必须使用 `--dist` 配置：`dev` 构建会在 `.so` 中内嵌约 `390 MB` 的 DWARF 调试信息与 `46 MB` 符号表，而 `package-android-host-apk.sh` 对 stripped `.so` 设有 `60 MiB` 体积上限。APK 内的 `.so` 采用未压缩方式存储并配合 `extractNativeLibs="false"`，安装后不再解压出第二份副本。更多工程细节见 `platform/android/README.md`。
 
-APK 里的 `.so` 以未压缩方式存放，配合 `extractNativeLibs="false"`。装机后不再解压出第二份。
+## 真机验收清单
 
-编过只说明依赖和接口能对上。平台工程笔记在 `platform/android/README.md`。
+在真机安装 APK 后需逐项核对以下行为（2026-09-16 已在 Galaxy Z Fold4 Android 16 上通过前四项真机验收，见 #83）：
 
-## 真机验收清单（本机交叉编译不能代替）
-
-在已安装的 debug APK 上逐项勾：
-
-| 项 | 期望 | 证据 |
+| 验收项 | 期望行为 | 证据要求 |
 | --- | --- | --- |
-| 点控制槽 Input | 软键盘弹出；焦点离开后收回 | 真机 / 模拟器 |
-| CJK 候选 | 拼音/笔画候选框相对 caret；选定后写入 Runtime `TextInput` | **必须真机 IME**，不能用 `adb shell input keyevent` 冒充 |
-| 剪贴板 | 槽内复制/粘贴与系统 ClipboardManager 互通；JS `clipboardWriteText` 同一后端 | 真机 |
-| TalkBack | Button 激活计数、Switch 切换、TextInput 获得焦点并进入编辑 | 真机 TalkBack |
-| 滚动 / 虚拟列表 | 未做 | 后期 |
-| V8 Vue | 设备上设置 `RUSTY_V8_ARCHIVE` 后的发行包 | 真机；CI stub 不算 |
-
-2026-09-16 已在 Galaxy Z Fold4 外屏（Android 16）逐项通过 CJK 候选、剪贴板与 TalkBack。证据见 #83。
-
-TalkBack 手势需要人在设备上完成。adb 注入的 tap 会绕过触摸浏览。
-
-Gboard 拼音的候选条在键盘顶端。控制槽已随 IME inset 抬到其上方。宿主未提供 `CursorAnchorInfo`。浮动候选框不跟随 caret。
-
-桌面 host 配置下的 Android host `--lib` 回归，验证的是 Rust 侧动作队列、输入、IME 映射和无障碍投影合同。它不能代替上表。
-
-配置 Android NDK 的 LLVM clang 之后，`cargo check --locked --no-default-features --target aarch64-linux-android` 覆盖 `nana-android-host`。构建需要把 `CC_aarch64_linux_android` 指到 NDK clang。仓库的 `scripts/android-env.sh` 会自动导出。
-
-默认 `engine-v8` 仍然需要 CI 或发行包提供 `RUSTY_V8_ARCHIVE`。这只是 ARM64 交叉编译的合同证据。
+| **软键盘唤起与收起** | 点击控制槽内的 `TextInput` 弹出软键盘，失焦后自动收起；控制槽随 IME inset 抬升至键盘上方 | 真机或模拟器 |
+| **CJK 输入法候选** | 拼音/笔画候选词选定后正确写入 Runtime `TextInput`（宿主暂未提供 `CursorAnchorInfo`，候选条停留在键盘顶端） | **必须使用真机输入法**，不得用 `adb shell input keyevent` 替代 |
+| **系统剪贴板互通** | 槽内复制/粘贴与系统 `ClipboardManager` 及 JS `clipboardWriteText` 互通 | 真机 |
+| **TalkBack 读屏交互** | `Button` 激活计数、`Switch` 状态切换、`TextInput` 聚焦并进入编辑 | **必须由真人在真机上做 TalkBack 手势**（`adb` 注入的 tap 会绕过无障碍触摸浏览） |
+| **V8 Vue 运行时** | 链接真实 `RUSTY_V8_ARCHIVE` 后的发行包可在设备上正常挂载渲染 | 真机（CI 的 V8 stub 不算数） |
+| **滚动与虚拟列表** | 尚未接入 Android 侧滚动无障碍动作 | 留待后续阶段 |
