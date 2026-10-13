@@ -1827,6 +1827,55 @@ fn tree_view_selects_toggles_drags_and_renames() {
 }
 
 #[test]
+fn area_layout_names_its_areas_with_the_application_labels() {
+    use crate::view::widget;
+    use crate::{AreaAxis, AreaLayout, AreaLayoutModel};
+
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let root = context
+        .create_component(document, crate::Stack::fill_column(0.0))
+        .unwrap();
+    let mut model = AreaLayoutModel::single("left", "outliner");
+    assert!(model.split("left", AreaAxis::Horizontal, 0.25, "right"));
+    model.set_editor("right", "viewport");
+    let saved = model.to_json();
+    context
+        .mount_view(root.stable_id(), move || {
+            widget(AreaLayout::new(model.clone()).labels([("outliner", "大纲")])).children((
+                widget(crate::Text::new("outliner")).key("left"),
+                widget(crate::Text::new("viewport")).key("right"),
+            ))
+        })
+        .unwrap();
+    let layout = Entity::<AreaLayout>::from_stable_id(
+        context.world().node(root.stable_id()).unwrap().children[0],
+    );
+    let regions = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(400.0, 300.0))
+            .unwrap();
+        let mut labels: Vec<String> = context
+            .world()
+            .project_accessibility(document)
+            .into_iter()
+            .filter(|n| n.role == crate::AccessibilityRole::Region)
+            .filter_map(|n| n.label.map(|l| l.to_string()))
+            .collect();
+        labels.sort();
+        labels
+    };
+    // a labelled editor is called by its label, another by its id
+    assert_eq!(regions(&mut context), ["viewport", "大纲"]);
+    // a new language: new labels, the same layout
+    context
+        .set_area_labels(layout, [("outliner", "Outliner"), ("viewport", "Viewport")])
+        .unwrap();
+    assert_eq!(regions(&mut context), ["Outliner", "Viewport"]);
+    assert_eq!(context.read(layout, |l| l.model.to_json()).unwrap(), saved);
+}
+
+#[test]
 fn area_layout_resizes_splits_joins_maximizes_and_keeps_contents() {
     use crate::view::widget;
     use crate::{AreaAxis, AreaChange, AreaLayout, AreaLayoutChanged, AreaLayoutModel};

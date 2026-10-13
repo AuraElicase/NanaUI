@@ -126,6 +126,10 @@ pub struct AreaLayout {
     /// The least either side of a divider keeps, px.
     pub min_size: f32,
     pub style: NodeStyle,
+    /// What assistive technology calls an area, by its editor type id, in the
+    /// interface's language (#350). An editor without one is called by its id.
+    /// Not part of [`AreaLayoutModel`], which stays language-free data.
+    pub labels: std::collections::BTreeMap<String, Arc<str>>,
     pub(crate) drag: Option<CornerDrag>,
     pub(crate) parts: Option<AreaParts>,
 }
@@ -137,9 +141,23 @@ impl AreaLayout {
             gap: nana_ui_core::space::XXS,
             min_size: 48.0,
             style: layout_style(),
+            labels: Default::default(),
             drag: None,
             parts: None,
         }
+    }
+
+    /// Name the areas showing each editor, `(editor type id, label)`; see
+    /// [`Self::labels`]. [`AppContext::set_area_labels`] changes them later.
+    pub fn labels<E: Into<String>, L: Into<Arc<str>>>(
+        mut self,
+        labels: impl IntoIterator<Item = (E, L)>,
+    ) -> Self {
+        self.labels = labels
+            .into_iter()
+            .map(|(editor, label)| (editor.into(), label.into()))
+            .collect();
+        self
     }
 
     /// Replaces the node style wholesale.
@@ -874,6 +892,21 @@ impl AppContext {
         Ok(set)
     }
 
+    /// Rename the areas for assistive technology, `(editor type id, label)`,
+    /// for instance after the interface's language changed; see
+    /// [`AreaLayout::labels`]. The layout itself does not change.
+    pub fn set_area_labels<E: Into<String>, L: Into<Arc<str>>>(
+        &mut self,
+        layout: Entity<AreaLayout>,
+        labels: impl IntoIterator<Item = (E, L)>,
+    ) -> Result<(), FrameworkError> {
+        let labels = labels
+            .into_iter()
+            .map(|(editor, label)| (editor.into(), label.into()))
+            .collect();
+        self.update_component(layout, |layout, _| layout.labels = labels)
+    }
+
     /// Show `model` instead, a saved layout or another workspace. Contents
     /// keep their state: an area in both layouts keeps its content, the
     /// others' wait hidden.
@@ -1028,7 +1061,13 @@ impl AppContext {
                 AreaPart::Area { id, frame, .. } => {
                     let (visible, grow, _) = shown[index];
                     index += 1;
-                    let editor = model.area(id).map(|area| Arc::from(area.editor.as_str()));
+                    let editor = model.area(id).map(|area| {
+                        snapshot
+                            .labels
+                            .get(&area.editor)
+                            .cloned()
+                            .unwrap_or_else(|| Arc::from(area.editor.as_str()))
+                    });
                     self.update_component(
                         Entity::<AreaBox>::from_stable_id(*frame),
                         |frame, _| {
