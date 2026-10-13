@@ -26,6 +26,7 @@ export default defineConfig({
       { text: "指南", link: "/guide/introduction", activeMatch: "/guide/" },
       { text: "组件", link: "/components/", activeMatch: "/components/" },
       { text: "架构", link: "/architecture/", activeMatch: "/architecture/" },
+      { text: "架构学习", link: "/learn/", activeMatch: "/learn/" },
       {
         text: "参考",
         link: "/reference/how-it-works",
@@ -220,6 +221,63 @@ export default defineConfig({
             { text: "实时画面", link: "/architecture/gpu" },
             { text: "文本", link: "/architecture/text" },
             { text: "窗口", link: "/architecture/window" },
+          ],
+        },
+      ],
+      "/learn/": [
+        {
+          text: "开始",
+          items: [
+            { text: "总览", link: "/learn/" },
+            { text: "模块与分层", link: "/learn/modules-and-layers" },
+          ],
+        },
+        {
+          text: "基础合同层",
+          items: [
+            { text: "核心合同", link: "/learn/core-contracts" },
+            { text: "CSS 引擎", link: "/learn/css-engine" },
+            { text: "文本引擎", link: "/learn/text-engine" },
+          ],
+        },
+        {
+          text: "Runtime",
+          items: [
+            { text: "保留树", link: "/learn/runtime-tree" },
+            { text: "布局引擎", link: "/learn/runtime-layout" },
+            { text: "输入链路", link: "/learn/runtime-input" },
+            { text: "工作台层", link: "/learn/workspace-shell-dock" },
+          ],
+        },
+        {
+          text: "渲染与宿主",
+          items: [
+            { text: "Scene 提取", link: "/learn/scene-extraction" },
+            { text: "GPU 与帧", link: "/learn/gpu-frame" },
+            { text: "窗口与平台", link: "/learn/window-platform" },
+          ],
+        },
+        {
+          text: "作者与工具",
+          items: [
+            { text: "三种作者入口", link: "/learn/authoring-paths" },
+            { text: "工具链", link: "/learn/toolchain" },
+            { text: "外围 crate", link: "/learn/supporting-crates" },
+          ],
+        },
+        {
+          text: "贯穿视角",
+          items: [
+            { text: "合同与不变量", link: "/learn/contracts-and-invariants" },
+            { text: "端到端数据流", link: "/learn/flows" },
+            { text: "代码阅读指南", link: "/learn/reading-the-code" },
+          ],
+        },
+        {
+          text: "附录",
+          items: [
+            { text: "覆盖矩阵", link: "/learn/coverage-matrix" },
+            { text: "证据清单", link: "/learn/evidence-checklist" },
           ],
         },
       ],
