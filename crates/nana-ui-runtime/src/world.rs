@@ -297,8 +297,9 @@ pub(crate) fn menu_surface_accessibility_changed(
     }
 }
 
-/// A tree's rows are virtual accessibility children too: its semantics follow
-/// the visible rows and the active one.
+/// A tree's rows and their toggles are virtual accessibility children too:
+/// its semantics follow the visible rows (toggle states included), the
+/// active one and the toggle columns' names.
 pub(crate) fn tree_view_accessibility_changed(
     previous: Option<&StandardVisual>,
     next: Option<&StandardVisual>,
@@ -308,10 +309,16 @@ pub(crate) fn tree_view_accessibility_changed(
             Some(StandardVisual::TreeView {
                 rows: previous_rows,
                 active: previous_active,
+                column_labels: previous_labels,
                 ..
             }),
-            Some(StandardVisual::TreeView { rows, active, .. }),
-        ) => previous_rows != rows || previous_active != active,
+            Some(StandardVisual::TreeView {
+                rows,
+                active,
+                column_labels,
+                ..
+            }),
+        ) => previous_rows != rows || previous_active != active || previous_labels != column_labels,
         (Some(StandardVisual::TreeView { .. }), _) | (_, Some(StandardVisual::TreeView { .. })) => {
             true
         }

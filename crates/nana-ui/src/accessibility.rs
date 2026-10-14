@@ -470,6 +470,15 @@ impl AccessibilityProjector {
             };
             return Some(nana_ui_runtime::AccessibilityActionRequest { target, action });
         }
+        if nana_ui_runtime::decode_virtual_tree_toggle(target).is_some() {
+            if node.role != AccessibilityRole::Checkbox || request.action != Action::Click {
+                return None;
+            }
+            return Some(nana_ui_runtime::AccessibilityActionRequest {
+                target,
+                action: nana_ui_runtime::AccessibilityAction::Click,
+            });
+        }
         let action = match request.action {
             Action::Click if supports_click(node.role) => {
                 nana_ui_runtime::AccessibilityAction::Click
@@ -1143,7 +1152,12 @@ fn project_node(
     if interactive && !node.disabled && supports_click(node.role) {
         projected.add_action(Action::Click);
     }
-    if interactive && !node.disabled && supports_focus(node.role) {
+    // A tree row's toggle only flips; the focus stays with the tree's rows.
+    if interactive
+        && !node.disabled
+        && supports_focus(node.role)
+        && nana_ui_runtime::decode_virtual_tree_toggle(node.id).is_none()
+    {
         projected.add_action(Action::Focus);
     }
     if interactive && !node.disabled && supports_set_value(node) {
@@ -2384,6 +2398,97 @@ mod tests {
         assert_eq!(request(row(1), Action::Expand), None);
         assert_eq!(request(row(2), Action::Expand), None);
         assert_eq!(request(row(2), Action::ScrollDown), None);
+    }
+
+    #[test]
+    fn tree_row_toggles_project_as_accesskit_checkboxes() {
+        use nana_ui_runtime::{AppContext, DocumentId, TreeNode, TreeToggleColumn, TreeView};
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let tree = cx
+            .create_component(
+                document,
+                TreeView::new([
+                    TreeNode::leaf("model".into(), "模型").toggles([true, false]),
+                    TreeNode::leaf("light".into(), "灯光")
+                        .toggles([true, true])
+                        .disabled(true),
+                ])
+                .columns([
+                    TreeToggleColumn::new(nana_ui_core::Icon::Eye, "显示"),
+                    TreeToggleColumn::new(nana_ui_core::Icon::ShieldCheck, "锁定"),
+                ])
+                .label("大纲"),
+            )
+            .unwrap();
+        cx.layout_document(document, nana_ui_runtime::LayoutViewport::new(300.0, 300.0))
+            .unwrap();
+        let row = |slot| nana_ui_runtime::virtual_tree_item_id(tree.stable_id(), slot).unwrap();
+        let toggle = |slot, column| {
+            nana_ui_runtime::virtual_tree_toggle_id(tree.stable_id(), slot, column).unwrap()
+        };
+        let (projector, update) =
+            AccessibilityProjector::new(cx.world().project_accessibility(document), true, 1.0);
+        let node = |id: StableNodeId| {
+            &update
+                .nodes
+                .iter()
+                .find(|(node, _)| *node == NodeId(id.get()))
+                .expect("projected node")
+                .1
+        };
+        assert_eq!(
+            node(row(1)).children(),
+            [NodeId(toggle(1, 0).get()), NodeId(toggle(1, 1).get())]
+        );
+        let (visible, locked) = (node(toggle(1, 0)), node(toggle(1, 1)));
+        assert_eq!(visible.role(), Role::CheckBox);
+        assert_eq!(locked.role(), Role::CheckBox);
+        assert_eq!(visible.label(), Some("显示"));
+        assert_eq!(locked.label(), Some("锁定"));
+        assert_eq!(visible.toggled(), Some(Toggled::True));
+        assert_eq!(locked.toggled(), Some(Toggled::False));
+        assert!(visible.supports_action(Action::Click));
+        assert!(
+            !visible.supports_action(Action::Focus),
+            "a toggle flips; the focus stays with the rows"
+        );
+        let disabled = node(toggle(2, 1));
+        assert!(disabled.is_disabled());
+        assert_eq!(disabled.toggled(), Some(Toggled::True));
+        assert!(!disabled.supports_action(Action::Click));
+
+        let request = |target: StableNodeId, action| {
+            projector
+                .project_action_request(ActionRequest {
+                    action,
+                    target_tree: TreeId::ROOT,
+                    target_node: NodeId(target.get()),
+                    data: None,
+                })
+                .map(|request| (request.target, request.action))
+        };
+        assert_eq!(
+            request(toggle(1, 1), Action::Click),
+            Some((toggle(1, 1), nana_ui_runtime::AccessibilityAction::Click))
+        );
+        assert_eq!(request(toggle(1, 1), Action::Focus), None);
+        assert_eq!(request(toggle(1, 1), Action::Expand), None);
+        assert_eq!(request(toggle(2, 0), Action::Click), None, "disabled");
+
+        // the translated click flips the toggle in the runtime
+        let (target, action) = request(toggle(1, 1), Action::Click).unwrap();
+        assert!(
+            cx.apply_accessibility_action(
+                document,
+                nana_ui_runtime::AccessibilityActionRequest { target, action }
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            cx.read(tree, |tree| tree.nodes[0].toggles.clone()).unwrap(),
+            [true, true]
+        );
     }
 
     #[test]

@@ -3158,6 +3158,12 @@ impl AppContext {
             }
             return self.apply_tree_item_action(document, tree, slot, &request.action);
         }
+        if let Some((tree, slot, column)) = crate::decode_virtual_tree_toggle(request.target) {
+            if self.world.document_of(tree) != Some(document) {
+                return Ok(false);
+            }
+            return self.apply_tree_toggle_action(tree, slot, column, &request.action);
+        }
         let owner = match &request.action {
             AccessibilityAction::ActivateMenuItem { menu, .. } => *menu,
             AccessibilityAction::Click => crate::decode_virtual_menu_item(request.target)

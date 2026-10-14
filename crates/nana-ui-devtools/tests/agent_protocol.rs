@@ -132,6 +132,79 @@ fn accessibility_dump_carries_tree_rows() {
     assert_eq!(selected, [Some(false), Some(true), Some(false)]);
 }
 
+/// A row's toggles are checkboxes under the row, named by their columns and
+/// carrying their state as `checked`; a click flips one and leaves the
+/// selection alone.
+#[test]
+fn accessibility_dump_carries_tree_row_toggles() {
+    use nana_ui::runtime::{TreeNode, TreeToggleColumn, TreeView};
+    let mut session = session_with(|document, id| {
+        document
+            .context_mut()
+            .create_component(
+                id,
+                TreeView::new([
+                    TreeNode::leaf("model".into(), "模型")
+                        .selected(true)
+                        .toggles([true, false]),
+                    TreeNode::leaf("camera".into(), "相机").toggles([false, false]),
+                ])
+                .columns([
+                    TreeToggleColumn::new(nana_ui_core::Icon::Eye, "显示"),
+                    TreeToggleColumn::new(nana_ui_core::Icon::ShieldCheck, "锁定"),
+                ])
+                .label("大纲"),
+            )
+            .unwrap();
+    });
+    session.flush().expect("flush");
+    let nodes = session.accessibility_dump();
+    let rows = nodes
+        .iter()
+        .filter(|node| node.role == "tree-item")
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2);
+    let toggles = |row: &nana_ui_devtools::agent::AccessibilityDumpNode| {
+        row.children
+            .iter()
+            .map(|child| {
+                nodes
+                    .iter()
+                    .find(|node| node.id == *child)
+                    .expect("a node for every child")
+                    .clone()
+            })
+            .collect::<Vec<_>>()
+    };
+    let model = toggles(rows[0]);
+    assert!(model.iter().all(|toggle| toggle.role == "checkbox"));
+    assert!(model.iter().all(|toggle| toggle.parent == Some(rows[0].id)));
+    let names = model
+        .iter()
+        .map(|toggle| toggle.label.as_deref())
+        .collect::<Vec<_>>();
+    assert_eq!(names, [Some("显示"), Some("锁定")]);
+    let checked = model
+        .iter()
+        .map(|toggle| toggle.checked)
+        .collect::<Vec<_>>();
+    assert_eq!(checked, [Some(true), Some(false)]);
+    let wire = serde_json::to_string(&model[1]).expect("serialize");
+    assert!(wire.contains(r#""checked":false"#), "{wire}");
+
+    let locked = toggles(rows[1])[1].id;
+    assert!(session.click_node(locked).expect("click"));
+    let nodes = session.accessibility_dump();
+    let flipped = nodes.iter().find(|node| node.id == locked).expect("toggle");
+    assert_eq!(flipped.checked, Some(true));
+    let selected = nodes
+        .iter()
+        .filter(|node| node.role == "tree-item")
+        .map(|row| row.selected)
+        .collect::<Vec<_>>();
+    assert_eq!(selected, [Some(true), Some(false)], "the selection stays");
+}
+
 /// Defaults must not bloat every node: a plain switch carries no `selection`,
 /// no `numeric_*` and no `modal` key on the wire.
 #[test]

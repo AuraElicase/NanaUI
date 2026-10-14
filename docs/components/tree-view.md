@@ -118,7 +118,20 @@ widget(TreeView::new([
 - 聚焦：和方向键移到这一行相同，把活动行移到这里，并让树获得焦点。
 - 展开 / 折叠：只对分支行，和点它的三角相同，发 `TreeViewEvent::Toggle`。
 
-禁用的行、已经不存在的行，以及行做不了的操作（例如对叶子展开、对已展开的分支再展开），都会被拒绝，不发事件。行尾的开关列暂时不进无障碍树。
+禁用的行、已经不存在的行，以及行做不了的操作（例如对叶子展开、对已展开的分支再展开），都会被拒绝，不发事件。
+
+### 开关列
+
+行尾的每个开关是这一行 TreeItem 下面的一个复选框（Checkbox），也是虚拟节点，按列的顺序排列。每个开关带：
+
+- 名字：列名，也就是 `TreeToggleColumn::new(图标, 名称)` 的第二个参数，例如「显示」「锁定」。树不会拿图标当名字，所以列名要由应用给出，界面换语言时跟着换；列名为空时开关没有名字。
+- 勾选：这一行这一列的开关状态；节点没写到这一列时是关着的。
+- 禁用：禁用节点的行，它的开关也是禁用的。
+- 边界：开关图标在行里的矩形。
+
+开关状态变了（按下、拖过，或者应用把节点写回去），读屏马上看到新的状态。
+
+读屏对开关只能点击：和按下这个开关相同，翻转它并发同样的 `TreeToggleChanged { id, column, on }`，树也同样更新节点上的状态。它不改变选中，也不移动焦点。禁用的行、已经不存在的行、树没有的列，以及点击以外的操作，都会被拒绝，不发事件。
 
 ## 属性
 
@@ -132,7 +145,7 @@ widget(TreeView::new([
 | `.disabled` | — | 写在节点上。禁用节点不会被选中 |
 | `.size` | — | 默认小号 |
 | `.multiple(bool)` | `bool` | 多选：Ctrl 切换、Shift 范围、活动项 |
-| `.columns(列)` | `TreeToggleColumn` | 行尾的开关列；状态写在 `TreeNode::toggles` |
+| `.columns(列)` | `TreeToggleColumn` | 行尾的开关列；状态写在 `TreeNode::toggles`。列名是读屏里每个开关的名字 |
 | `.reorderable(bool)` | `bool` | 行可以拖到别的行之前、之内或之后 |
 | `.renamable(bool)` | `bool` | F2 或双击时行内重命名 |
 | `.label(名称)` | `Arc<str>` | 树在读屏里的名字；行用各自的标签 |
@@ -145,7 +158,7 @@ widget(TreeView::new([
 | `TreeViewEvent::Toggle` | `id` | `apply_event` 只翻转分支 |
 | `TreeViewEvent::Select` | `id` | 选中那个还没禁用的节点，并清掉其他选中 |
 | `TreeSelectionChanged` | `selected`, `active` | 选中集合或活动项变了 |
-| `TreeToggleChanged` | `id`, `column`, `on` | 一行的开关被设成 `on` |
+| `TreeToggleChanged` | `id`, `column`, `on` | 一行的开关被设成 `on`：按下、拖过，或读屏点击开关 |
 | `TreeDropRequested` | `rows`, `intent` | 拖放请求；`intent` 是目标与 `Before` / `Inside` / `After` |
 | `TreeRenameRequested` | `id`, `text` | 重命名提交 |
 
