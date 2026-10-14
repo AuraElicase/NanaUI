@@ -132,6 +132,12 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.rearm_frame_demand(id);
             return;
         }
+        // AppKit calls this synchronously from its live-resize tracking loop.
+        // A step inside the commit interval returns before surface configure
+        // and document layout; the drawable already on screen stays up.
+        if self.defer_native_live_resize(id) {
+            return;
+        }
         let queued = self.drain_program_messages(id);
         self.apply_update(event_loop, queued, Some(id));
         if event_loop.exiting() || self.render_suspended || !self.can_present(id) {
@@ -434,6 +440,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         painter.record_submit(&submission);
         let gpu_work = painter.last_gpu_work();
         self.graphics.present_frame(frame);
+        self.note_native_live_resize_presented(id);
         crate::host_diagnostics::frame_presented(frame_started, submit, gpu_work);
         if let Some(host) = self.window_contexts.get_mut(&id) {
             self.graphics.apply_pending_reconfigure(&mut host.surface);

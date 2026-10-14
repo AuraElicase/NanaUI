@@ -331,6 +331,10 @@ struct WindowManager<Program: RuntimeProgram> {
     live_frame_move: Option<(WindowId, i16, nana_window::LiveFrameMove)>,
     #[cfg(target_os = "macos")]
     present_transaction_pinned: HashSet<WindowId>,
+    /// Last live-resize commit on macOS. Steps inside one refresh interval
+    /// keep that drawable instead of reconfiguring and laying out again.
+    #[cfg(target_os = "macos")]
+    live_resize_commit: HashMap<WindowId, windows::LiveResizeCoalescer>,
     /// This host's startup: the coordinator, the splash it owns until
     /// handoff, and the record programs read.
     startup: startup::HostStartup,
@@ -1304,6 +1308,8 @@ fn complete_startup<Program: RuntimeProgram>(
         live_frame_move: None,
         #[cfg(target_os = "macos")]
         present_transaction_pinned: HashSet::new(),
+        #[cfg(target_os = "macos")]
+        live_resize_commit: HashMap::new(),
         startup: host_startup,
         input_generations: HashMap::from([(WindowId::PRIMARY, 1)]),
         clipboard: host_services::process_clipboard(),

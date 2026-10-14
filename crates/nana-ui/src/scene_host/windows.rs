@@ -13,6 +13,72 @@ pub(super) fn content_aspect_ratio(settings: &WindowDescriptor) -> Option<f64> {
     settings.content_aspect_ratio.map(f64::from)
 }
 
+/// Gap between full surface commits while a live-resize gesture is moving
+/// the frame. One display frame: intermediate steps keep the last drawable
+/// (AppKit may scale it) instead of reconfiguring and laying out every pixel.
+pub(super) const LIVE_RESIZE_COMMIT_INTERVAL: Duration = Duration::from_millis(16);
+
+/// What one live-resize step should do with the surface and the document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LiveResizeStep {
+    /// Forward the resize and present at the current size.
+    Commit,
+    /// Keep the last drawable and the last layout.
+    Defer,
+}
+
+/// Coalesces live-resize steps to [`LIVE_RESIZE_COMMIT_INTERVAL`].
+///
+/// The interval starts when a frame is actually presented, not when the step
+/// is chosen. A commit runs synchronously inside AppKit's tracking loop, so
+/// stamping the decision would make the next step look overdue the moment
+/// that commit returned.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct LiveResizeCoalescer {
+    presented_at: Option<Instant>,
+    deferred: bool,
+}
+
+impl LiveResizeCoalescer {
+    pub(super) const fn new() -> Self {
+        Self {
+            presented_at: None,
+            deferred: false,
+        }
+    }
+
+    pub(super) fn on_step(self, now: Instant) -> (Self, LiveResizeStep) {
+        if live_resize_commit_due(self.presented_at, now) {
+            (self, LiveResizeStep::Commit)
+        } else {
+            (
+                Self {
+                    presented_at: self.presented_at,
+                    deferred: true,
+                },
+                LiveResizeStep::Defer,
+            )
+        }
+    }
+
+    /// A frame was presented; the next interval starts now.
+    pub(super) fn on_presented(self, now: Instant) -> Self {
+        Self {
+            presented_at: Some(now),
+            deferred: false,
+        }
+    }
+
+    /// `true` when a skipped size still has to be committed.
+    pub(super) fn finish(self) -> bool {
+        self.deferred
+    }
+}
+
+pub(super) fn live_resize_commit_due(presented_at: Option<Instant>, now: Instant) -> bool {
+    presented_at.is_none_or(|at| now.saturating_duration_since(at) >= LIVE_RESIZE_COMMIT_INTERVAL)
+}
+
 /// Advance a native window's input endpoint identity without ever reusing it.
 /// This deliberately has the same exhaustion policy as `InputSequencer`.
 fn next_input_generation(generation: u64) -> u64 {
@@ -934,7 +1000,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         self.native_content.remove(&id);
         self.bind_after_present.remove(&id);
         #[cfg(target_os = "macos")]
-        self.present_transaction_pinned.remove(&id);
+        {
+            self.present_transaction_pinned.remove(&id);
+            self.live_resize_commit.remove(&id);
+        }
         self.frame_schedules.remove(&id);
         self.close_window_output(id);
         self.texture_subscriptions.remove(&id);
@@ -1317,18 +1386,101 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.graphics.prepare_surface_frame(&mut host.surface, live);
         }
     }
+    /// Windows size-move, a host-driven frame drag, or AppKit's own
+    /// live-resize tracking loop. The native macOS loop does not set
+    /// [`LiveSizeMove`], so it has to be read from `inLiveResize`.
     pub(super) fn is_live_resize(&self, id: WindowId) -> bool {
+        self.size_move_active(id)
+            || self.custom_frame_resize_active(id)
+            || self.native_live_resize_gesture(id)
+    }
+    fn custom_frame_resize_active(&self, id: WindowId) -> bool {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
-            self.size_move_active(id)
-                || self
-                    .live_frame_resize
-                    .as_ref()
-                    .is_some_and(|(session, _)| *session == id)
+            self.live_frame_resize
+                .as_ref()
+                .is_some_and(|(session, _)| *session == id)
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            self.size_move_active(id)
+            let _ = id;
+            false
+        }
+    }
+    pub(super) fn native_live_resize_gesture(&self, id: WindowId) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            self.window(id)
+                .is_some_and(|window| nana_window::native_live_resize_active(window.as_ref()))
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = id;
+            false
+        }
+    }
+    /// `true` when this native live-resize step should keep the last drawable
+    /// and skip layout. The gesture's end commits a skipped size.
+    pub(super) fn defer_native_live_resize(&mut self, id: WindowId) -> bool {
+        if !self.native_live_resize_gesture(id) {
+            return false;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let now = Instant::now();
+            let coalescer = self
+                .live_resize_commit
+                .get(&id)
+                .copied()
+                .unwrap_or(LiveResizeCoalescer::new());
+            let (next, step) = coalescer.on_step(now);
+            if step == LiveResizeStep::Defer {
+                self.live_resize_commit.insert(id, next);
+                return true;
+            }
+            return false;
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
+    /// Starts the coalesce interval from a frame that really presented.
+    pub(super) fn note_native_live_resize_presented(&mut self, id: WindowId) {
+        #[cfg(target_os = "macos")]
+        if self.native_live_resize_gesture(id) {
+            let next = self
+                .live_resize_commit
+                .get(&id)
+                .copied()
+                .unwrap_or(LiveResizeCoalescer::new())
+                .on_presented(Instant::now());
+            self.live_resize_commit.insert(id, next);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = id;
+    }
+    /// After the tracking loop exits, deliver a size that was skipped so the
+    /// surface and the document match the window the user released.
+    #[cfg(target_os = "macos")]
+    pub(super) fn commit_finished_live_resizes(&mut self, event_loop: &dyn ActiveEventLoop) {
+        let ids: Vec<WindowId> = self.live_resize_commit.keys().copied().collect();
+        for id in ids {
+            if self.is_live_resize(id) {
+                continue;
+            }
+            let Some(coalescer) = self.live_resize_commit.remove(&id) else {
+                continue;
+            };
+            if !coalescer.finish() || !self.window_contexts.contains_key(&id) {
+                continue;
+            }
+            let geometry = self.geometry_of(id);
+            let update = self
+                .program
+                .window_event(WindowEvent::Resized { id, geometry }, &self.context_for(id));
+            self.apply_update(event_loop, update, None);
+            self.request_redraw(id);
         }
     }
     pub(super) fn size_move_active(&self, id: WindowId) -> bool {
@@ -2383,6 +2535,46 @@ mod request_error_tests {
             )),
             crate::WindowError::Unsupported(_)
         ));
+    }
+}
+
+#[cfg(test)]
+mod live_resize_coalesce_tests {
+    use super::*;
+
+    #[test]
+    fn the_first_step_commits_and_the_interval_starts_at_the_present() {
+        let mut clock = Instant::now();
+        let state = LiveResizeCoalescer::new();
+        let (state, step) = state.on_step(clock);
+        assert_eq!(step, LiveResizeStep::Commit);
+        assert!(!state.finish());
+
+        // The commit blocked the tracking loop. Stamp when it presents, not
+        // when it was chosen, or the next step would already look overdue.
+        clock += Duration::from_millis(40);
+        let state = state.on_presented(clock);
+        let (state, step) = state.on_step(clock);
+        assert_eq!(step, LiveResizeStep::Defer);
+        assert!(state.finish());
+
+        let (state, step) = state.on_step(clock + Duration::from_millis(15));
+        assert_eq!(step, LiveResizeStep::Defer);
+        assert!(state.finish());
+
+        let (state, step) = state.on_step(clock + LIVE_RESIZE_COMMIT_INTERVAL);
+        assert_eq!(step, LiveResizeStep::Commit);
+        let state = state.on_presented(clock + LIVE_RESIZE_COMMIT_INTERVAL);
+        assert!(!state.finish());
+    }
+
+    #[test]
+    fn a_gesture_that_only_deferred_still_owes_a_final_commit() {
+        let start = Instant::now();
+        let state = LiveResizeCoalescer::new().on_presented(start);
+        let (state, step) = state.on_step(start + Duration::from_millis(1));
+        assert_eq!(step, LiveResizeStep::Defer);
+        assert!(state.finish());
     }
 }
 
