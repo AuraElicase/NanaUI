@@ -1003,8 +1003,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         {
             self.present_transaction_pinned.remove(&id);
             self.live_resize_commit.remove(&id);
-            self.live_resize_hold_transaction.remove(&id);
-            self.live_resize_skip_accessibility.remove(&id);
         }
         self.frame_schedules.remove(&id);
         self.close_window_output(id);
@@ -1336,31 +1334,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             minimized,
         );
     }
-    /// Pins transaction presents while the OS's own frame-resize gesture is
-    /// moving the window, and reports whether that gesture is active.
-    #[cfg(target_os = "macos")]
-    pub(super) fn sync_native_live_resize_presents(&mut self, id: WindowId) -> bool {
-        let active = self
-            .window(id)
-            .is_some_and(|window| nana_window::native_live_resize_active(window.as_ref()));
-        if active {
-            // A transaction present waits for the Core Animation commit. That
-            // wait is the hitch when the gesture ends, and it slows every
-            // in-drag commit. Coalesced frames already tolerate a short scale.
-            self.release_present_transaction(id);
-        }
-        active
-    }
-    #[cfg(target_os = "macos")]
-    fn release_present_transaction(&mut self, id: WindowId) {
-        if !self.present_transaction_pinned.contains(&id) {
-            return;
-        }
-        if let Some(window) = self.window(id) {
-            nana_window::set_present_transaction(window.as_ref(), false);
-        }
-        self.present_transaction_pinned.remove(&id);
-    }
     #[cfg(target_os = "macos")]
     pub(super) fn pin_present_transaction(&mut self, id: WindowId) {
         if self.present_transaction_pinned.contains(&id) {
@@ -1372,9 +1345,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.present_transaction_pinned.insert(id);
         }
     }
-    /// Releases transaction presents once their resize gesture is over; the
-    /// pinned mode serializes every present with a Core Animation commit and
-    /// costs latency in steady-state frames.
+    /// Releases transaction presents once their resize gesture is over. The
+    /// pinned mode serializes every present with a Core Animation commit.
+    /// Native AppKit live resize does not pin: coalesced frames already
+    /// return to the tracking loop, and a transaction present would wait.
     #[cfg(target_os = "macos")]
     pub(super) fn unpin_idle_present_transactions(&mut self) {
         let pinned: Vec<WindowId> = self.present_transaction_pinned.iter().copied().collect();
@@ -1383,48 +1357,33 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 self.present_transaction_pinned.remove(&id);
                 continue;
             };
-            if nana_window::native_live_resize_active(window.as_ref())
-                || self.is_live_resize(id)
-                || self.live_resize_hold_transaction.contains(&id)
-                || self
-                    .live_resize_commit
-                    .get(&id)
-                    .is_some_and(|coalescer| coalescer.finish())
-            {
+            if self.is_live_resize(id) {
                 continue;
             }
             nana_window::set_present_transaction(window.as_ref(), false);
             self.present_transaction_pinned.remove(&id);
-            self.live_resize_skip_accessibility.insert(id);
         }
     }
     pub(super) fn resize_window(&mut self, id: WindowId) {
         if self.render_suspended {
             return;
         }
-        // Native macOS drags coalesce presents, so they do not take the
-        // latency-2 policy. Restoring latency 1 when the gesture ends would
-        // reconfigure the swapchain on the release frame even if the size
-        // already matches.
-        let live = self.swapchain_live_resize(id);
+        // Native macOS drags coalesce to the refresh interval and present the
+        // window's real size. They do not take the latency-2 policy: leaving
+        // it would reconfigure the swapchain again when the gesture ends.
+        let live = self.size_move_active(id) || self.custom_frame_resize_active(id);
         if let Some(host) = self.window_contexts.get_mut(&id)
             && host.surface_retry.is_none()
         {
             self.graphics.prepare_surface_frame(&mut host.surface, live);
         }
     }
-    /// Windows size-move, a host-driven frame drag, or AppKit's own
-    /// live-resize tracking loop. The native macOS loop does not set
-    /// [`LiveSizeMove`], so it has to be read from `inLiveResize`.
+    /// Windows size-move, a host-driven frame drag, or AppKit's live-resize
+    /// tracking loop. The native macOS loop does not set [`LiveSizeMove`].
     pub(super) fn is_live_resize(&self, id: WindowId) -> bool {
         self.size_move_active(id)
             || self.custom_frame_resize_active(id)
             || self.native_live_resize_gesture(id)
-    }
-    /// Windows size-move and a host-driven frame drag. Native AppKit live
-    /// resize is intentionally absent; see [`Self::resize_window`].
-    fn swapchain_live_resize(&self, id: WindowId) -> bool {
-        self.size_move_active(id) || self.custom_frame_resize_active(id)
     }
     fn custom_frame_resize_active(&self, id: WindowId) -> bool {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1439,28 +1398,31 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             false
         }
     }
+    #[cfg(target_os = "macos")]
     pub(super) fn native_live_resize_gesture(&self, id: WindowId) -> bool {
-        #[cfg(target_os = "macos")]
-        {
-            self.window(id)
-                .is_some_and(|window| nana_window::native_live_resize_active(window.as_ref()))
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = id;
-            false
-        }
+        self.window(id)
+            .is_some_and(|window| nana_window::native_live_resize_active(window.as_ref()))
+    }
+    #[cfg(not(target_os = "macos"))]
+    pub(super) fn native_live_resize_gesture(&self, id: WindowId) -> bool {
+        let _ = id;
+        false
     }
     /// `true` when this native live-resize step should return before layout
     /// and before configuring the swapchain. The last presented drawable is
-    /// the window size of the previous commit; the next commit configures
-    /// the window's real size. AppKit may scale that drawable until then.
+    /// the previous commit's real window size. AppKit may scale it until the
+    /// next commit, which configures the window's real size again.
     pub(super) fn defer_native_live_resize(&mut self, id: WindowId) -> bool {
-        if !self.native_live_resize_gesture(id) {
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = id;
             return false;
         }
         #[cfg(target_os = "macos")]
         {
+            if !self.native_live_resize_gesture(id) {
+                return false;
+            }
             let now = Instant::now();
             let coalescer = self
                 .live_resize_commit
@@ -1472,10 +1434,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 self.live_resize_commit.insert(id, next);
                 return true;
             }
-            return false;
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
             false
         }
     }
@@ -1494,13 +1452,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         #[cfg(not(target_os = "macos"))]
         let _ = id;
     }
-    /// After the tracking loop exits, deliver a size that was skipped so the
-    /// surface and the document match the window the user released.
+    /// After the tracking loop exits, deliver a skipped size at the window's
+    /// real size.
     #[cfg(target_os = "macos")]
     pub(super) fn commit_finished_live_resizes(&mut self, event_loop: &dyn ActiveEventLoop) {
         let ids: Vec<WindowId> = self.live_resize_commit.keys().copied().collect();
         for id in ids {
-            if self.is_live_resize(id) {
+            if self.native_live_resize_gesture(id) {
                 continue;
             }
             let Some(coalescer) = self.live_resize_commit.remove(&id) else {
@@ -1509,7 +1467,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             if !coalescer.finish() || !self.window_contexts.contains_key(&id) {
                 continue;
             }
-            self.live_resize_skip_accessibility.insert(id);
             let geometry = self.geometry_of(id);
             let update = self
                 .program
@@ -1517,28 +1474,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.apply_update(event_loop, update, None);
             self.request_redraw(id);
         }
-    }
-    /// Whether this present is the one that follows a native live resize, and
-    /// so should not republish accessibility yet.
-    #[cfg(target_os = "macos")]
-    pub(super) fn take_live_resize_accessibility_skip(&mut self, id: WindowId) -> bool {
-        self.live_resize_skip_accessibility.remove(&id)
-    }
-    #[cfg(not(target_os = "macos"))]
-    pub(super) fn take_live_resize_accessibility_skip(&mut self, id: WindowId) -> bool {
-        let _ = id;
-        false
-    }
-    pub(super) fn release_settled_live_resize_transaction(&mut self, id: WindowId) {
-        #[cfg(target_os = "macos")]
-        if self.live_resize_hold_transaction.remove(&id) && !self.native_live_resize_gesture(id) {
-            if let Some(window) = self.window(id) {
-                nana_window::set_present_transaction(window.as_ref(), false);
-            }
-            self.present_transaction_pinned.remove(&id);
-        }
-        #[cfg(not(target_os = "macos"))]
-        let _ = id;
     }
     pub(super) fn size_move_active(&self, id: WindowId) -> bool {
         self.window_contexts

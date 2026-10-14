@@ -335,14 +335,6 @@ struct WindowManager<Program: RuntimeProgram> {
     /// keep that drawable instead of reconfiguring and laying out again.
     #[cfg(target_os = "macos")]
     live_resize_commit: HashMap<WindowId, windows::LiveResizeCoalescer>,
-    /// Transaction presents stay pinned until the frame that applies a size
-    /// skipped during the gesture has been presented.
-    #[cfg(target_os = "macos")]
-    live_resize_hold_transaction: HashSet<WindowId>,
-    /// The first present after a native live resize skips accessibility, so
-    /// republishing every moved node does not land on the release frame.
-    #[cfg(target_os = "macos")]
-    live_resize_skip_accessibility: HashSet<WindowId>,
     /// This host's startup: the coordinator, the splash it owns until
     /// handoff, and the record programs read.
     startup: startup::HostStartup,
@@ -1318,10 +1310,6 @@ fn complete_startup<Program: RuntimeProgram>(
         present_transaction_pinned: HashSet::new(),
         #[cfg(target_os = "macos")]
         live_resize_commit: HashMap::new(),
-        #[cfg(target_os = "macos")]
-        live_resize_hold_transaction: HashSet::new(),
-        #[cfg(target_os = "macos")]
-        live_resize_skip_accessibility: HashSet::new(),
         startup: host_startup,
         input_generations: HashMap::from([(WindowId::PRIMARY, 1)]),
         clipboard: host_services::process_clipboard(),
