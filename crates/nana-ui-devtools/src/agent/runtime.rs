@@ -1,6 +1,6 @@
 //! L3 Runtime agent session. Vue-free: no JS engine, no Vue renderer.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use nana_ui::runtime::{
@@ -10,8 +10,8 @@ use nana_ui::runtime::{
 use nana_ui::{HeadlessInput, HostTextureRegistry, InputCounters, NanaTextShaper, ThemeAppearance};
 use nana_ui_core::SemanticColorRole;
 use nana_ui_platform::{
-    InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey, PointerInput,
-    PointerPhase, WheelInput, WheelUnit,
+    FileDragInput, FileDragKind, InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey,
+    PhysicalKey, PointerInput, PointerPhase, WheelInput, WheelUnit,
 };
 use std::borrow::Cow;
 
@@ -262,6 +262,33 @@ impl RuntimeAgentSession {
         self.dispatch_pointer(PointerPhase::Move, x, y, 0, 0)?;
         self.flush()?;
         Ok(())
+    }
+
+    /// One phase of a file drag from outside the window (#352): `Hover` over
+    /// `(x, y)`, `Drop` there, or `Cancel` (the drag left the window). It
+    /// takes the route a native window's file drag does, so drop targets
+    /// hear the same [`nana_ui::runtime::FileDropEvent`]s.
+    pub fn file_drag_xy(
+        &mut self,
+        kind: FileDragKind,
+        paths: &[PathBuf],
+        x: f32,
+        y: f32,
+    ) -> Result<(), AgentError> {
+        self.dispatch_input(InputPayload::FileDrag(FileDragInput {
+            kind,
+            paths: paths.to_vec(),
+            position: (kind != FileDragKind::Cancel).then_some((x, y)),
+            modifiers: InputModifiers::default(),
+        }))?;
+        self.flush()?;
+        Ok(())
+    }
+
+    /// Drag `paths` in over `(x, y)` and drop them there.
+    pub fn drop_files_xy(&mut self, paths: &[PathBuf], x: f32, y: f32) -> Result<(), AgentError> {
+        self.file_drag_xy(FileDragKind::Hover, paths, x, y)?;
+        self.file_drag_xy(FileDragKind::Drop, paths, x, y)
     }
 
     /// Press and release one named key. `key` and `code` follow the platform
@@ -627,6 +654,52 @@ mod tests {
             assert_eq!(pixels.len(), (size.width * size.height * 4) as usize);
             assert!(pixels.iter().any(|channel| *channel != 0));
         }
+    }
+
+    #[test]
+    fn runtime_session_drops_files_onto_a_drop_target() {
+        use nana_ui::runtime::{FileDropEvent, Stack};
+        use std::sync::{Arc, Mutex};
+
+        let document_id = DocumentId::new(1).expect("document");
+        let mut document = RuntimeDocument::new(document_id);
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&heard);
+        let (_, target) = document
+            .context_mut()
+            .mount_view_root(document_id, move || {
+                let target = entity_ref::<Stack>();
+                let log = Arc::clone(&log);
+                let root = widget(Stack::fill_column(0.0))
+                    .entity_ref(target)
+                    .on(move |e: &FileDropEvent| log.lock().unwrap().push(e.clone()));
+                with_refs(root, target)
+            })
+            .expect("root");
+        let mut session = RuntimeAgentSession::new(document, 240, 160).expect("session");
+        session.flush().expect("layout");
+        session
+            .document_mut()
+            .context_mut()
+            .set_drop_target(target, nana_ui_core::DropAccepts::files())
+            .expect("drop target");
+        let paths = [PathBuf::from("model.psd")];
+        session
+            .file_drag_xy(FileDragKind::Hover, &paths, 40.0, 40.0)
+            .expect("hover");
+        session
+            .file_drag_xy(FileDragKind::Cancel, &paths, 0.0, 0.0)
+            .expect("cancel");
+        session.drop_files_xy(&paths, 40.0, 40.0).expect("drop");
+        let heard = heard.lock().unwrap();
+        assert!(matches!(&heard[0], FileDropEvent::Hovered { .. }));
+        assert_eq!(heard[1], FileDropEvent::Left);
+        assert!(matches!(&heard[2], FileDropEvent::Hovered { .. }));
+        assert!(
+            matches!(&heard[3], FileDropEvent::Dropped { paths: p, .. } if p[..] == paths),
+            "{heard:?}"
+        );
+        assert_eq!(heard.len(), 4);
     }
 
     #[test]
