@@ -91,6 +91,9 @@ framework_strings! {
     command_palette_empty = "command_palette.empty" => "没有可用操作";
     menu_search = "menu.search" => "搜索操作";
 
+    /// What assistive technology calls an area's editor type select.
+    area_editor_type = "area_layout.editor_type" => "编辑器类型";
+
     date_picker_previous_month = "date_picker.previous_month" => "上一月";
     date_picker_next_month = "date_picker.next_month" => "下一月";
     /// `{month}`: 1–12.

@@ -1876,6 +1876,204 @@ fn area_layout_names_its_areas_with_the_application_labels() {
 }
 
 #[test]
+fn area_layout_places_editor_contents_and_switches_them_from_the_header() {
+    use crate::view::widget;
+    use crate::{
+        AreaAxis, AreaChange, AreaEditorSelect, AreaLayout, AreaLayoutChanged, AreaLayoutModel,
+        Select, SelectChanged,
+    };
+
+    static HEARD: Mutex<Vec<AreaChange>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let root = context
+        .create_component(document, crate::Stack::fill_column(0.0))
+        .unwrap();
+    let mut model = AreaLayoutModel::single("left", "outliner");
+    assert!(model.split("left", AreaAxis::Horizontal, 0.25, "right"));
+    model.set_editor("right", "viewport");
+    context
+        .mount_view(root.stable_id(), move || {
+            widget(
+                AreaLayout::new(model.clone())
+                    .labels([("outliner", "大纲")])
+                    .editor_select(AreaEditorSelect::new(["outliner", "viewport", "notes"])),
+            )
+            .on(|e: &AreaLayoutChanged| HEARD.lock().unwrap().push(e.change.clone()))
+            .children((
+                widget(crate::Text::new("outliner")).key("editor:outliner"),
+                widget(crate::Text::new("Outliner")).key("editor:outliner:header"),
+                widget(crate::Text::new("viewport")).key("editor:viewport"),
+                widget(crate::Text::new("notes")).key("editor:notes"),
+            ))
+        })
+        .unwrap();
+    let layout = Entity::<AreaLayout>::from_stable_id(
+        context.world().node(root.stable_id()).unwrap().children[0],
+    );
+    let relayout = |context: &mut AppContext| {
+        context
+            .layout_document(document, crate::LayoutViewport::new(402.0, 300.0))
+            .unwrap();
+    };
+    relayout(&mut context);
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let keyed = |context: &AppContext, key: &str| {
+        context
+            .assembled_child(layout.stable_id(), key)
+            .expect("keyed child")
+    };
+    let parts = |context: &AppContext| context.read(layout, |l| l.parts.clone()).unwrap().unwrap();
+    let area = |context: &AppContext, id: &str| {
+        parts(context)
+            .nodes
+            .into_iter()
+            .find_map(|part| match part {
+                crate::area_layout::AreaPart::Area {
+                    id: area,
+                    header,
+                    content,
+                    select,
+                    ..
+                } if area == id => Some((header, content, select.expect("a select"))),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no area {id}"))
+    };
+    let holder = |context: &AppContext, key: &str| {
+        let parent = context.world().parent_id(keyed(context, key));
+        parts(context)
+            .nodes
+            .into_iter()
+            .find_map(|part| match part {
+                crate::area_layout::AreaPart::Area {
+                    id,
+                    header,
+                    content,
+                    ..
+                } if parent == Some(content) || parent == Some(header) => Some(id),
+                _ => None,
+            })
+    };
+
+    // each editor's content and header sit in the area showing it, after its select
+    assert_eq!(holder(&context, "editor:outliner").as_deref(), Some("left"));
+    assert_eq!(
+        holder(&context, "editor:viewport").as_deref(),
+        Some("right")
+    );
+    assert_eq!(holder(&context, "editor:notes"), None, "no area shows it");
+    let (header, _, select) = area(&context, "left");
+    assert_eq!(
+        context.world().node(header).unwrap().children,
+        [select, keyed(&context, "editor:outliner:header")]
+    );
+    let (options, value, label) = context
+        .read(Entity::<Select>::from_stable_id(select), |s| {
+            (s.options.clone(), s.value.clone(), s.label.clone())
+        })
+        .unwrap();
+    assert_eq!(
+        options
+            .iter()
+            .map(|o| (&*o.value, &*o.label))
+            .collect::<Vec<_>>(),
+        [
+            ("outliner", "大纲"),
+            ("viewport", "viewport"),
+            ("notes", "notes")
+        ],
+        "named by the labels, else by id"
+    );
+    assert_eq!(value.as_deref(), Some("outliner"));
+    assert_eq!(label.as_deref(), Some("编辑器类型"));
+
+    // a split-off area shows the same editor, whose content stays where it is
+    let new = context
+        .split_area(layout, "right", AreaAxis::Vertical, 0.5)
+        .unwrap()
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(
+        holder(&context, "editor:viewport").as_deref(),
+        Some("right")
+    );
+    let (_, content, _) = area(&context, &new);
+    assert!(context.world().node(content).unwrap().children.is_empty());
+    // switching it to another editor brings that one's content
+    assert!(context.set_area_editor(layout, &new, "notes").unwrap());
+    relayout(&mut context);
+    assert_eq!(holder(&context, "editor:notes"), Some(new.clone()));
+    take();
+
+    // choosing an editor in a header's select moves its content there
+    let (_, _, select) = area(&context, &new);
+    context
+        .update_component(Entity::<Select>::from_stable_id(select), |_, cx| {
+            cx.emit(SelectChanged {
+                value: "viewport".into(),
+            })
+        })
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(take(), [AreaChange::Editor { area: new.clone() }]);
+    assert_eq!(
+        context
+            .read(layout, |l| l.model.area(&new).unwrap().editor.clone())
+            .unwrap(),
+        "viewport"
+    );
+    assert_eq!(holder(&context, "editor:viewport"), Some(new.clone()));
+    assert_eq!(holder(&context, "editor:notes"), None);
+    let value = context
+        .read(Entity::<Select>::from_stable_id(select), |s| {
+            s.value.clone()
+        })
+        .unwrap();
+    assert_eq!(value.as_deref(), Some("viewport"));
+
+    // a maximized area showing it takes it while the other is hidden
+    context
+        .toggle_area_maximized(layout, Some("right"))
+        .unwrap();
+    relayout(&mut context);
+    assert_eq!(
+        holder(&context, "editor:viewport").as_deref(),
+        Some("right")
+    );
+    context.toggle_area_maximized(layout, None).unwrap();
+    relayout(&mut context);
+    assert_eq!(holder(&context, "editor:viewport"), Some(new.clone()));
+
+    // no select: the headers hold the application's controls alone
+    context.set_area_editor_select(layout, None).unwrap();
+    relayout(&mut context);
+    let header = area_header(&context, layout, "left");
+    assert_eq!(
+        context.world().node(header).unwrap().children,
+        [keyed(&context, "editor:outliner:header")]
+    );
+    assert!(!context.world().contains(select));
+}
+
+/// `id`'s header node in `layout`.
+fn area_header(context: &AppContext, layout: Entity<crate::AreaLayout>, id: &str) -> StableNodeId {
+    context
+        .read(layout, |l| l.parts.clone())
+        .unwrap()
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find_map(|part| match part {
+            crate::area_layout::AreaPart::Area {
+                id: area, header, ..
+            } if area == id => Some(header),
+            _ => None,
+        })
+        .expect("the area")
+}
+
+#[test]
 fn area_layout_resizes_splits_joins_maximizes_and_keeps_contents() {
     use crate::view::widget;
     use crate::{AreaAxis, AreaChange, AreaLayout, AreaLayoutChanged, AreaLayoutModel};
@@ -1930,6 +2128,7 @@ fn area_layout_resizes_splits_joins_maximizes_and_keeps_contents() {
                     header,
                     content,
                     corners,
+                    ..
                 } if area == id => Some((frame, header, content, corners)),
                 _ => None,
             })

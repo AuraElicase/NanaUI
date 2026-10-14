@@ -170,8 +170,8 @@ pub use animation::{
 };
 pub use app_menu_bar::{AppMenuBar, MenuBarActivated, menu_shortcut_label};
 pub use area_layout::{
-    Area, AreaAxis, AreaChange, AreaGeometry, AreaLayout, AreaLayoutChanged, AreaLayoutError,
-    AreaLayoutModel, AreaNode, AreaSplitter,
+    Area, AreaAxis, AreaChange, AreaEditorSelect, AreaGeometry, AreaLayout, AreaLayoutChanged,
+    AreaLayoutError, AreaLayoutModel, AreaNode, AreaSplitter,
 };
 pub use avatar::{Avatar, DEFAULT_SIZE as AVATAR_DEFAULT_SIZE};
 pub use bars::{StatusBar, Toolbar};
@@ -220,8 +220,8 @@ pub use components::{
     TextMinimapGeometry, TextSelection, TextShapeConstraints, TextShaper, TextShaping,
     TextSignatureHelp, TextSignaturePopup, TextSnippet, TextStickyLineGeometry, TextValue,
     TextVerticalAlignment, TextWhitespaceKind, TooltipVisual, TriggeredMenuOverlay,
-    decode_virtual_menu_item, decode_virtual_tree_item, menu_row_index, menu_row_slots,
-    virtual_menu_item_id, virtual_tree_item_id,
+    decode_virtual_menu_item, decode_virtual_tree_item, decode_virtual_tree_toggle, menu_row_index,
+    menu_row_slots, virtual_menu_item_id, virtual_tree_item_id, virtual_tree_toggle_id,
 };
 pub use custom_paint::{
     AFFINE_IDENTITY, Affine, BlendMode, BoxPaint, ColorStop, CornerRadii, FillRule, Gradient,
