@@ -343,6 +343,9 @@ struct WindowManager<Program: RuntimeProgram> {
     /// republishing every moved node does not land on the release frame.
     #[cfg(target_os = "macos")]
     live_resize_skip_accessibility: HashSet<WindowId>,
+    /// Spare drawable kept after a native live resize, until this instant.
+    #[cfg(target_os = "macos")]
+    live_resize_cover_until: HashMap<WindowId, Instant>,
     /// This host's startup: the coordinator, the splash it owns until
     /// handoff, and the record programs read.
     startup: startup::HostStartup,
@@ -1322,6 +1325,8 @@ fn complete_startup<Program: RuntimeProgram>(
         live_resize_hold_transaction: HashSet::new(),
         #[cfg(target_os = "macos")]
         live_resize_skip_accessibility: HashSet::new(),
+        #[cfg(target_os = "macos")]
+        live_resize_cover_until: HashMap::new(),
         startup: host_startup,
         input_generations: HashMap::from([(WindowId::PRIMARY, 1)]),
         clipboard: host_services::process_clipboard(),

@@ -79,6 +79,28 @@ pub(super) fn live_resize_commit_due(presented_at: Option<Instant>, now: Instant
     presented_at.is_none_or(|at| now.saturating_duration_since(at) >= LIVE_RESIZE_COMMIT_INTERVAL)
 }
 
+/// Spare drawable pixels kept during a live resize, so the frames skipped at
+/// the end of the gesture still fit the texture allocated on the last commit.
+const LIVE_RESIZE_COVER_HEADROOM: u32 = 256;
+const LIVE_RESIZE_COVER_STEP: u32 = 64;
+/// How long the spare texture stays after the gesture, before it shrinks back
+/// to the window. Shrinking reallocates, so it does not run on the release.
+pub(super) const LIVE_RESIZE_COVER_HOLD: Duration = Duration::from_millis(1000);
+
+/// Drawable size that covers `actual` with headroom and never shrinks below
+/// `configured`. Both axes round up to [`LIVE_RESIZE_COVER_STEP`].
+pub(super) fn live_resize_cover_size(actual: (u32, u32), configured: (u32, u32)) -> (u32, u32) {
+    if actual.0 == 0 || actual.1 == 0 {
+        return actual;
+    }
+    let axis = |value: u32, current: u32| {
+        let wanted = value.saturating_add(LIVE_RESIZE_COVER_HEADROOM);
+        let bucket = wanted.div_ceil(LIVE_RESIZE_COVER_STEP) * LIVE_RESIZE_COVER_STEP;
+        bucket.max(value).max(current)
+    };
+    (axis(actual.0, configured.0), axis(actual.1, configured.1))
+}
+
 /// Advance a native window's input endpoint identity without ever reusing it.
 /// This deliberately has the same exhaustion policy as `InputSequencer`.
 fn next_input_generation(generation: u64) -> u64 {
@@ -1005,6 +1027,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.live_resize_commit.remove(&id);
             self.live_resize_hold_transaction.remove(&id);
             self.live_resize_skip_accessibility.remove(&id);
+            self.live_resize_cover_until.remove(&id);
         }
         self.frame_schedules.remove(&id);
         self.close_window_output(id);
@@ -1344,9 +1367,22 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             .window(id)
             .is_some_and(|window| nana_window::native_live_resize_active(window.as_ref()));
         if active {
-            self.pin_present_transaction(id);
+            // A transaction present waits for the Core Animation commit. That
+            // wait is the hitch when the gesture ends, and it slows every
+            // in-drag commit. Coalesced frames already tolerate a short scale.
+            self.release_present_transaction(id);
         }
         active
+    }
+    #[cfg(target_os = "macos")]
+    fn release_present_transaction(&mut self, id: WindowId) {
+        if !self.present_transaction_pinned.contains(&id) {
+            return;
+        }
+        if let Some(window) = self.window(id) {
+            nana_window::set_present_transaction(window.as_ref(), false);
+        }
+        self.present_transaction_pinned.remove(&id);
     }
     #[cfg(target_os = "macos")]
     pub(super) fn pin_present_transaction(&mut self, id: WindowId) {
@@ -1394,11 +1430,85 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         // reconfigure the swapchain on the release frame even if the size
         // already matches.
         let live = self.swapchain_live_resize(id);
-        if let Some(host) = self.window_contexts.get_mut(&id)
-            && host.surface_retry.is_none()
-        {
-            self.graphics.prepare_surface_frame(&mut host.surface, live);
+        let (actual, configured, retry) = {
+            let Some(host) = self.window_contexts.get(&id) else {
+                return;
+            };
+            (
+                host.surface.window_physical_size(),
+                host.surface.configured_extent(),
+                host.surface_retry.is_some(),
+            )
+        };
+        if retry {
+            return;
         }
+        let pixels = self.resize_target_pixels(id, actual, configured);
+        let Some(host) = self.window_contexts.get_mut(&id) else {
+            return;
+        };
+        self.graphics
+            .prepare_surface_frame_pixels(&mut host.surface, live, pixels.0, pixels.1);
+        #[cfg(target_os = "macos")]
+        {
+            let configured = host.surface.configured_extent();
+            let window = Arc::clone(host.surface.window());
+            nana_window::set_metal_contents_visible(window.as_ref(), actual, configured);
+        }
+    }
+    /// Drawable pixels for this frame. During a native live resize, and for a
+    /// short time after it, the texture stays large enough that the release
+    /// does not allocate another one.
+    fn resize_target_pixels(
+        &mut self,
+        id: WindowId,
+        actual: (u32, u32),
+        configured: (u32, u32),
+    ) -> (u32, u32) {
+        #[cfg(target_os = "macos")]
+        {
+            let native = self.native_live_resize_gesture(id);
+            if native {
+                self.live_resize_cover_until
+                    .insert(id, Instant::now() + LIVE_RESIZE_COVER_HOLD);
+            }
+            let hold = self
+                .live_resize_cover_until
+                .get(&id)
+                .is_some_and(|until| Instant::now() < *until);
+            if native || hold {
+                return live_resize_cover_size(actual, configured);
+            }
+            self.live_resize_cover_until.remove(&id);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = id;
+        }
+        let _ = configured;
+        actual
+    }
+    /// When the spare drawable's hold expires, ask for the frame that shrinks
+    /// it back to the window.
+    #[cfg(target_os = "macos")]
+    pub(super) fn snap_expired_live_resize_covers(&mut self, now: Instant) {
+        let due: Vec<WindowId> = self
+            .live_resize_cover_until
+            .iter()
+            .filter(|(_, until)| now >= **until)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in due {
+            if self.native_live_resize_gesture(id) {
+                continue;
+            }
+            self.live_resize_cover_until.remove(&id);
+            self.request_redraw(id);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    pub(super) fn next_live_resize_cover_snap(&self) -> Option<Instant> {
+        self.live_resize_cover_until.values().copied().min()
     }
     /// Windows size-move, a host-driven frame drag, or AppKit's own
     /// live-resize tracking loop. The native macOS loop does not set
@@ -1494,9 +1604,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             if !coalescer.finish() || !self.window_contexts.contains_key(&id) {
                 continue;
             }
-            // Keep the final present inside the Core Animation transaction,
-            // then drop the pin once that frame has been shown.
-            self.live_resize_hold_transaction.insert(id);
             self.live_resize_skip_accessibility.insert(id);
             let geometry = self.geometry_of(id);
             let update = self
@@ -2620,6 +2727,16 @@ mod live_resize_coalesce_tests {
         let (state, step) = state.on_step(start + Duration::from_millis(1));
         assert_eq!(step, LiveResizeStep::Defer);
         assert!(state.finish());
+    }
+
+    #[test]
+    fn cover_size_has_headroom_and_does_not_shrink() {
+        let covered = live_resize_cover_size((1000, 800), (1000, 800));
+        assert!(covered.0 >= 1000 + 256);
+        assert!(covered.1 >= 800 + 256);
+        assert_eq!(covered.0 % 64, 0);
+        assert_eq!(covered.1 % 64, 0);
+        assert_eq!(live_resize_cover_size((900, 700), covered), covered);
     }
 }
 
