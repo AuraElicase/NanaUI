@@ -192,6 +192,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         {
             self.unpin_idle_present_transactions();
             self.commit_finished_live_resizes(event_loop);
+            self.snap_expired_live_resize_covers(now);
         }
         let surface_retry_due = self
             .window_contexts
@@ -231,6 +232,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.host_work_deadline
                 .get_or_insert_with(|| Instant::now() + Duration::from_millis(1));
         }
+        #[cfg(target_os = "macos")]
+        let cover_snap = self.next_live_resize_cover_snap();
+        #[cfg(not(target_os = "macos"))]
+        let cover_snap = None;
         let next_wakeup = [
             self.next_gpu_retry,
             (!self.render_suspended)
@@ -246,6 +251,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.host_work_deadline,
             self.passthrough_forward_wakeup(),
             startup_latch,
+            cover_snap,
         ]
         .into_iter()
         .flatten()

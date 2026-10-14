@@ -36,6 +36,7 @@ pub use chrome::prepare_client_chrome;
 pub use chrome::prepare_custom_title_bar;
 pub use chrome::resize_custom_frame;
 pub use chrome::set_frameless_styles;
+pub use chrome::set_metal_contents_visible;
 pub use chrome::set_native_window_controls_visible;
 pub use chrome::set_non_client_rendering;
 pub use chrome::set_present_transaction;

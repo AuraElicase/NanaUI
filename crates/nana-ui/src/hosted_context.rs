@@ -401,18 +401,34 @@ impl HostedGpuSurface {
     #[doc(hidden)]
     pub fn prepare_frame(&mut self, gpu: &GpuContext, live: bool) {
         let size = self.window.surface_size();
+        self.prepare_frame_pixels(gpu, live, size.width, size.height);
+    }
+
+    /// Like [`Self::prepare_frame`], but the drawable may be larger than the
+    /// window. Live resize uses the spare pixels so the gesture can finish
+    /// without another swapchain allocation.
+    pub fn prepare_frame_pixels(&mut self, gpu: &GpuContext, live: bool, width: u32, height: u32) {
         let mut changed = self.apply_live_resize_policy(live);
         if surface_size_changed(
             (self.configuration.width, self.configuration.height),
-            (size.width, size.height),
+            (width, height),
         ) {
-            self.configuration.width = size.width;
-            self.configuration.height = size.height;
+            self.configuration.width = width;
+            self.configuration.height = height;
             changed = true;
         }
         if changed {
             self.reconfigure(gpu);
         }
+    }
+
+    pub(crate) fn window_physical_size(&self) -> (u32, u32) {
+        let size = self.window.surface_size();
+        (size.width, size.height)
+    }
+
+    pub(crate) fn configured_extent(&self) -> (u32, u32) {
+        (self.configuration.width, self.configuration.height)
     }
 
     fn apply_live_resize_policy(&mut self, live: bool) -> bool {
@@ -884,6 +900,15 @@ impl HostedGpuShared {
     /// [`HostedGpuSurface::prepare_frame`] operation directly.
     pub fn prepare_surface_frame(&self, surface: &mut HostedGpuSurface, live: bool) {
         surface.prepare_frame(&self.gpu, live);
+    }
+    pub fn prepare_surface_frame_pixels(
+        &self,
+        surface: &mut HostedGpuSurface,
+        live: bool,
+        width: u32,
+        height: u32,
+    ) {
+        surface.prepare_frame_pixels(&self.gpu, live, width, height);
     }
     pub fn apply_surface_alpha_mode(
         &self,
