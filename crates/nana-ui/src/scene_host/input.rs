@@ -224,7 +224,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                     self.refresh_surface_display(id);
                 }
                 #[cfg(target_os = "macos")]
-                let native_live_resize = self.sync_native_live_resize_presents(id);
+                let native_live_resize = self.native_live_resize_gesture(id);
                 #[cfg(not(target_os = "macos"))]
                 let native_live_resize = false;
                 // Native macOS drags repaint through winit's live-resize hook.
