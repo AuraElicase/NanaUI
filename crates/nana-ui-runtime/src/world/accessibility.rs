@@ -611,10 +611,17 @@ impl UiWorld {
             .collect()
     }
 
-    /// The visible rows of a tree as `TreeItem` nodes under it. The row the
+    /// The visible rows of a tree as `TreeItem` nodes under it, each followed
+    /// by its toggles as `Checkbox` nodes under the row (#353). The row the
     /// tree is on is focused while the tree has the focus.
     fn project_virtual_tree_items(&self, tree: &AccessibilityNode) -> Vec<AccessibilityNode> {
-        let Some(StandardVisual::TreeView { rows, active, .. }) = self.nodes.visual(tree.id) else {
+        let Some(StandardVisual::TreeView {
+            rows,
+            active,
+            column_labels,
+            ..
+        }) = self.nodes.visual(tree.id)
+        else {
             return Vec::new();
         };
         let geometry = match self.component_geometry(tree.id) {
@@ -622,36 +629,97 @@ impl UiWorld {
             _ => Vec::new(),
         };
         let count = rows.len().max(1) as f32;
-        rows.iter()
-            .enumerate()
-            .filter_map(|(index, row)| {
-                let slot = u16::try_from(index + 1).ok()?;
-                let id = crate::virtual_tree_item_id(tree.id, slot)?;
-                let bounds = geometry
-                    .get(index)
-                    .map(|row| row.bounds)
-                    .unwrap_or_else(|| LayoutBox {
-                        x: tree.bounds.x,
-                        y: tree.bounds.y + tree.bounds.height * index as f32 / count,
-                        width: tree.bounds.width,
-                        height: tree.bounds.height / count,
-                    });
-                Some(AccessibilityNode {
-                    id,
-                    parent: Some(tree.id),
+        let mut nodes = Vec::with_capacity(rows.len() * (1 + column_labels.len()));
+        for (index, row) in rows.iter().enumerate() {
+            let Ok(slot) = u16::try_from(index + 1) else {
+                break;
+            };
+            let Some(id) = crate::virtual_tree_item_id(tree.id, slot) else {
+                break;
+            };
+            let row_geometry = geometry.get(index);
+            let bounds = row_geometry
+                .map(|row| row.bounds)
+                .unwrap_or_else(|| LayoutBox {
+                    x: tree.bounds.x,
+                    y: tree.bounds.y + tree.bounds.height * index as f32 / count,
+                    width: tree.bounds.width,
+                    height: tree.bounds.height / count,
+                });
+            let toggles = column_labels
+                .iter()
+                .enumerate()
+                .filter_map(|(column, label)| {
+                    let toggle = crate::virtual_tree_toggle_id(tree.id, slot, column)?;
+                    // without geometry, a square of the row's height per
+                    // column at its end
+                    let icon = row_geometry
+                        .and_then(|row| row.toggles.get(column))
+                        .map(|(_, icon, _)| *icon)
+                        .unwrap_or_else(|| {
+                            let side = bounds.height.min(bounds.width);
+                            let from_end = (column_labels.len() - column) as f32;
+                            LayoutBox {
+                                x: bounds.x + bounds.width - side * from_end,
+                                y: bounds.y,
+                                width: side,
+                                height: side,
+                            }
+                        });
+                    Some((toggle, column, label, icon))
+                })
+                .collect::<Vec<_>>();
+            nodes.push(AccessibilityNode {
+                id,
+                parent: Some(tree.id),
+                children: toggles.iter().map(|(toggle, ..)| *toggle).collect(),
+                role: crate::AccessibilityRole::TreeItem,
+                label: Some(Arc::clone(&row.label)),
+                value: None,
+                description: None,
+                role_description: None,
+                disabled: row.disabled,
+                checked: None,
+                mixed: false,
+                orientation: None,
+                selected: Some(row.selected),
+                level: Some(u32::from(row.depth) + 1),
+                expanded: row.branch.then_some(row.expanded),
+                has_popup: false,
+                multiline: false,
+                editable: false,
+                selection: None,
+                modal: false,
+                busy: false,
+                invalid: false,
+                live: None,
+                numeric_minimum: None,
+                numeric_maximum: None,
+                numeric_step: None,
+                numeric_value: None,
+                scroll_x: None,
+                scroll_y: None,
+                focused: tree.focused && active.as_ref() == Some(&row.id),
+                bounds,
+                writing: tree.writing,
+            });
+            nodes.extend(toggles.into_iter().map(|(toggle, column, label, icon)| {
+                AccessibilityNode {
+                    id: toggle,
+                    parent: Some(id),
                     children: Vec::new(),
-                    role: crate::AccessibilityRole::TreeItem,
-                    label: Some(Arc::clone(&row.label)),
+                    role: crate::AccessibilityRole::Checkbox,
+                    label: (!label.is_empty()).then(|| Arc::clone(label)),
                     value: None,
                     description: None,
                     role_description: None,
                     disabled: row.disabled,
-                    checked: None,
+                    checked: Some(row.toggles.get(column).copied().unwrap_or(false)),
                     mixed: false,
                     orientation: None,
-                    selected: Some(row.selected),
-                    level: Some(u32::from(row.depth) + 1),
-                    expanded: row.branch.then_some(row.expanded),
+                    selected: None,
+                    level: None,
+                    expanded: None,
                     has_popup: false,
                     multiline: false,
                     editable: false,
@@ -666,12 +734,13 @@ impl UiWorld {
                     numeric_value: None,
                     scroll_x: None,
                     scroll_y: None,
-                    focused: tree.focused && active.as_ref() == Some(&row.id),
-                    bounds,
+                    focused: false,
+                    bounds: icon,
                     writing: tree.writing,
-                })
-            })
-            .collect()
+                }
+            }));
+        }
+        nodes
     }
 
     fn project_accessibility_entries(
@@ -798,6 +867,23 @@ impl UiWorld {
         let index = usize::from(slot).checked_sub(1)?;
         match self.nodes.visual(tree) {
             Some(StandardVisual::TreeView { rows, .. }) => rows.get(index).cloned(),
+            _ => None,
+        }
+    }
+
+    /// The visible row of `tree` in accessibility `slot`, when the tree has
+    /// toggle `column`.
+    pub(crate) fn virtual_tree_toggle_row(
+        &self,
+        tree: StableNodeId,
+        slot: u16,
+        column: usize,
+    ) -> Option<crate::tree_view::TreeRowData> {
+        let index = usize::from(slot).checked_sub(1)?;
+        match self.nodes.visual(tree) {
+            Some(StandardVisual::TreeView { rows, columns, .. }) if column < columns.len() => {
+                rows.get(index).cloned()
+            }
             _ => None,
         }
     }

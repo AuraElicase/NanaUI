@@ -17,7 +17,9 @@
 //! [`TreeView::label`], and each visible row is a virtual `TreeItem` under it
 //! (#349, [`crate::virtual_tree_item_id`]) with its level, expansion and
 //! selection. Click, Focus, Expand and Collapse on a row do what a click, the
-//! arrow keys and the disclosure do.
+//! arrow keys and the disclosure do. Each of a row's toggles is a virtual
+//! `Checkbox` under the row (#353, [`crate::virtual_tree_toggle_id`]) named
+//! by its column; Click on it does what a press on the toggle does.
 
 use std::sync::Arc;
 
@@ -410,6 +412,11 @@ impl ComponentView for TreeView {
             rows: rows.into(),
             size: self.size,
             columns: self.columns.iter().map(|column| column.icon).collect(),
+            column_labels: self
+                .columns
+                .iter()
+                .map(|column| Arc::clone(&column.label))
+                .collect(),
             drop: self.drop.clone(),
             active: self.active_id().cloned(),
         };
@@ -796,12 +803,7 @@ fn tree_pressed(
     if let Some((index, column)) = tree_toggle_at(&rows, x, y) {
         let id = Arc::clone(&rows[index].id);
         cx.update_component(tree, |tree, view| {
-            let on = !find_node(&tree.nodes, &id)
-                .and_then(|node| node.toggles.get(column).copied())
-                .unwrap_or(false);
-            if let Some(event) = set_toggle(tree, &id, column, on) {
-                view.emit(event);
-            }
+            let on = flip_toggle(tree, view, &id, column);
             tree.gesture = Some(TreeGesture::Swipe {
                 column,
                 on,
@@ -1001,6 +1003,23 @@ fn dragged_rows(tree: &TreeView, row: &Arc<str>) -> Vec<Arc<str>> {
     }
 }
 
+/// Flip `id`'s toggle in `column`, as a press on it does, and report it;
+/// the value it was set to.
+fn flip_toggle(
+    tree: &mut TreeView,
+    view: &mut crate::ViewContext<'_, TreeView>,
+    id: &Arc<str>,
+    column: usize,
+) -> bool {
+    let on = !find_node(&tree.nodes, id)
+        .and_then(|node| node.toggles.get(column).copied())
+        .unwrap_or(false);
+    if let Some(event) = set_toggle(tree, id, column, on) {
+        view.emit(event);
+    }
+    on
+}
+
 /// Set a row's toggle; the event when it changed.
 fn set_toggle(
     tree: &mut TreeView,
@@ -1071,6 +1090,39 @@ impl AppContext {
             }
             _ => Ok(false),
         }
+    }
+
+    /// An assistive-technology action on the virtual node of the toggle in
+    /// `column` of visible row `slot` of `tree` (#353). Click flips it as a
+    /// press on it does, leaving the selection and the focus alone. A row
+    /// that is gone or disabled, a column the tree does not have, and any
+    /// other action are refused.
+    pub(crate) fn apply_tree_toggle_action(
+        &mut self,
+        tree: StableNodeId,
+        slot: u16,
+        column: usize,
+        action: &crate::AccessibilityAction,
+    ) -> Result<bool, FrameworkError> {
+        if !matches!(action, crate::AccessibilityAction::Click) {
+            return Ok(false);
+        }
+        let Some(entity) = self.view_entity::<TreeView>(tree) else {
+            return Ok(false);
+        };
+        let Some(row) = self.world().virtual_tree_toggle_row(tree, slot, column) else {
+            return Ok(false);
+        };
+        if row.disabled {
+            return Ok(false);
+        }
+        self.update_component(entity, |tree, view| {
+            if column >= tree.columns.len() || find_node(&tree.nodes, &row.id).is_none() {
+                return false;
+            }
+            flip_toggle(tree, view, &row.id, column);
+            true
+        })
     }
 
     /// Rename `id` in place: an input over its label takes the focus with
@@ -1353,7 +1405,8 @@ mod tests {
 
     type Heard = Arc<std::sync::Mutex<Vec<String>>>;
 
-    /// A laid-out tree, and every selection and disclosure event it reports.
+    /// A laid-out tree, and every selection, disclosure and toggle event it
+    /// reports.
     fn heard_tree(tree: TreeView) -> (AppContext, Entity<TreeView>, Heard) {
         let mut context = AppContext::new();
         let entity = context.create_component(document(), tree).unwrap();
@@ -1367,6 +1420,12 @@ mod tests {
         let events = Arc::clone(&heard);
         context
             .on(entity, move |_, event: &TreeSelectionChanged, _| {
+                events.lock().unwrap().push(format!("{event:?}"));
+            })
+            .unwrap();
+        let events = Arc::clone(&heard);
+        context
+            .on(entity, move |_, event: &TreeToggleChanged, _| {
                 events.lock().unwrap().push(format!("{event:?}"));
             })
             .unwrap();
@@ -1698,8 +1757,8 @@ mod tests {
     }
 
     #[test]
-    fn menu_rows_and_tree_rows_never_decode_as_each_other() {
-        for owner in [1, 0x1234, 0x3fff_ffff_ffff] {
+    fn menu_rows_tree_rows_and_toggles_never_decode_as_each_other() {
+        for owner in [1, 0x1234, 0x3f_ffff_ffff] {
             let owner = StableNodeId::new(owner).unwrap();
             for slot in [1, 0x8000, u16::MAX] {
                 let menu = crate::virtual_menu_item_id(owner, slot).unwrap();
@@ -1707,18 +1766,313 @@ mod tests {
                 assert_ne!(menu, tree);
                 assert_eq!(crate::decode_virtual_menu_item(menu), Some((owner, slot)));
                 assert_eq!(crate::decode_virtual_tree_item(menu), None);
+                assert_eq!(crate::decode_virtual_tree_toggle(menu), None);
                 assert_eq!(crate::decode_virtual_tree_item(tree), Some((owner, slot)));
                 assert_eq!(crate::decode_virtual_menu_item(tree), None);
+                assert_eq!(crate::decode_virtual_tree_toggle(tree), None);
+                let mut toggles = Vec::new();
+                for column in [0, 1, 254] {
+                    let toggle = crate::virtual_tree_toggle_id(owner, slot, column).unwrap();
+                    assert_ne!(toggle, menu);
+                    assert_ne!(toggle, tree);
+                    assert!(!toggles.contains(&toggle));
+                    toggles.push(toggle);
+                    assert_eq!(
+                        crate::decode_virtual_tree_toggle(toggle),
+                        Some((owner, slot, column))
+                    );
+                    assert_eq!(crate::decode_virtual_tree_item(toggle), None);
+                    assert_eq!(crate::decode_virtual_menu_item(toggle), None);
+                }
+                assert_eq!(crate::virtual_tree_toggle_id(owner, slot, 255), None);
+                assert_eq!(crate::virtual_tree_toggle_id(owner, slot, usize::MAX), None);
             }
             assert_eq!(crate::virtual_tree_item_id(owner, 0), None);
             assert_eq!(crate::virtual_menu_item_id(owner, 0), None);
+            assert_eq!(crate::virtual_tree_toggle_id(owner, 0, 0), None);
         }
-        let too_large = StableNodeId::new(0x4000_0000_0000).unwrap();
+        let too_large = StableNodeId::new(0x40_0000_0000).unwrap();
         assert_eq!(crate::virtual_menu_item_id(too_large, 1), None);
         assert_eq!(crate::virtual_tree_item_id(too_large, 1), None);
+        assert_eq!(crate::virtual_tree_toggle_id(too_large, 1, 0), None);
         let retained = StableNodeId::new(42).unwrap();
         assert_eq!(crate::decode_virtual_menu_item(retained), None);
         assert_eq!(crate::decode_virtual_tree_item(retained), None);
+        assert_eq!(crate::decode_virtual_tree_toggle(retained), None);
+        // a column on a menu row is no id any encoder makes
+        let forged = StableNodeId::new(0x8000_0000_0000_0000 | (1 << 54) | (1 << 16) | 1).unwrap();
+        assert_eq!(crate::decode_virtual_menu_item(forged), None);
+        assert_eq!(crate::decode_virtual_tree_item(forged), None);
+        assert_eq!(crate::decode_virtual_tree_toggle(forged), None);
+    }
+
+    /// A tree whose rows end in a visible and a locked toggle: `scene`
+    /// (selected) holds `model`, and `light` is disabled with only its
+    /// first toggle written.
+    fn toggled() -> TreeView {
+        TreeView::new([
+            TreeNode::branch(
+                Arc::from("scene"),
+                "scene",
+                true,
+                [TreeNode::leaf(Arc::from("model"), "model").toggles([false, true])],
+            )
+            .selected(true)
+            .toggles([true, false]),
+            TreeNode::leaf(Arc::from("light"), "light")
+                .toggles([true])
+                .disabled(true),
+        ])
+        .columns([
+            TreeToggleColumn::new(Icon::Eye, "显示"),
+            TreeToggleColumn::new(Icon::ShieldCheck, "锁定"),
+        ])
+    }
+
+    fn toggle_node(tree: Entity<TreeView>, slot: u16, column: usize) -> StableNodeId {
+        crate::virtual_tree_toggle_id(tree.stable_id(), slot, column).unwrap()
+    }
+
+    /// Each row's toggle nodes, in column order.
+    fn toggle_semantics(
+        context: &AppContext,
+        tree: Entity<TreeView>,
+    ) -> Vec<Vec<crate::AccessibilityNode>> {
+        let nodes = context.world().project_accessibility(document());
+        let (_, rows) = semantics(context, tree);
+        rows.iter()
+            .map(|row| {
+                row.children
+                    .iter()
+                    .map(|child| {
+                        nodes
+                            .iter()
+                            .find(|node| node.id == *child)
+                            .cloned()
+                            .expect("a toggle node for every toggle child")
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn toggles_project_as_checkboxes_under_their_row() {
+        let (mut context, tree, _) = heard_tree(toggled());
+        let (_, rows) = semantics(&context, tree);
+        let toggles = toggle_semantics(&context, tree);
+        assert_eq!(toggles.len(), 3);
+        let geometry = row_geometry(&context, tree);
+        for (index, row) in rows.iter().enumerate() {
+            let slot = index as u16 + 1;
+            assert_eq!(
+                row.children,
+                [toggle_node(tree, slot, 0), toggle_node(tree, slot, 1)]
+            );
+            for (column, toggle) in toggles[index].iter().enumerate() {
+                assert_eq!(toggle.role, crate::AccessibilityRole::Checkbox);
+                assert_eq!(toggle.parent, Some(row.id));
+                assert!(toggle.children.is_empty());
+                assert_eq!(toggle.bounds, geometry[index].toggles[column].1);
+                assert!(!toggle.focused);
+                assert_eq!(toggle.selected, None);
+            }
+        }
+        let names = toggles[0]
+            .iter()
+            .map(|toggle| toggle.label.as_deref())
+            .collect::<Vec<_>>();
+        assert_eq!(names, [Some("显示"), Some("锁定")]);
+        let checked = toggles
+            .iter()
+            .map(|row| row.iter().map(|toggle| toggle.checked).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            checked,
+            [
+                [Some(true), Some(false)],
+                [Some(false), Some(true)],
+                // a toggle the node does not write is off
+                [Some(true), Some(false)],
+            ]
+        );
+        let disabled = toggles
+            .iter()
+            .map(|row| row.iter().all(|toggle| toggle.disabled))
+            .collect::<Vec<_>>();
+        assert_eq!(disabled, [false, false, true]);
+        // the toggles sit inside their row, the first column first
+        assert!(
+            geometry[0]
+                .bounds
+                .contains(toggles[0][0].bounds.x + 1.0, toggles[0][0].bounds.y + 1.0)
+        );
+        assert!(toggles[0][0].bounds.x < toggles[0][1].bounds.x);
+
+        // the application writing a toggle back reaches the delta, with
+        // nothing else changed
+        context.take_system_work();
+        context
+            .update_component(tree, |tree, _| tree.nodes[0].toggles = vec![false, false])
+            .unwrap();
+        let work = context.take_system_work();
+        let delta = context.world().project_accessibility_delta(&work);
+        let visible = delta
+            .updated
+            .iter()
+            .find(|node| node.id == toggle_node(tree, 1, 0))
+            .expect("the written toggle is projected again");
+        assert_eq!(visible.checked, Some(false));
+        assert_eq!(visible.label.as_deref(), Some("显示"));
+        assert_eq!(visible.parent, Some(row_node(tree, 1)));
+
+        // renaming a column renames every row's toggle
+        context.take_system_work();
+        context
+            .update_component(tree, |tree, _| {
+                tree.columns[1].label = Arc::from("锁住");
+            })
+            .unwrap();
+        let work = context.take_system_work();
+        let delta = context.world().project_accessibility_delta(&work);
+        let locked = delta
+            .updated
+            .iter()
+            .find(|node| node.id == toggle_node(tree, 2, 1))
+            .expect("a renamed column is projected again");
+        assert_eq!(locked.label.as_deref(), Some("锁住"));
+    }
+
+    #[test]
+    fn a_toggle_column_without_a_name_has_none() {
+        let (context, tree, _) = heard_tree(
+            TreeView::new([TreeNode::leaf(Arc::from("a"), "a")])
+                .columns([TreeToggleColumn::new(Icon::Eye, "")]),
+        );
+        let toggles = toggle_semantics(&context, tree);
+        assert_eq!(toggles[0].len(), 1);
+        assert_eq!(toggles[0][0].label, None);
+        assert_eq!(toggles[0][0].checked, Some(false));
+    }
+
+    #[test]
+    fn click_on_a_toggle_node_reports_what_a_press_on_the_toggle_does() {
+        let (mut pointer, pointer_tree, pointer_heard) = heard_tree(toggled());
+        let locked = row_geometry(&pointer, pointer_tree)[1].toggles[1].1;
+        pointer_click(&mut pointer, mid(locked));
+        let pressed = take(&pointer_heard);
+        assert_eq!(
+            pressed,
+            [r#"TreeToggleChanged { id: "model", column: 1, on: false }"#]
+        );
+
+        let (mut reader, reader_tree, reader_heard) = heard_tree(toggled());
+        assert!(act(
+            &mut reader,
+            toggle_node(reader_tree, 2, 1),
+            crate::AccessibilityAction::Click
+        ));
+        assert_eq!(take(&reader_heard), pressed);
+        let read = |context: &AppContext, tree: Entity<TreeView>| {
+            context
+                .read(tree, |tree| (tree.nodes.clone(), tree.selected_ids()))
+                .unwrap()
+        };
+        assert_eq!(read(&reader, reader_tree), read(&pointer, pointer_tree));
+        let (_, rows) = semantics(&reader, reader_tree);
+        let selected = rows.iter().map(|row| row.selected).collect::<Vec<_>>();
+        assert_eq!(selected, [Some(true), Some(false), Some(false)]);
+        assert_eq!(
+            reader.world().focused(document()),
+            None,
+            "the focus stays where it was"
+        );
+        assert_eq!(
+            toggle_semantics(&reader, reader_tree)[1][1].checked,
+            Some(false)
+        );
+
+        // and back on, as a second press does
+        assert!(act(
+            &mut reader,
+            toggle_node(reader_tree, 2, 1),
+            crate::AccessibilityAction::Click
+        ));
+        assert_eq!(
+            take(&reader_heard),
+            [r#"TreeToggleChanged { id: "model", column: 1, on: true }"#]
+        );
+        // a toggle the node does not write yet is set on
+        assert!(act(
+            &mut reader,
+            toggle_node(reader_tree, 1, 1),
+            crate::AccessibilityAction::Click
+        ));
+        assert_eq!(
+            take(&reader_heard),
+            [r#"TreeToggleChanged { id: "scene", column: 1, on: true }"#]
+        );
+    }
+
+    #[test]
+    fn toggle_node_actions_refuse_wrong_targets() {
+        let (mut context, tree, heard) = heard_tree(toggled());
+        let click = || crate::AccessibilityAction::Click;
+        // a disabled row, past the last row, past the last column
+        assert!(!act(&mut context, toggle_node(tree, 3, 0), click()));
+        assert!(!act(&mut context, toggle_node(tree, 4, 0), click()));
+        assert!(!act(&mut context, toggle_node(tree, 1, 2), click()));
+        // another node's toggles, and a toggle of another document
+        let elsewhere = StableNodeId::new(tree.stable_id().get() + 1000).unwrap();
+        assert!(!act(
+            &mut context,
+            crate::virtual_tree_toggle_id(elsewhere, 1, 0).unwrap(),
+            click()
+        ));
+        assert!(
+            !context
+                .apply_accessibility_action(
+                    DocumentId::new(2).unwrap(),
+                    crate::AccessibilityActionRequest {
+                        target: toggle_node(tree, 1, 0),
+                        action: click(),
+                    },
+                )
+                .unwrap()
+        );
+        // actions a toggle cannot take
+        for action in [
+            crate::AccessibilityAction::Focus,
+            crate::AccessibilityAction::Expand,
+            crate::AccessibilityAction::Collapse,
+            crate::AccessibilityAction::Increment,
+        ] {
+            assert!(!act(&mut context, toggle_node(tree, 1, 0), action));
+        }
+        // a row that is gone: collapsing `scene` leaves two rows
+        assert!(act(
+            &mut context,
+            row_node(tree, 1),
+            crate::AccessibilityAction::Collapse
+        ));
+        take(&heard);
+        assert!(!act(&mut context, toggle_node(tree, 3, 0), click()));
+        assert!(take(&heard).is_empty());
+        assert_eq!(
+            context
+                .read(tree, |tree| tree.nodes[1].toggles.clone())
+                .unwrap(),
+            [true],
+            "the disabled row's toggles are untouched"
+        );
+        assert!(act(&mut context, toggle_node(tree, 1, 0), click()));
+
+        // a tree without columns has no toggles to click
+        let (mut plain, plain_tree, plain_heard) = heard_tree(sample());
+        assert!(!act(&mut plain, toggle_node(plain_tree, 1, 0), click()));
+        assert!(take(&plain_heard).is_empty());
+        let (_, rows) = semantics(&plain, plain_tree);
+        assert!(rows.iter().all(|row| row.children.is_empty()));
     }
 
     #[test]
