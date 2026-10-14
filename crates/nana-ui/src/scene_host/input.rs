@@ -227,10 +227,17 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 let native_live_resize = self.sync_native_live_resize_presents(id);
                 #[cfg(not(target_os = "macos"))]
                 let native_live_resize = false;
-                self.forward_window_event(event_loop, id, &event);
-                // Native macOS drags repaint through winit's live-resize
-                // hook, and a custom chrome drag paints its steps in-stack;
-                // both would only duplicate the per-step frame here.
+                // Native macOS drags repaint through winit's live-resize hook.
+                // Steps inside one refresh interval keep the last drawable and
+                // do not relayout; the hook still runs, but it returns before
+                // configure. A custom chrome drag paints its steps in-stack
+                // and is not this path.
+                let defer_program = native_live_resize
+                    && matches!(event, WinitWindowEvent::SurfaceResized(_))
+                    && self.defer_native_live_resize(id);
+                if !defer_program {
+                    self.forward_window_event(event_loop, id, &event);
+                }
                 if geometry_changed && !native_live_resize {
                     self.request_redraw(id);
                 }
