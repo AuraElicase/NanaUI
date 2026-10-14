@@ -15,8 +15,14 @@
 //!   (workspaces) only moves the contents, so their state survives.
 //!
 //! Contents come from the view: a child keyed with an area's id is its
-//! content, one keyed `{id}:header` its header. Keyed children whose area is
-//! not in the layout wait, hidden, until a layout shows it again.
+//! content, one keyed `{id}:header` its header. A child keyed
+//! `editor:{type}` (and `editor:{type}:header`) is an editor's content and
+//! goes to an area showing that editor, so areas split off or switched to
+//! another editor show it (#351). Keyed children whose area is not in the
+//! layout wait, hidden, until a layout shows it again.
+//!
+//! With [`AreaLayout::editor_select`] every header starts with a select of
+//! editor types; choosing one is [`AppContext::set_area_editor`].
 
 mod model;
 
@@ -35,8 +41,16 @@ use crate::view_components::project_common;
 use crate::{
     AccessibilityRole, AccessibilityState, AppContext, ComponentView, Entity, FrameworkError,
     InteractionState, LayoutBox, MutationQueue, NodeKind, NodePointer, NodePointerHooks, NodeStyle,
-    NodeWheel, StableNodeId, UiWorld,
+    NodeWheel, Select, SelectChanged, SelectOption, StableNodeId, UiWorld,
 };
+
+/// The key prefix of a content placed by its editor type (#351).
+const EDITOR_KEY: &str = "editor:";
+
+/// The key of `editor`'s content.
+fn editor_key(editor: &str) -> String {
+    format!("{EDITOR_KEY}{editor}")
+}
 
 /// A corner drag moves this far before it means anything, px.
 const DRAG_SLOP: f32 = nana_ui_core::space::SM;
@@ -103,6 +117,8 @@ pub(crate) enum AreaPart {
         header: StableNodeId,
         content: StableNodeId,
         corners: [StableNodeId; 2],
+        /// The editor type select at the start of the header.
+        select: Option<StableNodeId>,
     },
 }
 
@@ -130,8 +146,40 @@ pub struct AreaLayout {
     /// interface's language (#350). An editor without one is called by its id.
     /// Not part of [`AreaLayoutModel`], which stays language-free data.
     pub labels: std::collections::BTreeMap<String, Arc<str>>,
+    /// The editor type select at the start of every header (#351); `None`
+    /// leaves the headers to the application.
+    pub editor_select: Option<AreaEditorSelect>,
+    /// The area each editor type was last chosen in: its `editor:` content
+    /// goes there.
+    pub(crate) hosts: std::collections::BTreeMap<String, String>,
     pub(crate) drag: Option<CornerDrag>,
     pub(crate) parts: Option<AreaParts>,
+}
+
+/// The editor types an area's header select offers, in order, named by
+/// [`AreaLayout::labels`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AreaEditorSelect {
+    pub editors: Vec<String>,
+    /// What assistive technology calls the select; `None` is the framework
+    /// strings' `area_layout.editor_type`.
+    pub label: Option<Arc<str>>,
+}
+
+impl AreaEditorSelect {
+    pub fn new<E: Into<String>>(editors: impl IntoIterator<Item = E>) -> Self {
+        Self {
+            editors: editors.into_iter().map(Into::into).collect(),
+            label: None,
+        }
+    }
+
+    /// See [`Self::label`]; an empty name is none.
+    pub fn label(mut self, label: impl Into<Arc<str>>) -> Self {
+        let label = label.into();
+        self.label = (!label.is_empty()).then_some(label);
+        self
+    }
 }
 
 impl AreaLayout {
@@ -142,9 +190,19 @@ impl AreaLayout {
             min_size: 48.0,
             style: layout_style(),
             labels: Default::default(),
+            editor_select: None,
+            hosts: Default::default(),
             drag: None,
             parts: None,
         }
+    }
+
+    /// Start every area's header with a select of `select`'s editor types;
+    /// choosing one shows it in that area ([`AppContext::set_area_editor`]).
+    /// [`AppContext::set_area_editor_select`] changes it later.
+    pub fn editor_select(mut self, select: AreaEditorSelect) -> Self {
+        self.editor_select = Some(select);
+        self
     }
 
     /// Name the areas showing each editor, `(editor type id, label)`; see
@@ -192,6 +250,7 @@ impl ComponentView for AreaLayout {
         // the layout is the user's once they have dragged it; a view that
         // means to replace it calls `set_area_layout`
         next.model = std::mem::replace(&mut self.model, next.model);
+        next.hosts = std::mem::take(&mut self.hosts);
         next.drag = self.drag.take();
         next.parts = self.parts.take();
         *self = next;
@@ -870,7 +929,8 @@ impl AppContext {
         self.emit_area_change(layout, AreaChange::Maximized(maximized))
     }
 
-    /// Show `editor` in `area`. The application swaps the content.
+    /// Show `editor` in `area`. Its `editor:` content moves there; a content
+    /// keyed by the area's id is the application's to swap.
     pub fn set_area_editor(
         &mut self,
         layout: Entity<AreaLayout>,
@@ -878,8 +938,12 @@ impl AppContext {
         editor: &str,
     ) -> Result<bool, FrameworkError> {
         let set = self.update_component(layout, |layout, _| {
-            layout.model.area(area).is_some_and(|a| a.editor != editor)
-                && layout.model.set_editor(area, editor)
+            let set = layout.model.area(area).is_some_and(|a| a.editor != editor)
+                && layout.model.set_editor(area, editor);
+            if set {
+                layout.hosts.insert(editor.to_owned(), area.to_owned());
+            }
+            set
         })?;
         if set {
             self.emit_area_change(
@@ -907,6 +971,16 @@ impl AppContext {
         self.update_component(layout, |layout, _| layout.labels = labels)
     }
 
+    /// Change the headers' editor type select, or remove it (`None`); see
+    /// [`AreaLayout::editor_select`]. The layout itself does not change.
+    pub fn set_area_editor_select(
+        &mut self,
+        layout: Entity<AreaLayout>,
+        select: Option<AreaEditorSelect>,
+    ) -> Result<(), FrameworkError> {
+        self.update_component(layout, |layout, _| layout.editor_select = select)
+    }
+
     /// Show `model` instead, a saved layout or another workspace. Contents
     /// keep their state: an area in both layouts keeps its content, the
     /// others' wait hidden.
@@ -918,6 +992,7 @@ impl AppContext {
         model.validate().map_err(|_| FrameworkError::InvalidInput)?;
         self.update_component(layout, |layout, _| {
             layout.model = model;
+            layout.hosts.clear();
             layout.drag = None;
         })?;
         self.emit_area_change(layout, AreaChange::Replaced)
@@ -955,10 +1030,14 @@ impl AppContext {
                                 header,
                                 content,
                                 corners,
+                                select,
                             } = part
                                 && snapshot.model.area(id).is_some()
                             {
-                                reuse.insert(id.clone(), (*frame, *header, *content, *corners));
+                                reuse.insert(
+                                    id.clone(),
+                                    (*frame, *header, *content, *corners, *select),
+                                );
                             }
                         }
                         let top_reused = reuse.values().any(|(frame, ..)| *frame == old.top);
@@ -999,8 +1078,11 @@ impl AppContext {
             }
         };
 
+        self.assemble_editor_selects(layout, document, &snapshot, &mut parts)?;
+
         // contents into their areas, the rest to wait
         let model = &snapshot.model;
+        let hosts = self.editor_hosts(layout, &snapshot, &parts);
         let mut placed = Vec::new();
         for part in &parts.nodes {
             let AreaPart::Area {
@@ -1012,7 +1094,15 @@ impl AppContext {
             else {
                 continue;
             };
-            for (key, slot) in [(id.clone(), *content), (format!("{id}:header"), *header)] {
+            let mut keys = vec![(id.clone(), *content), (format!("{id}:header"), *header)];
+            if let Some(area) = model.area(id)
+                && hosts.get(area.editor.as_str()) == Some(id)
+            {
+                let key = editor_key(&area.editor);
+                keys.push((format!("{key}:header"), *header));
+                keys.push((key, *content));
+            }
+            for (key, slot) in keys {
                 if let Some(child) = self
                     .assembled_child(layout.stable_id(), &key)
                     .filter(|child| self.world().contains(*child))
@@ -1118,13 +1208,14 @@ impl AppContext {
     ) -> Result<StableNodeId, FrameworkError> {
         match node {
             AreaNode::Area { id } => {
-                if let Some((frame, header, content, corners)) = reuse.remove(id) {
+                if let Some((frame, header, content, corners, select)) = reuse.remove(id) {
                     out.push(AreaPart::Area {
                         id: id.clone(),
                         frame,
                         header,
                         content,
                         corners,
+                        select,
                     });
                     return Ok(frame);
                 }
@@ -1166,6 +1257,7 @@ impl AppContext {
                     header,
                     content,
                     corners,
+                    select: None,
                 });
                 Ok(frame)
             }
@@ -1264,12 +1356,188 @@ impl AppContext {
                 .map(|(_, b)| (local(*b), true)),
         })
     }
+
+    /// Give each header its editor type select (or take it away), showing
+    /// the area's editor among the layout's choices.
+    fn assemble_editor_selects(
+        &mut self,
+        layout: Entity<AreaLayout>,
+        document: crate::DocumentId,
+        snapshot: &AreaLayout,
+        parts: &mut AreaParts,
+    ) -> Result<(), FrameworkError> {
+        let name = |editor: &str| {
+            snapshot
+                .labels
+                .get(editor)
+                .cloned()
+                .unwrap_or_else(|| Arc::from(editor))
+        };
+        for part in &mut parts.nodes {
+            let AreaPart::Area {
+                id, header, select, ..
+            } = part
+            else {
+                continue;
+            };
+            let Some(choice) = &snapshot.editor_select else {
+                if let Some(node) = select.take() {
+                    let mut mutations = MutationQueue::new();
+                    mutations.despawn_subtree(node);
+                    self.commit_mutations(mutations)?;
+                }
+                continue;
+            };
+            let node = match *select {
+                Some(node) if self.world().contains(node) => node,
+                _ => {
+                    let mut field = Select::new(None::<&str>)
+                        .size(nana_ui_core::ControlSize::Small)
+                        .fit_options(true);
+                    {
+                        let layout = Arc::make_mut(&mut field.style.layout);
+                        layout.width = Some(LengthSpec::Shrink);
+                        layout.flex_shrink = Some(0.0);
+                    }
+                    let field = self.create_detached_component(document, field)?;
+                    // first in the header, before the application's controls
+                    let first = self
+                        .world()
+                        .node(*header)
+                        .and_then(|node| node.children.first().copied());
+                    let mut mutations = MutationQueue::new();
+                    mutations.insert(*header, field.stable_id(), first);
+                    self.commit_mutations(mutations)?;
+                    let area = id.clone();
+                    self.observe(field, layout, move |layout, e: &SelectChanged, cx| {
+                        let editor = e.value.to_string();
+                        if layout.model.area(&area).is_none_or(|a| a.editor == editor) {
+                            return;
+                        }
+                        layout.model.set_editor(&area, editor.clone());
+                        layout.hosts.insert(editor, area.clone());
+                        cx.emit(AreaLayoutChanged {
+                            change: AreaChange::Editor { area: area.clone() },
+                            model: layout.model.clone(),
+                        });
+                        cx.reassemble();
+                    })?;
+                    *select = Some(field.stable_id());
+                    field.stable_id()
+                }
+            };
+            let editor = snapshot.model.area(id).map(|area| area.editor.clone());
+            let mut options: Vec<SelectOption> = choice
+                .editors
+                .iter()
+                .map(|e| SelectOption::new(e.as_str(), name(e)))
+                .collect();
+            // an editor the choices leave out still shows as the value
+            if let Some(editor) = &editor
+                && !choice.editors.contains(editor)
+            {
+                options.push(SelectOption::new(editor.as_str(), name(editor)));
+            }
+            let value = editor.map(Arc::<str>::from);
+            let label = choice
+                .label
+                .clone()
+                .unwrap_or_else(|| Arc::clone(&self.world().framework_strings().area_editor_type));
+            let field = Entity::<Select>::from_stable_id(node);
+            let stale = self.read(field, |field| {
+                field.options != options
+                    || field.value != value
+                    || field.label.as_ref() != Some(&label)
+            })?;
+            if stale {
+                self.update_component(field, |field, _| {
+                    field.options = options;
+                    field.value = value;
+                    field.label = Some(label);
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The area each `editor:` content goes to, by editor type: one area per
+    /// type, the one it was last chosen in, else the one holding it, else
+    /// the first; a shown area first. An area with a content keyed by its own
+    /// id takes none.
+    fn editor_hosts(
+        &self,
+        layout: Entity<AreaLayout>,
+        snapshot: &AreaLayout,
+        parts: &AreaParts,
+    ) -> std::collections::HashMap<String, String> {
+        let keyed = |key: &str| {
+            self.assembled_child(layout.stable_id(), key)
+                .filter(|child| self.world().contains(*child))
+        };
+        let model = &snapshot.model;
+        let areas: Vec<(&str, &str, StableNodeId, StableNodeId)> = parts
+            .nodes
+            .iter()
+            .filter_map(|part| match part {
+                AreaPart::Area {
+                    id,
+                    header,
+                    content,
+                    ..
+                } => model
+                    .area(id)
+                    .map(|area| (id.as_str(), area.editor.as_str(), *header, *content)),
+                AreaPart::Split { .. } => None,
+            })
+            .collect();
+        let shown = |id: &str| model.maximized.as_deref().is_none_or(|max| max == id);
+        let mut hosts = std::collections::HashMap::new();
+        for &(_, editor, ..) in &areas {
+            if hosts.contains_key(editor) {
+                continue;
+            }
+            let key = editor_key(editor);
+            let Some(child) = keyed(&key).or_else(|| keyed(&format!("{key}:header"))) else {
+                continue;
+            };
+            let candidates: Vec<&str> = areas
+                .iter()
+                .filter(|(id, e, ..)| *e == editor && keyed(id).is_none())
+                .map(|(id, ..)| *id)
+                .collect();
+            let holder = self.world().parent_id(child).and_then(|slot| {
+                areas
+                    .iter()
+                    .find(|(_, _, header, content)| slot == *header || slot == *content)
+                    .map(|(id, ..)| *id)
+            });
+            let preferred: Vec<&str> = snapshot
+                .hosts
+                .get(editor)
+                .map(String::as_str)
+                .into_iter()
+                .chain(holder)
+                .chain(candidates.iter().copied())
+                .filter(|id| candidates.contains(id))
+                .collect();
+            if let Some(host) = preferred.iter().find(|id| shown(id)).or(preferred.first()) {
+                hosts.insert(editor.to_owned(), (*host).to_owned());
+            }
+        }
+        hosts
+    }
 }
 
-/// An area's frame, header, content and corners, by id.
+/// An area's frame, header, content, corners and editor select, by id.
 type ReusedAreas = std::collections::HashMap<
     String,
-    (StableNodeId, StableNodeId, StableNodeId, [StableNodeId; 2]),
+    (
+        StableNodeId,
+        StableNodeId,
+        StableNodeId,
+        [StableNodeId; 2],
+        Option<StableNodeId>,
+    ),
 >;
 
 /// For each tree node in build order: whether it shows, how much it grows
