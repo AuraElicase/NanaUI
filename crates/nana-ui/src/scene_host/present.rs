@@ -441,6 +441,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let gpu_work = painter.last_gpu_work();
         self.graphics.present_frame(frame);
         self.note_native_live_resize_presented(id);
+        self.release_settled_live_resize_transaction(id);
         crate::host_diagnostics::frame_presented(frame_started, submit, gpu_work);
         if let Some(host) = self.window_contexts.get_mut(&id) {
             self.graphics.apply_pending_reconfigure(&mut host.surface);
@@ -473,7 +474,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         // Publish semantics for the frame just presented. Application callbacks
         // below may commit new work intended for the next frame.
         #[cfg(not(target_os = "android"))]
-        if !self.is_live_resize(id) {
+        if !self.is_live_resize(id) && !self.take_live_resize_accessibility_skip(id) {
             self.synchronize_accessibility(id);
         }
         // Layout moved the caret, or the field under it: the IME follows.
