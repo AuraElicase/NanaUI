@@ -11,6 +11,7 @@ Read [`docs/reference/window.md`](../../../docs/reference/window.md) and the pla
 - Clear an existing effect before reapplying it. Return the effect actually applied or an explicit fallback; never report a requested effect after failure.
 - Use a readable opaque fallback when a native material is unavailable. Do not silently substitute a different material family.
 - Keep title-bar drag, client-area chrome, native controls, scaling, input, IME, clipboard, display, and fullscreen ownership in the platform boundary. Framework UI supplies layout slots and public state.
+- Window focus changes cancel native preedit as well as Runtime preedit. Defer native IME resets to the end of the event turn, retain loss/regain edges even for the same editor, and discard AppKit's input-context buffer before replacing the session. Do not gate IME continuously on key-window status or replace real cross-window Pinyin evidence with pasted text.
 - Route Scene/GPU changes to `$nanaui-gpu-integration` and evidence to `$nanaui-validation`.
 
 Require a real target-platform window before claiming native material, resize, cleanup, or visual acceptance; compilation for another target is not runtime evidence.

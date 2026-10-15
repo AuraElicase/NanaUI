@@ -285,8 +285,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                         return;
                     }
                 }
-                if *focused && let Some(host) = self.window_contexts.get_mut(&id) {
-                    host.input_source.forget_ime();
+                if let Some(host) = self.window_contexts.get_mut(&id) {
+                    host.input_source.reset_ime();
                 }
                 // Window focus is canonical input as well as a host
                 // observation. Routing it first lets the Runtime cancel what

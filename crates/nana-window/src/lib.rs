@@ -12,6 +12,7 @@ mod contrast_preference;
 #[cfg(target_os = "windows")]
 mod dcomp;
 mod file_dialog;
+mod ime;
 mod keyboard;
 mod material;
 mod menu;
@@ -50,6 +51,7 @@ pub use file_dialog::{
     FileDialogSupport, FileFilter, describe_configured_dialog, file_dialog_support,
     open_file_dialog,
 };
+pub use ime::discard_native_ime_preedit;
 pub use keyboard::{KeyboardModifiers, keyboard_modifiers};
 pub use material::{
     Appearance, FallbackColor, MaterialEffect, MaterialFallback, MaterialOutcome,
