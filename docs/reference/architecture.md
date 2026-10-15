@@ -48,7 +48,7 @@ Vue + JS L1/L2（可选宿主适配）
 
 ### 无窗口输出与边界守护脚本
 
-操作系统窗口并非输出 API 的唯一语义根：普通窗口直接画进自己的 Surface；其他需要消费同一场景的目标（如 Spout 发送端、录屏器、嵌套宿主）通过窗口外输出获取画面——宿主在窗口原本就要录制的那一帧里，复用同一个 `SceneWgpuPainter` 将场景额外画进 `ExternalSurface`，不复制 `UiWorld`、`UiScene` 或自定义渲染器。`ExternalSurface` 为无窗口、嵌套与无头消费方保留持久 GPU 资源：静态场景在生产端入口直接跳过整帧（`Reused`），消费方只采样最近一次已完成的修订版本，无拓扑协商器，也无 CPU 回读路径（详见 [窗口外输出](output.md)）。
+操作系统窗口并非输出 API 的唯一语义根：Window 与无窗口 `PresentationDriver` 共用真实的 presentation 编排。普通 Window-only 直接画进 Surface；`RenderTargetPlanner` 在消费者或显示需求变化时缓存兼容分组，兼容 Window/外部消费方共享一次 canonical 渲染，仅最终 transfer 独立计数；像素密度、文本 AA、HDR 等不兼容需求明确分组。`ExternalSurface` 为无窗口、嵌套与无头消费方保留有界 GPU 槽位和真实提交租约：静态生产端跳过渲染和提交，消费方只采样已完成版本。整个路径仍只有一份 `UiWorld → UiScene` 和同设备 `SceneWgpuPainter`，产品不提供 CPU 回读 fallback（详见 [窗口外输出](output.md)）。
 
 `scripts/check-engine-boundary.py` 在 CI 中静态守卫以下边界：
 

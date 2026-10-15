@@ -5,7 +5,12 @@
   "description": "Machine-readable workload definition. Iced, GPUI, and NanaUI runners must consume the same file rather than inventing their own trees, fonts, or interaction scripts.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "id", "kind", "params"],
+  "required": [
+    "schema_version",
+    "id",
+    "kind",
+    "params"
+  ],
   "properties": {
     "schema_version": {
       "const": 1
@@ -30,7 +35,9 @@
         "Overlay",
         "Animation",
         "GpuScene",
-        "Theme"
+        "Theme",
+        "PresentationOutput",
+        "OutputTransport"
       ]
     },
     "params": {
@@ -38,20 +45,43 @@
     },
     "record": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "invariants": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
-          "name": { "type": "string" },
-          "path": { "type": "string" },
-          "op": { "type": "string", "enum": ["eq", "lte", "gte"] },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "eq",
+              "lte",
+              "gte"
+            ]
+          },
           "value": {},
-          "status": { "type": "string", "enum": ["required", "not-evaluable"] },
-          "note": { "type": "string" }
+          "status": {
+            "type": "string",
+            "enum": [
+              "required",
+              "not-evaluable"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
         }
       }
     },

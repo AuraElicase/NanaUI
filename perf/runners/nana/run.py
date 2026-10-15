@@ -56,6 +56,13 @@ GPU_SCENE_BIN = {
     "features": "gpu",
     "key": "gpu",
 }
+OUTPUT_BIN = {
+    "package": "nana-ui",
+    "binary": "nana-output-benchmark",
+    "features": "gpu",
+    "key": "output",
+}
+TRANSPORT_BIN = {**OUTPUT_BIN, "key":"output_transport"}
 THEME_BIN = {
     "package": "nana-ui-runtime",
     "binary": "nana-theme-benchmark",
@@ -66,6 +73,10 @@ THEME_BIN = {
 
 def _needed_bins(scenario: dict[str, Any]) -> list[dict[str, str]]:
     kind = scenario["kind"]
+    if kind == "PresentationOutput":
+        return [OUTPUT_BIN]
+    if kind == "OutputTransport":
+        return [TRANSPORT_BIN]
     if kind == "StaticTree":
         return [RUNTIME_BIN, SCENE_BIN]
     if kind in {"Mutation", "Hover"}:
@@ -101,6 +112,10 @@ def plan(scenario_id: str, args: Any) -> list[str]:
             f"# nana unsupported for {scenario_id}; exit {contract.EXIT_UNSUPPORTED}",
             f"# {gpu_skip}",
         ]
+    if scenario.get("kind") == "PresentationOutput" and scenario["params"]["workload"] == "direct" and not args.from_report:
+        return ["# output-direct requires a real presentation-output-probe Window report; pass --from-report"]
+    if scenario.get("kind") == "OutputTransport" and scenario["params"]["workload"] in {"native-host", "openvr-native", "web-native"} and not args.from_report:
+        return ["# actual external transport needs its native-host/OpenVR/Electron report; pass --from-report"]
     bins = _needed_bins(scenario)
     if not bins:
         return [f"# no Nana binary mapping for {scenario_id}"]
@@ -150,7 +165,15 @@ def execute(scenario_id: str, args: Any) -> dict[str, Any]:
             scenario=scenario,
             unsupported_reason=gpu_skip,
         )
+    if scenario.get("kind") == "PresentationOutput" and scenario["params"]["workload"] == "direct" and not args.from_report:
+        return contract.envelope(
+            runner="nana", status="unsupported", scenario_id=scenario_id, scenario=scenario,
+            unsupported_reason="output-direct requires a real presentation-output-probe Window report; pass --from-report",
+        )
     needed = _needed_bins(scenario)
+    if scenario.get("kind") == "OutputTransport" and scenario["params"]["workload"] in {"native-host", "openvr-native", "web-native"} and not args.from_report:
+        return contract.envelope(runner="nana", status="unsupported", scenario_id=scenario_id, scenario=scenario,
+            unsupported_reason="Actual external transport requires its native-host/OpenVR/Electron reference report; pass --from-report")
     if not needed:
         return contract.envelope(
             runner="nana",
@@ -192,7 +215,7 @@ def execute(scenario_id: str, args: Any) -> dict[str, Any]:
                 try:
                     contract.run_command(command, args.repo_root)
                 except subprocess.CalledProcessError as exc:
-                    if spec["key"] == "gpu" and exc.returncode == 2 and output.is_file():
+                    if spec["key"] in {"gpu", "output", "output_transport"} and exc.returncode == 2 and output.is_file():
                         payload = contract.load_json(output)
                         if payload.get("status") == "unsupported":
                             return contract.envelope(
@@ -212,13 +235,17 @@ def execute(scenario_id: str, args: Any) -> dict[str, Any]:
     try:
         report = contract.extract_nana(scenario, reports, source_paths=paths)
     except KeyError as exc:
+        # A completed transport with missing/invalid evidence is a broken report,
+        # not absence of platform capability. Explicit unsupported stays separate.
+        transport = scenario.get("kind") == "OutputTransport"
         return contract.envelope(
             runner="nana",
-            status="unsupported",
+            status="error" if transport else "unsupported",
             scenario_id=scenario_id,
             scenario=scenario,
             command=commands,
-            unsupported_reason=contract.key_error_reason(exc),
+            **({"error":contract.key_error_reason(exc)} if transport else
+               {"unsupported_reason":contract.key_error_reason(exc)}),
         )
     report["scenario_id"] = scenario_id
     report["scenario"] = scenario
@@ -240,6 +267,8 @@ def catalog_framework_window_args(repo_root: Path) -> list[str]:
 
 
 def _extra_args(scenario: dict[str, Any], spec: dict[str, str], repo_root: Path) -> list[str] | None:
+    if spec["key"] == "output_transport":
+        return ["--transport-only"]
     if spec["key"] == "gpu":
         return ["--scenario", str(contract.scenario_path(scenario["id"], repo_root))]
     if spec["key"] == "scene_compositor":
@@ -252,6 +281,10 @@ def _extra_args(scenario: dict[str, Any], spec: dict[str, str], repo_root: Path)
 
 
 def _guess_report_key(payload: dict[str, Any]) -> str:
+    if "transport_cases" in payload or payload.get("fixture") in {"native-host-output", "openvr-native-output", "electron-webgpu-output"} or payload.get("evidence") == "actual-electron-webgpu" or payload.get("type") == "summary":
+        return "output_transport"
+    if "output_cases" in payload:
+        return "output"
     if payload.get("catalog_theme") is not None:
         return "theme"
     if payload.get("catalog_compositor") is not None:

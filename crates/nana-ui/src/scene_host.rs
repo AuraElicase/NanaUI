@@ -11,6 +11,7 @@ mod input;
 mod output;
 mod presence;
 mod present;
+mod production;
 mod schedule;
 mod startup;
 mod tasks;
@@ -288,6 +289,9 @@ struct WindowManager<Program: RuntimeProgram> {
     frame_schedules: HashMap<WindowId, crate::runtime_host::FrameSchedule>,
     /// Offscreen outputs of windows whose program asked for one.
     window_outputs: HashMap<WindowId, crate::output::window_output::WindowOutputState>,
+    producer_frames: production::WindowProducerCache,
+    /// Allocated only for windows that opt in to output diagnostics.
+    direct_output_traces: HashMap<WindowId, crate::output::OutputTraceSnapshot>,
     /// Host-texture slots each window's scene samples, with the subscription
     /// that wakes it; re-subscribed only when the slot set or registry changes.
     texture_subscriptions: HashMap<WindowId, (HashSet<Arc<str>>, crate::TextureSubscription)>,
@@ -1281,6 +1285,8 @@ fn complete_startup<Program: RuntimeProgram>(
         surface_generation: 0,
         frame_schedules: HashMap::new(),
         window_outputs: HashMap::new(),
+        producer_frames: production::WindowProducerCache::default(),
+        direct_output_traces: HashMap::new(),
         texture_subscriptions: HashMap::new(),
         texture_redraws: Arc::new(Mutex::new(HashSet::new())),
         image_targets: Arc::new(Mutex::new(HashMap::new())),

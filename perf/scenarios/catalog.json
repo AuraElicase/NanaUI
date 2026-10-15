@@ -102,7 +102,7 @@
         "text_len": 32,
         "item_extent_px": 20
       },
-      "note": "Required by #8 §3.4. Scenario JSON and Nana mapping exist; nana-framework-benchmark skips the 1M row unless NANA_PERF_SCALE=large. Not in harness_ids so default --all is not exit 2."
+      "note": "Required by #8 \u00a73.4. Scenario JSON and Nana mapping exist; nana-framework-benchmark skips the 1M row unless NANA_PERF_SCALE=large. Not in harness_ids so default --all is not exit 2."
     },
     {
       "id": "virtual-tree-1m",
@@ -114,7 +114,7 @@
         "text_len": 32,
         "item_extent_px": 20
       },
-      "note": "Required by #8 §3.4. Scenario JSON and Nana mapping exist; nana-framework-benchmark skips the 1M tree row unless NANA_PERF_SCALE=large. Not in harness_ids so default --all is not exit 2."
+      "note": "Required by #8 \u00a73.4. Scenario JSON and Nana mapping exist; nana-framework-benchmark skips the 1M tree row unless NANA_PERF_SCALE=large. Not in harness_ids so default --all is not exit 2."
     },
     {
       "id": "gpu-scene-ui-live2d",
@@ -122,7 +122,7 @@
       "params": {
         "composition": "UiLive2d"
       },
-      "note": "Required by #8 §3.8."
+      "note": "Required by #8 \u00a73.8."
     },
     {
       "id": "gpu-scene-ui-live2d-effect",
@@ -130,7 +130,27 @@
       "params": {
         "composition": "UiLive2dEffect"
       },
-      "note": "Required by #8 §3.8. Required by #8 / not implemented as a shared Scenario runner."
+      "note": "Required by #8 \u00a73.8. Required by #8 / not implemented as a shared Scenario runner."
     }
+  ],
+  "nana_output_ids": [
+    "output-direct",
+    "output-static",
+    "output-multi",
+    "output-nested",
+    "output-conversion",
+    "output-slow",
+    "output-recovery"
+  ],
+  "nana_transport_ids": [
+    "transport-overlay-static",
+    "transport-overlay-changing",
+    "transport-overlay-multi",
+    "transport-overlay-slow",
+    "transport-web-static",
+    "transport-web-changing",
+    "transport-native-host",
+    "transport-openvr-native",
+    "transport-web-native"
   ]
 }

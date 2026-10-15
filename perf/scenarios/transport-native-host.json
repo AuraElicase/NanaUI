@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "id": "transport-native-host",
+  "kind": "OutputTransport",
+  "params": {
+    "workload": "native-host",
+    "frames": 240
+  },
+  "record": [
+    "producer_work",
+    "consumer_work",
+    "proof",
+    "evidence"
+  ],
+  "invariants": [
+    {
+      "name": "native_host_frames",
+      "path": "frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_producer_work_ui_renders",
+      "path": "producer_work.ui_renders",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_producer_work_submissions",
+      "path": "producer_work.submissions",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_producer_work_gpu_copies",
+      "path": "producer_work.gpu_copies",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_producer_work_cpu_readbacks",
+      "path": "producer_work.cpu_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_producer_work_target_recreates",
+      "path": "producer_work.target_recreates",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_consumer_work_gpu_copies",
+      "path": "consumer_work.gpu_copies",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_consumer_work_gpu_copy_bytes",
+      "path": "consumer_work.gpu_copy_bytes",
+      "op": "eq",
+      "value": 884736000,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_consumer_work_gpu_ready_waits",
+      "path": "consumer_work.gpu_ready_waits",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_consumer_work_gpu_release_signals",
+      "path": "consumer_work.gpu_release_signals",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_consumer_work_target_recreates",
+      "path": "consumer_work.target_recreates",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_consumer_work_validation_readbacks",
+      "path": "consumer_work.validation_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_proof_native_handle_imports",
+      "path": "proof.native_handle_imports",
+      "op": "gte",
+      "value": 1,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_proof_explicit_cpu_fence_waits",
+      "path": "proof.explicit_cpu_fence_waits",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_proof_production_cpu_readbacks",
+      "path": "proof.production_cpu_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "native_host_fixture_version",
+      "path": "fixture_version",
+      "op": "eq",
+      "value": 1,
+      "status": "required",
+      "note": "Pin actual fixture, physical extent and disjoint warmup/measurement scope; missing is not success."
+    },
+    {
+      "name": "native_host_warmup_frames",
+      "path": "warmup_frames",
+      "op": "eq",
+      "value": 30,
+      "status": "required",
+      "note": "Pin actual fixture, physical extent and disjoint warmup/measurement scope; missing is not success."
+    },
+    {
+      "name": "native_host_device_generation",
+      "path": "device_generation",
+      "op": "gte",
+      "value": 1,
+      "status": "required",
+      "note": "Pin actual fixture, physical extent and disjoint warmup/measurement scope; missing is not success."
+    },
+    {
+      "name": "native_host_producer_work_draw_calls",
+      "path": "producer_work.draw_calls",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Actual disjoint steady workload; missing evidence fails closed."
+    },
+    {
+      "name": "native_host_source_calls",
+      "path": "source_calls",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Actual disjoint steady workload; missing evidence fails closed."
+    }
+  ],
+  "notes": "Portable transfer fixtures explicitly mock only foreign retirement; native-host/OpenVR/Electron scenarios require their actual platform reference reports and remain unavailable where not executed."
+}

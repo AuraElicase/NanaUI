@@ -61,6 +61,85 @@ jobs:
         run: cargo check -p component-gallery --bin component-gallery --locked
       - name: Run default-feature tests
         run: cargo test --workspace --all-targets --locked
+      # Issue #242: measured output work, never a prerecorded zero fixture.
+      # Linux has lavapipe, macOS Metal and Windows the hosted GPU/WARP path.
+      - name: Exercise retained output and judge live GPU work
+        shell: bash
+        run: |
+          cargo test -p nana-ui --lib --features gpu --locked output:: -- --test-threads=1
+          cargo test -p nana-ui --test output_trace_owner --features gpu,wgpu-interop --locked -- --test-threads=1
+          cargo run -p nana-ui --features gpu --bin nana-output-benchmark --locked -- \
+            --output target/performance/output-live.json
+          for workload in static multi nested conversion slow recovery; do
+            python3 perf/runners/nana/run.py --scenario "output-${workload}" \
+              --from-report target/performance/output-live.json \
+              --output "target/performance/output-gates/output-${workload}.json"
+          done
+          python3 perf/contract.py --evaluate-invariants target/performance/output-gates
+          cargo run -p nana-ui --features gpu --bin nana-output-benchmark --locked -- \
+            --transport-only --output target/performance/output-transports-live.json
+          for workload in overlay-static overlay-changing overlay-multi overlay-slow web-static web-changing; do
+            python3 perf/runners/nana/run.py --scenario "transport-${workload}" \
+              --from-report target/performance/output-transports-live.json \
+              --output "target/performance/transport-gates/transport-${workload}.json"
+          done
+          python3 perf/contract.py --evaluate-invariants target/performance/transport-gates
+      - name: Check concrete Web bridge receipt and error classification contracts
+        shell: bash
+        run: node --test examples/web-output-bridge/*.test.cjs
+      - name: Exercise and judge real Window output topology
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cargo run -p nana-ui --example presentation-output-probe --features hosted,bundled-fonts --locked -- \
+            --output target/performance/output-window.json
+          python3 perf/runners/nana/run.py --scenario output-direct \
+            --from-report target/performance/output-window.json \
+            --output target/performance/output-direct.json
+          python3 perf/contract.py --evaluate-invariants target/performance/output-direct.json
+      # Pure ABI/kernel-handle tests need Windows, but no SteamVR or Electron.
+      # The ignored live SteamVR test stays a separate conformance requirement.
+      - name: Check native reference ABI and temporary NT handle ownership
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cargo test -p nana-ui --example openvr-output-probe --example web-output-producer \
+            --features gpu,bundled-fonts,native-export,wgpu-interop --locked -- --test-threads=1
+      - name: Exercise DX12 export and actual D3D11 native import
+        if: runner.os == 'Windows'
+        shell: bash
+        timeout-minutes: 15
+        env:
+          NANA_REQUIRE_DX12_NATIVE_TESTS: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p target/performance
+          cargo test -p nana-gpu --features native-export --test native_export --locked -- \
+            --test-threads=1 --nocapture 2>&1 | tee target/performance/output-native-tests.log
+          cargo run -p nana-ui --example window-output-probe --features hosted,bundled-fonts,native-export --locked \
+            | tee target/performance/output-native-window.jsonl
+          cargo run -p nana-ui --example window-output-probe --features hosted,bundled-fonts,native-export --locked -- \
+            --perf-output target/performance/output-native-host.json
+          python3 perf/runners/nana/run.py --scenario transport-native-host \
+            --from-report target/performance/output-native-host.json \
+            --output target/performance/output-native-host-gate.json
+          python3 perf/contract.py --evaluate-invariants target/performance/output-native-host-gate.json
+      - name: Save presentation conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: presentation-output-${{ matrix.os }}
+          path: |
+            target/performance/output-live.json
+            target/performance/output-transports-live.json
+            target/performance/transport-gates
+            target/performance/output-gates
+            target/performance/output-window.json
+            target/performance/output-direct.json
+            target/performance/output-native-tests.log
+            target/performance/output-native-window.jsonl
+            target/performance/output-native-host.json
+            target/performance/output-native-host-gate.json
       # The Runtime suite again on typed contexts: a creation path that forgot
       # to install a component's type hook fails the test that needs it.
       - name: Run Runtime tests on typed contexts

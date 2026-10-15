@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "id": "output-slow",
+  "kind": "PresentationOutput",
+  "params": {
+    "workload": "slow",
+    "frames": 240
+  },
+  "record": [
+    "output_work",
+    "producer_call_ms",
+    "proof",
+    "evidence"
+  ],
+  "invariants": [
+    {
+      "name": "slow_gpu_copies",
+      "path": "output_work.gpu_copies",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_gpu_copy_bytes",
+      "path": "output_work.gpu_copy_bytes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_cpu_readbacks",
+      "path": "output_work.cpu_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_plan_rebuilds",
+      "path": "output_work.plan_rebuilds",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_scene_primitives",
+      "path": "proof.scene_primitives",
+      "op": "gte",
+      "value": 1,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_consumer_samples",
+      "path": "proof.consumer_samples",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_target_recreates",
+      "path": "output_work.target_recreates",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_extra_passes",
+      "path": "output_work.extra_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_ui_renders",
+      "path": "output_work.ui_renders",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_submissions",
+      "path": "output_work.submissions",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_deferred",
+      "path": "output_work.deferred",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_recovered_after_release",
+      "path": "proof.recovered_after_release",
+      "op": "eq",
+      "value": 1,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "slow_frame_slot_waits",
+      "path": "gpu_policy.frame_slot_waits",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Real device-policy deltas; output must not hide CPU waiting or frame-slot stalls."
+    },
+    {
+      "name": "slow_frame_slot_stalls",
+      "path": "gpu_policy.frame_slot_stalls",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Real device-policy deltas; output must not hide CPU waiting or frame-slot stalls."
+    },
+    {
+      "name": "slow_upload_ring_waits",
+      "path": "gpu_policy.upload_ring_waits",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Real device-policy deltas; output must not hide CPU waiting or frame-slot stalls."
+    },
+    {
+      "name": "slow_measured_policy_samples",
+      "path": "measurement_gpu_policy.samples",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual measured iterations; excludes initialization and 30 warmup frames."
+    },
+    {
+      "name": "slow_timing_samples",
+      "path": "timing_samples",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "CPU call quantiles must come from exactly 240 measured samples; warmup is excluded."
+    },
+    {
+      "name": "slow_content_revisions",
+      "path": "output_work.content_revisions",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "slow_gpu_convert_passes",
+      "path": "output_work.gpu_convert_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "slow_idle_reuse_frames",
+      "path": "output_work.idle_reuse_frames",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "slow_resolve_count",
+      "path": "output_work.resolve_count",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "slow_measured_upload_bytes",
+      "path": "measurement_gpu_policy.upload_bytes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "A saturated consumer pool must defer before producer GPU uploads or reallocations."
+    },
+    {
+      "name": "slow_measured_upload_writes",
+      "path": "measurement_gpu_policy.upload_writes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "A saturated consumer pool must defer before producer GPU uploads or reallocations."
+    },
+    {
+      "name": "slow_measured_upload_copies",
+      "path": "measurement_gpu_policy.upload_copies",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "A saturated consumer pool must defer before producer GPU uploads or reallocations."
+    },
+    {
+      "name": "slow_measured_buffer_reallocations",
+      "path": "measurement_gpu_policy.buffer_reallocations",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "A saturated consumer pool must defer before producer GPU uploads or reallocations."
+    }
+  ],
+  "notes": "Issue #242/#248 actual GPU output gate. Direct needs a real Window/Surface probe. Other platform adapters and device-loss are explicit unavailable evidence, never synthetic zero reports. Outside cross-framework harness ids."
+}

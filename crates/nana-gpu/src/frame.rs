@@ -27,6 +27,15 @@ impl fmt::Debug for FrameId {
     }
 }
 
+/// Frame-slot work performed while acquiring this exact frame. Unlike a
+/// device-policy delta, this cannot include another host thread's waits.
+/// These counts describe frame acquisition, not SDK or GPU execution time.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct FrameAcquisition {
+    pub frame_slot_waits: u64,
+    pub frame_slot_stalls: u64,
+}
+
 /// One frame's command recording. It owns the encoder from
 /// [`GpuContext::begin_frame`] until [`Self::submit`]; dropping it instead
 /// is the discard.
@@ -41,12 +50,15 @@ pub struct FrameContext {
     encoder: Option<wgpu::CommandEncoder>,
     retained: Vec<(RetainedWrites, u64)>,
     frame_slot: Option<FrameSlotId>,
+    acquisition: FrameAcquisition,
     transient_registry: Arc<Mutex<Vec<(TransientResourceKey, wgpu::Buffer)>>>,
     /// Writes renderers queued for this frame; submitted ahead of it.
     uploads: crate::upload::FrameUploads,
     /// Raw queue operations that must follow this frame's `queue.submit`
     /// under the same submission guard (native-export ready signals).
     after_submit: Vec<Box<dyn FnOnce() + Send>>,
+    on_discard: Vec<Box<dyn FnOnce() + Send>>,
+    completion_resources: Vec<Box<dyn Send>>,
 }
 
 impl fmt::Debug for FrameContext {
@@ -66,6 +78,7 @@ impl FrameContext {
         id: FrameId,
         encoder: wgpu::CommandEncoder,
         frame_slot: Option<FrameSlotId>,
+        acquisition: FrameAcquisition,
     ) -> Self {
         let uploads = Arc::new(Mutex::new(gpu.inner.upload_ring.batch()));
         Self {
@@ -74,9 +87,12 @@ impl FrameContext {
             encoder: Some(encoder),
             retained: Vec::new(),
             frame_slot,
+            acquisition,
             transient_registry: Arc::new(Mutex::new(Vec::new())),
             uploads,
             after_submit: Vec::new(),
+            on_discard: Vec::new(),
+            completion_resources: Vec::new(),
         }
     }
 
@@ -87,6 +103,18 @@ impl FrameContext {
     #[cfg_attr(not(all(windows, feature = "native-export")), allow(dead_code))]
     pub(crate) fn after_submit(&mut self, hook: Box<dyn FnOnce() + Send>) {
         self.after_submit.push(hook);
+    }
+
+    /// Run a cleanup if this recording is discarded. A successful submit
+    /// removes the cleanup without calling it.
+    pub fn on_discard(&mut self, cleanup: impl FnOnce() + Send + 'static) {
+        self.on_discard.push(Box::new(cleanup));
+    }
+
+    /// Keep a sampled resource or reservation alive until this frame's GPU
+    /// work completes. Discard releases it without waiting or submitting.
+    pub fn keep_alive_until_complete(&mut self, resource: impl Send + 'static) {
+        self.completion_resources.push(Box::new(resource));
     }
 
     pub(crate) fn uploads(&self) -> crate::upload::FrameUploads {
@@ -116,6 +144,10 @@ impl FrameContext {
 
     pub fn gpu(&self) -> &GpuContext {
         &self.gpu
+    }
+
+    pub const fn acquisition(&self) -> FrameAcquisition {
+        self.acquisition
     }
 
     pub fn generation(&self) -> DeviceGeneration {
@@ -190,6 +222,14 @@ impl FrameContext {
             (index, submission)
         };
         let cpu_duration = started.elapsed();
+        self.on_discard.clear();
+        if !self.completion_resources.is_empty() {
+            let resources = std::mem::take(&mut self.completion_resources);
+            self.gpu
+                .inner
+                .queue
+                .on_submitted_work_done(move || drop(resources));
+        }
         for (owner, key) in self.retained.drain(..) {
             owner.settle(key, self.id);
         }
@@ -241,6 +281,7 @@ impl FrameContext {
             frame: self.id,
             generation: self.gpu.generation(),
             cpu_duration,
+            acquisition: self.acquisition,
             index: index.0,
             submission: index.1,
         }
@@ -294,6 +335,9 @@ impl Drop for FrameContext {
         for (owner, key) in self.retained.drain(..) {
             owner.roll_back(key, self.id);
         }
+        for cleanup in self.on_discard.drain(..) {
+            cleanup();
+        }
     }
 }
 
@@ -302,6 +346,7 @@ pub struct GpuSubmission {
     frame: FrameId,
     generation: DeviceGeneration,
     cpu_duration: Duration,
+    acquisition: FrameAcquisition,
     pub(crate) index: wgpu::SubmissionIndex,
     submission: u64,
 }
@@ -319,6 +364,10 @@ impl fmt::Debug for GpuSubmission {
 }
 
 impl GpuSubmission {
+    pub const fn acquisition(&self) -> FrameAcquisition {
+        self.acquisition
+    }
+
     pub fn frame(&self) -> FrameId {
         self.frame
     }

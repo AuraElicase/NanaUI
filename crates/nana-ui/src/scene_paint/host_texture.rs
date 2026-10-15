@@ -18,6 +18,10 @@ pub(super) struct PreparedHostTexture {
 }
 
 impl HostTexturePipeline {
+    pub(super) fn keep_alive_until_complete(&self, frame: &mut nana_gpu::FrameContext) {
+        self.pipeline.keep_alive_until_complete(frame);
+    }
+
     pub(super) fn invalidate_image_bindings(&mut self) {
         self.pipeline.invalidate_image_bindings();
     }
