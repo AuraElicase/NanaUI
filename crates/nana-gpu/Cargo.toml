@@ -15,6 +15,8 @@ wgpu-interop = []
 # DX12 shared textures and a shared fence another D3D device opens by handle
 # (`NativeExportPool`). Windows only; compiles the DX12 backend in.
 native-export = ["dep:windows", "wgpu/dx12"]
+# Host-owned DX12 shared input textures written by an external GPU producer.
+native-import = ["dep:windows", "wgpu/dx12"]
 
 [lib]
 name = "nana_gpu"

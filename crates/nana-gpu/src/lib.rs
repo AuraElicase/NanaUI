@@ -40,6 +40,9 @@ mod wgpu_interop;
 #[cfg(all(windows, feature = "native-export"))]
 mod export;
 
+#[cfg(all(windows, feature = "native-import"))]
+mod import;
+
 pub use abi::{
     LogicalBinding, LogicalBindingType, LogicalResource, ResourceBinding, ResourceClass,
     ResourceSet, ResourceTable, ShaderInterface, ShaderStage, VertexAttribute,
@@ -66,3 +69,9 @@ pub use export::{
     NATIVE_EXPORT_FORMAT, NATIVE_EXPORT_SLOTS, NativeExportDeferral, NativeExportError,
     NativeExportOutcome, NativeExportPool, NativeFrameToken, StagedNativeFrame,
 };
+
+#[cfg(all(windows, feature = "native-import"))]
+pub use import::{
+    NATIVE_IMPORT_SLOTS, NativeImportError, NativeImportFrame, NativeImportPool, NativeImportTarget,
+};
+
