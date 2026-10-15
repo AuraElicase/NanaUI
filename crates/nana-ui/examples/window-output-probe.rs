@@ -17,6 +17,7 @@
 
 use std::convert::Infallible;
 use std::num::NonZeroU32;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use nana_ui::runtime::view::{entity_ref, widget, with_refs};
@@ -57,6 +58,78 @@ struct Probe {
     #[cfg(all(windows, feature = "native-export"))]
     consumer: Option<consumer::Consumer>,
     readback_ok: Option<bool>,
+    perf: Option<NativePerf>,
+}
+
+struct NativePerf {
+    output: PathBuf,
+    adapter: String,
+    device_generation: u64,
+    extent: Option<[u32; 2]>,
+    warmup_tokens: usize,
+    frames: usize,
+    source_ui_renders: usize,
+    source_draw_calls: usize,
+    measurement_started: bool,
+    source_submissions: usize,
+    source_cpu_readbacks: usize,
+    source_target_recreates: usize,
+    native_copy_bytes: usize,
+    source_native_copies: usize,
+    consumer_times: Vec<f64>,
+    source_times: Vec<f64>,
+    source_started: Instant,
+    measured_source_frame: bool,
+    #[cfg(all(windows, feature = "native-export"))]
+    last_release: u64,
+    consumer_baseline: Option<serde_json::Value>,
+}
+
+impl NativePerf {
+    fn new(output: PathBuf, adapter: String, device_generation: u64) -> Self {
+        Self {
+            output,
+            adapter,
+            device_generation,
+            extent: None,
+            warmup_tokens: 0,
+            frames: 0,
+            source_ui_renders: 0,
+            source_draw_calls: 0,
+            measurement_started: false,
+            source_submissions: 0,
+            source_cpu_readbacks: 0,
+            source_target_recreates: 0,
+            native_copy_bytes: 0,
+            source_native_copies: 0,
+            consumer_times: Vec::with_capacity(240),
+            source_times: Vec::new(),
+            source_started: Instant::now(),
+            measured_source_frame: false,
+            #[cfg(all(windows, feature = "native-export"))]
+            last_release: 0,
+            consumer_baseline: None,
+        }
+    }
+}
+
+fn perf_output_path() -> Option<PathBuf> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--perf-output" {
+            return Some(args.next().expect("--perf-output needs a path").into());
+        }
+    }
+    None
+}
+
+fn quantiles(mut values: Vec<f64>) -> serde_json::Value {
+    if values.is_empty() {
+        return serde_json::Value::Null;
+    }
+    values.sort_by(f64::total_cmp);
+    let at = |p: f64| values[((values.len() - 1) as f64 * p).round() as usize];
+    serde_json::json!({"samples":values.len(),"p50":at(0.5),"p95":at(0.95),"p99":at(0.99)})
 }
 
 impl Probe {
@@ -65,10 +138,16 @@ impl Probe {
     }
 
     fn animated(&self) -> bool {
-        PHASES.get(self.phase).is_some_and(|phase| phase.2)
+        self.perf.is_some() || PHASES.get(self.phase).is_some_and(|phase| phase.2)
     }
 
     fn advance(&mut self) -> RuntimeProgramUpdate {
+        if self.perf.is_some() {
+            if self.started.elapsed() > Duration::from_secs(90) {
+                self.finish_native(Some("native workload timed out"));
+            }
+            return RuntimeProgramUpdate::default();
+        }
         let phase = self.phase_at(Instant::now());
         if phase == self.phase {
             return RuntimeProgramUpdate::default();
@@ -108,6 +187,48 @@ impl Probe {
             "{}",
             serde_json::json!({"summary": checks, "passed": passed, "counts": self.counts})
         );
+        std::process::exit(if passed { 0 } else { 1 });
+    }
+
+    fn finish_native(&self, error: Option<&str>) -> ! {
+        let perf = self.perf.as_ref().expect("native perf mode");
+        #[cfg(all(windows, feature = "native-export"))]
+        let consumer = self
+            .consumer
+            .as_ref()
+            .map(|consumer| serde_json::json!(consumer.stats));
+        #[cfg(not(all(windows, feature = "native-export")))]
+        let consumer: Option<serde_json::Value> = None;
+        let mut measured = serde_json::Map::new();
+        if let (Some(after), Some(before)) = (&consumer, &perf.consumer_baseline) {
+            for key in [
+                "gpu_copies",
+                "gpu_copy_bytes",
+                "gpu_ready_waits",
+                "gpu_release_signals",
+                "target_recreates",
+                "validation_readbacks",
+            ] {
+                if let (Some(after), Some(before)) = (after[key].as_u64(), before[key].as_u64()) {
+                    measured.insert(key.into(), serde_json::json!(after - before));
+                }
+            }
+        }
+        let passed = error.is_none()
+            && perf.frames == 240
+            && measured.get("gpu_copies").and_then(|v| v.as_u64()) == Some(240);
+        let report = serde_json::json!({"schema_version":1,"fixture":"native-host-output","fixture_version":1,"native_api":"DX12-NT-D3D11","platform":std::env::consts::OS,"device_generation":perf.device_generation,"extent":perf.extent,"status":if passed {"ok"} else {"error"},"error":error,
+            "evidence":"actual-native-host-gpu","adapter":perf.adapter,"frames":perf.frames,"warmup_frames":perf.warmup_tokens,
+            "source_calls":perf.source_times.len(),"producer_work":{"draw_calls":perf.source_draw_calls,"ui_renders":perf.source_ui_renders,"submissions":perf.source_submissions,"cpu_readbacks":perf.source_cpu_readbacks,"target_recreates":perf.source_target_recreates,"gpu_copies":perf.source_native_copies,"gpu_copy_bytes":perf.native_copy_bytes},
+            "consumer_work":measured,"proof":{"consumer_completed":passed,"native_handle_imports":consumer.as_ref().and_then(|v|v["native_handle_imports"].as_u64()),"explicit_cpu_fence_waits":0,"production_cpu_readbacks":0},
+            "producer_window_cpu_ms":quantiles(perf.source_times.clone()),"consumer_record_cpu_ms":quantiles(perf.consumer_times.clone()),
+            "scope":"30 native tokens warmup then 240 actual native copies/foreign GPU consumer updates; source Window may redraw more while native consumer is busy; consumer CPU call excludes GPU completion; source timing includes full Window interval",
+            "gpu_execution_ms":null,"driver_vram_bytes":null});
+        if let Some(parent) = perf.output.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&perf.output, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+        println!("{report}");
         std::process::exit(if passed { 0 } else { 1 });
     }
 }
@@ -161,6 +282,17 @@ impl RuntimeProgram for Probe {
                 #[cfg(all(windows, feature = "native-export"))]
                 consumer: None,
                 readback_ok: None,
+                perf: perf_output_path().map(|path| {
+                    NativePerf::new(
+                        path,
+                        format!(
+                            "{} ({:?}) -> same-LUID D3D11",
+                            context.gpu().capabilities().adapter_name(),
+                            context.gpu().capabilities().backend()
+                        ),
+                        context.gpu().generation().get(),
+                    )
+                }),
             },
             Vec::new(),
         ))
@@ -220,6 +352,26 @@ impl RuntimeProgram for Probe {
     }
 
     fn prepare_window_frame(&mut self, _: WindowId, _: &RuntimeProgramContext<()>) {
+        if let Some(perf) = &mut self.perf {
+            #[cfg(all(windows, feature = "native-export"))]
+            if !perf.measurement_started
+                && perf.warmup_tokens == 30
+                && self
+                    .consumer
+                    .as_ref()
+                    .is_some_and(|consumer| consumer.release_completed(perf.last_release))
+            {
+                // The 30th foreign GPU read has really completed. No blocking
+                // CPU wait: the Window keeps ticking until this observation.
+                perf.consumer_baseline = self
+                    .consumer
+                    .as_ref()
+                    .map(|consumer| serde_json::json!(consumer.stats));
+                perf.measurement_started = true;
+            }
+            perf.source_started = Instant::now();
+            perf.measured_source_frame = perf.measurement_started;
+        }
         if self.animated() {
             self.tick += 1;
             let text = format!("frame {}", self.tick);
@@ -235,10 +387,56 @@ impl RuntimeProgram for Probe {
         _: WindowId,
         _: &RuntimeProgramContext<()>,
     ) -> RuntimeProgramUpdate {
+        if let Some(perf) = self.perf.as_mut() {
+            let work = self.document.context().last_work_counters();
+            if perf.measured_source_frame {
+                let (
+                    Some(renders),
+                    Some(draws),
+                    Some(submits),
+                    Some(readbacks),
+                    Some(recreates),
+                    Some(copies),
+                    Some(bytes),
+                ) = (
+                    work.output_ui_renders,
+                    work.draw_calls,
+                    work.output_submissions,
+                    work.output_cpu_readbacks,
+                    work.output_target_recreates,
+                    work.output_gpu_copies,
+                    work.output_gpu_copy_bytes,
+                )
+                else {
+                    self.finish_native(Some("source output counters were not observed"))
+                };
+                perf.source_ui_renders += renders;
+                perf.source_draw_calls += draws;
+                perf.source_submissions += submits;
+                perf.source_cpu_readbacks += readbacks;
+                perf.source_target_recreates += recreates;
+                perf.source_native_copies += copies;
+                perf.native_copy_bytes += bytes;
+                perf.source_times
+                    .push(perf.source_started.elapsed().as_secs_f64() * 1000.0);
+            }
+            #[cfg(all(windows, feature = "native-export"))]
+            if perf.frames == 240
+                && self
+                    .consumer
+                    .as_ref()
+                    .is_some_and(|consumer| consumer.release_completed(perf.last_release))
+            {
+                self.finish_native(None);
+            }
+        }
         self.advance()
     }
 
     fn next_wakeup(&self) -> Option<Instant> {
+        if self.perf.is_some() {
+            return Some(self.started + Duration::from_secs(90));
+        }
         Some(self.started + PHASE * (self.phase as u32 + 1))
     }
 
@@ -263,6 +461,33 @@ impl RuntimeProgram for Probe {
         frame: &WindowOutputFrame,
         context: &RuntimeProgramContext<()>,
     ) {
+        #[cfg(all(windows, feature = "native-export"))]
+        if let Some(perf) = &mut self.perf {
+            if perf.frames == 240 || perf.warmup_tokens == 30 && !perf.measurement_started {
+                return;
+            }
+            let Some(mut token) = frame.take_native() else {
+                return;
+            };
+            perf.extent = Some(token.extent());
+            perf.device_generation = context.gpu().generation().get();
+            let consumer = self
+                .consumer
+                .get_or_insert_with(|| consumer::Consumer::on_luid(token.adapter_luid()));
+            let at = Instant::now();
+            if consumer.consume(&mut token, false).is_err() {
+                self.finish_native(Some("native GPU import/copy failed"));
+            }
+            if perf.warmup_tokens < 30 {
+                perf.warmup_tokens += 1;
+            } else {
+                perf.frames += 1;
+                perf.consumer_times
+                    .push(at.elapsed().as_secs_f64() * 1000.0);
+            }
+            perf.last_release = token.release_value();
+            return;
+        }
         let Some(counts) = self.counts.get_mut(self.phase) else {
             return;
         };
@@ -327,9 +552,27 @@ mod consumer {
         opened: Option<(u64, Vec<ID3D11Texture2D>, ID3D11Fence)>,
         /// Where each frame is copied, as a sender's own texture would be.
         copy: Option<ID3D11Texture2D>,
+        pub stats: Stats,
+    }
+
+    #[derive(Default, serde::Serialize)]
+    pub struct Stats {
+        gpu_copies: usize,
+        gpu_copy_bytes: usize,
+        gpu_ready_waits: usize,
+        gpu_release_signals: usize,
+        target_recreates: usize,
+        validation_readbacks: usize,
+        native_handle_imports: usize,
     }
 
     impl Consumer {
+        pub fn release_completed(&self, value: u64) -> bool {
+            self.opened.as_ref().is_some_and(|(_, _, fence)| {
+                let completed = unsafe { fence.GetCompletedValue() };
+                completed != u64::MAX && completed >= value
+            })
+        }
         pub fn on_luid(luid: i64) -> Self {
             unsafe {
                 let factory: IDXGIFactory4 =
@@ -358,6 +601,7 @@ mod consumer {
                     context: context.unwrap(),
                     opened: None,
                     copy: None,
+                    stats: Stats::default(),
                 }
             }
         }
@@ -386,6 +630,7 @@ mod consumer {
                                 ))
                                 .map_err(|e| e.to_string())?,
                         );
+                        self.stats.native_handle_imports += 1;
                     }
                     let mut fence: Option<ID3D11Fence> = None;
                     device5
@@ -409,6 +654,7 @@ mod consumer {
                         .CreateTexture2D(&copy_desc, None, Some(&mut copy))
                         .map_err(|e| e.to_string())?;
                     self.copy = copy;
+                    self.stats.target_recreates += 1;
                 }
                 let copy = self.copy.as_ref().unwrap();
                 let context4: ID3D11DeviceContext4 =
@@ -417,10 +663,14 @@ mod consumer {
                 context4
                     .Wait(fence, token.ready_value())
                     .map_err(|e| e.to_string())?;
+                self.stats.gpu_ready_waits += 1;
                 self.context.CopyResource(copy, shared);
+                self.stats.gpu_copies += 1;
+                self.stats.gpu_copy_bytes += desc.Width as usize * desc.Height as usize * 4;
                 context4
                     .Signal(fence, token.release_value())
                     .map_err(|e| e.to_string())?;
+                self.stats.gpu_release_signals += 1;
                 self.context.Flush();
                 if !read_back {
                     return Ok(None);
@@ -443,6 +693,7 @@ mod consumer {
                 self.context
                     .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
                     .map_err(|e| e.to_string())?;
+                self.stats.validation_readbacks += 1;
                 // The opaque part of the frame is the red box; find it and
                 // return its centre texel.
                 let (mut opaque, mut min, mut max) = (0usize, [usize::MAX; 2], [0usize; 2]);
@@ -477,6 +728,14 @@ mod consumer {
 }
 
 fn main() -> Result<(), nana_ui::HostedRunError> {
+    #[cfg(not(all(windows, feature = "native-export")))]
+    if let Some(path) = perf_output_path() {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schema_version":1,"fixture":"native-host-output","status":"unsupported","evidence":"unavailable","unsupported_reason":"actual DX12/D3D11 native-host import requires Windows"})).unwrap()).unwrap();
+        std::process::exit(2);
+    }
     let mut settings = WindowDescriptor::new("NanaUI window output probe")
         .initial_size(480.0, 320.0)
         .surface(nana_ui::WindowSurfacePreference::Composition);

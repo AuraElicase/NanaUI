@@ -713,10 +713,15 @@ fn a_full_pipeline_blocks_on_the_oldest_frame_and_unsubmitted_slots_never_deadlo
     // Three submitted frames hold every slot until they complete; the next
     // frame waits for the oldest instead of spinning.
     let before = gpu.policy().stats();
-    gpu.begin_frame("after").submit();
+    let submission = gpu.begin_frame("after").submit();
     let after = gpu.policy().stats();
     assert!(after.frame_slot_waits - before.frame_slot_waits <= 1);
     assert_eq!(after.frame_slot_stalls, before.frame_slot_stalls);
+    assert_eq!(
+        submission.acquisition().frame_slot_waits,
+        after.frame_slot_waits - before.frame_slot_waits
+    );
+    assert_eq!(submission.acquisition().frame_slot_stalls, 0);
 
     // Let the submitted frames complete and hand their slots back.
     __framework::device(&gpu)
@@ -730,15 +735,31 @@ fn a_full_pipeline_blocks_on_the_oldest_frame_and_unsubmitted_slots_never_deadlo
     let starter = gpu.clone();
     thread::spawn(move || {
         let frame = starter.begin_frame("unslotted");
-        done_tx.send(frame.id()).unwrap();
+        done_tx.send((frame.id(), frame.acquisition())).unwrap();
     });
-    done_rx
+    let (_, acquisition) = done_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("begin_frame must not wait on frames that were never submitted");
+    assert_eq!(
+        acquisition,
+        nana_gpu::FrameAcquisition {
+            frame_slot_waits: 0,
+            frame_slot_stalls: 1
+        }
+    );
     assert_eq!(
         gpu.policy().stats().frame_slot_stalls,
         before.frame_slot_stalls + 1
     );
+    // Another thread's stall cannot retroactively become this recording's
+    // acquisition work, even though both share the same device policy.
+    assert_eq!(
+        held[0].as_ref().unwrap().acquisition(),
+        nana_gpu::FrameAcquisition::default()
+    );
+    drop(held);
+    let next = gpu.try_begin_frame("after foreign stall").unwrap().submit();
+    assert_eq!(next.acquisition(), nana_gpu::FrameAcquisition::default());
 }
 
 #[test]

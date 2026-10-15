@@ -236,3 +236,139 @@ copies that catalog param; Nana writes `mounted − visible`. Compare windows vi
 `--evaluate-invariants` judges Nana runner envelopes. Exit codes,
 `invariants/` completeness vs `weekly/`, and gated ids are described
 below in §8.1.
+
+## Issue #242 presentation output
+
+`catalog.json` 的 `nana_output_ids` 是七个独立工作量门禁；不进入跨框架
+`harness_ids`。`output-direct` 来自真实 Window/Surface probe；其余六项来自同一设备上
+真实的保留目标、Scene painter、consumer lease 与 final transfer。初始化与 30 次预热不计入
+240 次测量窗口，报告同时给出调用区间的 elapsed wall time p50/p95/p99；这些时间没有公共 CI 阈值。
+`output-recovery` 的时间包含非阻塞 GPU 完成轮询；其余 headless 时间计生产调用，
+conversion 不包含 consumer final transfer 的耗时。nested 另外报告 parent 调用耗时；
+direct 计真实窗口 prepare 至 presented 的区间。
+
+```bash
+cargo run --release --locked -p nana-ui --features gpu --bin nana-output-benchmark -- --output target/performance/output/live.json
+for workload in static multi nested conversion slow recovery; do
+  python3 perf/runners/nana/run.py --scenario "output-${workload}" --from-report target/performance/output/live.json --output "target/performance/output/gates/output-${workload}.json"
+done
+python3 perf/contract.py --evaluate-invariants target/performance/output/gates
+cargo run --release --locked -p nana-ui --example presentation-output-probe --features hosted,bundled-fonts -- --output target/performance/output/window.json
+python3 perf/runners/nana/run.py --scenario output-direct --from-report target/performance/output/window.json --output target/performance/output/direct.json
+python3 perf/contract.py --evaluate-invariants target/performance/output/direct.json
+```
+
+静态输出与 active parent 内的静态 child 要求 producer render/submit/copy/recreate 为 0；
+三消费方要求每次内容修订只 render 一次；BGRA typed/untyped 转换只增加显式 final transfer；
+慢消费者填满池后必须零录制地 defer，释放后恢复；resize 验证旧代际被拒绝与有界目标重建。
+真实窗口 probe 还验证 attach/detach、不兼容目标、resize 与隐藏静态输出。
+
+`evidence` 明确区分 `actual-gpu`、`actual-window-gpu`、`mock-contract`、`unavailable`。
+extractor 拒绝把 mock、不可用平台、缺失计数或不足 240 次的工作量当作 GPU 通过；没有
+adapter 时 executable/runner 返回 2。XR、native-host、Web 与真实 device-loss 需要各自
+平台 probe；CPU fallback 当前没有实现，不会默认选择或写入虚构的零拷贝证据。
+`--self-test` 对每条 invariant 注入失败、删除计数与伪造 evidence，验证门禁确实能拒绝。
+
+headless 的 `measurement_gpu_policy` 仅累计测量窗口，`gpu_policy` 明确包含 setup/预热；嵌套 child
+与 parent 分别观测。静态 producer 的 painter 为 `skipped`、240 帧且 `work: null`，
+不会用虚构的全零 draw/上传计数替代未发生的 encode。真实 encode 必须导出 draw、batch、
+upload 与 GPU buffer reallocation；后者不代表进程 malloc。计时必须有 240 次样本，
+分位数有限、非负且有序；测量期意外 Deferred 直接使正常场景失败，不吞掉重试工作。
+GPU timestamp、进程级 malloc、driver VRAM 当前未测，报告为 null；CPU 调用时间不能
+解释为 GPU 执行时间。slow/recovery 的内部 painter 未公开指标，限制在报告中单独说明。
+direct 使用真实 Window 的 painter observation，并要求 240 次 encode、有 draw/batch、五项
+指标均存在；direct 的 device-policy 仍为 null，不表示零上传或零等待。
+
+direct 的 elapsed wall time 包含该区间内的 native acquire/present、调度和等待，不能视为
+主线程执行时间。定位时可以保留逐帧 wall、主线程 CPU clock、两者差值和实际 prepare cadence：
+
+```bash
+cargo run --release --locked -p nana-ui --example presentation-output-probe --features hosted,bundled-fonts -- --direct-only --timing-samples --warmup-frames 240 --measured-frames 1200 --output target/performance/output/direct-diagnostic.json
+```
+
+`--timing-samples` 使用预分配的有界存储；它不安装 diagnostics，也不增加 GPU 完成轮询。
+主线程 CPU clock 当前仅在 macOS 可用，其他平台为 null。wall 与 thread CPU 差值可能为负，
+且不能直接解释为 GPU 等待。样本包含预热标记和实际 present/prepare 序号；同一进程内
+样本存在相关性，不能将全部帧当成独立重复实验。QoS 字段仅观察请求值，不证明实际 CPU
+核心、性能层级或频率。维护示例的 Rust heap observer 始终开启；计数仍只代表
+Rust System 分配请求，并非 foreign malloc、驱动显存或 GPU 等待。
+
+R5 的 kind4/P/E、Mach endpoint、native helper、focus/category 干预与 allocator on/off
+实验已从维护示例移至[归档研究源码与冻结工具](../archive/docs-notes/performance-data/issue242-r5-2026-10-15/research-fixture-source/README.md)。
+`--execution-samples`、`--focus-schedule`、`--task-category-policy`、`--allocator-observation`
+在维护示例中会明确报迁移错误，不能静默执行另一种工作负载。旧实验仅使用已记录 hash 的
+冻结二进制或其精确源码快照；原 raw、构建记录和不完整/失败证据继续保留。
+研究时延、后台负载和平台证据不能转移为精简后的新二进制性能结论。
+
+正式 `output-direct` extractor 拒绝任何非 null 的逐帧诊断、stage profile、producer/consumer
+trace，也拒绝 direct-only 和 allocator-off 报告。默认完整六阶段、allocator-on 报告才能
+进入原有门禁；历史报告缺失或 null 的可选字段保持兼容。诊断实验必须单独保存，不能混入
+默认时延对照；比较时记录原始样本、二进制哈希、运行顺序和后台干扰。
+
+The two Issue #242 fixtures install a binary-only `System` allocator wrapper. `measurement_rust_heap` reports 240 producer-call intervals (nested parent separately); the Window interval is prepare through presented. Relaxed atomic counters record requested alloc/realloc calls and bytes plus dealloc calls/bytes across all Rust threads in that process. Reading counters does not allocate, and report aggregation/serialization occurs outside each interval. Observer overhead is included in CPU timings. These are not live/peak heap or process-wide malloc measurements: foreign/native driver allocations and VRAM remain unobserved. Failed requests are counted as requests. Neither framework allocator behavior nor GPU work changes.
+
+静态复用的零 producer GPU 工作不代表零 CPU 分配。当前 `PresentationDriver::render_scene`
+为返回 outcomes 创建 `Vec::with_capacity(self.targets.len())`，全 Reused 也会请求分配；
+本机诊断观测为每次 producer 调用一次 Rust allocation。未来若要求 CPU allocation-free，
+可以另提供 caller-owned outcomes 或迭代接口，不以改写观测数据替代优化。
+
+最初 output 改造前未保留相同配置的 Release 耗时 baseline，因此不宣称相对改造前的时延改善。
+历史默认门禁与受控调查的配置、结果和保留证据见[交付记录](../archive/docs-notes/issue242-delivery.md)。
+原始 trace、冻结 executable、失败记录和完整研究工具保留在原工作区，未作为代码提交上传。
+direct 时延信号与 P/E 推荐触发原因由 [#354](https://github.com/sena-nana/NanaUI/issues/354) 继续跟踪；
+GPU duration/driver VRAM 未观测时保持 unavailable，不能由 CPU 或分配计数替代。
+
+### External transport work
+
+`catalog.json` 的 `nana_transport_ids` 另维护 9 个 transport 门禁，不能把原来七项
+presentation 工作量重命名为 XR/Web 验收。六个 portable workload 真正通过
+`OverlayHostAdapter` 向独立的消费目标执行 GPU transfer：overlay 静态、变化、两个独立
+transport、饱和后恢复；`web-*` 这里只是同一通用 transport 的 mock foreign-retirement
+静态与变化场景，不代表已安装 Electron bridge。实际 Electron native import 由
+`examples/web-output-bridge` 单独验证。
+foreign receipt 明确使用 mock，证据为 `actual-gpu-transfer-mock-foreign-retirement`，
+`platform_conformance` 必须为 false；这些门禁通过也不代表 native handle import、
+SteamVR 或 Chromium 已运行。producer 与 consumer 的 render/pass/submit/bytes、CPU 调用
+及 Rust heap 分开记录，consumer 的复用/饱和不能记成 producer GPU 工作。
+
+```bash
+cargo run --release --locked -p nana-ui --features gpu --bin nana-output-benchmark -- --transport-only --output target/performance/output-transports.json
+for workload in overlay-static overlay-changing overlay-multi overlay-slow web-static web-changing; do
+  python3 perf/runners/nana/run.py --scenario "transport-${workload}" --from-report target/performance/output-transports.json --output "target/performance/transport-gates/${workload}.json"
+done
+python3 perf/contract.py --evaluate-invariants target/performance/transport-gates
+```
+
+这些场景同样先预热 30 次，再测 240 次；全部 producer/consumer 输出工作项都有精确
+预算，静态/饱和工作还检查实际上传和等待策略计数。mock transport 调用发生在本机 GPU
+transfer 完成后，foreign 生命周期不能从本机 submission 完成推断。GPU 完成轮询位于
+CPU 调用计时之外。`--transport-only` 独立运行，不改变原七个工作量的默认执行顺序。
+
+`PresentationDriver::work()` 保留累计兼容语义：同一次 producer 调用之后执行
+`present_to`，返回值会包含实际 consumer transfer。判断静态 producer 是否零 GPU 工作时，
+先在 consumer 调用前保存该值，或使用按 owner 区分的 `output_traces()`；不能把后续消费
+提交算成 producer 工作，也不能从一个 encoder 的 pass 推断调用者已执行 submission。
+
+三个真实平台场景只接受各自 reference 的实际报告，不自动换成 portable mock：
+
+| 场景 | 生产与消费证据 |
+| --- | --- |
+| `transport-native-host` | Windows `window-output-probe --perf-output ...`：30 个 native token 预热，再进行 240 次 D3D11 导入目标 copy；source Window 继续运行，实际多出的源帧/导出 copy 仍如实计数。最后观察真实 release fence 完成。perf 模式没有像素回读，普通功能 probe 的 test-only 像素验收独立运行。 |
+| `transport-openvr-native` | `openvr-output-probe` 的 `shared_atomic` 模式：真实 SteamVR + DXGI shared handle；先完成 30 次实际 native + consumer 更新，再测量 240 次原子更新与 240 次静态零工作检查。1 个稳定 handle 的首次 compositor 绑定和 target allocation 单列 setup；稳态 SDK call 为 skipped（0 样本、null 分位数）。持续引用该 allocation 不代表资源已退休。 |
+| `transport-web-native` | 专用 Electron bridge：真实 NT handle import、WebGPU draw/submit、`allReferencesReleased` 后回收。30 次实际导入、显示与 foreign release 预热后再测 240 次，源端还须观察真实 release fence 完成才开始计数。270 次总 proof、30 次 warmup proof 与 240 次 measured proof 分列；producer call CPU 与 renderer import/encode/submit CPU 分开。Chromium 内部 copy、GPU 执行时间和显存仍未观测。 |
+
+```bash
+# Windows native-host: functional pixel verification remains a separate run.
+cargo run --release --locked -p nana-ui --example window-output-probe --features hosted,bundled-fonts,native-export -- --perf-output target/performance/native-host.json
+python3 perf/runners/nana/run.py --scenario transport-native-host --from-report target/performance/native-host.json --output target/performance/native-host-gate.json
+python3 perf/contract.py --evaluate-invariants target/performance/native-host-gate.json
+# OpenVR/Electron: feed the actual reference report from the corresponding host.
+python3 perf/runners/nana/run.py --scenario transport-openvr-native --from-report target/performance/openvr.json --output target/performance/openvr-gate.json
+python3 perf/runners/nana/run.py --scenario transport-web-native --from-report target/performance/electron.json --output target/performance/web-gate.json
+```
+
+平台不可用仍为 `unsupported`，不是 invariant-ok；平台标签必须真实为 Windows，
+fixture 版本、设备代际、固定 BGRA extent 和预热范围必须符合维护中的 reference。
+成功报告缺少必要工作计数、完成证明、consumer CPU 样本、有效计时，或出现 mock 升级为
+平台证据时，runner 返回 `error`，不能把坏报告降级为平台缺失。actual reference 的 CPU 时间按各自
+报告 scope 解读，不与 portable 稳态或 GPU execution time 混为同一指标。

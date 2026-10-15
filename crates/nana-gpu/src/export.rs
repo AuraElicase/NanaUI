@@ -8,20 +8,22 @@
 //! signals the frame's *ready* value on the device queue right after the
 //! submit, under the submission guard. The consumer waits for that value on
 //! its own GPU timeline, reads the slot and signals the frame's *release*
-//! value. Frame `k` (from 0) is ready at `2k + 1` and released at `2k + 2`.
+//! value. Reservation `k` (from 0) is ready at `2k + 1` and released at
+//! `2k + 2`. Discarded or abandoned reservations consume their values too;
+//! fence values are never reused for another copy.
 //!
 //! Nobody waits on the CPU. A frame the consumer has not released yet makes
 //! the next [`NativeExportPool::stage`] answer [`NativeExportOutcome::Deferred`].
-//! Both sides signal the one fence, so the producer only issues frame `k + 1`
-//! once release `2k + 2` completed: the fence value never goes backwards.
+//! Both sides signal the one fence, so the producer only issues another frame
+//! once the preceding consumer's release completed: the fence never goes backwards.
 //!
 //! A [`NativeFrameToken`] dropped without [`NativeFrameToken::accept_release`]
 //! is released by the producer itself, with a signal on its own queue that
 //! is ordered after the ready one.
 
 use std::os::windows::io::{BorrowedHandle, RawHandle};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{CloseHandle, GENERIC_ALL, HANDLE};
@@ -108,6 +110,9 @@ fn native(step: &'static str) -> impl FnOnce(windows::core::Error) -> NativeExpo
 /// consumer's; nothing waited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeExportDeferral {
+    /// A previous copy is still being recorded or awaits `finish`. No
+    /// consumer owns it yet; its destination slot remains exclusively reserved.
+    ProducerBusy,
     /// The consumer has not released the previous frame yet. `waiting` is how
     /// long the producer has been waiting for that release.
     ConsumerBusy { waiting: Duration },
@@ -136,6 +141,7 @@ pub struct StagedNativeFrame {
 const SIGNAL_PENDING: u8 = 0;
 const SIGNAL_DONE: u8 = 1;
 const SIGNAL_FAILED: u8 = 2;
+const SIGNAL_DISCARDED: u8 = 3;
 
 /// COM objects moved into a submit hook. D3D12 command queues and fences are
 /// free-threaded.
@@ -186,6 +192,41 @@ impl SharedHandles {
         let _guard = self.gpu.lock_submission();
         // SAFETY: the fence and queue belong to the live device `gpu` holds.
         unsafe { self.queue.Signal(&self.fence, value) }.map_err(native("queue signal"))
+    }
+}
+
+/// A bounded host's ownership of a retired native pool. Keep this ticket
+/// until [`Self::is_released`] reports that no frame token owns the pool and
+/// its consumer GPU timeline has released the last issued frame. In
+/// particular, dropping an accepted token does not prove GPU completion.
+pub struct NativeExportRetirement {
+    shared: Arc<SharedHandles>,
+    release: u64,
+}
+
+impl std::fmt::Debug for NativeExportRetirement {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("NativeExportRetirement")
+            .field("pool", &self.shared.pool)
+            .field("release", &self.release)
+            .field("released", &self.is_released())
+            .finish()
+    }
+}
+
+impl NativeExportRetirement {
+    pub fn pool_generation(&self) -> u64 {
+        self.shared.pool
+    }
+
+    pub fn is_released(&self) -> bool {
+        if Arc::strong_count(&self.shared) != 1 {
+            return false;
+        }
+        // SAFETY: the ticket retains the fence and its device. A removed
+        // device reports MAX and cannot execute any further accesses.
+        (unsafe { self.shared.fence.GetCompletedValue() }) >= self.release
     }
 }
 
@@ -297,10 +338,13 @@ pub struct NativeExportPool {
     shared: Option<Arc<SharedHandles>>,
     slots: Vec<Slot>,
     next_slot: usize,
-    /// Frames issued so far: the next one is ready at `2 * issued + 1`.
+    /// Frames handed out through `finish`, independent of abandoned recordings.
     issued: u64,
+    /// Every staged copy consumes a fresh odd value, even if never finished.
+    next_ready: u64,
     /// Release value of the last issued frame, until it completed.
     outstanding: Option<(u64, Instant)>,
+    staged: Weak<AtomicU8>,
 }
 
 impl std::fmt::Debug for NativeExportPool {
@@ -362,6 +406,16 @@ impl NativeExportPool {
         self.shared.is_none()
     }
 
+    /// Obtain one ticket before retiring this pool. The caller must retain
+    /// it while consumer release is outstanding and bound how many such
+    /// generations it permits before creating another native pool.
+    pub fn retirement_ticket(&self) -> Option<NativeExportRetirement> {
+        Some(NativeExportRetirement {
+            shared: Arc::clone(self.shared.as_ref()?),
+            release: self.outstanding.map_or(0, |(release, _)| release),
+        })
+    }
+
     /// Frames handed out so far.
     pub fn issued(&self) -> u64 {
         self.issued
@@ -381,6 +435,7 @@ impl NativeExportPool {
         self.shared = None;
         self.slots.clear();
         self.outstanding = None;
+        self.staged = Weak::new();
     }
 
     /// Records a copy of `source` into the next free slot of `frame` and
@@ -408,6 +463,13 @@ impl NativeExportPool {
         {
             return Err(NativeExportError::IncompatibleSource);
         }
+        if let Some(staged) = self.staged.upgrade()
+            && staged.load(Ordering::Acquire) != SIGNAL_DISCARDED
+        {
+            return Ok(NativeExportOutcome::Deferred(
+                NativeExportDeferral::ProducerBusy,
+            ));
+        }
         // SAFETY: the fence belongs to the live pool.
         let completed = unsafe { shared.fence.GetCompletedValue() };
         if completed == u64::MAX {
@@ -429,7 +491,10 @@ impl NativeExportPool {
         }
         let slot = self.next_slot;
         debug_assert!(self.slots[slot].release <= completed);
-        let ready = 2 * self.issued + 1;
+        let ready = self.next_ready;
+        self.next_ready = ready.checked_add(2).ok_or(NativeExportError::Unsupported(
+            "native export fence sequence exhausted",
+        ))?;
         let extent = wgpu::Extent3d {
             width,
             height,
@@ -441,6 +506,11 @@ impl NativeExportPool {
             extent,
         );
         let signal = Arc::new(AtomicU8::new(SIGNAL_PENDING));
+        self.staged = Arc::downgrade(&signal);
+        let discard_signal = Arc::clone(&signal);
+        frame.on_discard(move || {
+            discard_signal.store(SIGNAL_DISCARDED, Ordering::Release);
+        });
         let hook_signal = Arc::clone(&signal);
         let target = SendQueue(shared.queue.clone(), shared.fence.clone());
         frame.after_submit(Box::new(move || {
@@ -475,6 +545,13 @@ impl NativeExportPool {
         if staged.pool != shared.pool {
             return Err(NativeExportError::Retired);
         }
+        if !self
+            .staged
+            .upgrade()
+            .is_some_and(|active| Arc::ptr_eq(&active, &staged.signal))
+        {
+            return Err(NativeExportError::NotSubmitted);
+        }
         match staged.signal.load(Ordering::Acquire) {
             SIGNAL_DONE => {}
             SIGNAL_FAILED => {
@@ -490,6 +567,7 @@ impl NativeExportPool {
         self.slots[staged.slot].release = release;
         self.next_slot = (staged.slot + 1) % self.slots.len();
         self.outstanding = Some((release, Instant::now()));
+        self.staged = Weak::new();
         Ok(NativeFrameToken {
             shared,
             slot: staged.slot,
@@ -648,6 +726,8 @@ unsafe fn create_pool(
         slots,
         next_slot: 0,
         issued: 0,
+        next_ready: 1,
         outstanding: None,
+        staged: Weak::new(),
     })
 }

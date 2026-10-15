@@ -1,0 +1,11 @@
+{
+  "scope": "Exact four maintained fixture sources before removing R5 research observers and allocator switch; not a new performance population or standalone workspace",
+  "saved_at_utc": "2026-10-15T11:58:54.575395+00:00",
+  "files_sha256": {
+    "crates/nana-ui/examples/presentation-output-probe.rs": "610e2a41715ab740f3f04f1c8852661b350ba67e7208db05820dd13240e07c59",
+    "crates/nana-ui/examples/support/presentation_timing.rs": "ff22d7782eca84451857dbd7639471716443a9e90991cd1ac89a89a98633ddeb",
+    "crates/nana-ui/examples/support/execution_bridge.rs": "41437fececc248e166eb6c07885f282e9932d556e5f1d925703da63dd4179878",
+    "crates/nana-ui/src/bin/support/output_allocator.rs": "f43bbf7c385328f598db26af9fe2f461440457ca0ceb1f15118cc54e18580d40"
+  },
+  "preserved_evidence": "All prior frozen binaries, raw reports, source tarballs and manifests remain untouched. Binary/source identities are recorded separately; this snapshot must not be assumed byte-identical to the earlier5461 build."
+}

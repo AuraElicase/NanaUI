@@ -135,18 +135,23 @@ mod scene_paint;
 #[cfg(all(feature = "hosted", feature = "native-export", target_os = "windows"))]
 pub use nana_gpu::{
     NATIVE_EXPORT_FORMAT, NATIVE_EXPORT_SLOTS, NativeExportDeferral, NativeExportError,
-    NativeExportOutcome, NativeExportPool, NativeFrameToken, StagedNativeFrame,
+    NativeExportOutcome, NativeExportPool, NativeExportRetirement, NativeFrameToken,
+    StagedNativeFrame,
 };
 #[cfg(feature = "gpu")]
 pub use output::{
-    EmbeddedBindError, EmbeddedFrameBinding, EmbeddedMetadataError, EmbeddedOutputMetadata,
-    EmbeddedSurfaceNode, ExternalFrame, ExternalRenderOutcome, ExternalSurface,
-    ExternalSurfaceConfig, ExternalSurfaceError,
+    EmbeddedBindError, EmbeddedFrameBinding, EmbeddedInputMapping, EmbeddedMetadataError,
+    EmbeddedOutputMetadata, EmbeddedSurfaceNode, ExternalFrame, ExternalRenderOutcome,
+    ExternalSurface, ExternalSurfaceConfig, ExternalSurfaceError, OutputProvenance,
+    OutputSurfaceId, OverlayAdapterError, OverlayAdapterState, OverlayFramePlan,
+    OverlayHostAdapter, OverlayRelease, OverlayTransport, OverlayTransportError,
+    PresentationDriver, PresentationError,
 };
 #[cfg(all(feature = "gpu", feature = "hosted"))]
 pub use output::{
     WINDOW_OUTPUT_FORMAT, WINDOW_OUTPUT_HIDDEN_FPS, WindowOutputAlpha, WindowOutputConfig,
-    WindowOutputExport, WindowOutputExtent, WindowOutputFit, WindowOutputFrame, WindowOutputStatus,
+    WindowOutputExport, WindowOutputExtent, WindowOutputFit, WindowOutputFrame, WindowOutputLease,
+    WindowOutputStatus,
 };
 pub mod selection;
 pub mod settings;

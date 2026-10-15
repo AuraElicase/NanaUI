@@ -756,6 +756,12 @@ impl SceneWgpuPainter {
         self.fetch_host = host;
     }
 
+    /// The exclusive owner changed egress for every target of this painter.
+    /// Cancel the old requests even if no future batch rebuild will trim them.
+    pub(crate) fn retire_resource_fetch_host(&mut self, host: &SharedFetchHost) {
+        self.url_cache.release_fetch_host(host);
+    }
+
     pub fn has_image_updates(&self) -> bool {
         self.url_cache.has_updates()
     }
@@ -763,6 +769,21 @@ impl SceneWgpuPainter {
     /// Offscreen hosts can await completion and paint again without polling pixels.
     pub fn has_pending_images(&self) -> bool {
         self.url_cache.has_pending()
+    }
+
+    /// Drain completed image resources before deciding whether a retained
+    /// target can be reused. Polling only while painting would leave a static
+    /// target permanently displaying its pre-decode pixels.
+    pub(crate) fn refresh_image_resources(&mut self) -> bool {
+        if !self.url_cache.poll() {
+            return false;
+        }
+        self.painted = None;
+        self.image_revision = self.image_revision.wrapping_add(1);
+        self.quads.invalidate_image_bindings();
+        self.host_textures.invalidate_image_bindings();
+        // Other targets observe this revision when they become active.
+        true
     }
 
     /// Completion generation, used by layered snapshot hosts to repaint earlier layers.
@@ -924,6 +945,9 @@ impl SceneWgpuPainter {
             gpu_renderers,
             Some(link),
         );
+        if result.is_ok() {
+            self.host_textures.keep_alive_until_complete(frame);
+        }
         self.swap_target_state(&mut state);
         state.image_revision = self.image_revision;
         self.targets.insert(id, state);
@@ -1040,6 +1064,7 @@ impl SceneWgpuPainter {
             Some(link),
         );
         if result.is_ok() {
+            self.host_textures.keep_alive_until_complete(frame);
             frame.record_retained_writes(&self.retained_default, DEFAULT_TARGET);
         }
         result
@@ -1060,15 +1085,7 @@ impl SceneWgpuPainter {
         self.last_gpu_work = None;
         self.last_gpu_timings = None;
         self.last_dest_pass_counts = None;
-        if self.url_cache.poll() {
-            self.painted = None;
-            self.image_revision = self.image_revision.wrapping_add(1);
-            // The active target is held in the painter fields while `paint`
-            // runs; invalidate its URL-backed bindings immediately. Other
-            // targets are invalidated when their revision is observed above.
-            self.quads.invalidate_image_bindings();
-            self.host_textures.invalidate_image_bindings();
-        }
+        self.refresh_image_resources();
         // URL bindings and a cached dest are keyed by URL alone, so ones built
         // through another document's egress must not be reused under this one.
         if egress_of(self.fetch_host.as_ref()) != egress_of(self.bound_fetch_host.as_ref()) {

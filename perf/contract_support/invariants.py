@@ -36,6 +36,11 @@ def text_gate_ids(root: Path | None = None) -> frozenset[str]:
 
 
 
+def output_gate_ids(root: Path | None = None) -> frozenset[str]:
+    catalog = load_catalog(root)
+    return frozenset((catalog.get("nana_output_ids") or []) + (catalog.get("nana_transport_ids") or []))
+
+
 def machine_note() -> dict[str, Any]:
     return {
         "system": platform.system(),
@@ -260,7 +265,8 @@ def judge_runner_invariants(
     if report.get("equivalence") is not None:
         judged["equivalence"] = report.get("equivalence")
     text_ids = text_gate_ids(root)
-    skip = _skip_section_8_1(scenario_id, runner, status, text_ids)
+    output_ids = output_gate_ids(root)
+    skip = _skip_section_8_1(scenario_id, runner, status, text_ids | output_ids)
     if skip:
         judged["decision"] = "skipped"
         if status == "unsupported":
@@ -300,6 +306,10 @@ def judge_runner_invariants(
         for item in evaluated
         if item.get("status") == "not-evaluable"
     ]
+    if scenario_id in output_ids and unevaluable:
+        judged["decision"] = "failed"
+        judged["note"] = "output GPU evidence missing: " + ", ".join(unevaluable)
+        return judged
     if scenario_id in SECTION_8_1_STATIC_UI_IDS and unevaluable:
         judged["decision"] = "skipped"
         judged["note"] = (
@@ -433,7 +443,7 @@ def evaluate_runner_invariant_paths(
         summary["status"] = "failed"
         return summary, EXIT_ERROR
     present_ok = {item.get("scenario_id") for item in ok}
-    gated = SECTION_8_1_HONEST_OK_IDS | text_gate_ids(root)
+    gated = SECTION_8_1_HONEST_OK_IDS | text_gate_ids(root) | output_gate_ids(root)
     gated_skipped = sorted(
         {
             str(item.get("scenario_id"))

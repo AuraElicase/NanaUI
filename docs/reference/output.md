@@ -1,56 +1,128 @@
 # 窗口外输出（ExternalSurface）
 
-`nana_ui::output` 是无窗口呈现（不让操作系统窗口独占渲染目标）的输出边界。启用 `gpu` feature 即可使用，不要求开启 `hosted` 或 `winit`。
+`nana_ui::output` 是 `UiScene` 之后的呈现边界，启用 `gpu` 即可使用，不要求 `hosted`、winit 或 OS Window。设备、帧和提交继续由宿主的同一份 `GpuContext` / `FrameContext` 管理，所有 UI 绘制仍使用 `SceneWgpuPainter`。
 
-普通窗口直接呈现到它自己的 Surface。任何需要消费同一场景的其他目标（如 Spout 发送端、录屏器或嵌套宿主）走**输出（Output）**路径：在窗口本来就要录制的那一帧里，把同一份场景再往 `ExternalSurface` 里画一遍（见下文「窗口输出」）。这里没有拓扑协商器，也没有 CPU 回退路径；需要在另一块设备或另一个进程里拿到像素的消费方，通过原生共享句柄接收。
+普通 Window-only presentation 保持直接画入宿主取得的 Surface 目标。增加兼容消费方时，共享一个持久 canonical 输出；尺寸、像素密度、文字抗锯齿、alpha 或颜色合同不兼容时形成独立绘制组。框架没有隐式 CPU readback/upload 回退，也不为了启用输出能力给普通窗口增加目标纹理、pass、copy 或 submit。
 
-## ExternalSurface 与 EmbeddedSurfaceNode
+## 无窗口入口与目标规划
 
-`ExternalSurface` 持有一组有界的持久 GPU 纹理，并使用与窗口相同的 `SceneWgpuPainter`。调用 `render` 时会比对 Scene 投影版本、宿主版本、纹理注册表版本、视口尺寸和目标设备代际：
+`PresentationDriver` 接受调用方持有的 `RuntimeDocument`，以与窗口相同的 flush 流程完成样式、文字、布局和增量 Scene 提取，然后生成 retained 输出。
 
-- 若呈现内容未变化，在开始一帧之前直接返回 `Reused`——不分配、不编码、不复制、不提交，也不回读像素。
-- 提交后的版本只在队列完成回调触发后才对外发布。
-- `sample` 返回最近一次已完成纹理的租约（lease）；drop 租约即归还槽位，不在 CPU 上等待。
-- `GpuContext::poll` 与 `ExternalSurface::poll` 只驱动非阻塞完成回调。
+真实 Window 可见呈现、隐藏输出与 headless 入口都调用内部 `PresentationFrameDriver`：`prepare` 选择 direct、共享 canonical 或独立组并预留目标，`encode` 使用宿主已有帧绘制和 transfer，`finish` 绑定真实 submission 与租约。窗口 adapter 保留 Surface acquire/present、节拍和原生 transport；不再另写共享或重复绘制的决策。普通 direct 使用栈上目标描述，不创建输出池或执行 planner。
 
-`EmbeddedSurfaceNode` 是嵌套消费方的接缝：在父级录制自身场景期间持有子级的 `ExternalFrame` 租约，并可将该租约绑定到父级的 `GpuSubmission`，待父级完成采样后由完成回调回收子级槽位。逻辑与纹理尺寸、设备/资源代际以及内容修订号作为显式元数据传递，父级的变换与裁剪仍留在父级场景中。注意 `HostTextureRegistry` 槽位会持有一份子级句柄克隆，因此不再使用该节点时，父级必须替换或移除该槽位，避免后续子级修订复用目标时旧槽位仍挂在注册表里。
+```rust
+let mut driver = nana_ui::output::PresentationDriver::new(&gpu);
+driver.configure(&consumers)?;
+driver.render_document(
+    &mut document, [640.0, 480.0], host_revision,
+    [0.0; 4], Some(&textures), None,
+)?;
+// 非阻塞 poll 驱动完成回调；尚未完成时 sample 返回 NoCompletedFrame。
+driver.poll();
+let completed = driver.sample(consumer_id)?;
+```
 
-`render` 等价于在表面自有的帧里依次执行 `prepare` → `record` → `bind_submission`。已经在录制帧的宿主可以直接分三步调用：
+`render_document` 返回 Runtime 的 flush 结果，不保证 GPU 已提交。若 `driver.work().output_deferred` 大于零，宿主应稍后重试呈现；可使用 `render_scene(document.scene(), ...)` 重试同一份 Scene，无需重复业务 mutation。仅 `poll` 不会补交被跳过的生产帧。`render_scene` 的返回值分别说明各组 `Submitted`、`Reused` 或 `Deferred`。
 
-1. `prepare`：不录制任何命令，直接回答 `Reused`、`Deferred` 或 `Record(plan)`；
-2. `record`：用表面自己的 painter（或通过 `ExternalSurface::with_host_painter` 创建时传入的宿主 painter）将 `plan` 的槽位画进调用方的 `FrameContext`。`target_namespace` 将其槽位 ID 与 painter 的其他目标隔开；表面销毁时用 `target_ids()` 从 painter 中移除；
-3. `bind_submission`：在该帧的 `GpuSubmission` 上标记槽位在飞（in-flight）。`plan_texture` 即该槽位的纹理，可用于同一帧内追加后续 GPU 工作。
+无窗口宿主可用 `set_resource_fetch_host` 注入与窗口相同的 policy-gated HTTP(S) 图片传输，用 `set_image_update_waker` 让异步图片完成时唤醒自己的调度器；应在首帧前安装 waker。切换或清空 fetch host 会取消旧 egress 的未完成请求，旧缓存不会跨 host 使用。
 
-外部目标是同进程、同设备的资源。在 Windows / DX12 下，`native-export` feature 提供 NanaUI 内置的原生跨进程/跨 API 交换（见下文「DX12 共享纹理」）。Linux / Vulkan 侧经评估：wgpu 30 虽可通过 HAL 导入部分 DMA-BUF 图像，但未暴露外部信号量导入/导出及内存导出合同，且队列所有权屏障超出 Nana GPU 的安全合同范围，因此暂不支持原生导出。当消费方在同设备 GPU 上复制输出纹理时，设置 `copy_source`。
+`set_resource_producers(Some(Arc<SceneResourceProducerRegistry>))` 将图资源生产接入同一个输出帧：所有兼容/不兼容 UI 组共享一次 producer encode 和一次总提交，只有实际提交后通知 `submitted`，任何编码错误均丢弃整帧。`SceneResourceProducer::preparation_version` 默认 `None`，保持既有动态生产行为；提供稳定版本后，节点输入与版本均不变时不重新生产，未被引用的 producer 不会使输出 volatile。所有输出槽位饱和时在 producer 编码之前返回 `Deferred`。`PresentationError` 新增 `ResourceProduction`，穷尽匹配方需处理。
 
-生产端必须把未被 `UiScene::projection_revision` 覆盖的 GPU 生产者或宿主纹理修订号一并计入。尺寸变化或设备替换会先创建新资源；若创建失败，旧的已完成表面继续可用。所有目标资源均携带 `DeviceGeneration`，表面遇到不同代际的设备会直接拒绝，不会把过期句柄交给 painter。
+`consumers` 是已解析的 `OutputConsumer` 列表，包含稳定的 consumer / presentation identity、`RenderTargetRequirements` 与具体 adapter 的 `PresenterCapabilities`。`configure` 无变更时返回 `false`，不分配、不重建计划；配置失败保留原计划和已完成资源。仅增加或移除兼容 consumer 时保留原目标池和 revision。一个 driver 接受同一 presentation、同一逻辑视口；当前通用 driver 采用等比 `Contain`，支持 grayscale、预乘 alpha 的 retained 目标。直接 Surface、原生可渲染共享目标、subpixel 和 straight-alpha 的具体呈现由对应宿主负责，缺少实现时明确返回错误。
 
-输出侧的工作量可通过 `OutputWorkObservation`、表面的 `last_work()` 快照、`WorkCounters` 的 `output_*` 字段以及 `nana_diagnostics::framework::gpu::OUTPUT_*` 指标观测。帧驱动器可用 `record_last_work` 将表面快照并入当帧计数。
+`RenderTargetPlanner` 在真实窗口输出与 driver 中调用。无结构变化时复用计划；内容修订不触发 topology 协商。其结果说明 consumer 如何到达目标：
 
-## 窗口输出（Window outputs）
+| 路径 | 当前行为 |
+| --- | --- |
+| `DirectSurface` | 一个兼容组内只有有效 Window consumer 时保留 direct；独立窗口各自保留自己的 direct 路径。 |
+| `SharedTexture` | 同设备 consumer 共同租用 canonical 纹理，同一组只渲染一次 UI。 |
+| `GpuTransfer` | Window 最终呈现、原生导出复制等已实现的 GPU transfer。 |
+| `NativeShared` | 仅 adapter 明确支持直接渲染至可导出的 canonical 资源时可选；DX12 export-copy 不冒充此路径。 |
+| `Unsupported` | 没有实现的能力、无效目标或不支持的采样配置，明确拒绝，不静默改走 CPU。 |
 
-一扇窗口可以把自己的场景在离屏输出里再画一份，交给外部消费方（Spout 发送端、录制器）。`RuntimeProgram::window_output(id)` 返回 `Option<WindowOutputConfig>`（`ApplicationState` 则通过 `ApplicationWindow::output` 配置）；宿主每帧读取该配置，返回 `None` 即停止输出。
+兼容性比较 presentation、viewport mapping identity、物理尺寸、profile、alpha、text AA、sample count、device generation 与 canonical ownership。`viewport_revision` 由宿主依据逻辑视口、DPR、fit 和原点的完整映射产生，不能拿内容 revision 代替。持久要求可向同组提升；native-copy transport 可消费同一个同设备 canonical，不额外渲染 UI。`OutputPlan::incompatibilities` 返回独立分组的具体原因。
+
+当前只合并已实现的 SDR sRGB `BGRA8_UNORM` / `BGRA8_UNORM_SRGB` 最终格式差异：保留 encoded UNORM canonical，再通过已计数的最终 transfer 写入 sRGB Surface。subpixel 与 grayscale、不同 alpha、HDR/P3 或不同像素密度不会被悄悄降级以取得共享。多采样目标目前明确不支持，未承诺未实现的 MSAA resolve 路径。
+
+原 `ApplicationState` / `RuntimeApplication` / `RuntimeProgramContext` 仍是窗口应用的兼容入口。无窗口应用通过 `RuntimeDocument` + `PresentationDriver` 驱动；不应把仍依赖 winit Window 的 `EmbeddedRuntime` 当作此入口。
+
+## 持久资源、版本与租约
+
+`ExternalSurface` 管理有界的 2–8 个持久 GPU 纹理槽，默认 3 个。稳态只推进 `content_revision`；resize、profile 或设备变化才创建新的资源代际。纹理槽在安全退休后循环复用，不逐帧创建、导出和销毁。consumer 应比较资源代际与内容版本，不能把每一帧占用的池 slot 当作永久不变的单个 handle。
+
+- 内容不变时，`render` 在编码前返回 `Reused`：0 UI render、纹理重建、copy/blit、上传、submit 和 CPU 像素移动。consumer 可在 120/240 Hz 重复 sample，不能因此推动 NanaUI 刷新。
+- 新内容仅在实际 GPU 提交完成后发布。`sample` 取得最近 completed 版本；新提交尚未完成时，原 completed 版本仍可用。
+- `ExternalFrame` 可 clone；最后一份显示/提交引用退休之后才释放 producer slot。异步采样使用 `FrameContext::keep_alive_until_complete`，或在提交后调用 `ExternalFrame::retire_after`。clone 裸 `GpuTexture` 只保活分配，不预留 producer slot。
+- slot 或 frame-slot 满时返回 `Deferred`，不阻塞等待。`poll` 只驱动非阻塞回调，不能用 `device.poll(WAIT)` 代替同步合同。
+- 资源带 `DeviceGeneration`；错误设备、旧计划、旧资源代际和 producer teardown 均明确拒绝。失败 resize/configure 保留旧的有效 completed 结果。
+
+分段宿主使用 `prepare` → `record` → `bind_submission`。`prepare` 独占预留槽位；丢弃计划释放未录制预留。录制后即使计划被丢弃，帧仍保留该槽位，直到 discard 或 GPU 完成。`record` 拒绝与准备阶段不一致的 Scene、viewport、registry 修订、alpha 或设备；`bind_submission` 只接受真正录制该计划的帧。discard 不发布内容或依赖；逆序绑定/完成也不能把旧 key 标成新内容。
+
+迁移既有分段调用方时，`ExternalFramePlan` 现在是不可复制的一次性 reservation：录制时借用，绑定真实 submission 时移交所有权。不能缓存旧计划给后续帧重放，也不能用另一帧的 submission 补绑定。
+
+`ExternalFrame` 携带真实 presentation profile、alpha 编码及稳定的 `OutputSurfaceId` / completed-revision ancestry。通过保留的嵌套 HostTexture 组合时，`record` 只检查 Scene 实际引用的槽位，并冻结其纹理、租约与 provenance，避免并发替换绕过检查。采样依赖闭包中已包含当前 producer 时返回 `CompositionCycle`，不编码 GPU 工作；普通 DAG 和多父消费可共享同一 child。这个检查针对已完成 revision 的因果依赖，不维护第二棵 UI/业务树，也不是对应用所有逻辑 endpoint 的全局图分析。低层宿主自行拆出裸纹理、剥离租约/provenance 或使用自定义 renderer 时，需自行维持其依赖与资源合同。
+
+宿主应将没有包含在 Scene 修订中的外部内容纳入 `host_revision`。标准 renderer registry 使用实际被 Scene 引用的 renderer preparation version；未提供稳定版本的 renderer 才按 volatile 处理。缓存键同时包含 presentation / motion 修订和活跃动画的实际时钟；同一时刻重复消费不推动动画重画。异步图片结果在静态复用判定前收集，完成后推进 image revision，随后恢复静态复用。
+
+HostTexture 静态判定只读取 Scene 实际引用槽位的存在性、实例、代际、版本、尺寸与 alpha，不再依赖整个 registry 的全局 revision。直接 `HostTexture::invalidate` 也会使对应输出失效；共享 registry 中未被引用槽位的更新不会让其他静态 presentation 重绘。
+
+## 嵌套输出与兼容迁移
+
+`EmbeddedSurfaceNode::from_frame` 使用一份 completed `ExternalFrame` 构造普通 HostTexture；父级继续使用自身的布局、裁剪、变换、opacity 和文档顺序。`update_frame` 保持 node / HostTexture identity，更新真实 child 来源、资源/内容版本，并自动重新登记仍归该 node 的槽位以发布尺寸、推进 registry revision 和唤醒父级；已移除或替换的槽位不会被重新创建。来自不同 producer 的相同 revision 数字不会被误认为同一帧。
+
+同 producer、同资源代际的迟到旧 revision 返回 `StaleFrame`，不会把已经显示的新版本回退；切换 producer 仍允许相同 revision 数字。
+
+注册表保留显示租约，正常 HostTexture painter 为每次父帧录制保留独立的 GPU 完成引用。一个 child 可被多父帧、多窗口反复采样；discard 只释放该次录制引用，不结束长期显示租约。旧 `bind_to_submission` 仍可作为提交后兼容 helper，多次调用分别保活，不能提前回收仍在显示的 child。
+
+显式 `detach(self)` 消费节点，按 instance identity 原子撤销仍归它的注册槽，并释放节点自身引用；返回实际撤销数量。后来的 slot owner 不会被误删，父级会收到 revision / wake 通知。外部保存的 binding、HostTexture clone 和已录制 GPU 快照仍独立保活，直到各自安全退休。普通 Drop 继续允许注册表留显；兼容 `retire()` 只停止节点的显式 frame 访问，不等同于 detach。
+
+`EmbeddedOutputMetadata` 包含逻辑/纹理尺寸、真实 profile/alpha、source、设备/资源/内容代际、独立的 endpoint generation 及可选 `EmbeddedInputMapping`。输入映射锚定父级权威节点和 geometry revision，不创建第二套坐标树；完整输入路由属于 Issue #243。仅能直接采样的预乘线性 scRGB合同进入普通 HostTexture；gamma 预乘、未编码成 sRGB 格式的 SDR、P3/HDR 等需要先做明确转换，不能静默按线性解释。
+
+## 窗口输出
+
+`RuntimeProgram::window_output(id)` 或 `ApplicationWindow::output` 返回 `WindowOutputConfig`；返回 `None` 停止输出并恢复 Window-only direct。
 
 ```rust
 fn window_output(&self, id: WindowId) -> Option<WindowOutputConfig> {
-    (id == TYPEWRITER).then(|| WindowOutputConfig::default() // 默认 1920x1080, Contain
-        .with_extent(WindowOutputExtent::Fixed { width: 1920, height: 1080 })
-        .with_export(WindowOutputExport::Native))
+    (id == TYPEWRITER).then(|| WindowOutputConfig::default()
+        .with_extent(WindowOutputExtent::MatchWindow)
+        .with_export(WindowOutputExport::SameDevice))
 }
-fn window_output_frame(&mut self, id: WindowId, frame: &WindowOutputFrame, cx: &RuntimeProgramContext<Msg>) {
-    // frame.texture(): 同一设备，BGRA8_UNORM，sRGB 编码，预乘 alpha
-    // frame.take_native(): 下述 DX12 令牌（Windows，开启 native-export）
-}
-fn window_output_status(&mut self, id: WindowId, status: WindowOutputStatus, cx: &RuntimeProgramContext<Msg>) {}
 ```
 
-- **同一场景，同一帧。** 宿主在为该窗口录制的同一个 `FrameContext` 内，于窗口自身绘制之后、`submit` 之前，使用宿主共享的输出配置专用 painter（独立的 `RenderTargetId`、灰度抗锯齿文本、`AlphaEncoding::Gamma`、SDR 参数）把窗口的 `UiScene` 画进输出目标。不会做第二次布局。
-- **无变更则零录制。** 输出底层就是 `ExternalSurface`；若投影、宿主纹理、图片和视口均未变化，直接返回 `Reused`，不产出输出帧也不提交。自定义 GPU 渲染器与合成器动画视为每帧变化。
-- **隐藏窗口。** 开启 `while_hidden`（默认开启）时，无法呈现到屏幕的窗口（隐藏、最小化、被遮挡）按 `max_fps`（默认 30）节拍运行：宿主排空消息、flush 文档，并在独立帧中只录制该输出（以及窗口的场景生产者）。隐藏的静态窗口什么都不录；尺寸为 0 的窗口不产出帧。
-- **尺寸与适配（Size and fit）。** 支持 `Fixed { width, height }`（默认 1920×1080）、`MatchWindow` 或窗口物理尺寸的 `Scale(f)`。painter 做等比缩放，场景不会为输出尺寸重新布局；宽高比不同时按 `Contain`（完整居中，四周透明）或 `Cover`（铺满裁切）放置，不提供非等比拉伸。
-- **Alpha 编码。** 支持 `Premultiplied`（gamma 空间，直接匹配 OBS Spout 的「Premultiplied」选项）或 `Straight`（追加一个小型 pass 将颜色除以 alpha 写入独立纹理）。
-- **帧生命周期。** `WindowOutputFrame::texture` 从回调起对提交到宿主设备的后续 GPU 工作有效（按队列顺序）；输出在两帧后回收该纹理。全程无 CPU 等待。
-- **状态通知。** `WindowOutputStatus` 每次状态变化上报一次：`Active`、`NativeUnavailable`、`NativeDeferred`、`NativeRetired`、`Failed`、`Stopped`。`max_fps` 负责节流；被节流的变更会在到期时产出。
+- **共享与独立绘制。** 透明 SDR、相同尺寸/视口、grayscale 的 Window + output 只绘制一次 gamma 预乘 canonical，再做最终 Surface transfer；straight 输出另作转换，不要求重画 UI。默认 output 是 1920×1080 `Contain`，且 opaque Window 可能使用 subpixel 与不同 alpha 合同；不兼容时各组独立绘制，仍共用宿主当帧提交，不二次布局。
+- **静态与节流。** 输出不变时不录制输出；`max_fps` 只控制生产节拍。隐藏、最小化或遮挡窗口在 `while_hidden` 下继续排空消息/flush，并只为有变更的输出或 producer 编码；隐藏静态内容 0 UI render / submit。0 尺寸不产出帧。
+- **适配与 alpha。** 支持 `Fixed`、`MatchWindow`、`Scale`，以及等比 `Contain` / `Cover`。`Premultiplied` 使用适合外部 compositor 的 gamma 空间预乘；`Straight` 对每个 canonical slot 使用对应的转换目标，额外 pass 可观测。
+- **异步生命周期迁移。** `WindowOutputFrame::texture()` 保留回调内读取入口；异步消费必须取 `frame.lease()`。`WindowOutputLease` 可 clone，并在采样前对调用方帧使用 `keep_alive_until_complete`。不再依赖“两帧后复用”假设，慢 consumer 令池返回 `Deferred`，不会覆盖仍在使用的 slot。
+- **状态。** `Planned { plan }` 仅在 consumer / 尺寸 / 显示配置 / 设备等结构变化时报告实际计划；内容变化不反复通知。`Active`、`NativeUnavailable`、`NativeDeferred`、`NativeRetired`、`Failed`、`Stopped` 仅在状态改变时通知。native 不可用时仍可保留同设备输出；这不等于 CPU fallback。
+
+迁移穷尽匹配状态或错误枚举的调用方时，需要处理新增的 `Planned`、循环依赖 / 过期计划拒绝，以及 native stage 的 `ProducerBusy`。后者表示已有生产 reservation，区别于消费方尚未释放资源，不应把两种状态合并为成功或擅自释放资源。
+
+## 宿主适配与能力拒绝
+
+以下区分具体消费路径与本机证据；接口、编译与 mock 不等同于外部平台实测：
+
+| 消费方 | 入口与本机证据 |
+| --- | --- |
+| Window | 真实 `presentation-output-probe`，覆盖 direct、共享、独立分组、detach、resize 和隐藏静态输出。 |
+| Nested | `EmbeddedSurfaceNode` 与真实 child → parent 像素测试，包括 120/240 次父提交。 |
+| Headless | `PresentationDriver::render_document`，没有 Window 或 event loop。 |
+| Native host | `PresentationDriver::present_to` 实现同设备目标 transfer；Windows `window-output-probe` / `native_export` 包含真实 D3D11 shared-handle import、GPU wait/copy/release 参考代码。后者需 Windows 实测。 |
+| OpenVR / SteamVR | `openvr-output-probe` 通过 DX12 ready/release fence、同适配器 D3D11 共享纹理与 `IVROverlay_028` 提交到 SteamVR。默认采用官方 `DXGISharedHandle` 的持久纹理原子 `CopyResource` 更新；本机仅编译与协议检查，未执行 Windows/SteamVR。 |
+| Web bridge | [Electron 44.7.2 参考宿主](../../examples/web-output-bridge/README.md) + `web-output-producer`：跨进程 NT handle → managed `sharedTexture` → `VideoFrame` → WebGPU 绘制。本机覆盖真实 main 使用的协议模块；未执行 Windows/Electron GPU 路径。普通 Web API 无法导入任意 native GPU handle，必须由具体宿主安装并检测专用 bridge；通用 GPU transport 不代表 Electron bridge 已安装。 |
+
+通用 `OverlayHostAdapter` 只负责同设备 transfer 与宿主提供的异步消费凭据，不提供或检测浏览器 native import。使用该 transport 的宿主对自己的 `FrameContext` 先 `record`，提交后以同一 submission 调用 `bind_submission`，再非阻塞 `poll`。NanaUI 的 copy 完成后才调用 transport。每个 transport 使用独立目标池，未释放的目标返回 `Deferred`；不得将一个原生单消费方 token 复制给多个独立消费者。
+
+`OverlayRelease` 是需要宿主维持同步正确性的 unsafe 合同：只有外部 GPU 读取已完成且不会再次读取该版本，才可报告释放；adapter drop 或断连也不能提前释放 foreign 正在使用的资源。[OpenVR 官方纹理接口](https://github.com/ValveSoftware/openvr/blob/master/headers/openvr.h) 分别定义纹理提交、清除和 native handle 释放；本适配层不会把 `SetOverlayTexture` 的返回值推断成 GPU 完成证明。无法取得所需保证时，transport 返回 `Unsupported` 或保留目标，不能猜测等待帧数。
+
+`OverlayAdapterError` 新增 `DeviceLost`。设备丢失后，完成回调不被用作有效像素的证明，`poll` / `record` / `bind_submission` 拒绝向 foreign transport 发布；已有未退休 receipt 保留其独立的资源责任。
+
+Metal / Vulkan native import/export 未建立完整安全合同的能力明确不支持；同设备 GPU transfer 的通过不代表这些跨设备或跨进程能力已通过。
+
+OpenVR 参考固定 [官方头文件版本](https://github.com/ValveSoftware/openvr/blob/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr.h)。默认只分配一个 consumer 共享纹理，初始化提交一次 handle，此后按该接口合同执行原子 GPU 复制；局部 fence 仅证明 NanaUI 源已复制完成。compositor 的最终资源退休没有被证明，consumer 资源保留至进程退出。参考显式配置预乘 alpha flag；当前维护 workload 全部不透明，不构成透明边缘视觉验收。`--immutable-snapshots` 是有界三槽后 defer 的保守模式，不用于连续更新性能合同。没有将 `SetOverlayTexture` 返回值当作租约完成。
+
+Electron 参考在生产端非阻塞观察 ready 后发送 handle。成功 import 后关闭临时跨进程句柄；消费者必须同时满足 renderer 的 `queue.onSubmittedWorkDone()` 和主进程 managed `allReferencesReleased`，才能确认 release。失败、断连或缺失凭据会隔离未完成资源并停止新输出；不能靠 IPC 返回或超时提前复用。只有明确能力缺失返回 `unsupported`，运行时验证、设备丢失和协议故障返回 `error`。两个参考均为 host fixture；不引入 WebView 产品外壳或 CPU fallback。
+
 
 ## DX12 共享纹理（`native-export`）
 
@@ -60,14 +132,14 @@ fn window_output_status(&mut self, id: WindowId, status: WindowOutputStatus, cx:
 - `FrameContext::submit`：在提交守卫保护下，紧随 `queue.submit` 之后在设备队列上 signal 当帧的 *ready* 围栏值；
 - `finish`：将已提交的拷贝包装为 `NativeFrameToken`。配置了 `WindowOutputExport::Native` 的窗口输出会对每个产出帧执行此流程。
 
-第 `k` 帧（从 0 起算）在围栏值 `2k + 1` 时就绪（ready），在 `2k + 2` 时释放（released）。消费方合同如下：
+第 `k` 次成功 stage reservation（从 0 起算）使用 ready 值 `2k + 1` 和 release 值 `2k + 2`。discard、提交后丢弃且未 `finish` 的 reservation 也消耗序号，后续值允许跳号；consumer 必须使用 token 给出的数值，不能从 `issued()` 或已交付帧数推算。否则丢弃的提交可能让下一次 ready wait 提前通过。消费方合同如下：
 
 1. **按 `token.pool_generation()` 打开池（每个代际一次）**：在 `token.adapter_luid()` 指定的适配器上创建 D3D11 设备（`IDXGIFactory4::EnumAdapterByLuid`），对 `slot < NATIVE_EXPORT_SLOTS` 的每个 `token.texture_handle(slot)` 调用 `ID3D11Device1::OpenSharedResource1`，并对 `token.fence_handle()` 调用 `ID3D11Device5::OpenSharedFence`。只要该池还有任何 token 存活，句柄就保持有效；打开后的对象归消费方自己持有。
 2. **消费每一帧 token**：先调 `token.accept_release()`，随后在消费方上下文上依次执行 `ID3D11DeviceContext4::Wait(fence, token.ready_value())` → 读取 `textures[token.slot()]`（例如 `CopyResource` 到发送端纹理）→ `Signal(fence, token.release_value())` → `Flush`。
 3. **只能在 Wait 之后的 GPU 时间线上 signal release。** 若在生产端的 ready 信号落地前就提前 signal 了 release，生产端信号到达时会把围栏值往回拉，导致池永久挂起（defer）。
 4. **未调用 `accept_release` 就直接 drop 的 token** 会由生产端在自己的队列上（排在 ready 信号之后）自动释放；消费方可以直接 drop token 来跳帧。
 
-全程没有 CPU 等待。当消费方尚未释放上一帧时，`stage` 返回 `Deferred(ConsumerBusy)` 且不录制任何命令；窗口输出此时上报 `NativeDeferred`，并继续产出同设备纹理帧。若消费方超过 2 秒未释放，旧池退役并换新池（上报 `NativeRetired`）。尺寸变化、alpha/导出模式切换或设备重建同样会退役旧池，下一枚 token 将携带新的 `pool_generation`。除显式要求 `Straight` 外，像素均为 sRGB 编码、预乘 alpha。导出路径不做任何 CPU 回读；测试与 `window-output-probe` 中的 D3D11 回读仅用于验收核对。
+全程没有 CPU 等待。当消费方尚未释放上一帧时，`stage` 返回 `Deferred(ConsumerBusy)` 且不录制任何命令；窗口输出此时上报 `NativeDeferred`，并继续产出同设备纹理帧。若消费方超过 2 秒未释放，旧池退役（上报 `NativeRetired`）。宿主持有 `NativeExportRetirement`，直到最后一枚 token 归还且消费方 GPU 围栏实际到达 release；不能把已接受 token 的 drop 当作 GPU 完成。每扇窗口最多保留两份尚未释放的退役池，达到预算时继续报告 `NativeDeferred` 并停止新池分配；已有同设备输出仍可继续。尺寸变化、alpha/导出模式切换或设备重建同样会退役旧池，下一枚 token 将携带新的 `pool_generation`。除显式要求 `Straight` 外，像素均为 sRGB 编码、预乘 alpha。导出路径不做任何 CPU 回读；测试与 `window-output-probe` 中的 D3D11 回读仅用于验收核对。
 
 ```powershell
 cargo test -p nana-gpu --features native-export --test native_export
@@ -76,6 +148,41 @@ cargo run -p nana-ui --example window-output-probe --features hosted,bundled-fon
 
 测试覆盖：导出帧并在同一适配器的 D3D11 设备上打开、逐字节复制比对、未释放帧使下一帧 defer、drop token 自释放、丢弃帧不污染池，以及最后一枚 token 释放后退役池关闭句柄。`window-output-probe` 让一扇透明合成窗口跑过四个阶段（可见/隐藏 × 动画/静态），并在 D3D11 设备上消费每一枚原生 token。
 
+Windows CI 以 `NANA_REQUIRE_DX12_NATIVE_TESTS=1` 执行 native-export 测试：缺少 DX12 adapter 直接失败，避免本地可选 skip 被误计为平台验收通过。CI 还运行上面的真实 Window/D3D11 import probe，保存其原始证据；配置了 CI 不等于本机已经执行 Windows 测试。
+
+窗口路径同样按实际引用的 producer 签名及真实 GPU 设备代际保留生产缓存，仅成功 submit 推进版本；失败/discard 不推进。未引用的 registry 和稳定版本不会在隐藏 tick 中产生空提交，未实现 `preparation_version` 的 producer 继续采用动态语义。
+
+## 性能、诊断与验收
+
+`OutputWorkObservation`、`PresentationDriver::work`、`ExternalSurface::last_work`、Runtime `WorkCounters::output_*` 及 append-only diagnostics 记录真实规划、UI renders、提交、重建、复用、copy bytes、resolve/convert pass、readback 与 defer。未执行的阶段保持未观测，缺数据不能当作零；旧退休 diagnostics ID 不重复分配。
+
+六类实际 GPU fixture 是 `output-static`、`output-multi`、`output-nested`、`output-conversion`、`output-slow`、`output-recovery`；另由真实原生 Window/Surface probe 验收 `output-direct`。后者还运行 attach/detach、兼容/不兼容输出、resize 与 hidden/static 阶段。headless target 不得冒充 direct Surface，resize recovery 不得冒充实际设备丢失。
+
+```bash
+cargo test --locked -p nana-ui --features hosted,bundled-fonts --lib output:: -- --test-threads=1
+cargo run --release --locked -p nana-ui --features gpu --bin nana-output-benchmark -- --output target/performance/output/live.json
+cargo run --release --locked -p nana-ui --example presentation-output-probe --features hosted,bundled-fonts -- --output target/performance/output/window.json
+python3 perf/runners/nana/run.py --scenario output-direct --from-report target/performance/output/window.json --output target/performance/output/direct.json
+python3 perf/contract.py --evaluate-invariants target/performance/output/direct.json
+```
+
+全部场景的 adapter、invariant 与报告命令见 [性能合同](../../perf/README.md)。Windows/DX12、SteamVR、Electron foreign import 及实际 device-loss 需要对应平台或服务证据；没有执行时明确报告 unavailable，不能用编译通过或合成零计数替代。当前没有实现通用第三方框架/传输协议，也没有 CPU fallback。
+
+额外六个 `transport-{overlay-static,overlay-changing,overlay-multi,overlay-slow,web-static,web-changing}` 用真实本地 GPU transfer 验证独立 consumer 池与退休，foreign retirement 明确为 mock。通过 `--transport-only` 独立执行，避免改变原七场景负载。三个 `transport-{native-host,openvr-native,web-native}` 只接收对应真实参考报告：30 次实际预热后，240 次测量，严格核对 fixture、平台路径、设备、尺寸、生产/消费工作量与 CPU 计时。缺指标、空负载或 mock 报告不能判为平台通过。
+
+具体参考与九个 transport 门禁现已进入代码；Windows/SteamVR/Electron 运行证据、真实设备丢失、GPU execution time/VRAM 仍是平台或测量证据缺口。macOS 的同设备/mock 通过不能填补这些缺口。
+
+
+### 按 producer / consumer 追踪
+
+`PresentationDriver::set_output_trace_enabled(true)` 启用每个实际目标组的 `output_traces()`。窗口入口实现 `RuntimeProgram::output_trace_enabled`，从 `window_output_trace` 收取直接 Surface、canonical 与实际 transfer consumer 的数值快照。默认关闭；启用时才分配冷路径状态。`OutputTraceSnapshot` 包含稳定 source/consumer identity、路径、格式、尺寸、设备/资源/内容代际、工作量、重建原因、defer/failure 状态与可选等待观察。
+
+等待数据来自实际 `FrameContext` acquisition / `GpuSubmission`，不会从全局计数差值推断单个 consumer 的等待。未观察值保持 `None`。共享提交只有实际提交 owner 记一次，deferred 组不会占用其他组的提交数据。`PresentationDriver::work()` 保留已有 aggregate 语义；需要 producer/consumer 归属时读取 trace，不能把 aggregate 中的 consumer transfer 当作 producer 重绘。
+
+正常 observe/query 只更新内存数值和 metric，不逐帧发 event。显式 `snapshot.capture_diagnostics()` 在 Debug 开启时发出九条具有同一 trace ID 的结构化记录，便于 nlog 重建；在非帧路径按需调用。`presentation-output-probe --trace-outputs` 保存真实窗口的逐项观察，独立于默认计时采样。
+
+`presentation-output-probe --profile-stages` 单独打开阶段 metric 与 macOS thread CPU 时钟，区分 prepare、acquire、encode、submit、present 等 CPU 调用的墙钟时间；`--frame-rate 30` 可与默认 120 比较呈现等待。阶段及线程采样起点略有差异，不要求各段与整帧严格相等；这些数据均不是 GPU 执行时长。默认性能对照关闭上述 profiling/trace。
+
 ## 参见
 
-- [实时画面](gpu.md) · [窗口](window.md) · [架构合同](architecture.md) · [GPU 与帧生命周期](/learn/gpu-frame)
+- [实时画面](gpu.md) · [窗口](window.md) · [架构合同](architecture.md) · [Issue #242 实施记录](../../archive/docs-notes/issue242-delivery.md) · [GPU 与帧生命周期](/learn/gpu-frame)

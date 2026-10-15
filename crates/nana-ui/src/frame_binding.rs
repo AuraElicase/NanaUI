@@ -334,38 +334,31 @@ mod tests {
         .expect("copy source")
     }
 
-    /// Copy `source` and wait until the exchange publishes it. Other tests
-    /// share the device, and wgpu runs `on_submitted_work_done` callbacks on
-    /// whichever thread's poll collects them, so one poll here does not
-    /// guarantee this exchange's copy and slot releases have been observed.
-    fn publish_frame(
-        gpu: &GpuContext,
-        exchange: &mut FrameExchange<u64>,
-        source: &GpuTexture,
-        epoch: u64,
-    ) {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        let settle = || {
+    /// Await this exchange's publication, rather than waiting for unrelated
+    /// work on the process-wide test queue. Nonblocking polls also let other
+    /// libtest threads collect callbacks and release their frame slots.
+    fn publish_frame(exchange: &mut FrameExchange<u64>, source: &GpuTexture, epoch: u64) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let settle = |exchange: &FrameExchange<u64>, phase: &str| {
             assert!(
                 std::time::Instant::now() < deadline,
-                "frame exchange did not settle"
+                "frame exchange did not settle during {phase}: {:?}",
+                exchange.stats(),
             );
-            __framework::device(gpu)
-                .poll(wgpu::PollType::wait_indefinitely())
-                .unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1));
         };
         loop {
             match exchange.copy_from(source, epoch) {
                 CopyOutcome::Submitted => break,
                 CopyOutcome::PoolFull => {
-                    settle();
                     exchange.poll();
+                    settle(exchange, "frame-slot acquisition");
                 }
                 outcome => panic!("unexpected copy outcome {outcome:?}"),
             }
         }
         while !exchange.poll() {
-            settle();
+            settle(exchange, "own copy publication");
         }
     }
 
@@ -378,7 +371,7 @@ mod tests {
         let mut exchange = FrameExchange::new(&gpu, DEFAULT_CAPACITY, 0u64, Arc::new(|| {}));
         let inbox = exchange.inbox();
         let publish = |exchange: &mut FrameExchange<u64>, width: u32, epoch: u64| {
-            publish_frame(&gpu, exchange, &source(&gpu, width), epoch);
+            publish_frame(exchange, &source(&gpu, width), epoch);
         };
         let registry = HostTextureRegistry::new();
         let size = || {
@@ -431,7 +424,7 @@ mod tests {
         );
         let all = |_: &FrameToken<u64>| true;
 
-        publish_frame(&gpu, &mut exchange, &source(&gpu, 4), 0);
+        publish_frame(&mut exchange, &source(&gpu, 4), 0);
         assert!(binding.prepare(Some(&inbox), all));
         binding.presented(Some(&inbox), all);
         assert_eq!(wakes.load(Ordering::Acquire), 1);
@@ -449,7 +442,7 @@ mod tests {
             "waiting must not spin redraws"
         );
 
-        publish_frame(&gpu, &mut exchange, &source(&gpu, 8), 1);
+        publish_frame(&mut exchange, &source(&gpu, 8), 1);
         assert_eq!(
             wakes.load(Ordering::Acquire),
             3,
@@ -484,7 +477,7 @@ mod tests {
         let inbox = exchange.inbox();
         let source = source(&gpu, 4);
         let publish = |exchange: &mut FrameExchange<u64>| {
-            publish_frame(&gpu, exchange, &source, 0);
+            publish_frame(exchange, &source, 0);
         };
         let registry = HostTextureRegistry::new();
         let changes = Arc::new(AtomicU64::new(0));
