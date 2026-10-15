@@ -662,4 +662,4 @@ hosted 宿主在布局收敛后暂存无障碍变化。在成功呈现后、应�
 
 窗口关闭时。`RuntimeApplication` 先移除窗口文档。再调用 `ApplicationState::window_closed` 清理应用状态。最后调用 `window_event(Closed)`。关闭通知的观察者因此看到已完成清理的状态。创建失败回滚仍调用清理钩子。但不发送成功或关闭事件。
 
-`TextArea::auto_grow(min_rows, max_rows)` 提供按软折行伸缩的多行输入；`character_counter(limit)` 显示已提交字符数，`submit_on_enter(true)` 选择 Enter 提交 / Shift+Enter 换行。默认行为保持原样。L3 的 `.trailing_action(view)` 在框内右下角保留 小号控件大小的真实操作槽，`.model(signal)` 与 `.on_submit(...)` 可以一起使用；命令式装配见 `AppContext::assemble_text_area`。多行计数与操作占用底部操作栏，编辑区在其上方使用完整宽度；`auto_grow` 的行数只计文本行。输入法确认不会发出 `TextSubmitted`。
+`TextArea::auto_grow(min_rows, max_rows)` 提供按软折行伸缩的多行输入；`character_counter(limit)` 显示已提交字符数，`submit_on_enter(true)` 选择 Enter 提交 / Shift+Enter 换行。默认行为保持原样。L3 的 `.trailing_action(view)` 在框内右下角保留 小号控件大小的真实操作槽，`.model(signal)` 与 `.on_submit(...)` 可以一起使用；命令式装配见 `AppContext::assemble_text_area`。`auto_grow` 最小行数为 1 时，计数和操作先与短文本共用紧凑单行；实际显示文本（含 IME）超过该行可用宽度或显式换行后，才展开为完整宽度编辑区及底部操作栏。行数只计文本行。输入法确认不会发出 `TextSubmitted`。

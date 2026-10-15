@@ -825,6 +825,8 @@ pub struct UiWorld {
     /// since the framework last asked, for geometry a component spends at
     /// projection time from a measurement.
     text_backend_changed: bool,
+    /// Adaptive editors shaped since their component fit was last refreshed.
+    text_input_adaptive_updates: Vec<StableNodeId>,
     /// Text work of the last pass, or of the last frame that ran one.
     text_work: nana_text::TextWorkCounters,
     /// Text work of the frame being accumulated.
@@ -1043,6 +1045,7 @@ impl UiWorld {
             default_text_scale: 1.0,
             document_text_scales: HashMap::default(),
             text_backend_changed: false,
+            text_input_adaptive_updates: Vec::new(),
             text_work: nana_text::TextWorkCounters::default(),
             text_frame_work: nana_text::TextWorkCounters::default(),
             pending_edit_work: nana_text::TextWorkCounters::default(),

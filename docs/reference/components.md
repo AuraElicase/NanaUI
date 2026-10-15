@@ -298,12 +298,12 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 ### 自适应多行发送框
 
-`TextArea::auto_grow(1, 6)`（Rust 构造属性）使用 Medium 控件行高和随主题变化的单行高度，按实际排版后的视觉行数增高、缩回，超过最大行数继续在编辑区内滚动。默认不启用；普通 `TextArea` 的尺寸与 Enter 换行行为不变。`character_counter(limit)` 与 `TextInput` 一样只统计已提交文本的 Unicode 标量，超限用错误色显示，不截断输入。多行计数固定在输入框内部底部的操作栏，编辑区位于它上方并使用完整宽度。
+`TextArea::auto_grow(1, 6)`（Rust 构造属性）按实际排版后的视觉文本行增高、缩回，超过最大行数时在编辑区内部滚动。默认不启用；普通 `TextArea` 的尺寸与 Enter 换行行为不变。`character_counter(limit)` 与 `TextInput` 一样只统计已提交文本的 Unicode 标量，超限用错误色显示，不截断输入。
+
+最小行数为 1 且启用计数或操作槽时，短文本保持紧凑单行（默认 32px），计数和操作位于框内右侧。文本将越过计数左边界、操作左侧的可用边界，或存在显式换行时，才展开为上方完整宽度的编辑区和底部操作栏。判定由同一个宿主文本引擎对显示文本（含 IME 预编辑）测量，始终与假设的紧凑行宽比较；展开后即使完整宽度可容纳一行，也不会反复切换。删除、输入法取消和宽度变化可恢复紧凑单行；占位文字不触发展开。
 
 `submit_on_enter(true)` 使 Enter 发出 `TextSubmitted`，Shift+Enter 仍换行；输入法正在组字时 Enter 不发送。只读和禁用时不提交。应用负责校验和处理提交。
 
-`view::text_area()` 或 `view::widget(TextArea::new(...))` 的 `.trailing_action(view)` 将真实操作控件装在框内底部右侧的小号控件槽位。操作栏通过底内边距预留高度，编辑文本、软换行、光标、选区与输入法均使用上方完整宽度，操作仍有独立焦点、Activate 和无障碍名称；键路径保留在字段下。命令式用 `TextArea::trailing_action(node)` 后调用 `AppContext::assemble_text_area`。
+`view::text_area()` 或 `view::widget(TextArea::new(...))` 的 `.trailing_action(view)` 将真实操作控件装在框内右侧的小号控件槽位。展开时操作栏通过底内边距预留高度，文本、软换行、光标、选区和输入法均使用上方完整宽度。操作有独立焦点、Activate 和无障碍名称，键路径保留在字段下。命令式用 `TextArea::trailing_action(node)` 后调用 `AppContext::assemble_text_area`。
 
-`auto_grow` 的最小 / 最大行数只统计文本行，不含底部操作栏。计数加操作时，默认一行文本的总高度为 64px（32px 单行输入 + 28px 小号操作 + 4px 间距）；六行文本上限为 144px。只有计数时操作栏高 16px 加 4px 间距；未启用计数或操作槽的 `TextArea` 和所有 `TextInput` 保持既有尺寸规则。
-
-自适应高度是首选尺寸；有高度约束的 Flex 父容器可将文本区压缩到 `min_rows` 对应的最小高度，余下内容在编辑区内部滚动，底部操作栏保持完整。默认允许收缩，并保留消费方显式指定的 `flex_shrink` 策略。
+`auto_grow` 的行数不含底部操作栏。展开时计数加操作的一行文本为 64px（32px 单行输入 + 28px 小号操作 + 4px 间距），六行文本上限为 144px；只有计数时底栏为 16px 加 4px 间距。`min_rows > 1` 保持多行底栏布局。紧凑或展开状态都允许有高度约束的 Flex 父容器收缩到相应最小高度，余下内容内部滚动；保留消费方显式指定的 `flex_shrink` 策略。
