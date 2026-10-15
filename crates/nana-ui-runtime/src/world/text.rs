@@ -6097,6 +6097,7 @@ impl UiWorld {
         let StandardVisual::TextInput {
             size,
             character_counter: Some(limit),
+            editor_options,
             ..
         } = self.nodes.visual(id)?
         else {
@@ -6109,15 +6110,26 @@ impl UiWorld {
         let weight = self.computed_style(id)?.font_weight;
         let measure = self.chrome_text_measure(id);
         // Keep the editor stable throughout the normal 0..=limit range.
+        let multiline = self.nodes.get(id)?.accessibility.multiline;
+        let action_extent = if multiline && editor_options.footer_action {
+            nana_ui_core::ControlSize::Small.height_in(self.style_model.metrics) + 4.0
+        } else {
+            0.0
+        };
         let width = measure
             .width(&label, font_size, weight)
             .max(measure.width(&format!("{limit}/{limit}"), font_size, weight))
-            .min(content.width);
+            .min((content.width - action_extent).max(0.0));
         let line_height = size.line_height();
-        let bounds = if self.nodes.get(id)?.accessibility.multiline {
+        let bounds = if multiline {
+            let footer_extent = crate::view_components::text_area_footer_extent(
+                true,
+                editor_options.footer_action,
+                self.style_model.metrics,
+            );
             LayoutBox {
-                y: content.y + (content.height - line_height).max(0.0),
-                height: content.height.min(line_height),
+                y: content.y + content.height + 4.0 + (footer_extent - line_height) / 2.0,
+                height: line_height,
                 ..content
             }
         } else {
@@ -6127,7 +6139,7 @@ impl UiWorld {
         Some(crate::TextInputCharacterCounter {
             text: crate::ComponentTextRegion {
                 bounds: LayoutBox {
-                    x: content.x + content.width - width,
+                    x: content.x + content.width - action_extent - width,
                     width,
                     ..bounds
                 },
@@ -6144,9 +6156,13 @@ impl UiWorld {
                 font_size,
                 font_weight: weight,
             },
-            editor_bounds: LayoutBox {
-                width: (content.width - width - gap).max(0.0),
-                ..content
+            editor_bounds: if multiline {
+                content
+            } else {
+                LayoutBox {
+                    width: (content.width - width - gap).max(0.0),
+                    ..content
+                }
             },
         })
     }

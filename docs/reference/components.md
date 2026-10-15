@@ -298,8 +298,10 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 ### 自适应多行发送框
 
-`TextArea::auto_grow(1, 6)`（Rust 构造属性）使用 Medium 控件行高和随主题变化的单行高度，按实际排版后的视觉行数增高、缩回，超过最大行数继续在编辑区内滚动。默认不启用；普通 `TextArea` 的尺寸与 Enter 换行行为不变。`character_counter(limit)` 与 `TextInput` 一样只统计已提交文本的 Unicode 标量，超限用错误色显示，不截断输入。多行计数固定在编辑区最后一行的尾部。
+`TextArea::auto_grow(1, 6)`（Rust 构造属性）使用 Medium 控件行高和随主题变化的单行高度，按实际排版后的视觉行数增高、缩回，超过最大行数继续在编辑区内滚动。默认不启用；普通 `TextArea` 的尺寸与 Enter 换行行为不变。`character_counter(limit)` 与 `TextInput` 一样只统计已提交文本的 Unicode 标量，超限用错误色显示，不截断输入。多行计数固定在输入框内部底部的操作栏，编辑区位于它上方并使用完整宽度。
 
 `submit_on_enter(true)` 使 Enter 发出 `TextSubmitted`，Shift+Enter 仍换行；输入法正在组字时 Enter 不发送。只读和禁用时不提交。应用负责校验和处理提交。
 
-`view::text_area()` 或 `view::widget(TextArea::new(...))` 的 `.trailing_action(view)` 将真实操作控件装在框内右下角的 小号控件大小的槽位。编辑文本、软换行、光标和选区会为操作与计数预留相同的尾列，操作仍有独立焦点、Activate 和无障碍名称；键路径保留在字段下。命令式用 `TextArea::trailing_action(node)` 后调用 `AppContext::assemble_text_area`。
+`view::text_area()` 或 `view::widget(TextArea::new(...))` 的 `.trailing_action(view)` 将真实操作控件装在框内底部右侧的小号控件槽位。操作栏通过底内边距预留高度，编辑文本、软换行、光标、选区与输入法均使用上方完整宽度，操作仍有独立焦点、Activate 和无障碍名称；键路径保留在字段下。命令式用 `TextArea::trailing_action(node)` 后调用 `AppContext::assemble_text_area`。
+
+`auto_grow` 的最小 / 最大行数只统计文本行，不含底部操作栏。计数加操作时，默认一行文本的总高度为 64px（32px 单行输入 + 28px 小号操作 + 4px 间距）；六行文本上限为 144px。只有计数时操作栏高 16px 加 4px 间距；未启用计数或操作槽的 `TextArea` 和所有 `TextInput` 保持既有尺寸规则。

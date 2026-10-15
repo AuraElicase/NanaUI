@@ -68,12 +68,10 @@ impl AppContext {
             let layout = Arc::make_mut(&mut slot.style_mut().layout);
             layout.hidden = hidden;
             layout.position = nana_ui_core::PositionSpec::Absolute;
-            // Absolute slots use the parent content box. The action occupies
-            // the reserved padding lane beyond that box, not its text.
-            layout.offset_right = Some(nana_ui_core::LengthSpec::Px(-(extent + 4.0)));
-            layout.offset_bottom = Some(nana_ui_core::LengthSpec::Px(
-                (nana_ui_core::ControlSize::Medium.line_height() - extent) / 2.0,
-            ));
+            // Text fills the content box. The footer is the reserved bottom
+            // padding band, so its action cannot consume any text-column width.
+            layout.offset_right = Some(nana_ui_core::LengthSpec::Px(0.0));
+            layout.offset_bottom = Some(nana_ui_core::LengthSpec::Px(-(extent + 4.0)));
             layout.width = Some(nana_ui_core::LengthSpec::Px(extent));
             layout.height = Some(nana_ui_core::LengthSpec::Px(extent));
         })?;

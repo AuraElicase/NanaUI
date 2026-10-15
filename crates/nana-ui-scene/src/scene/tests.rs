@@ -11348,7 +11348,7 @@ fn character_counter_paints_outside_the_shared_editor_clip_and_updates_increment
 }
 
 #[test]
-fn composer_trailing_action_icon_survives_editor_clip_in_the_reserved_lane() {
+fn composer_trailing_action_icon_survives_editor_clip_in_the_bottom_footer() {
     use nana_ui_runtime::{AppContext, DocumentId, IconButton, LayoutViewport, TextArea};
     let mut cx = AppContext::new();
     let document = DocumentId::new(1).unwrap();
@@ -11375,6 +11375,19 @@ fn composer_trailing_action_icon_survives_editor_clip_in_the_reserved_lane() {
         cx.shape_text(&[area.stable_id()], &mut nana_ui_runtime::MeasureTextShaper)
             .unwrap();
     }
+    let ComponentGeometry::TextInput {
+        character_counter: Some(counter),
+        ..
+    } = cx.world().component_geometry(area.stable_id()).unwrap()
+    else {
+        panic!("missing counter")
+    };
+    let editor = counter.editor_bounds;
+    let frame = cx.world().layout_box(area.stable_id()).unwrap();
+    assert!(
+        editor.width > frame.width - 24.0,
+        "editor has normal field padding only"
+    );
     let mut scene = UiScene::new();
     scene.apply_delta(cx.world().extract_document(document), []);
     let icon = scene
@@ -11399,4 +11412,7 @@ fn composer_trailing_action_icon_survives_editor_clip_in_the_reserved_lane() {
     let counter = scene.primitives().find(|primitive| primitive.node == area.stable_id()
         && matches!(&primitive.kind, ScenePrimitiveKind::Text { content, .. } if content == "0/40")).unwrap();
     assert!(counter.bounds.x + counter.bounds.width <= icon.bounds.x);
+    assert!(editor.y + editor.height <= counter.bounds.y);
+    assert!(editor.y + editor.height <= icon.bounds.y);
+    assert!(editor.x + editor.width >= icon.bounds.x + icon.bounds.width);
 }
