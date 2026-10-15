@@ -4089,9 +4089,7 @@ impl UiWorld {
             self.glyph_cache = glyphs;
             return outcome.map(|()| false);
         }
-        for id in adaptive_updates {
-            self.text_input_adaptive_updates.push(id);
-        }
+        self.text_input_adaptive_updates.extend(adaptive_updates);
         let (mut scaled, mut unbreakable_moved) =
             self.apply_plain_resolutions(resolved, backend.epoch, &mut work);
         // Text whose widest line was found not to break, or to break after
@@ -5080,9 +5078,7 @@ impl UiWorld {
             self.glyph_cache = glyphs;
             return outcome;
         }
-        for id in adaptive_updates {
-            self.text_input_adaptive_updates.push(id);
-        }
+        self.text_input_adaptive_updates.extend(adaptive_updates);
         let (mut scaled, unbreakable_moved) =
             self.apply_plain_resolutions(resolved, backend.epoch, &mut work);
         let mut stopped = 0usize;

@@ -7,9 +7,10 @@ impl AppContext {
     /// Assemble a retained small-control bottom trailing action slot without owning
     /// application action state or its activation semantics.
     pub fn assemble_text_area(&mut self, area: Entity<TextArea>) -> Result<bool, FrameworkError> {
-        let snapshot = self.read(area, Clone::clone)?;
-        let Some(action) = snapshot.trailing_action else {
-            if let Some(slot) = snapshot.action_slot.filter(|id| self.world().contains(*id)) {
+        let (action, action_slot) =
+            self.read(area, |area| (area.trailing_action, area.action_slot))?;
+        let Some(action) = action else {
+            if let Some(slot) = action_slot.filter(|id| self.world().contains(*id)) {
                 self.update_component(Entity::<Stack>::from_stable_id(slot), |slot, _| {
                     Arc::make_mut(&mut slot.style_mut().layout).hidden = true;
                 })?;
@@ -21,10 +22,8 @@ impl AppContext {
             .node(area.stable_id())
             .ok_or(FrameworkError::MissingView(area.stable_id()))?
             .document;
-        let created = snapshot
-            .action_slot
-            .is_none_or(|id| !self.world().contains(id));
-        let slot = match snapshot.action_slot.filter(|id| self.world().contains(*id)) {
+        let created = action_slot.is_none_or(|id| !self.world().contains(id));
+        let slot = match action_slot.filter(|id| self.world().contains(*id)) {
             Some(id) => Entity::<Stack>::from_stable_id(id),
             None => self.create_detached_component(document, Stack::column(0.0))?,
         };
@@ -55,15 +54,17 @@ impl AppContext {
         &mut self,
         area: Entity<TextArea>,
     ) -> Result<(), FrameworkError> {
-        let Some(slot) = self
-            .read(area, |area| area.action_slot)?
-            .filter(|id| self.world().contains(*id))
-        else {
+        let (slot, hidden, expanded) = self.read(area, |area| {
+            (
+                area.action_slot,
+                area.trailing_action.is_none(),
+                area.uses_expanded_footer(),
+            )
+        })?;
+        let Some(slot) = slot.filter(|id| self.world().contains(*id)) else {
             return Ok(());
         };
         let slot = Entity::<Stack>::from_stable_id(slot);
-        let hidden = self.read(area, |area| area.trailing_action.is_none())?;
-        let expanded = self.read(area, TextArea::uses_expanded_footer)?;
         let extent = nana_ui_core::ControlSize::Small.height_in(self.world().theme_metrics());
         self.update_component(slot, |slot, _| {
             let layout = Arc::make_mut(&mut slot.style_mut().layout);
