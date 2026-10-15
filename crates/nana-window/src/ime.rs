@@ -25,6 +25,13 @@ pub fn discard_native_ime_preedit<W: raw_window_handle::HasWindowHandle + ?Sized
         // SAFETY: the live AppKit window owns this view; the host calls us
         // on its event thread, outside key/composition delivery.
         let view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
+        // Focus notifications are queued: another window may already own
+        // the current conversion session when we drain the old one's loss.
+        // Never discard through an inactive client. A Disable can clear
+        // its local buffer; its input context resets when it regains key.
+        if !view.window().is_some_and(|window| window.isKeyWindow()) {
+            return;
+        }
         if view.respondsToSelector(sel!(unmarkText)) {
             // SAFETY: NSTextInputClient's unmarkText takes no arguments and
             // returns void. Winit's implementation first clears its marked
