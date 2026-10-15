@@ -484,6 +484,67 @@ mod tests {
     }
 
     #[test]
+    fn native_unmark_after_window_regain_does_not_start_an_empty_composition() {
+        use nana_ui_platform::{InputModifiers, InputPayload, KeyInput, KeyState};
+        use nana_ui_runtime::{AppContext, DocumentId, HeadlessInput, TextInput};
+
+        let mut context = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let editor = context
+            .create_component(document, TextInput::new("ce"))
+            .unwrap();
+        context.focus_node(document, editor.stable_id()).unwrap();
+        let mut input = HeadlessInput::bind(&mut context, document);
+        input
+            .route(&mut context, InputPayload::Focus { focused: true })
+            .unwrap();
+        input
+            .composition(
+                &mut context,
+                super::super::platform_composition(&winit::event::Ime::Preedit(
+                    "ha".into(),
+                    Some((2, 2)),
+                )),
+            )
+            .unwrap();
+        input
+            .route(&mut context, InputPayload::Focus { focused: false })
+            .unwrap();
+        input
+            .route(&mut context, InputPayload::Focus { focused: true })
+            .unwrap();
+        // AppKit unmarkText queues this after the focus event. It cancels
+        // the native conversion; it must not re-enter Runtime composition.
+        input
+            .composition(
+                &mut context,
+                super::super::platform_composition(&winit::event::Ime::Preedit(
+                    String::new(),
+                    None,
+                )),
+            )
+            .unwrap();
+        assert!(context.world().ime(editor.stable_id()).is_none());
+        input
+            .route(
+                &mut context,
+                InputPayload::Key(KeyInput::named(
+                    "KeyA",
+                    "a",
+                    KeyState::Pressed,
+                    InputModifiers {
+                        meta: cfg!(target_os = "macos"),
+                        control: !cfg!(target_os = "macos"),
+                        ..InputModifiers::default()
+                    },
+                )),
+            )
+            .unwrap();
+        input.text(&mut context, "好").unwrap();
+        assert_eq!(context.world().text(editor.stable_id()), Some("好"));
+    }
+
+    #[test]
     fn a_new_capability_replaces_the_ime_session() {
         assert!(matches!(
             ime_apply(Some(&state(false, true)), Some(&state(true, true))).0,
