@@ -2806,6 +2806,10 @@ pub struct TextEditorRenderOptions {
     pub resize_vertical: bool,
     /// A real action occupies the trailing side of the multiline footer.
     pub footer_action: bool,
+    /// Auto-growing controls may begin with their count/action on the same row.
+    pub adaptive_footer: bool,
+    /// Count/action occupy a bottom row, leaving the editor its full width.
+    pub expanded_footer: bool,
     /// 光标处单词/选中文本的出现高亮（内部派生，聚焦时绘制）。
     pub occurrence_highlight: bool,
     /// 相对行号：光标行显示绝对行号，其余行显示与光标所在显示行的距离
@@ -2836,6 +2840,8 @@ impl Default for TextEditorRenderOptions {
         Self {
             resize_vertical: false,
             footer_action: false,
+            adaptive_footer: false,
+            expanded_footer: false,
             occurrence_highlight: false,
             relative_line_numbers: false,
             show_whitespace: false,
@@ -2937,6 +2943,9 @@ pub struct LineLabel {
 pub struct TextInputPresentation {
     /// Full shaped text extent, including visual soft-wrapped rows.
     pub content_size: TextMetrics,
+    /// Unwrapped display-text width and hard-break flag, measured by the host
+    /// shaper only for adaptive composers. Excludes placeholder text; includes IME.
+    pub compact_measure: Option<(f32, bool)>,
     pub display_value: TextValue,
     pub placeholder: bool,
     pub selection: Option<(f32, f32)>,

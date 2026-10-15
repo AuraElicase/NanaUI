@@ -11362,7 +11362,7 @@ fn composer_trailing_action_icon_survives_editor_clip_in_the_bottom_footer() {
     let area = cx
         .create_component(
             document,
-            TextArea::new("")
+            TextArea::new("first\nsecond")
                 .auto_grow(1, 6)
                 .character_counter(40)
                 .trailing_action(action.stable_id()),
@@ -11410,7 +11410,7 @@ fn composer_trailing_action_icon_survives_editor_clip_in_the_bottom_footer() {
         );
     }
     let counter = scene.primitives().find(|primitive| primitive.node == area.stable_id()
-        && matches!(&primitive.kind, ScenePrimitiveKind::Text { content, .. } if content == "0/40")).unwrap();
+        && matches!(&primitive.kind, ScenePrimitiveKind::Text { content, .. } if content == "12/40")).unwrap();
     assert!(counter.bounds.x + counter.bounds.width <= icon.bounds.x);
     assert!(editor.y + editor.height <= counter.bounds.y);
     assert!(editor.y + editor.height <= icon.bounds.y);

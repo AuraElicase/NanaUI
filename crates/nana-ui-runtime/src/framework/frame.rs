@@ -122,6 +122,7 @@ impl AppContext {
         self.record_stage(FrameStage::TextShape, started);
         result?;
         self.reproject_text_backend_views()?;
+        self.refresh_shaped_text_area_layouts()?;
         // Clamps are announced from the layout-aware passes: before layout
         // a text has no width to clamp against.
         Ok(())
@@ -139,7 +140,8 @@ impl AppContext {
             .map_err(FrameworkError::from);
         self.record_stage(FrameStage::TextShape, started);
         let reshaped = result?;
-        let reprojected = self.reproject_text_backend_views()?;
+        let reprojected =
+            self.reproject_text_backend_views()? | self.refresh_shaped_text_area_layouts()?;
         self.announce_text_clamps()?;
         Ok(reprojected || reshaped)
     }
@@ -158,7 +160,8 @@ impl AppContext {
             .map_err(FrameworkError::from);
         self.record_stage(FrameStage::TextShape, started);
         let reshaped = result?;
-        let reprojected = self.reproject_text_backend_views()?;
+        let reprojected =
+            self.reproject_text_backend_views()? | self.refresh_shaped_text_area_layouts()?;
         self.announce_text_clamps()?;
         Ok(reprojected || reshaped)
     }
@@ -423,10 +426,17 @@ impl AppContext {
             phase.lap(10);
             let mut settings_rows = Vec::new();
             let mut terminal_sizes = Vec::new();
+            let mut adaptive_editors = Vec::new();
             for id in &scope {
                 let Some(view) = self.views.get(id) else {
                     continue;
                 };
+                if view
+                    .downcast_ref::<TextArea>()
+                    .is_some_and(TextArea::uses_adaptive_footer)
+                {
+                    adaptive_editors.push(*id);
+                }
                 if view.is::<crate::TerminalView>() {
                     terminal_sizes.push(*id);
                 } else if view
@@ -450,6 +460,9 @@ impl AppContext {
             #[cfg(feature = "benchmark")]
             phase.lap(13);
             self.last_layout_scope = scope;
+            for id in adaptive_editors {
+                self.refresh_text_area_compact_layout(id)?;
+            }
             for id in settings_rows {
                 self.refresh_settings_row_layout(id)?;
             }

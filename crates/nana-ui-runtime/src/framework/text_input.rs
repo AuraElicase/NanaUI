@@ -63,6 +63,7 @@ impl AppContext {
         };
         let slot = Entity::<Stack>::from_stable_id(slot);
         let hidden = self.read(area, |area| area.trailing_action.is_none())?;
+        let expanded = self.read(area, TextArea::uses_expanded_footer)?;
         let extent = nana_ui_core::ControlSize::Small.height_in(self.world().theme_metrics());
         self.update_component(slot, |slot, _| {
             let layout = Arc::make_mut(&mut slot.style_mut().layout);
@@ -70,8 +71,16 @@ impl AppContext {
             layout.position = nana_ui_core::PositionSpec::Absolute;
             // Text fills the content box. The footer is the reserved bottom
             // padding band, so its action cannot consume any text-column width.
-            layout.offset_right = Some(nana_ui_core::LengthSpec::Px(0.0));
-            layout.offset_bottom = Some(nana_ui_core::LengthSpec::Px(-(extent + 4.0)));
+            layout.offset_right = Some(nana_ui_core::LengthSpec::Px(if expanded {
+                0.0
+            } else {
+                -(extent + 4.0)
+            }));
+            layout.offset_bottom = Some(nana_ui_core::LengthSpec::Px(if expanded {
+                -(extent + 4.0)
+            } else {
+                (nana_ui_core::ControlSize::Medium.line_height() - extent) / 2.0
+            }));
             layout.width = Some(nana_ui_core::LengthSpec::Px(extent));
             layout.height = Some(nana_ui_core::LengthSpec::Px(extent));
         })?;
@@ -87,6 +96,37 @@ impl AppContext {
             self.commit_mutations(mutations)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn refresh_text_area_compact_layout(
+        &mut self,
+        id: StableNodeId,
+    ) -> Result<bool, FrameworkError> {
+        let Some(area) = self.view_entity::<TextArea>(id) else {
+            return Ok(false);
+        };
+        if !self.read(area, TextArea::uses_adaptive_footer)? {
+            return Ok(false);
+        }
+        let Some(expanded) = self.world().text_input_needs_expanded_footer(id) else {
+            return Ok(false);
+        };
+        if self.read(area, TextArea::uses_expanded_footer)? == expanded {
+            return Ok(false);
+        }
+        self.update_component(area, |area, _| area.footer_expanded = Some(expanded))?;
+        Ok(true)
+    }
+
+    pub(crate) fn refresh_shaped_text_area_layouts(&mut self) -> Result<bool, FrameworkError> {
+        let mut changed = false;
+        let mut ids = self.world.take_text_input_adaptive_updates();
+        ids.sort_unstable();
+        ids.dedup();
+        for id in ids {
+            changed |= self.refresh_text_area_compact_layout(id)?;
+        }
+        Ok(changed)
     }
 
     /// Native composition owns its pending text and committed insertion range.

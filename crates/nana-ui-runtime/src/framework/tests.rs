@@ -12704,6 +12704,10 @@ fn composer_footer_preserves_the_full_editor_width_for_pointer_selection_and_ime
             .iter()
             .any(|selection| selection.x + selection.width > counter.text.bounds.x)
     );
+    cx.update_component(area, |area, _| {
+        area.state.selection = TextSelection::new(value.len(), value.len())
+    })
+    .unwrap();
     cx.set_ime_preedit(document, "预编辑".into(), None).unwrap();
     cx.shape_text(&[node], &mut crate::MeasureTextShaper)
         .unwrap();
@@ -12724,15 +12728,16 @@ fn composer_footer_preserves_the_full_editor_width_for_pointer_selection_and_ime
 
 #[test]
 fn auto_growing_text_area_counts_only_text_rows_and_keeps_full_width_with_any_footer() {
-    for (counter, action, height) in [
-        (false, false, 32.0),
-        (true, false, 52.0),
-        (false, true, 64.0),
-        (true, true, 64.0),
+    for (counter, action, min_rows, initial_height, height) in [
+        (false, false, 1, 32.0, 48.0),
+        (true, false, 1, 32.0, 68.0),
+        (false, true, 1, 32.0, 80.0),
+        (true, true, 1, 32.0, 80.0),
+        (true, true, 2, 80.0, 80.0),
     ] {
         let mut cx = AppContext::new();
         let document = DocumentId::new(1).unwrap();
-        let mut area = TextArea::new("").auto_grow(1, 6);
+        let mut area = TextArea::new("").auto_grow(min_rows, 6);
         if counter {
             area = area.character_counter(40);
         }
@@ -12758,14 +12763,40 @@ fn auto_growing_text_area_counts_only_text_rows_and_keeps_full_width_with_any_fo
                 .component_layout_box(area.stable_id())
                 .unwrap()
                 .height,
-            height
+            initial_height
         );
+        let compact = cx.world().text_input_text_box(area.stable_id()).unwrap();
+        assert_eq!(
+            compact.height,
+            min_rows as f32 * nana_ui_core::ControlSize::Medium.line_height()
+        );
+        if min_rows == 1 && (counter || action) {
+            assert!(compact.width < 238.0);
+        } else {
+            assert_eq!(compact.width, 238.0);
+        }
+        cx.update_component(area, |area, _| {
+            area.state.replace_value("a\nb");
+        })
+        .unwrap();
+        for _ in 0..6 {
+            cx.layout_document(document, crate::LayoutViewport::new(260.0, 300.0))
+                .unwrap();
+            cx.shape_text(&[area.stable_id()], &mut crate::MeasureTextShaper)
+                .unwrap();
+        }
+        let grown_height = cx
+            .world()
+            .component_layout_box(area.stable_id())
+            .unwrap()
+            .height;
+        // The finite-metrics test shaper approximates a 16px row as 15.6px;
+        // the real host-shaper integration tests cover the exact fit boundary.
+        assert!(grown_height <= height && grown_height >= height - 1.0);
         let editor = cx.world().text_input_text_box(area.stable_id()).unwrap();
         assert_eq!(editor.width, 238.0, "counter={counter} action={action}");
-        assert_eq!(
-            editor.height,
-            nana_ui_core::ControlSize::Medium.line_height()
-        );
+        assert!(editor.height > nana_ui_core::ControlSize::Medium.line_height());
+        assert!(editor.height <= 2.0 * nana_ui_core::ControlSize::Medium.line_height());
     }
 }
 

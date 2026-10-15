@@ -2605,6 +2605,7 @@ pub struct TextArea {
     pub submit_on_enter: bool,
     pub trailing_action: Option<StableNodeId>,
     pub(crate) action_slot: Option<StableNodeId>,
+    pub(crate) footer_expanded: Option<bool>,
     pub resize_vertical: bool,
     pub(crate) resized_height: Option<f32>,
     pub(crate) resize_drag: Option<TextAreaResizeDrag>,
@@ -2703,6 +2704,7 @@ impl TextArea {
             submit_on_enter: false,
             trailing_action: None,
             action_slot: None,
+            footer_expanded: None,
             resize_vertical: false,
             resized_height: None,
             resize_drag: None,
@@ -2736,7 +2738,9 @@ impl TextArea {
         }
     }
 
-    /// Size to shaped wrapped content, bounded by visual rows (at least one).
+    /// Size to shaped wrapped content, bounded by visual text rows (at least one).
+    /// With min_rows=1, counter/action stay on the first row until displayed
+    /// text (including IME) exceeds that compact row; then they move below it.
     pub fn auto_grow(mut self, min_rows: usize, max_rows: usize) -> Self {
         let min_rows = min_rows.max(1);
         self.auto_grow = Some((min_rows, max_rows.max(min_rows)));
@@ -2759,6 +2763,19 @@ impl TextArea {
     pub fn trailing_action(mut self, node: StableNodeId) -> Self {
         self.trailing_action = Some(node);
         self
+    }
+
+    pub(crate) fn uses_adaptive_footer(&self) -> bool {
+        matches!(self.auto_grow, Some((1, _)))
+            && (self.character_counter.is_some() || self.trailing_action.is_some())
+    }
+
+    pub(crate) fn uses_expanded_footer(&self) -> bool {
+        if self.uses_adaptive_footer() {
+            self.footer_expanded.unwrap_or(false)
+        } else {
+            self.character_counter.is_some() || self.trailing_action.is_some()
+        }
     }
 
     /// 启用代码编辑行为：括号配对、Enter 自动缩进、Tab/Shift+Tab 缩进与
@@ -2995,6 +3012,7 @@ impl ComponentView for TextArea {
 
     fn keep_framework_state(&mut self, previous: &Self) {
         self.action_slot = self.action_slot.or(previous.action_slot);
+        self.footer_expanded = self.footer_expanded.or(previous.footer_expanded);
     }
 
     fn node_kind(&self) -> NodeKind {
@@ -3035,6 +3053,8 @@ impl ComponentView for TextArea {
             editor_options: TextEditorRenderOptions {
                 resize_vertical: self.supports_vertical_resize(),
                 footer_action: self.trailing_action.is_some(),
+                adaptive_footer: self.uses_adaptive_footer(),
+                expanded_footer: self.uses_expanded_footer(),
                 occurrence_highlight: self.occurrence_highlight,
                 relative_line_numbers: self.relative_line_numbers,
                 show_whitespace: self.show_whitespace,
@@ -3102,17 +3122,27 @@ impl ComponentView for TextArea {
             }
         }
         let mut effective_style = self.style.clone();
-        let footer_extent = text_area_footer_extent(
-            self.character_counter.is_some(),
-            self.trailing_action.is_some(),
-            world.theme_metrics(),
-        );
+        let expanded_footer = self.uses_expanded_footer();
+        let footer_extent = if expanded_footer {
+            text_area_footer_extent(
+                self.character_counter.is_some(),
+                self.trailing_action.is_some(),
+                world.theme_metrics(),
+            )
+        } else {
+            0.0
+        };
         let footer_band = if footer_extent > 0.0 {
             footer_extent + 4.0
         } else {
             0.0
         };
         if let Some((min_rows, max_rows)) = self.auto_grow {
+            let max_rows = if self.uses_adaptive_footer() && !expanded_footer {
+                min_rows
+            } else {
+                max_rows
+            };
             let line = size.line_height();
             let chrome = (size.height_in(world.theme_metrics()) - line).max(2.0);
             effective_style.control_padding_y = None;
@@ -3147,6 +3177,23 @@ impl ComponentView for TextArea {
             layout.padding_top = Some(nana_ui_core::LengthSpec::Px(top));
             layout.padding_bottom = Some(nana_ui_core::LengthSpec::Px(bottom + footer_band));
             effective_style.control_padding_y = None;
+        }
+        if self.uses_adaptive_footer() && !expanded_footer && self.trailing_action.is_some() {
+            let padding = effective_style
+                .control_padding_x
+                .map(|padding| padding.resolve(world.theme_metrics()))
+                .unwrap_or_else(|| effective_style.layout.resolved_padding().right);
+            let left_padding = effective_style
+                .control_padding_x
+                .map(|padding| padding.resolve(world.theme_metrics()))
+                .unwrap_or_else(|| effective_style.layout.resolved_padding().left);
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.position = nana_ui_core::PositionSpec::Relative;
+            layout.padding_right = Some(nana_ui_core::LengthSpec::Px(
+                padding + nana_ui_core::ControlSize::Small.height_in(world.theme_metrics()) + 4.0,
+            ));
+            layout.padding_left = Some(nana_ui_core::LengthSpec::Px(left_padding));
+            effective_style.control_padding_x = None;
         }
         if self.resize_vertical
             && let Some(height) = self.resized_height
