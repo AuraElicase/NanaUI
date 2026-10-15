@@ -4938,3 +4938,166 @@ fn a_reactive_locale_and_caption_on_one_node_both_follow() {
         Locale::parse("ar").as_ref()
     );
 }
+
+#[test]
+fn composer_action_slot_keeps_identity_and_occupies_only_reserved_trailing_space() {
+    let (mut cx, document, parent) = setup();
+    let view = cx
+        .mount_view(parent, || {
+            widget(
+                crate::TextArea::new("hello")
+                    .auto_grow(1, 6)
+                    .character_counter(40)
+                    .submit_on_enter(true),
+            )
+            .key("input")
+            .trailing_action(icon_button(nana_ui_core::Icon::Close, "Send").key("send"))
+        })
+        .unwrap();
+    let field = view.roots()[0];
+    let settle_composer = |cx: &mut AppContext| {
+        for _ in 0..4 {
+            cx.layout_document(document, LayoutViewport::new(260.0, 400.0))
+                .unwrap();
+            cx.shape_text(&[field], &mut crate::MeasureTextShaper)
+                .unwrap();
+        }
+    };
+    let action = cx.resolve_assembly_path(field, "send").unwrap();
+    settle_composer(&mut cx);
+    let frame = cx.world().component_layout_box(field).unwrap();
+    let action_frame = cx.world().component_layout_box(action).unwrap();
+    let counter = cx.world().text_input_character_counter(field).unwrap();
+    assert!(
+        frame.height < 40.0,
+        "composer begins with one row: {frame:?}"
+    );
+    assert!(
+        action_frame.x >= counter.text.bounds.x + counter.text.bounds.width,
+        "frame={frame:?} action={action_frame:?} counter={counter:?}"
+    );
+    assert!(action_frame.x + action_frame.width <= frame.x + frame.width);
+    assert!(counter.editor_bounds.x + counter.editor_bounds.width < counter.text.bounds.x);
+    cx.update_component(
+        Entity::<crate::TextArea>::from_stable_id(field),
+        |area, _| {
+            area.state.replace_value("a\nb\nc");
+        },
+    )
+    .unwrap();
+    settle_composer(&mut cx);
+    let grown = cx.world().component_layout_box(field).unwrap();
+    assert!(grown.height > frame.height);
+    let counter = cx.world().text_input_character_counter(field).unwrap();
+    assert_eq!(counter.text.content.as_ref(), "5/40");
+    assert!(counter.text.bounds.y > frame.y + frame.height);
+    assert_eq!(cx.resolve_assembly_path(field, "send"), Some(action));
+    cx.update_component(
+        Entity::<crate::TextArea>::from_stable_id(field),
+        |area, _| {
+            area.state.replace_value("line\n".repeat(20));
+        },
+    )
+    .unwrap();
+    settle_composer(&mut cx);
+    let max_height = cx.world().component_layout_box(field).unwrap().height;
+    assert_eq!(
+        max_height,
+        frame.height + 5.0 * nana_ui_core::ControlSize::Medium.line_height()
+    );
+    cx.update_component(
+        Entity::<crate::TextArea>::from_stable_id(field),
+        |area, _| {
+            area.state.replace_value("");
+        },
+    )
+    .unwrap();
+    settle_composer(&mut cx);
+    assert_eq!(
+        cx.world().component_layout_box(field).unwrap().height,
+        frame.height
+    );
+    assert_eq!(
+        cx.world()
+            .text_input_character_counter(field)
+            .unwrap()
+            .text
+            .content
+            .as_ref(),
+        "0/40"
+    );
+}
+
+#[test]
+fn composer_action_slot_is_retained_replaces_content_and_stays_hidden_after_removal() {
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let action = cx
+        .create_detached_component(
+            document,
+            crate::IconButton::new(nana_ui_core::Icon::Close, "Send"),
+        )
+        .unwrap();
+    let area = cx
+        .create_component(
+            document,
+            crate::TextArea::new("")
+                .auto_grow(1, 6)
+                .trailing_action(action.stable_id()),
+        )
+        .unwrap();
+    assert!(cx.assemble_text_area(area).unwrap());
+    let slot = cx.read(area, |area| area.action_slot).unwrap().unwrap();
+    let count = cx.world().len();
+    assert!(!cx.assemble_text_area(area).unwrap());
+    assert_eq!(cx.world().len(), count);
+    assert_eq!(cx.world().parent_id(action.stable_id()), Some(slot));
+    let replacement = cx
+        .create_detached_component(
+            document,
+            crate::IconButton::new(nana_ui_core::Icon::Close, "Other"),
+        )
+        .unwrap();
+    cx.update_component(area, |area, _| {
+        area.trailing_action = Some(replacement.stable_id())
+    })
+    .unwrap();
+    cx.assemble_text_area(area).unwrap();
+    assert_eq!(cx.world().parent_id(action.stable_id()), None);
+    assert_eq!(cx.world().parent_id(replacement.stable_id()), Some(slot));
+    let mut metrics = nana_ui_core::UI_METRICS;
+    metrics.compact_control_height += 4.0;
+    metrics.control_height += 8.0;
+    cx.set_style_tokens(
+        nana_ui_core::ThemeAppearance::Dark,
+        metrics,
+        nana_ui_core::SemanticPalette::dark(),
+        nana_ui_core::SemanticPalette::dark().surface,
+    )
+    .unwrap();
+    assert_eq!(
+        cx.world().node_style(slot).unwrap().layout.width,
+        Some(LengthSpec::Px(metrics.compact_control_height))
+    );
+    cx.update_component(area, |area, _| area.trailing_action = None)
+        .unwrap();
+    cx.assemble_text_area(area).unwrap();
+    cx.reproject_component(area).unwrap();
+    cx.set_style_tokens(
+        nana_ui_core::ThemeAppearance::Light,
+        nana_ui_core::UI_METRICS,
+        nana_ui_core::SemanticPalette::light(),
+        nana_ui_core::SemanticPalette::light().surface,
+    )
+    .unwrap();
+    cx.layout_document(document, LayoutViewport::new(260.0, 400.0))
+        .unwrap();
+    assert!(cx.world().node_style(slot).unwrap().layout.hidden);
+    assert!(!cx.world().is_mounted(action.stable_id()));
+    assert!(
+        !cx.world()
+            .project_accessibility(document)
+            .iter()
+            .any(|node| node.id == replacement.stable_id())
+    );
+}

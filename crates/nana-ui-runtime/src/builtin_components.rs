@@ -671,6 +671,7 @@ impl RegisterableComponent for TextArea {
             area.resized_height = previous.resized_height;
             area.resize_drag = previous.resize_drag;
             area.scroll_offset = previous.scroll_offset;
+            area.action_slot = previous.action_slot;
         }
         area
     }
@@ -681,6 +682,9 @@ impl RegisterableComponent for TextArea {
             .disabled(spec.disabled)
             .read_only(spec.read_only)
             .invalid(spec.invalid);
+        component.character_counter = spec.attr("character-counter").and_then(|v| v.parse().ok());
+        component.submit_on_enter = flag_attr(spec, &["submit-on-enter", "submitonenter"]);
+        component.trailing_action = spec.slot("trailing-action");
         if let Some(language) = highlight_language_from_spec(spec) {
             component = component.highlight(language);
         }

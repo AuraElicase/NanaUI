@@ -3424,6 +3424,13 @@ impl UiWorld {
         let padding = self.used_layout_padding(id);
         let border = source.layout.resolved_border_edges();
         let leading_visual = text_leading_inset(self.nodes.visual(id));
+        let counter_reserved = self
+            .text_input_character_counter(id)
+            .map(|counter| {
+                self.component_content_box(id)
+                    .map_or(0.0, |content| content.width - counter.editor_bounds.width)
+            })
+            .unwrap_or(0.0);
         crate::TextShapeConstraints {
             max_width: if is_text_input && !text_input_multiline {
                 None
@@ -3434,7 +3441,8 @@ impl UiWorld {
                         - padding.right
                         - border.left
                         - border.right
-                        - leading_visual)
+                        - leading_visual
+                        - counter_reserved)
                         .max(0.0),
                 )
             },
@@ -6105,13 +6113,23 @@ impl UiWorld {
             .width(&label, font_size, weight)
             .max(measure.width(&format!("{limit}/{limit}"), font_size, weight))
             .min(content.width);
+        let line_height = size.line_height();
+        let bounds = if self.nodes.get(id)?.accessibility.multiline {
+            LayoutBox {
+                y: content.y + (content.height - line_height).max(0.0),
+                height: content.height.min(line_height),
+                ..content
+            }
+        } else {
+            content
+        };
         let gap = 4.0;
         Some(crate::TextInputCharacterCounter {
             text: crate::ComponentTextRegion {
                 bounds: LayoutBox {
                     x: content.x + content.width - width,
                     width,
-                    ..content
+                    ..bounds
                 },
                 content: label.into(),
                 color: Some(

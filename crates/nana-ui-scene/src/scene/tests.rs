@@ -11346,3 +11346,57 @@ fn character_counter_paints_outside_the_shared_editor_clip_and_updates_increment
             .is_none()
     );
 }
+
+#[test]
+fn composer_trailing_action_icon_survives_editor_clip_in_the_reserved_lane() {
+    use nana_ui_runtime::{AppContext, DocumentId, IconButton, LayoutViewport, TextArea};
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let action = cx
+        .create_detached_component(
+            document,
+            IconButton::new(nana_ui_core::Icon::Close, "Send")
+                .size(nana_ui_core::ControlSize::Small),
+        )
+        .unwrap();
+    let area = cx
+        .create_component(
+            document,
+            TextArea::new("")
+                .auto_grow(1, 6)
+                .character_counter(40)
+                .trailing_action(action.stable_id()),
+        )
+        .unwrap();
+    cx.assemble_text_area(area).unwrap();
+    for _ in 0..3 {
+        cx.layout_document(document, LayoutViewport::new(260.0, 200.0))
+            .unwrap();
+        cx.shape_text(&[area.stable_id()], &mut nana_ui_runtime::MeasureTextShaper)
+            .unwrap();
+    }
+    let mut scene = UiScene::new();
+    scene.apply_delta(cx.world().extract_document(document), []);
+    let icon = scene
+        .primitives()
+        .find(|primitive| {
+            primitive.node == action.stable_id()
+                && matches!(primitive.kind, ScenePrimitiveKind::Icon { .. })
+        })
+        .expect("the real action paints its icon");
+    assert!(icon.opacity > 0.0);
+    let x = icon.bounds.x + icon.bounds.width / 2.0;
+    let y = icon.bounds.y + icon.bounds.height / 2.0;
+    for clip in icon.clips.iter() {
+        assert!(
+            x >= clip.bounds.x
+                && x <= clip.bounds.x + clip.bounds.width
+                && y >= clip.bounds.y
+                && y <= clip.bounds.y + clip.bounds.height,
+            "action {icon:?} must remain inside ancestor clip {clip:?}"
+        );
+    }
+    let counter = scene.primitives().find(|primitive| primitive.node == area.stable_id()
+        && matches!(&primitive.kind, ScenePrimitiveKind::Text { content, .. } if content == "0/40")).unwrap();
+    assert!(counter.bounds.x + counter.bounds.width <= icon.bounds.x);
+}

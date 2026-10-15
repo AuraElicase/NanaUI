@@ -6749,3 +6749,56 @@ fn a_press_in_a_scrolled_field_places_the_caret_where_the_text_shows() {
         ("hello world".into(), 11, 11)
     );
 }
+
+#[test]
+fn composer_enter_submits_shift_enter_wraps_and_ime_confirmation_does_not_submit() {
+    use std::sync::{Arc, Mutex};
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let area = context
+        .create_component(document, TextArea::new("你好").submit_on_enter(true))
+        .unwrap();
+    context.focus_node(document, area.stable_id()).unwrap();
+    let submitted = Arc::new(Mutex::new(Vec::new()));
+    let output = submitted.clone();
+    context
+        .on(area, move |_, event: &crate::TextSubmitted, _| {
+            output.lock().unwrap().push(event.value.clone())
+        })
+        .unwrap();
+    let mut input = TestInput::default();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(*submitted.lock().unwrap(), ["你好"]);
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好");
+    input
+        .dispatch(&mut context, document, &shift_key("Enter"))
+        .unwrap();
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好\n");
+    assert_eq!(submitted.lock().unwrap().len(), 1);
+    context
+        .set_ime_preedit(document, String::new(), None)
+        .unwrap();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好\n");
+    assert_eq!(submitted.lock().unwrap().len(), 1);
+    context
+        .set_ime_preedit(document, "shi".into(), None)
+        .unwrap();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(submitted.lock().unwrap().len(), 1);
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好\n");
+    context.commit_ime(document, "世").unwrap();
+    context
+        .update_component(area, |area, _| area.read_only = true)
+        .unwrap();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(submitted.lock().unwrap().len(), 1);
+}

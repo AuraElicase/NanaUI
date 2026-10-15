@@ -1022,3 +1022,10 @@ macro_rules! item_slots {
 }
 
 item_slots!(ListItem, crate::SidebarRow);
+
+impl<K> El<TextArea, K> {
+    /// A real action inside the field's bottom trailing corner.
+    pub fn trailing_action(self, view: impl IntoView) -> Self {
+        self.child_slot(view, TextArea::trailing_action)
+    }
+}

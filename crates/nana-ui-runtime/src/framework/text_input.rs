@@ -1,8 +1,96 @@
 //! AppContext text input operations.
 
 use super::*;
+use crate::Stack;
 
 impl AppContext {
+    /// Assemble a retained small-control bottom trailing action slot without owning
+    /// application action state or its activation semantics.
+    pub fn assemble_text_area(&mut self, area: Entity<TextArea>) -> Result<bool, FrameworkError> {
+        let snapshot = self.read(area, Clone::clone)?;
+        let Some(action) = snapshot.trailing_action else {
+            if let Some(slot) = snapshot.action_slot.filter(|id| self.world().contains(*id)) {
+                self.update_component(Entity::<Stack>::from_stable_id(slot), |slot, _| {
+                    Arc::make_mut(&mut slot.style_mut().layout).hidden = true;
+                })?;
+            }
+            return Ok(false);
+        };
+        let document = self
+            .world()
+            .node(area.stable_id())
+            .ok_or(FrameworkError::MissingView(area.stable_id()))?
+            .document;
+        let created = snapshot
+            .action_slot
+            .is_none_or(|id| !self.world().contains(id));
+        let slot = match snapshot.action_slot.filter(|id| self.world().contains(*id)) {
+            Some(id) => Entity::<Stack>::from_stable_id(id),
+            None => self.create_detached_component(document, Stack::column(0.0))?,
+        };
+        self.append_child(area, slot)?;
+        let mut mutations = MutationQueue::new();
+        if let Some(slot_node) = self.world().node(slot.stable_id()) {
+            for child in slot_node
+                .children
+                .iter()
+                .copied()
+                .filter(|id| *id != action)
+            {
+                mutations.park_subtree(child);
+                mutations.detach(child);
+            }
+        }
+        if self.world().parent_id(action) != Some(slot.stable_id()) {
+            mutations.insert(slot.stable_id(), action, None);
+        }
+        if !mutations.is_empty() {
+            self.commit_mutations(mutations)?;
+        }
+        self.update_component(area, |area, _| area.action_slot = Some(slot.stable_id()))?;
+        Ok(created)
+    }
+
+    pub(crate) fn refresh_text_area_action_slot(
+        &mut self,
+        area: Entity<TextArea>,
+    ) -> Result<(), FrameworkError> {
+        let Some(slot) = self
+            .read(area, |area| area.action_slot)?
+            .filter(|id| self.world().contains(*id))
+        else {
+            return Ok(());
+        };
+        let slot = Entity::<Stack>::from_stable_id(slot);
+        let hidden = self.read(area, |area| area.trailing_action.is_none())?;
+        let extent = nana_ui_core::ControlSize::Small.height_in(self.world().theme_metrics());
+        self.update_component(slot, |slot, _| {
+            let layout = Arc::make_mut(&mut slot.style_mut().layout);
+            layout.hidden = hidden;
+            layout.position = nana_ui_core::PositionSpec::Absolute;
+            // Absolute slots use the parent content box. The action occupies
+            // the reserved padding lane beyond that box, not its text.
+            layout.offset_right = Some(nana_ui_core::LengthSpec::Px(-(extent + 4.0)));
+            layout.offset_bottom = Some(nana_ui_core::LengthSpec::Px(
+                (nana_ui_core::ControlSize::Medium.line_height() - extent) / 2.0,
+            ));
+            layout.width = Some(nana_ui_core::LengthSpec::Px(extent));
+            layout.height = Some(nana_ui_core::LengthSpec::Px(extent));
+        })?;
+        let mut mutations = MutationQueue::new();
+        if hidden {
+            mutations.park_subtree(slot.stable_id());
+        } else if self.world().is_mounted(area.stable_id())
+            && !self.world().is_mounted(slot.stable_id())
+        {
+            mutations.insert(area.stable_id(), slot.stable_id(), None);
+        }
+        if !mutations.is_empty() {
+            self.commit_mutations(mutations)?;
+        }
+        Ok(())
+    }
+
     /// Native composition owns its pending text and committed insertion range.
     /// Ordinary key edits must wait for the IME commit/cancel event.
     pub(super) fn has_focused_ime_composition(&self, document: DocumentId) -> bool {
@@ -19,12 +107,25 @@ impl AppContext {
             .is_some_and(|composition| !composition.text.is_empty())
     }
 
-    /// Submit only a focused native single-line input. IME confirmation never
-    /// submits a form; non-input editors retain their existing Enter behavior.
+    /// Submit a focused single-line input or an opt-in submit-on-enter TextArea.
+    /// IME confirmation never submits; ordinary multiline fields keep Enter editing.
     pub fn submit_focused_text_input(
         &mut self,
         document: DocumentId,
     ) -> Result<bool, FrameworkError> {
+        if let Some(entity) = self.focused_editor::<TextArea>(document) {
+            if self.world.ime(entity.id).is_some()
+                || !self.read(entity, |area| area.submit_on_enter && area.accepts_input())?
+            {
+                return Ok(false);
+            }
+            self.update(entity, |area, cx| {
+                cx.emit(crate::TextSubmitted {
+                    value: area.state.value.to_string(),
+                });
+            })?;
+            return Ok(true);
+        }
         let Some(entity) = self.focused_editor::<TextInput>(document) else {
             return Ok(false);
         };
