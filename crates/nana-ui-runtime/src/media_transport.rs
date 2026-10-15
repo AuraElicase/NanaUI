@@ -414,15 +414,16 @@ impl MediaTransportBar {
     }
 
     /// Let the runtime run the idle hide from the input it routes and its own
-    /// clock, with no host calls: for a window that is only a picture.
+    /// clock, with no host calls. Its parent defines the picture's stage.
     ///
     /// While `playing` and not `disabled`, the bar hides
     /// [`crate::OVERLAY_IDLE`] after the last activity: a pointer moving,
     /// pressing or releasing over the bar's parent (its stage), or any key
-    /// press in the document. The pointer leaving the window hides it at
-    /// once, paused or not, until the pointer comes back. An open menu, a
-    /// drag (seeking, volume) and keyboard focus inside the bar hold it; a
-    /// control focused by a click does not. Each flip emits
+    /// press in the document. The pointer leaving the stage or window hides
+    /// it at once, paused or not, until stage activity or a key press. An open
+    /// menu, a drag (seeking, volume) and keyboard focus inside the bar hold it; a
+    /// control focused by a click does not. When a hold ends outside the
+    /// stage, the bar hides immediately. Each flip emits
     /// [`crate::OverlayVisibilityChanged`], so a title bar over the same
     /// picture can follow it. Do not also drive this bar through
     /// [`AppContext::sync_overlay_visibility`] or
