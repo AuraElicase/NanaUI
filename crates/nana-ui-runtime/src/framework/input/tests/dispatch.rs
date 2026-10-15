@@ -2246,6 +2246,103 @@ fn outside_press_closes_the_popover_without_reaching_the_underlay() {
     assert_eq!(*activations.lock().unwrap(), 0);
 }
 
+#[test]
+fn outside_press_reports_no_reachable_hit_and_the_next_press_reaches_the_underlay() {
+    for action_menu in [false, true] {
+        for button in [0, 1, 2] {
+            let mut context = AppContext::new();
+            let document = DocumentId::new(1).unwrap();
+            let underlay = context
+                .create_component(document, Button::new("Underlay"))
+                .unwrap();
+            let popup = if action_menu {
+                context
+                    .create_component(document, ActionMenu::new().open(true))
+                    .unwrap()
+                    .stable_id()
+            } else {
+                // Media transport volume uses the same ordinary Popover.
+                context
+                    .create_component(document, crate::Popover::new().open(true))
+                    .unwrap()
+                    .stable_id()
+            };
+            let activations = Arc::new(Mutex::new(0));
+            let observed = Arc::clone(&activations);
+            context
+                .on(underlay, move |_, _: &Activate, _| {
+                    *observed.lock().unwrap() += 1;
+                })
+                .unwrap();
+            let mut layout = MutationQueue::new();
+            for (node, y) in [(underlay.stable_id(), 0.0), (popup, 100.0)] {
+                layout.write_layout(
+                    node,
+                    LayoutBox {
+                        x: 0.0,
+                        y,
+                        width: 300.0,
+                        height: 60.0,
+                    },
+                );
+            }
+            context.commit_mutations(layout).unwrap();
+            context.rebuild_hit_test(document);
+            let mut input = crate::HeadlessInput::bind(&mut context, document);
+            let payload = |phase| {
+                InputPayload::Pointer(PointerInput {
+                    button,
+                    buttons: if phase == PointerPhase::Down {
+                        match button {
+                            0 => 1,
+                            1 => 4,
+                            _ => 2,
+                        }
+                    } else {
+                        0
+                    },
+                    ..PointerInput::mouse(phase, 20.0, 20.0)
+                })
+            };
+            let dismissed = input
+                .route(&mut context, payload(PointerPhase::Down))
+                .unwrap();
+            assert!(dismissed.prevent_default);
+            assert_eq!(dismissed.pointer_hit, None);
+            assert_eq!(
+                context
+                    .world()
+                    .pointer_press(document, dismissed.pointer_id.unwrap()),
+                None
+            );
+            input
+                .route(&mut context, payload(PointerPhase::Up))
+                .unwrap();
+            assert_eq!(*activations.lock().unwrap(), 0);
+            let opened = if action_menu {
+                context.read(Entity::<ActionMenu>::from_stable_id(popup), |menu| {
+                    menu.popover.open
+                })
+            } else {
+                context.read(Entity::<crate::Popover>::from_stable_id(popup), |menu| {
+                    menu.open
+                })
+            }
+            .unwrap();
+            assert!(!opened);
+
+            let next = input
+                .pointer(&mut context, PointerPhase::Down, 20.0, 20.0)
+                .unwrap();
+            assert_eq!(next.pointer_hit, Some(underlay.stable_id()));
+            input
+                .pointer(&mut context, PointerPhase::Up, 20.0, 20.0)
+                .unwrap();
+            assert_eq!(*activations.lock().unwrap(), 1);
+        }
+    }
+}
+
 /// A press outside a dialog holds nothing (no press, no capture), yet the
 /// overlay remembers its sequence. Cancelling the source forgets it too.
 #[test]
