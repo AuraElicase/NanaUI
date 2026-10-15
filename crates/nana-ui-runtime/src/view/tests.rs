@@ -4969,15 +4969,24 @@ fn composer_action_slot_keeps_identity_and_occupies_only_reserved_trailing_space
     let action_frame = cx.world().component_layout_box(action).unwrap();
     let counter = cx.world().text_input_character_counter(field).unwrap();
     assert!(
-        frame.height < 40.0,
-        "composer begins with one row: {frame:?}"
+        frame.height == 64.0,
+        "one text row plus the internal footer: {frame:?}"
     );
     assert!(
         action_frame.x >= counter.text.bounds.x + counter.text.bounds.width,
         "frame={frame:?} action={action_frame:?} counter={counter:?}"
     );
     assert!(action_frame.x + action_frame.width <= frame.x + frame.width);
-    assert!(counter.editor_bounds.x + counter.editor_bounds.width < counter.text.bounds.x);
+    assert_eq!(
+        counter.editor_bounds,
+        cx.world().component_content_box(field).unwrap()
+    );
+    assert!(counter.editor_bounds.y + counter.editor_bounds.height <= counter.text.bounds.y);
+    assert!(counter.editor_bounds.y + counter.editor_bounds.height <= action_frame.y);
+    assert!(
+        counter.editor_bounds.x + counter.editor_bounds.width
+            >= action_frame.x + action_frame.width
+    );
     cx.update_component(
         Entity::<crate::TextArea>::from_stable_id(field),
         |area, _| {

@@ -149,6 +149,22 @@ fn text_field_style(multiline: bool) -> NodeStyle {
     }
 }
 
+/// The footer is independent of the text row budget. Its action uses the
+/// theme's small-control extent; a count-only footer needs one caption row.
+pub(crate) fn text_area_footer_extent(
+    counter: bool,
+    action: bool,
+    metrics: nana_ui_core::ThemeMetrics,
+) -> f32 {
+    if action {
+        nana_ui_core::ControlSize::Small.height_in(metrics)
+    } else if counter {
+        nana_ui_core::ControlSize::Medium.line_height()
+    } else {
+        0.0
+    }
+}
+
 struct TextFieldProjection<'a> {
     state: &'a TextInputState,
     label: &'a Option<Arc<str>>,
@@ -3018,6 +3034,7 @@ impl ComponentView for TextArea {
             git_marks: Arc::clone(&self.git_gutter),
             editor_options: TextEditorRenderOptions {
                 resize_vertical: self.supports_vertical_resize(),
+                footer_action: self.trailing_action.is_some(),
                 occurrence_highlight: self.occurrence_highlight,
                 relative_line_numbers: self.relative_line_numbers,
                 show_whitespace: self.show_whitespace,
@@ -3085,6 +3102,16 @@ impl ComponentView for TextArea {
             }
         }
         let mut effective_style = self.style.clone();
+        let footer_extent = text_area_footer_extent(
+            self.character_counter.is_some(),
+            self.trailing_action.is_some(),
+            world.theme_metrics(),
+        );
+        let footer_band = if footer_extent > 0.0 {
+            footer_extent + 4.0
+        } else {
+            0.0
+        };
         if let Some((min_rows, max_rows)) = self.auto_grow {
             let line = size.line_height();
             let chrome = (size.height_in(world.theme_metrics()) - line).max(2.0);
@@ -3093,10 +3120,10 @@ impl ComponentView for TextArea {
             let layout = Arc::make_mut(&mut effective_style.layout);
             layout.height = None;
             layout.min_height = Some(nana_ui_core::LengthSpec::Px(
-                min_rows as f32 * line + chrome,
+                min_rows as f32 * line + chrome + footer_band,
             ));
             layout.max_height = Some(nana_ui_core::LengthSpec::Px(
-                max_rows as f32 * line + chrome,
+                max_rows as f32 * line + chrome + footer_band,
             ));
             layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(line));
             layout.padding_top = Some(nana_ui_core::LengthSpec::Px((chrome - 2.0) / 2.0));
@@ -3105,18 +3132,18 @@ impl ComponentView for TextArea {
             layout.white_space_nowrap = false;
             layout.flex_shrink = Some(0.0);
         }
-        if self.trailing_action.is_some() {
+        if footer_band > 0.0 {
             let padding = effective_style
-                .control_padding_x
-                .map(|p| p.resolve(world.theme_metrics()))
-                .unwrap_or_else(|| effective_style.layout.resolved_padding().right);
+                .control_padding_y
+                .map(|padding| padding.resolve(world.theme_metrics()));
+            let top = padding.unwrap_or_else(|| effective_style.layout.resolved_padding().top);
+            let bottom =
+                padding.unwrap_or_else(|| effective_style.layout.resolved_padding().bottom);
             let layout = Arc::make_mut(&mut effective_style.layout);
             layout.position = nana_ui_core::PositionSpec::Relative;
-            layout.padding_right = Some(nana_ui_core::LengthSpec::Px(
-                padding + nana_ui_core::ControlSize::Small.height_in(world.theme_metrics()) + 4.0,
-            ));
-            layout.padding_left = Some(nana_ui_core::LengthSpec::Px(padding));
-            effective_style.control_padding_x = None;
+            layout.padding_top = Some(nana_ui_core::LengthSpec::Px(top));
+            layout.padding_bottom = Some(nana_ui_core::LengthSpec::Px(bottom + footer_band));
+            effective_style.control_padding_y = None;
         }
         if self.resize_vertical
             && let Some(height) = self.resized_height

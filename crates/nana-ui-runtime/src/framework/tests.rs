@@ -12626,3 +12626,145 @@ fn character_counter_reserves_the_editor_frame_for_scroll_pointer_and_ime() {
     assert!(narrow.text.bounds.width >= 0.0);
     assert!(narrow.text.bounds.x.is_finite());
 }
+
+#[test]
+fn composer_footer_preserves_the_full_editor_width_for_pointer_selection_and_ime() {
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let value = "abcdefghijklmnopqrstuvwx";
+    let action = cx
+        .create_detached_component(
+            document,
+            crate::IconButton::new(nana_ui_core::Icon::Close, "Send"),
+        )
+        .unwrap();
+    let area = cx
+        .create_component(
+            document,
+            TextArea::new(value)
+                .auto_grow(1, 6)
+                .character_counter(40)
+                .trailing_action(action.stable_id()),
+        )
+        .unwrap();
+    cx.assemble_text_area(area).unwrap();
+    cx.focus_node(document, area.stable_id()).unwrap();
+    let node = area.stable_id();
+    for _ in 0..4 {
+        cx.layout_document(document, crate::LayoutViewport::new(220.0, 300.0))
+            .unwrap();
+        cx.shape_text(&[node], &mut crate::MeasureTextShaper)
+            .unwrap();
+    }
+    let crate::ComponentGeometry::TextInput {
+        character_counter: Some(counter),
+        caret: Some(caret),
+        ..
+    } = cx.world().component_geometry(node).unwrap()
+    else {
+        panic!("missing editor")
+    };
+    let action = cx.world().component_layout_box(action.stable_id()).unwrap();
+    assert_eq!(
+        counter.editor_bounds,
+        cx.world().component_content_box(node).unwrap()
+    );
+    assert!(
+        caret.x > counter.text.bounds.x,
+        "caret can use the width above the footer count"
+    );
+    assert!(caret.y < action.y && caret.y < counter.text.bounds.y);
+    cx.text_editor_pointer_press(
+        document,
+        node,
+        1,
+        caret.x,
+        caret.y + 2.0,
+        false,
+        false,
+        std::time::Duration::ZERO,
+        &mut crate::MeasureTextShaper,
+    )
+    .unwrap();
+    cx.text_editor_pointer_release(1);
+    assert_eq!(
+        cx.world().text_input(node).unwrap().selection.focus,
+        value.len()
+    );
+    cx.select_all_focused_text(document).unwrap();
+    cx.shape_text(&[node], &mut crate::MeasureTextShaper)
+        .unwrap();
+    let crate::ComponentGeometry::TextInput { selection, .. } =
+        cx.world().component_geometry(node).unwrap()
+    else {
+        unreachable!()
+    };
+    assert!(
+        selection
+            .iter()
+            .any(|selection| selection.x + selection.width > counter.text.bounds.x)
+    );
+    cx.set_ime_preedit(document, "预编辑".into(), None).unwrap();
+    cx.shape_text(&[node], &mut crate::MeasureTextShaper)
+        .unwrap();
+    let crate::ComponentGeometry::TextInput {
+        character_counter: Some(ime_counter),
+        caret: Some(ime_caret),
+        preedit,
+        ..
+    } = cx.world().component_geometry(node).unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(ime_counter.editor_bounds, counter.editor_bounds);
+    assert_eq!(ime_counter.text.content, "24/40");
+    assert!(ime_caret.y < ime_counter.text.bounds.y);
+    assert!(!preedit.is_empty());
+}
+
+#[test]
+fn auto_growing_text_area_counts_only_text_rows_and_keeps_full_width_with_any_footer() {
+    for (counter, action, height) in [
+        (false, false, 32.0),
+        (true, false, 52.0),
+        (false, true, 64.0),
+        (true, true, 64.0),
+    ] {
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let mut area = TextArea::new("").auto_grow(1, 6);
+        if counter {
+            area = area.character_counter(40);
+        }
+        if action {
+            let action = cx
+                .create_detached_component(
+                    document,
+                    crate::IconButton::new(nana_ui_core::Icon::Close, "Send"),
+                )
+                .unwrap();
+            area = area.trailing_action(action.stable_id());
+        }
+        let area = cx.create_component(document, area).unwrap();
+        cx.assemble_text_area(area).unwrap();
+        for _ in 0..3 {
+            cx.layout_document(document, crate::LayoutViewport::new(260.0, 300.0))
+                .unwrap();
+            cx.shape_text(&[area.stable_id()], &mut crate::MeasureTextShaper)
+                .unwrap();
+        }
+        assert_eq!(
+            cx.world()
+                .component_layout_box(area.stable_id())
+                .unwrap()
+                .height,
+            height
+        );
+        let editor = cx.world().text_input_text_box(area.stable_id()).unwrap();
+        assert_eq!(editor.width, 238.0, "counter={counter} action={action}");
+        assert_eq!(
+            editor.height,
+            nana_ui_core::ControlSize::Medium.line_height()
+        );
+    }
+}

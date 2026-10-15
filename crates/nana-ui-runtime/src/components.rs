@@ -2804,6 +2804,8 @@ pub struct TextSwatchMark {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextEditorRenderOptions {
     pub resize_vertical: bool,
+    /// A real action occupies the trailing side of the multiline footer.
+    pub footer_action: bool,
     /// 光标处单词/选中文本的出现高亮（内部派生，聚焦时绘制）。
     pub occurrence_highlight: bool,
     /// 相对行号：光标行显示绝对行号，其余行显示与光标所在显示行的距离
@@ -2833,6 +2835,7 @@ impl Default for TextEditorRenderOptions {
     fn default() -> Self {
         Self {
             resize_vertical: false,
+            footer_action: false,
             occurrence_highlight: false,
             relative_line_numbers: false,
             show_whitespace: false,
