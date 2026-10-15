@@ -12,6 +12,8 @@
 
 每次新载入、尺寸或设备代际变化都新建 pool；不能让新内容覆写仍归属旧播放身份的输出。先清理生产者的 native-handle 缓存，再释放旧 pool，防止 OS 重用句柄数值后误命中旧纹理。旧 target、ready 和已提交 GPU 操作保留自己的资源所有权。非 DX12、错误代际、退役池和跨 pool 帧均明确拒绝。
 
+退役时，原生 release Signal 后的 WGPU 队列尾标记保留槽资源，直到 completion 回调释放；正常逐帧路径不增加提交。调用方需继续 poll 旧 `GpuContext`，与现有提交完成回调的合同一致。设备替换后完全停止旧设备 poll 会保守延长旧资源寿命。
+
 `HostTexture` / `GpuTextureView` 继续使用普通宿主纹理路径。框架桥不负责生产者 EGL/OpenGL 上下文、解码器、播放状态或应用回退策略。
 
 ## 验证
