@@ -232,8 +232,18 @@ impl RevealSchedule {
 
     /// When the last scheduled grapheme has finished entering.
     pub fn end(&self) -> Duration {
-        let last = self.at_s.iter().copied().fold(0.0f32, f32::max);
-        self.start + Duration::from_secs_f32((last + self.intro.duration_s.max(0.0)).max(0.0))
+        let count = self.limit.map_or(self.at_s.len(), |limit| limit as usize);
+        let last = self
+            .at_s
+            .iter()
+            .take(count)
+            .copied()
+            .filter(|at| at.is_finite())
+            .reduce(f32::max);
+        self.start
+            + Duration::from_secs_f32(
+                last.map_or(0.0, |last| (last + self.intro.duration_s.max(0.0)).max(0.0)),
+            )
     }
 }
 
@@ -533,6 +543,20 @@ mod tests {
             "held back by the limit"
         );
         assert_eq!(reveal.end(), at(1.2));
+    }
+
+    #[test]
+    fn paused_reveal_deadline_excludes_the_hidden_suffix() {
+        let reveal = RevealSchedule::new(Duration::from_secs(2), vec![0.1, 1.0e6])
+            .intro(GlyphIntro::fade(0.2));
+        assert_eq!(
+            reveal.clone().limit(1).end(),
+            Duration::from_secs(2) + Duration::from_secs_f32(0.3)
+        );
+        assert_eq!(reveal.limit(0).end(), Duration::from_secs(2));
+        let shown =
+            RevealSchedule::new(Duration::from_secs(2), vec![-60.0]).intro(GlyphIntro::fade(0.2));
+        assert_eq!(shown.end(), Duration::from_secs(2));
     }
 
     #[test]
