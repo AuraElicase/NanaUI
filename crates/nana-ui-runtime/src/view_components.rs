@@ -3130,7 +3130,10 @@ impl ComponentView for TextArea {
             layout.padding_bottom = layout.padding_top;
             layout.word_break = Some(nana_ui_core::WordBreakSpec::BreakAll);
             layout.white_space_nowrap = false;
-            layout.flex_shrink = Some(0.0);
+            // Natural rows are a preferred size. A bounded flex parent may
+            // reduce the text viewport down to min_rows while the footer stays.
+            // Preserve an explicit consumer policy.
+            layout.flex_shrink.get_or_insert(1.0);
         }
         if footer_band > 0.0 {
             let padding = effective_style
