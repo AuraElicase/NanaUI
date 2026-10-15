@@ -21,6 +21,7 @@ objc2-foundation = { workspace = true, default-features = false, features = [
     "NSData",
     "NSDate",
     "NSEnumerator",
+    "NSNotification",
     "NSString",
     "NSURL",
     "NSValue",

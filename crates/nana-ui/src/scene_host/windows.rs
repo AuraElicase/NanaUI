@@ -4,8 +4,10 @@ use super::*;
 use nana_diagnostics::{framework::window as diagnostics_window, metric};
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-fn uses_host_managed_drag(settings: &WindowDescriptor, button: i16) -> bool {
-    settings.host_managed_drag || button != PRIMARY_MOUSE_BUTTON
+fn uses_host_managed_drag(settings: &WindowDescriptor, button: i16, has_underlay: bool) -> bool {
+    settings.host_managed_drag
+        || button != PRIMARY_MOUSE_BUTTON
+        || (cfg!(target_os = "macos") && has_underlay)
 }
 
 /// The content aspect ratio of a checked descriptor, for [`LiveSizeMove`].
@@ -284,6 +286,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     /// request, material or presentation changes.
     pub(super) fn apply_window_shadow(&mut self, id: WindowId) {
         let held = self.startup_presentation_held(id);
+        #[cfg(target_os = "macos")]
+        let shadow_owner = self
+            .window_contexts
+            .values()
+            .find(|host| host.settings.parent == Some(id) && host.underlay.is_some())
+            .map(|host| Arc::clone(host.surface.window()))
+            .or_else(|| self.window(id).cloned());
         let Some(host) = self.window_contexts.get_mut(&id) else {
             return;
         };
@@ -314,12 +323,20 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             }
         }
         if host.shadow.has_companion() {
+            #[cfg(target_os = "macos")]
+            if let Some(owner) = shadow_owner {
+                host.shadow.set_ordering_parent(owner.as_ref());
+            }
             let visible = !held && window.fullscreen().is_none();
             host.shadow
                 .set_shape(window.as_ref(), crate::window_shadow::shape(body), visible);
         }
         host.presentation
             .record_shadow(crate::window_shadow::outcome(intent, applied));
+        // The picture remains independent of the UI's capture group and
+        // above the shadow, whose native owner is now the picture.
+        #[cfg(target_os = "macos")]
+        self.sync_underlays_of(id);
     }
 
     /// Follow the window's visible body with its shadow companion. The scene
@@ -949,6 +966,15 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         {
             underlay.sync();
         }
+        #[cfg(target_os = "macos")]
+        if let Some(parent) = self
+            .window_contexts
+            .get(&id)
+            .filter(|host| host.underlay.is_some())
+            .and_then(|host| host.settings.parent)
+        {
+            self.apply_window_shadow(parent);
+        }
         window.request_redraw();
         self.prepare_window_chrome(id, geometry.maximized);
         crate::host_diagnostics::window_opened(id, &geometry);
@@ -1052,6 +1078,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 self.focus_window(parent_id);
             }
             self.window_ids.remove(&host.surface.window().id());
+            #[cfg(target_os = "macos")]
+            if let Some(parent) = host.underlay.as_ref().and(host.settings.parent) {
+                self.apply_window_shadow(parent);
+            }
             drop(host);
             nana_diagnostics::event!(nana_diagnostics::framework::window::CLOSED, window = id.0);
             let update = self
@@ -1497,7 +1527,11 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     /// trigger uses to say "move this window with the gesture in flight".
     ///
     /// A gesture held with the primary button keeps the platform's own move
-    /// unless the window asks for `host_managed_drag`: the platform path is
+    /// unless the window asks for `host_managed_drag` or has an independent
+    /// macOS underlay: AppKit's server-driven drag can move the UI ahead of
+    /// its move notifications, leaving that underlay visibly behind. Moving
+    /// both in the host's input turn keeps their geometry together without
+    /// joining the capture attachment group. The platform path is
     /// the only one with edge snapping, and on macOS with Spaces. Any other
     /// button is followed by the host, because the platform drag assumes a
     /// primary press — AppKit ignores a drag whose current event is not one,
@@ -1510,7 +1544,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     ) -> Result<(), winit::error::RequestError> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         if let Some(button) = held_mouse_button(self.input_of(id).buttons)
-            && uses_host_managed_drag(self.settings_of(id), button)
+            && uses_host_managed_drag(
+                self.settings_of(id),
+                button,
+                self.window_contexts
+                    .values()
+                    .any(|host| host.settings.parent == Some(id) && host.underlay.is_some()),
+            )
         {
             // A gesture the host declines — a fullscreen window has nowhere to
             // move to — reports that, rather than falling back to the platform,
@@ -1544,7 +1584,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         if window.fullscreen().is_some() {
             return false;
         }
-        let live = if window.is_maximized() {
+        let live = if geometry_maximized(window.as_ref()) {
             let grab = nana_window::LiveFrameMove::grab(window.as_ref());
             window.set_maximized(false);
             match grab {
@@ -2577,11 +2617,34 @@ mod drag_policy_tests {
     #[test]
     fn host_managed_drag_overrides_the_primary_button_native_default() {
         let native = WindowDescriptor::new("native");
-        assert!(!uses_host_managed_drag(&native, PRIMARY_MOUSE_BUTTON));
-        assert!(uses_host_managed_drag(&native, 1));
+        assert!(!uses_host_managed_drag(
+            &native,
+            PRIMARY_MOUSE_BUTTON,
+            false
+        ));
+        assert!(uses_host_managed_drag(&native, 1, false));
 
         let managed = WindowDescriptor::new("managed").host_managed_drag(true);
-        assert!(uses_host_managed_drag(&managed, PRIMARY_MOUSE_BUTTON));
+        assert!(uses_host_managed_drag(
+            &managed,
+            PRIMARY_MOUSE_BUTTON,
+            false
+        ));
+    }
+
+    #[test]
+    fn independent_underlays_use_the_same_input_turn_for_macos_movement() {
+        let native = WindowDescriptor::new("native");
+        assert_eq!(
+            uses_host_managed_drag(&native, PRIMARY_MOUSE_BUTTON, true),
+            cfg!(target_os = "macos")
+        );
+        // Removing the underlay restores the descriptor's native policy.
+        assert!(!uses_host_managed_drag(
+            &native,
+            PRIMARY_MOUSE_BUTTON,
+            false
+        ));
     }
 }
 

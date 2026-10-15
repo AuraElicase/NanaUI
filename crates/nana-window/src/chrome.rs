@@ -248,6 +248,20 @@ pub fn native_live_resize_active<W: HasWindowHandle + ?Sized>(window: &W) -> boo
     }
 }
 
+/// Reads AppKit's zoom state without changing the window's style or frame.
+/// Borderless and fixed-size windows cannot be zoomed. Unlike winit's
+/// `is_maximized`, this never temporarily adds title-bar or resize styles,
+/// so it is safe while handling native move and resize notifications.
+/// Returns `None` when the handle does not refer to an AppKit window.
+#[cfg(target_os = "macos")]
+pub fn native_window_maximized<W: HasWindowHandle + ?Sized>(window: &W) -> Option<bool> {
+    use objc2_app_kit::NSWindowStyleMask;
+
+    let window = appkit_window(window)?;
+    let zoomable = NSWindowStyleMask::Titled | NSWindowStyleMask::Resizable;
+    Some(window.styleMask().contains(zoomable) && window.isZoomed())
+}
+
 /// Pins or unpins the window's Metal layer to present inside Core Animation
 /// transactions. While a resize gesture moves the window frame, the
 /// compositor otherwise scales the previous drawable to the new frame between

@@ -32,6 +32,8 @@ pub use chrome::LiveFrameResize;
 pub use chrome::arm_frameless_guard;
 pub use chrome::drag_custom_title_bar;
 pub use chrome::native_live_resize_active;
+#[cfg(target_os = "macos")]
+pub use chrome::native_window_maximized;
 pub use chrome::place_native_window_controls;
 pub use chrome::prepare_client_chrome;
 pub use chrome::prepare_custom_title_bar;

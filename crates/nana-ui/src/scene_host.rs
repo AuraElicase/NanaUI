@@ -2601,15 +2601,17 @@ fn window_geometry(window: &dyn winit::window::Window) -> WindowGeometry {
     }
 }
 
-/// macOS 的 winit `is_maximized` 底层是 `is_zoomed`。borderless 全屏时它会临时改
-/// style mask 再回滚,在 resize 路径里自激,所以全屏直接返回 false。窗口模式仍要查,
-/// 否则每扇普通窗口都被记成最大化,位置和尺寸写不进去。
+/// AppKit state reads must not change native styles: winit's `is_maximized`
+/// temporarily makes borderless/fixed-size windows titled and resizable,
+/// generating more move/resize events while handling those same events.
+/// Keep fullscreen out of persisted maximized state and read windowed zoom
+/// directly, so ordinary windows still persist their actual maximized state.
 #[cfg(target_os = "macos")]
 fn geometry_maximized(window: &dyn winit::window::Window) -> bool {
     if window.fullscreen().is_some() || WindowExtMacOS::simple_fullscreen(window) {
         false
     } else {
-        window.is_maximized()
+        nana_window::native_window_maximized(window).unwrap_or(false)
     }
 }
 

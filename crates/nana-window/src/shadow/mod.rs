@@ -225,6 +225,17 @@ impl WindowShadowState {
         self.companion.is_some()
     }
 
+    /// Put an existing macOS shadow companion below a different native window.
+    /// Its shape still follows the original source window. This keeps an
+    /// independent underlay above the shadow without joining the UI's capture
+    /// group. Returns false when no companion or AppKit window is available.
+    #[cfg(target_os = "macos")]
+    pub fn set_ordering_parent<W: HasWindowHandle + ?Sized>(&mut self, window: &W) -> bool {
+        self.companion
+            .as_mut()
+            .is_some_and(|companion| companion.set_ordering_parent(window))
+    }
+
     pub fn work(&self) -> ShadowWork {
         let mut work = self.work;
         if let Some(companion) = self.companion.as_ref() {
