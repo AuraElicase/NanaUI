@@ -527,6 +527,52 @@ mod tests {
     }
 
     #[test]
+    fn auto_hide_uses_the_transformed_stage_position_for_routed_pointers() {
+        use nana_ui_core::PaintTransform;
+        use nana_ui_input::PointerPhase::Move;
+
+        let mut stage = AutoHideStage::new(true);
+        let picture_id = stage.cx.world().parent_id(stage.bar.stable_id()).unwrap();
+        let picture = stage.cx.view_entity::<crate::Stack>(picture_id).unwrap();
+        stage
+            .cx
+            .update_component(picture, |picture, _| {
+                *picture = picture.clone().with_layout(|layout| {
+                    layout.transform = Some(PaintTransform {
+                        e: 200.0,
+                        f: 100.0,
+                        ..PaintTransform::default()
+                    });
+                });
+            })
+            .unwrap();
+        stage
+            .cx
+            .layout_document(stage.document, crate::LayoutViewport::new(960.0, 600.0))
+            .unwrap();
+        stage.cx.compat_world_mut().rebuild_hit_test(stage.document);
+
+        let raw_frame = stage.cx.world().layout_box(picture_id).unwrap();
+        assert!(raw_frame.contains(100.0, 200.0));
+        assert!(!raw_frame.contains(700.0, 200.0));
+        stage.pointer(Move, 100.0, 200.0);
+        assert!(
+            !stage.shown(),
+            "the old layout position is outside the translated picture"
+        );
+        stage.pointer(Move, 700.0, 200.0);
+        assert!(
+            stage.shown(),
+            "the actual picture reveals its bar beyond the raw layout box"
+        );
+        stage.pointer(Move, 900.0, 200.0);
+        assert!(
+            !stage.shown(),
+            "crossing the translated right edge conceals the bar"
+        );
+    }
+
+    #[test]
     fn auto_hide_retains_an_outside_pointer_when_a_menu_closes() {
         use nana_ui_input::PointerPhase::Move;
 
