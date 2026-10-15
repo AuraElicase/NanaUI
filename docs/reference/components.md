@@ -305,3 +305,5 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 `view::text_area()` 或 `view::widget(TextArea::new(...))` 的 `.trailing_action(view)` 将真实操作控件装在框内底部右侧的小号控件槽位。操作栏通过底内边距预留高度，编辑文本、软换行、光标、选区与输入法均使用上方完整宽度，操作仍有独立焦点、Activate 和无障碍名称；键路径保留在字段下。命令式用 `TextArea::trailing_action(node)` 后调用 `AppContext::assemble_text_area`。
 
 `auto_grow` 的最小 / 最大行数只统计文本行，不含底部操作栏。计数加操作时，默认一行文本的总高度为 64px（32px 单行输入 + 28px 小号操作 + 4px 间距）；六行文本上限为 144px。只有计数时操作栏高 16px 加 4px 间距；未启用计数或操作槽的 `TextArea` 和所有 `TextInput` 保持既有尺寸规则。
+
+自适应高度是首选尺寸；有高度约束的 Flex 父容器可将文本区压缩到 `min_rows` 对应的最小高度，余下内容在编辑区内部滚动，底部操作栏保持完整。默认允许收缩，并保留消费方显式指定的 `flex_shrink` 策略。

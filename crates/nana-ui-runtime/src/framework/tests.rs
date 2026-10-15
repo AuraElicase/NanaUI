@@ -12768,3 +12768,161 @@ fn auto_growing_text_area_counts_only_text_rows_and_keeps_full_width_with_any_fo
         );
     }
 }
+
+#[test]
+fn auto_growing_text_area_shrinks_under_parent_constraints_and_scrolls_above_its_footer() {
+    for (shrink, expected_height) in [(None, 104.0), (Some(1.0), 104.0), (Some(0.0), 144.0)] {
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let parent = cx
+            .create_component(
+                document,
+                Stack::column(0.0).with_layout(|layout| {
+                    layout.width = Some(LengthSpec::Px(260.0));
+                    layout.height = Some(LengthSpec::Px(104.0));
+                }),
+            )
+            .unwrap();
+        let action = cx
+            .create_detached_component(
+                document,
+                crate::IconButton::new(nana_ui_core::Icon::Close, "Send"),
+            )
+            .unwrap();
+        let mut input = TextArea::new("line\n".repeat(20))
+            .auto_grow(1, 6)
+            .character_counter(40)
+            .trailing_action(action.stable_id());
+        Arc::make_mut(&mut input.style.layout).flex_shrink = shrink;
+        let area = cx.create_detached_component(document, input).unwrap();
+        cx.append_child(parent, area).unwrap();
+        cx.assemble_text_area(area).unwrap();
+        cx.focus_node(document, area.stable_id()).unwrap();
+        for _ in 0..4 {
+            cx.layout_document(document, crate::LayoutViewport::new(260.0, 300.0))
+                .unwrap();
+            cx.shape_text(&[area.stable_id()], &mut crate::MeasureTextShaper)
+                .unwrap();
+        }
+        let frame = cx.world().component_layout_box(area.stable_id()).unwrap();
+        assert_eq!(frame.height, expected_height, "shrink={shrink:?}");
+        let crate::ComponentGeometry::TextInput {
+            character_counter: Some(counter),
+            caret: Some(caret),
+            ..
+        } = cx.world().component_geometry(area.stable_id()).unwrap()
+        else {
+            panic!("missing editor")
+        };
+        let action = cx.world().component_layout_box(action.stable_id()).unwrap();
+        assert!(counter.editor_bounds.y + counter.editor_bounds.height <= action.y);
+        assert!(action.y + action.height <= frame.y + frame.height);
+        assert!(counter.text.bounds.y + counter.text.bounds.height <= frame.y + frame.height);
+        assert!(
+            caret.y >= counter.editor_bounds.y
+                && caret.y + caret.height <= counter.editor_bounds.y + counter.editor_bounds.height
+        );
+        let scroll = cx.world().scroll_metrics(area.stable_id()).unwrap();
+        assert!(scroll.content_height > scroll.viewport_height);
+        assert_eq!(scroll.viewport_height, counter.editor_bounds.height);
+    }
+}
+
+#[test]
+fn auto_growing_text_area_follows_nested_composer_constraints_without_losing_its_footer() {
+    for (parent_height, field_height) in [(173.0, 104.0), (133.0, 64.0)] {
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let parent = cx
+            .create_component(
+                document,
+                Stack::column(0.0).with_layout(|layout| {
+                    layout.width = Some(LengthSpec::Px(260.0));
+                    layout.height = Some(LengthSpec::Px(parent_height));
+                }),
+            )
+            .unwrap();
+        let header = cx
+            .create_detached_component(
+                document,
+                Stack::column(0.0).with_layout(|layout| {
+                    layout.height = Some(LengthSpec::Px(44.0));
+                    layout.min_height = Some(LengthSpec::Px(44.0));
+                    layout.flex_shrink = Some(0.0);
+                }),
+            )
+            .unwrap();
+        let composer = cx
+            .create_detached_component(
+                document,
+                Stack::column(0.0).with_layout(|layout| {
+                    layout.height = Some(LengthSpec::Auto);
+                    layout.min_height = Some(LengthSpec::Px(0.0));
+                    layout.flex_shrink = Some(1.0);
+                    layout.flex_basis = Some(LengthSpec::Auto);
+                    layout.padding = Some(LengthSpec::Px(12.0));
+                    layout.border_top_width = Some(1.0);
+                }),
+            )
+            .unwrap();
+        let wrapper = cx
+            .create_detached_component(
+                document,
+                Stack::column(0.0).with_layout(|layout| {
+                    layout.height = Some(LengthSpec::Auto);
+                    layout.min_height = Some(LengthSpec::Px(0.0));
+                    layout.flex_shrink = Some(1.0);
+                    layout.flex_basis = Some(LengthSpec::Auto);
+                }),
+            )
+            .unwrap();
+        let action = cx
+            .create_detached_component(
+                document,
+                crate::IconButton::new(nana_ui_core::Icon::Close, "Send"),
+            )
+            .unwrap();
+        let area = cx
+            .create_detached_component(
+                document,
+                TextArea::new("line\n".repeat(20))
+                    .auto_grow(1, 6)
+                    .character_counter(40)
+                    .trailing_action(action.stable_id()),
+            )
+            .unwrap();
+        cx.append_child(parent, header).unwrap();
+        cx.append_child(parent, composer).unwrap();
+        cx.append_child(composer, wrapper).unwrap();
+        cx.append_child(wrapper, area).unwrap();
+        cx.assemble_text_area(area).unwrap();
+        cx.focus_node(document, area.stable_id()).unwrap();
+        for _ in 0..4 {
+            cx.layout_document(document, crate::LayoutViewport::new(260.0, 300.0))
+                .unwrap();
+            cx.shape_text(&[area.stable_id()], &mut crate::MeasureTextShaper)
+                .unwrap();
+        }
+        let frame = |id| cx.world().component_layout_box(id).unwrap();
+        let field = frame(area.stable_id());
+        let container = frame(parent.stable_id());
+        let composer = frame(composer.stable_id());
+        let action = frame(action.stable_id());
+        assert_eq!(field.height, field_height);
+        assert!(composer.y + composer.height <= container.y + container.height);
+        assert!(field.y >= composer.y + 13.0);
+        assert!(field.y + field.height <= composer.y + composer.height - 12.0);
+        assert!(action.y + action.height <= field.y + field.height);
+        let crate::ComponentGeometry::TextInput {
+            character_counter: Some(counter),
+            ..
+        } = cx.world().component_geometry(area.stable_id()).unwrap()
+        else {
+            panic!("missing editor")
+        };
+        assert!(counter.editor_bounds.y + counter.editor_bounds.height <= action.y);
+        assert!(counter.text.bounds.y + counter.text.bounds.height <= field.y + field.height);
+        let scroll = cx.world().scroll_metrics(area.stable_id()).unwrap();
+        assert!(scroll.content_height > scroll.viewport_height);
+    }
+}
