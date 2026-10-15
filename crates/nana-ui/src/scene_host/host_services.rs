@@ -525,20 +525,23 @@ mod tests {
             )
             .unwrap();
         assert!(context.world().ime(editor.stable_id()).is_none());
+        let select_all = KeyInput::named(
+            "KeyA",
+            "a",
+            KeyState::Pressed,
+            InputModifiers {
+                meta: cfg!(target_os = "macos"),
+                control: !cfg!(target_os = "macos"),
+                ..InputModifiers::default()
+            },
+        );
         input
-            .route(
-                &mut context,
-                InputPayload::Key(KeyInput::named(
-                    "KeyA",
-                    "a",
-                    KeyState::Pressed,
-                    InputModifiers {
-                        meta: cfg!(target_os = "macos"),
-                        control: !cfg!(target_os = "macos"),
-                        ..InputModifiers::default()
-                    },
-                )),
-            )
+            .press(&mut context, select_all.clone(), Some("a"), None)
+            .unwrap();
+        // Cancel restores the original selection. Repeating Select All is
+        // a no-op, but its native key text must still not insert an 'a'.
+        input
+            .press(&mut context, select_all, Some("a"), None)
             .unwrap();
         input.text(&mut context, "好").unwrap();
         assert_eq!(context.world().text(editor.stable_id()), Some("好"));
