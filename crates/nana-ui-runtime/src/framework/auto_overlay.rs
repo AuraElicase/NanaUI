@@ -37,9 +37,6 @@ pub(crate) struct AutoOverlay {
     /// `playing && !disabled` the policy last ran with; `None` before its
     /// first run.
     active: Option<bool>,
-    /// The latest pointer sample was outside the stage. Keep this request
-    /// through menu/drag holds; a new stage activity or key press clears it.
-    conceal: bool,
 }
 
 /// The policy keeps `Instant`s; the runtime clock is a `Duration` from the
@@ -74,7 +71,7 @@ impl AppContext {
         if ran == Some(active) && !snapshot.menu_toggled {
             return Ok(());
         }
-        self.drive_auto_overlay(bar, false).map(drop)
+        self.drive_auto_overlay(bar, None).map(drop)
     }
 
     pub(crate) fn has_auto_overlays(&self) -> bool {
@@ -130,32 +127,18 @@ impl AppContext {
         for bar in self.driven_bars(Some(document)) {
             let reveal = match activity {
                 OverlayActivity::Pointer { x, y, target } => {
-                    self.over_stage(document, bar.stable_id(), x, y, target)
+                    Some(self.over_stage(document, bar.stable_id(), x, y, target))
                 }
-                OverlayActivity::Key => true,
-                OverlayActivity::None | OverlayActivity::Leave => false,
-            };
-            let conceal = match activity {
-                OverlayActivity::Pointer { .. } => Some(!reveal),
-                OverlayActivity::Leave => Some(true),
-                OverlayActivity::Key => Some(false),
+                OverlayActivity::Key => Some(true),
+                OverlayActivity::Leave => Some(false),
                 OverlayActivity::None => None,
             };
-            let driven = self
-                .component_lifecycle
-                .auto_overlays
-                .get_mut(&bar.stable_id())
-                .expect("a driven bar has lifecycle state");
-            if let Some(conceal) = conceal {
-                driven.conceal = conceal;
-            }
-            let conceal = driven.conceal;
-            if !conceal
+            if reveal != Some(false)
                 && self
                     .read(bar, |bar| bar.visibility.counting_down())
                     .unwrap_or(false)
             {
-                if reveal
+                if reveal == Some(true)
                     && let Some(driven) = self
                         .component_lifecycle
                         .auto_overlays
@@ -180,7 +163,7 @@ impl AppContext {
                     bar.visibility.wakeup().is_some_and(|wakeup| wakeup <= now)
                 })
                 .unwrap_or(false);
-            if due && self.drive_auto_overlay(bar, false).unwrap_or(false) {
+            if due && self.drive_auto_overlay(bar, None).unwrap_or(false) {
                 flipped.push(bar.stable_id());
             }
         }
@@ -193,26 +176,29 @@ impl AppContext {
     fn drive_auto_overlay(
         &mut self,
         bar: Entity<MediaTransportBar>,
-        reveal: bool,
+        reveal: Option<bool>,
     ) -> Result<bool, FrameworkError> {
         let now = instant(self.component_lifecycle.now);
-        let active = self.read(bar, |bar| bar.playing && !bar.disabled)?;
-        let (noted, conceal) = self
+        let (active, concealed) = self.read(bar, |bar| {
+            (bar.playing && !bar.disabled, bar.visibility.concealed())
+        })?;
+        let noted = self
             .component_lifecycle
             .auto_overlays
             .get_mut(&bar.stable_id())
-            .map(|driven| {
+            .and_then(|driven| {
                 driven.active = Some(active);
-                (driven.activity.take(), driven.conceal)
-            })
-            .unwrap_or_default();
+                driven.activity.take()
+            });
         let (flipped, _) = self.step_overlay(
             bar,
             OverlayStep {
                 now,
                 active,
-                activity: if reveal { Some(now) } else { noted },
-                conceal,
+                activity: if reveal == Some(true) { Some(now) } else { noted },
+                // Menu close restarts activity in the policy; preserve its
+                // existing conceal request unless new input replaces it.
+                conceal: reveal.map_or(concealed, |reveal| !reveal),
                 // A control a click left focused would otherwise keep the
                 // bar up for good.
                 focus_visible_only: true,

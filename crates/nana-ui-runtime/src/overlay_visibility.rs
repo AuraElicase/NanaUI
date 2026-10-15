@@ -93,6 +93,10 @@ impl OverlayVisibility {
         self.visible
     }
 
+    pub(crate) fn concealed(&self) -> bool {
+        self.concealed
+    }
+
     /// Up, not concealed, and counting down to an idle hide: activity now
     /// would only move that deadline later.
     pub(crate) fn counting_down(&self) -> bool {
