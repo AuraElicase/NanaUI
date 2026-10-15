@@ -417,8 +417,8 @@ fn copy_style(text: RecipeText, role: SemanticColorRole, lines: u16) -> NodeStyl
     style
 }
 
-/// A button beside the copy: as tall as its size, centred on the title's
-/// first line without making a one-line toast any taller.
+/// A button beside the copy: centred on the toast's content, including its
+/// description and progress, without making a one-line toast any taller.
 fn beside_copy(
     layout: &mut nana_ui_core::LayoutStyle,
     recipe: &ToastRecipe,
@@ -428,6 +428,7 @@ fn beside_copy(
     let pull = ((line_box(recipe.title.size) - control) / 2.0).min(0.0);
     layout.margin_top = Some(LengthSpec::Px(pull));
     layout.margin_bottom = Some(LengthSpec::Px(pull));
+    layout.align_self = Some(AlignSpec::Center);
     layout.flex_shrink = Some(0.0);
     layout.hidden = !shown;
 }
@@ -1666,11 +1667,11 @@ mod tests {
         );
         assert!(mark.x + mark.width <= title.x - ToastRecipe::DEFAULT.gap + 0.01);
 
-        // The close button is centred on the same first line.
+        // The close button is centred on the whole toast, even as the copy wraps.
         let close = context.world().layout_box(parts.close).unwrap();
         assert!(
-            ((close.y + close.height / 2.0) - (title.y + line / 2.0)).abs() < 0.01,
-            "{close:?} {title:?}"
+            ((close.y + close.height / 2.0) - (bounds.y + bounds.height / 2.0)).abs() < 0.01,
+            "{close:?} {bounds:?}"
         );
 
         // The built-in recipe clamps the title and the description to a
@@ -1693,6 +1694,68 @@ mod tests {
             title_style.layout.line_height,
             Some(LineHeightSpec::Absolute(line))
         );
+    }
+
+    #[test]
+    fn action_and_close_stay_centred_as_copy_and_progress_change() {
+        for theme in [
+            nana_ui_core::ThemeDefinition::NANA_LIGHT,
+            nana_ui_core::ThemeDefinition::NANA_DARK,
+        ] {
+            let mut context = AppContext::new();
+            context
+                .set_theme_definition(&theme.with_toast(ToastRecipe {
+                    title_max_lines: 2,
+                    description_max_lines: 3,
+                    ..ToastRecipe::DEFAULT
+                }))
+                .unwrap();
+            let toast = assembled(
+                &mut context,
+                Toast::new("Saved", ToastTone::Success)
+                    .action("View")
+                    .dismissible(true),
+            );
+            let parts = parts_of(&context, toast);
+            for description in [
+                None,
+                Some(
+                    "A long exported file path with several folders and a file name that wraps across lines",
+                ),
+            ] {
+                for progress in [
+                    None,
+                    Some(ToastProgress::Determinate(0.5)),
+                    Some(ToastProgress::Indeterminate),
+                ] {
+                    context
+                        .update_component(toast, |toast, _| {
+                            toast.description = description.map(Arc::from);
+                            toast.progress = progress;
+                        })
+                        .unwrap();
+                    for width in [220.0, 360.0] {
+                        lay_out(&mut context, width);
+                        let bounds = context.world().layout_box(toast.stable_id()).unwrap();
+                        for button in [parts.action, parts.close] {
+                            let button = context.world().layout_box(button).unwrap();
+                            assert!(
+                                ((button.y + button.height / 2.0)
+                                    - (bounds.y + bounds.height / 2.0))
+                                    .abs()
+                                    < 0.01,
+                                "button {button:?} is centred in {bounds:?}"
+                            );
+                        }
+                    }
+                }
+            }
+            assert_eq!(
+                parts_of(&context, toast),
+                parts,
+                "updates retain the original controls"
+            );
+        }
     }
 
     /// A toast is as wide as its copy needs; one showing progress is at
