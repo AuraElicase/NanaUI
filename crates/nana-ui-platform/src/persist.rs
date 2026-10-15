@@ -466,11 +466,7 @@ impl PersistedWindowGeometry {
     }
 
     pub fn apply(&self, settings: &mut crate::WindowDescriptor) {
-        // macOS once reported every windowed frame as maximized, so the first
-        // save stored this descriptor's own frame and then never recorded a
-        // move or resize. That flag is not a user zoom.
-        let placeholder = Self::from_descriptor(settings);
-        let placeholder_maximized = self.maximized && same_frame(self, &placeholder);
+        let defaults = Self::from_descriptor(settings);
         if self.width.is_finite()
             && self.height.is_finite()
             && self.width > 0.0
@@ -481,7 +477,10 @@ impl PersistedWindowGeometry {
         if self.x.is_finite() && self.y.is_finite() {
             settings.initial_position = Some((self.x, self.y));
         }
-        settings.maximized = self.maximized && !placeholder_maximized;
+        // maximized on the descriptor's own frame was never a live zoom.
+        settings.maximized = self.maximized
+            && (self.x, self.y, self.width, self.height)
+                != (defaults.x, defaults.y, defaults.width, defaults.height);
     }
 
     pub fn load(store: &ViewStateStore, key: &str) -> Result<Option<Self>, StoreError> {
@@ -503,14 +502,6 @@ impl PersistedWindowGeometry {
             serde_json::to_string(self).map_err(|error| StoreError::new(error.to_string()))?;
         store.save("window", key, 1, json)
     }
-}
-
-/// The saved frame is still the descriptor that was never replaced by a live one.
-fn same_frame(saved: &PersistedWindowGeometry, placeholder: &PersistedWindowGeometry) -> bool {
-    saved.x == placeholder.x
-        && saved.y == placeholder.y
-        && saved.width == placeholder.width
-        && saved.height == placeholder.height
 }
 
 /// Overlay stored geometry onto a descriptor when `persist_key` is set.
