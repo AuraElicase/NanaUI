@@ -88,7 +88,7 @@ impl Drop for Slot {
 }
 
 impl Slot {
-    fn release(&self, ready: u64, locked: bool) {
+    fn release(self: &Arc<Self>, ready: u64, locked: bool) {
         let _guard = (!locked).then(|| self.gpu.lock_submission());
         // Waiting on the GPU also makes dropping an unconsumed ready frame
         // safe: the release cannot overtake the external producer's write.
@@ -104,6 +104,18 @@ impl Slot {
         };
         if result.is_err() {
             self.retired.store(true, Ordering::Release);
+        }
+        if self.retired.load(Ordering::Acquire) {
+            // The original WGPU submission's completion fence precedes the
+            // native Signal above. A new queue tail is required to prove that
+            // the native fence and handles can be destroyed. This allocation
+            // and extra submission happen only after pool retirement.
+            let retained = Arc::clone(self);
+            self.gpu.inner.queue.submit(std::iter::empty());
+            self.gpu
+                .inner
+                .queue
+                .on_submitted_work_done(move || drop(retained));
         }
         self.reserved.store(false, Ordering::Release);
     }
@@ -359,6 +371,16 @@ impl NativeImportPool {
 impl Drop for NativeImportPool {
     fn drop(&mut self) {
         self.retire();
+        // Covers native signals already queued before retirement. Outstanding
+        // targets/ready frames/recordings retain their own slot and add another
+        // tail marker if they release it later, after this marker was queued.
+        let retained = self.slots.clone();
+        let _guard = self.gpu.lock_submission();
+        self.gpu.inner.queue.submit(std::iter::empty());
+        self.gpu
+            .inner
+            .queue
+            .on_submitted_work_done(move || drop(retained));
     }
 }
 
@@ -715,5 +737,74 @@ mod tests {
             .device
             .poll(wgpu::PollType::wait_indefinitely())
             .unwrap();
+    }
+
+    #[test]
+    fn retiring_before_a_pending_copy_submits_or_discards_retains_native_objects() {
+        struct Gate(ID3D12Fence);
+        impl Drop for Gate {
+            fn drop(&mut self) {
+                // Always unblock the queue, including on a failed assertion.
+                unsafe {
+                    let _ = self.0.Signal(1);
+                }
+            }
+        }
+        let gpu = gpu();
+        for submit in [true, false] {
+            let mut pool = NativeImportPool::new(&gpu, [16, 8]).unwrap();
+            let target = pool.try_acquire().unwrap().unwrap();
+            let weak = Arc::downgrade(target.slot.as_ref().unwrap());
+            let producer = Producer::new(target.adapter_luid());
+            let input = producer.write(target, [0.0, 1.0, 0.0, 1.0]);
+            let gate = unsafe {
+                let device = gpu.inner.device.as_hal::<wgpu::hal::api::Dx12>().unwrap();
+                Gate(
+                    device
+                        .raw_device()
+                        .CreateFence(0, D3D12_FENCE_FLAG_SHARED)
+                        .unwrap(),
+                )
+            };
+            {
+                let _guard = gpu.lock_submission();
+                let queue = unsafe { gpu.inner.queue.as_hal::<wgpu::hal::api::Dx12>() }.unwrap();
+                unsafe { queue.as_raw().Wait(&gate.0, 1) }.unwrap();
+            }
+            let mut frame = gpu.begin_frame("retired pending native input");
+            let output = pool.stage(&mut frame, input).unwrap();
+            drop(pool);
+            if submit {
+                frame.submit();
+            } else {
+                frame.discard();
+            }
+            gpu.poll();
+            assert!(
+                weak.upgrade().is_some(),
+                "native objects died while queue was blocked"
+            );
+            unsafe { gate.0.Signal(1) }.unwrap();
+            let pixels = read(&gpu, &output);
+            if submit {
+                assert!(
+                    pixels
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .all(|pixel| *pixel == [0, 255, 0, 255])
+                );
+            } else {
+                assert!(
+                    pixels.iter().all(|byte| *byte == 0),
+                    "discard submitted its copy"
+                );
+            }
+            gpu.poll();
+            assert!(
+                weak.upgrade().is_none(),
+                "native objects outlived completed retirement"
+            );
+        }
     }
 }
