@@ -46,6 +46,8 @@ widget(Popover::new().trigger("更多")).children(widget(ActionMenuItem::new("�
 
 里面只做显示，不要放可按的控件。
 
+触发器宽度随内容收缩，交叉轴对齐由父容器决定：在居中的横向工具栏里垂直居中，在默认拉伸的纵向容器里也不会占满整行。
+
 ## 位置
 
 `.placement` 用 `nana_ui::PopoverPlacement`：`Top`、`Bottom`、`Left`、`Right`，默认 `Bottom`。

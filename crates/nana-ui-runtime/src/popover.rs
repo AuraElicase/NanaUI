@@ -552,9 +552,9 @@ fn triggered_menu_style(
 pub(crate) fn trigger_button_style() -> NodeStyle {
     let mut style = NodeStyle {
         layout: Arc::new(nana_ui_core::LayoutStyle {
-            // A button hugs its label. Without this the surrounding stack
-            // stretches the trigger and it reads as a field, not a control.
-            align_self: Some(nana_ui_core::AlignSpec::Start),
+            // Keep the trigger content-sized in a stretching column without
+            // overriding the parent's cross-axis alignment in a toolbar row.
+            width: Some(LengthSpec::Shrink),
             border_width: Some(nana_ui_core::HAIRLINE),
             ..nana_ui_core::LayoutStyle::default()
         }),
@@ -844,6 +844,120 @@ mod tests {
     use crate::LayoutViewport;
     use crate::framework::AppContext;
     use std::time::Duration;
+
+    #[test]
+    fn triggers_follow_the_parent_rows_cross_axis_alignment() {
+        use crate::view::{entity_ref, widget, with_refs};
+        use nana_ui_core::AlignSpec;
+
+        for align in [AlignSpec::Start, AlignSpec::Center, AlignSpec::End] {
+            for bare in [false, true] {
+                let mut context = AppContext::new();
+                let root = context
+                    .create_component(
+                        document(),
+                        crate::Stack::row(8.0)
+                            .width(LengthSpec::Px(400.0))
+                            .height(LengthSpec::Px(48.0))
+                            .padding(6.0)
+                            .align(align),
+                    )
+                    .unwrap();
+                let (_, (text, icon, content, menu)) = context
+                    .mount_view(root.stable_id(), || {
+                        let text = entity_ref::<Popover>();
+                        let icon = entity_ref::<Popover>();
+                        let content = entity_ref::<Popover>();
+                        let menu = entity_ref::<ActionMenu>();
+                        with_refs(
+                            (
+                                widget(Popover::new().trigger("Text").bare_trigger(bare))
+                                    .entity_ref(text),
+                                widget(
+                                    Popover::new()
+                                        .trigger_icon(Icon::Add, "Icon")
+                                        .bare_trigger(bare),
+                                )
+                                .entity_ref(icon),
+                                widget(Popover::new().trigger("Content").bare_trigger(bare))
+                                    .entity_ref(content)
+                                    .trigger(widget(
+                                        crate::Stack::row(0.0)
+                                            .width(LengthSpec::Px(14.0))
+                                            .height(LengthSpec::Px(14.0)),
+                                    )),
+                                widget(ActionMenu::new().trigger("Menu").bare_trigger(bare))
+                                    .entity_ref(menu),
+                            ),
+                            (text, icon, content, menu),
+                        )
+                    })
+                    .unwrap();
+                context
+                    .layout_document(document(), LayoutViewport::new(400.0, 100.0))
+                    .unwrap();
+                let expected_y = match align {
+                    AlignSpec::Start => 6.0,
+                    AlignSpec::Center => 10.0,
+                    AlignSpec::End => 14.0,
+                    _ => unreachable!(),
+                };
+                for id in [
+                    text.stable_id(),
+                    icon.stable_id(),
+                    content.stable_id(),
+                    menu.stable_id(),
+                ] {
+                    let bounds = context.world().layout_box(id).unwrap();
+                    assert!((bounds.height - TRIGGER_HEIGHT).abs() < 0.01, "{bounds:?}");
+                    assert!(
+                        (bounds.y - expected_y).abs() < 0.01,
+                        "{align:?}, bare={bare}: {bounds:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn content_triggers_keep_their_intrinsic_width_in_stretch_columns() {
+        use crate::view::widget;
+
+        for bare in [false, true] {
+            let mut context = AppContext::new();
+            let root = context
+                .create_component(
+                    document(),
+                    crate::Stack::column(0.0).width(LengthSpec::Fill),
+                )
+                .unwrap();
+            context
+                .mount_view(root.stable_id(), || {
+                    widget(Popover::new().trigger("Content").bare_trigger(bare)).trigger(widget(
+                        crate::Stack::row(0.0)
+                            .width(LengthSpec::Px(40.0))
+                            .height(LengthSpec::Px(14.0)),
+                    ))
+                })
+                .unwrap();
+            context
+                .layout_document(document(), LayoutViewport::new(400.0, 100.0))
+                .unwrap();
+            let trigger = context.world().node(root.stable_id()).unwrap().children[0];
+            let bounds = context.world().layout_box(trigger).unwrap();
+            let expected_width = 40.0
+                + UI_METRICS.control_padding_x * 2.0
+                + if bare {
+                    0.0
+                } else {
+                    nana_ui_core::HAIRLINE * 2.0
+                };
+            assert!(
+                (bounds.width - expected_width).abs() < 0.01,
+                "bare={bare}: {bounds:?}"
+            );
+        }
+    }
 
     /// The hanging surface opens `gap` below the trigger's box, not below
     /// the first frame of the trigger's open animation.
@@ -1137,7 +1251,10 @@ mod tests {
         assert_eq!(closed.border, Some(SemanticColorRole::BorderSoft));
         assert!(closed.interaction.hovered.background.is_some());
         assert!(closed.interaction.pressed.background.is_some());
-        assert!(closed.layout.width.is_none(), "trigger sizes to its label");
+        assert!(
+            matches!(closed.layout.width, None | Some(LengthSpec::Shrink)),
+            "trigger sizes to its label"
+        );
         context
             .update_component(popover, |popover, _| {
                 popover.open = true;
