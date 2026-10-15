@@ -27,6 +27,7 @@ pub struct RuntimeAgentSession {
     document: RuntimeDocument,
     shaper: NanaTextShaper,
     gpu: Option<OffscreenSnapshots>,
+    gpu_renderers: Option<nana_ui::SceneGpuRendererRegistry>,
     scale_factor: f32,
     width: u32,
     height: u32,
@@ -72,6 +73,7 @@ impl RuntimeAgentSession {
             document,
             shaper: NanaTextShaper::default(),
             gpu: None,
+            gpu_renderers: None,
             width,
             height,
             clear: None,
@@ -286,6 +288,11 @@ impl RuntimeAgentSession {
         Ok(())
     }
 
+    /// Use the consumer's real GPU nodes in its offscreen evidence.
+    pub fn set_gpu_renderers(&mut self, renderers: nana_ui::SceneGpuRendererRegistry) {
+        self.gpu_renderers = Some(renderers);
+    }
+
     pub fn screenshot_rgba(&mut self) -> Result<(Size<u32>, Vec<u8>), AgentError> {
         self.flush()?;
         let size = Size::new(
@@ -296,8 +303,9 @@ impl RuntimeAgentSession {
         let clear = self.clear_color();
         let scene = self.document.scene().clone();
         let textures = self.host_textures.clone();
+        let custom = self.gpu_renderers.clone();
         let gpu = self.gpu_mut()?;
-        let renderers = gpu.default_gpu_renderers();
+        let renderers = custom.unwrap_or_else(|| gpu.default_gpu_renderers());
         let pixels = gpu
             .paint_layers_scaled(
                 &[(&scene, true)],
