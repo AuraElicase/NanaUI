@@ -79,6 +79,20 @@ impl GlyphEffect {
         Self::new(GlyphEffectKind::Flicker, 1.0, 8.0)
     }
 
+    /// Whether this descriptor has a visible effect, including a frozen pose.
+    pub fn is_effective(&self) -> bool {
+        self.amplitude.is_finite()
+            && self.amplitude != 0.0
+            && (self.kind != GlyphEffectKind::Flicker || self.amplitude > 0.0)
+            && self.frequency_hz.is_finite()
+            && self.stagger.is_finite()
+    }
+
+    /// Frozen effects still paint, but never keep a window awake.
+    pub fn is_animated(&self) -> bool {
+        self.is_effective() && self.frequency_hz != 0.0
+    }
+
     pub fn stagger(mut self, cycles: f32) -> Self {
         self.stagger = cycles;
         self
@@ -229,6 +243,9 @@ impl RevealSchedule {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct GlyphPresentation {
     pub effects: Arc<[GlyphEffect]>,
+    /// Optional effect chains indexed by RichSpanStyle::effect. Empty keeps
+    /// the legacy single-effect table. Empty chains are explicitly static.
+    pub effect_chains: Arc<[GlyphEffectChain]>,
     pub reveal: Option<RevealSchedule>,
 }
 
@@ -236,17 +253,60 @@ impl GlyphPresentation {
     pub fn new(effects: impl Into<Arc<[GlyphEffect]>>, reveal: Option<RevealSchedule>) -> Self {
         Self {
             effects: effects.into(),
+            effect_chains: Arc::from([]),
             reveal,
+        }
+    }
+
+    pub fn chains(
+        chains: impl Into<Arc<[GlyphEffectChain]>>,
+        reveal: Option<RevealSchedule>,
+    ) -> Self {
+        Self {
+            effects: Arc::from([]),
+            effect_chains: chains.into(),
+            reveal,
+        }
+    }
+
+    pub fn effect_chain(&self, index: usize) -> &[GlyphEffect] {
+        if self.effect_chains.is_empty() {
+            self.effects
+                .get(index)
+                .map(std::slice::from_ref)
+                .unwrap_or(&[])
+        } else {
+            self.effect_chains
+                .get(index)
+                .map(|chain| chain.0.as_ref())
+                .unwrap_or(&[])
         }
     }
 
     /// Until when it changes what is drawn: `None` for a looping effect,
     /// which never stops.
     pub fn live_until(&self, uses_effects: bool) -> Option<Option<Duration>> {
-        if uses_effects && !self.effects.is_empty() {
+        if uses_effects
+            && (self.effects.iter().any(GlyphEffect::is_animated)
+                || self.effect_chains.iter().any(GlyphEffectChain::is_animated))
+        {
             return Some(None);
         }
         self.reveal.as_ref().map(|reveal| Some(reveal.end()))
+    }
+}
+
+/// An ordered combination of looping effects. Offsets add, scale and alpha
+/// multiply, and the last colour-producing effect supplies the colour.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct GlyphEffectChain(pub Arc<[GlyphEffect]>);
+
+impl GlyphEffectChain {
+    pub fn new(effects: impl Into<Arc<[GlyphEffect]>>) -> Self {
+        Self(effects.into())
+    }
+    pub fn is_animated(&self) -> bool {
+        self.0.iter().any(GlyphEffect::is_animated)
     }
 }
 
@@ -315,8 +375,23 @@ pub fn evaluate_glyph(
     ordinal: u32,
     now: Duration,
 ) -> GlyphSample {
+    evaluate_glyph_chain(
+        effect.map(std::slice::from_ref).unwrap_or(&[]),
+        reveal,
+        ordinal,
+        now,
+    )
+}
+
+/// CPU counterpart of the text shader, also used for inline objects.
+pub fn evaluate_glyph_chain(
+    effects: &[GlyphEffect],
+    reveal: Option<&RevealSchedule>,
+    ordinal: u32,
+    now: Duration,
+) -> GlyphSample {
     let mut sample = GlyphSample::IDENTITY;
-    if let Some(effect) = effect {
+    for effect in effects.iter().filter(|effect| effect.is_effective()) {
         apply_effect(&mut sample, effect, ordinal, effect_clock(now));
     }
     if let Some(reveal) = reveal {
@@ -354,7 +429,7 @@ fn apply_effect(sample: &mut GlyphSample, effect: &GlyphEffect, ordinal: u32, cl
         GlyphEffectKind::Flicker => {
             let step = (clock * effect.frequency_hz).floor() as i32 as u32;
             if unit(glyph_hash(ordinal.wrapping_mul(0x85eb_ca6b) ^ step)) < 0.2 {
-                sample.alpha *= 0.35;
+                sample.alpha *= 1.0 - 0.65 * effect.amplitude.clamp(0.0, 1.0);
             }
         }
     }
@@ -389,6 +464,51 @@ fn apply_reveal(sample: &mut GlyphSample, reveal: &RevealSchedule, ordinal: u32,
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn effect_chains_compose_and_empty_effects_do_not_loop() {
+        use super::*;
+        let fx = [
+            GlyphEffect::wave(3.0),
+            GlyphEffect::rainbow(),
+            GlyphEffect::pulse(0.2),
+        ];
+        let now = Duration::from_millis(210);
+        let combined = evaluate_glyph_chain(&fx, None, 0, now);
+        assert_eq!(
+            combined.offset,
+            evaluate_glyph(Some(&fx[0]), None, 0, now).offset
+        );
+        assert_eq!(
+            combined.color,
+            evaluate_glyph(Some(&fx[1]), None, 0, now).color
+        );
+        assert_eq!(
+            combined.scale,
+            evaluate_glyph(Some(&fx[2]), None, 0, now).scale
+        );
+        let reveal = RevealSchedule::uniform(Duration::ZERO, 2, 0.1).intro(GlyphIntro::fade(0.2));
+        let expected = reveal.end();
+        let static_fx = GlyphPresentation::new(vec![GlyphEffect::shake(0.0)], Some(reveal));
+        assert_eq!(static_fx.live_until(true), Some(Some(expected)));
+        assert_eq!(
+            evaluate_glyph_chain(&[GlyphEffect::shake(0.0)], None, 0, now),
+            GlyphSample::IDENTITY
+        );
+        assert!(!GlyphEffect::wave(1.0).frequency(0.0).is_animated());
+        assert!(!GlyphEffect::wave(f32::NAN).is_animated());
+        assert!(!GlyphEffect::new(GlyphEffectKind::Flicker, -1.0, 8.0).is_effective());
+        let frozen = GlyphEffect::wave(3.0).frequency(0.0);
+        assert!(frozen.is_effective());
+        assert_eq!(
+            evaluate_glyph(Some(&frozen), None, 2, Duration::ZERO),
+            evaluate_glyph(Some(&frozen), None, 2, Duration::from_secs(10))
+        );
+        assert_ne!(
+            evaluate_glyph(Some(&frozen), None, 2, Duration::ZERO),
+            GlyphSample::IDENTITY
+        );
+    }
+
     use super::*;
 
     #[test]
