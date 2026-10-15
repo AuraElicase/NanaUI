@@ -195,7 +195,11 @@ impl AppContext {
             OverlayStep {
                 now,
                 active,
-                activity: if reveal == Some(true) { Some(now) } else { noted },
+                activity: if reveal == Some(true) {
+                    Some(now)
+                } else {
+                    noted
+                },
                 // Menu close restarts activity in the policy; preserve its
                 // existing conceal request unless new input replaces it.
                 conceal: reveal.map_or(concealed, |reveal| !reveal),
