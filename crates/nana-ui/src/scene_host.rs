@@ -2716,6 +2716,7 @@ fn platform_composition(ime: &winit::event::Ime) -> CompositionInput {
     match ime {
         winit::event::Ime::Enabled => CompositionInput::Enabled,
         winit::event::Ime::Disabled => CompositionInput::Disabled,
+        winit::event::Ime::Preedit(text, _) if text.is_empty() => CompositionInput::End,
         winit::event::Ime::Preedit(text, selection) => CompositionInput::Update {
             text: text.clone(),
             selection: *selection,
