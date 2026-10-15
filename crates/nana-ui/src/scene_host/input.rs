@@ -682,9 +682,15 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     /// request made while the platform delivers a key or a composition
     /// re-enters the window procedure.
     pub(super) fn apply_window_ime(&mut self) {
-        for host in self.window_contexts.values_mut() {
+        for (id, host) in &mut self.window_contexts {
             let apply = host.input_source.take_ime_apply();
-            host_services::apply_text_input(host.surface.window().as_ref(), apply);
+            if let Err(error) =
+                host_services::apply_text_input(host.surface.window().as_ref(), apply)
+            {
+                host.input_source.applied_ime = None;
+                self.program
+                    .report_host_failure(HostFailure::ImeDispatch { window: *id, error });
+            }
         }
     }
 

@@ -289,35 +289,42 @@ fn enable_ime(
     window: &dyn winit::window::Window,
     capabilities: ImeCapabilities,
     data: ImeRequestData,
-) {
+) -> Result<(), String> {
     let Some(enable) = ImeEnableRequest::new(capabilities, data.clone()) else {
-        return;
+        return Err("IME capabilities do not match initial request data".into());
     };
-    if window.request_ime_update(ImeRequest::Enable(enable)) == Err(ImeRequestError::AlreadyEnabled)
-    {
-        let _ = window.request_ime_update(ImeRequest::Update(data));
+    match window.request_ime_update(ImeRequest::Enable(enable)) {
+        Err(ImeRequestError::AlreadyEnabled) => window.request_ime_update(ImeRequest::Update(data)),
+        result => result,
     }
+    .map_err(|error| error.to_string())
 }
 
-pub(super) fn apply_text_input(window: &dyn winit::window::Window, apply: ImeApply) {
+pub(super) fn apply_text_input(
+    window: &dyn winit::window::Window,
+    apply: ImeApply,
+) -> Result<(), String> {
     match apply {
-        ImeApply::None => {}
+        ImeApply::None => Ok(()),
         ImeApply::Disable => {
             nana_window::discard_native_ime_preedit(window);
-            let _ = window.request_ime_update(ImeRequest::Disable);
+            window
+                .request_ime_update(ImeRequest::Disable)
+                .map_err(|error| error.to_string())
         }
         ImeApply::Enable { capabilities, data } => enable_ime(window, capabilities, data),
         ImeApply::Replace { capabilities, data } => {
             nana_window::discard_native_ime_preedit(window);
-            let _ = window.request_ime_update(ImeRequest::Disable);
-            enable_ime(window, capabilities, data);
+            window
+                .request_ime_update(ImeRequest::Disable)
+                .map_err(|error| error.to_string())?;
+            enable_ime(window, capabilities, data)
         }
         ImeApply::Reset { capabilities, data } => {
             nana_window::discard_native_ime_preedit(window);
-            // AppKit's text client is now in Ground, with its input context
-            // still active. Disabling it again loses that activation across
-            // a window switch. Keep the existing session when its declared
-            // capabilities match; other platforms reset through Disable.
+            // unmarkText cancels AppKit's composition without changing its
+            // declared capabilities. Keep a matching session; other
+            // platforms cancel through Disable.
             #[cfg(target_os = "macos")]
             let disable = window
                 .ime_capabilities()
@@ -325,13 +332,15 @@ pub(super) fn apply_text_input(window: &dyn winit::window::Window, apply: ImeApp
             #[cfg(not(target_os = "macos"))]
             let disable = true;
             if disable {
-                let _ = window.request_ime_update(ImeRequest::Disable);
+                window
+                    .request_ime_update(ImeRequest::Disable)
+                    .map_err(|error| error.to_string())?;
             }
-            enable_ime(window, capabilities, data);
+            enable_ime(window, capabilities, data)
         }
-        ImeApply::Update(data) => {
-            let _ = window.request_ime_update(ImeRequest::Update(data));
-        }
+        ImeApply::Update(data) => window
+            .request_ime_update(ImeRequest::Update(data))
+            .map_err(|error| error.to_string()),
     }
 }
 
