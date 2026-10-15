@@ -1367,6 +1367,45 @@ fn text_from_a_handled_key_is_dropped() {
     assert_eq!(context.input_counters().text_suppressed, 1);
 }
 
+#[test]
+fn command_key_text_is_suppressed_but_altgr_still_types() {
+    let mut context = AppContext::new();
+    let doc = document(20);
+    let mut input = HeadlessInput::bind(&mut context, doc);
+    let editor = focused_editor(&mut context, doc, "");
+    for modifiers in [
+        InputModifiers {
+            meta: true,
+            ..InputModifiers::default()
+        },
+        InputModifiers {
+            control: true,
+            ..InputModifiers::default()
+        },
+    ] {
+        input
+            .press(&mut context, key("q", modifiers), Some("q"), None)
+            .unwrap();
+    }
+    assert_eq!(context.world().text(editor.stable_id()), Some(""));
+    input
+        .press(
+            &mut context,
+            key(
+                "@",
+                InputModifiers {
+                    control: true,
+                    alt: true,
+                    ..InputModifiers::default()
+                },
+            ),
+            Some("@"),
+            None,
+        )
+        .unwrap();
+    assert_eq!(context.world().text(editor.stable_id()), Some("@"));
+}
+
 /// A program that observed a key press and stopped it (a page's
 /// `keydown.preventDefault()`) drops the text the key typed.
 #[test]

@@ -182,7 +182,7 @@ struct SourceState {
     /// after the world under it changed.
     pointer: Option<(u64, f32, f32)>,
     effects: effects::SourceEffects,
-    /// The last key press handled by Runtime; text naming it is dropped.
+    /// The last handled press or command chord; text naming it is dropped.
     handled_key: Option<InputSequence>,
     /// A file drag from this source is hovering the document.
     file_drag: bool,
@@ -627,8 +627,13 @@ impl AppContext {
                     services,
                     text_shaper,
                 )?;
+                // Platforms can attach literal text to a command chord,
+                // even when its operation is a no-op (Cmd+A on an existing
+                // full selection). It is never a text insertion. Ctrl+Alt
+                // remains text-capable for AltGr keyboard layouts.
+                let command = key.modifiers.meta || (key.modifiers.control && !key.modifiers.alt);
                 if key.state == KeyState::Pressed
-                    && disposition.handled
+                    && (disposition.handled || command)
                     && let Some(state) = self.input.source(source)
                 {
                     state.handled_key = Some(meta.sequence);
