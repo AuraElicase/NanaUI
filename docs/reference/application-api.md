@@ -661,3 +661,5 @@ hosted 宿主在布局收敛后暂存无障碍变化。在成功呈现后、应�
 `RuntimeProgramContext::windows()` 提供线程安全的 `WindowService`。`window()` 提供当前窗口的 `WindowHandle`。窗口描述统一为 `WindowDescriptor`。只放一幅画面的窗口用 `content_aspect_ratio` 锁定客户区宽高比，框架负责拖边、最小尺寸与换比例，见 [内容宽高比](window.md#内容宽高比)。`ApplicationState::build` 在每扇窗口发布前执行。构建失败不显示窗口。窗口事件可在 `ApplicationState::window_event` 中观察。详见 [窗口](window.md#多窗口) 的完成语义、embedded 接口和迁移说明。
 
 窗口关闭时。`RuntimeApplication` 先移除窗口文档。再调用 `ApplicationState::window_closed` 清理应用状态。最后调用 `window_event(Closed)`。关闭通知的观察者因此看到已完成清理的状态。创建失败回滚仍调用清理钩子。但不发送成功或关闭事件。
+
+`TextArea::auto_grow(min_rows, max_rows)` 提供按软折行伸缩的多行输入；`character_counter(limit)` 显示已提交字符数，`submit_on_enter(true)` 选择 Enter 提交 / Shift+Enter 换行。默认行为保持原样。L3 的 `.trailing_action(view)` 在框内右下角保留 小号控件大小的真实操作槽，`.model(signal)` 与 `.on_submit(...)` 可以一起使用；命令式装配见 `AppContext::assemble_text_area`。输入法确认不会发出 `TextSubmitted`。

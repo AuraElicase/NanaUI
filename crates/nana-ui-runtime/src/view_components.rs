@@ -2581,6 +2581,14 @@ pub(crate) struct TextAreaResizeDrag {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextArea {
     pub state: TextInputState,
+    /// Optional committed Unicode scalar count; display only, without truncation.
+    pub character_counter: Option<usize>,
+    /// Grow and shrink between these visual row counts; overflow scrolls.
+    pub auto_grow: Option<(usize, usize)>,
+    /// Enter submits; Shift+Enter still inserts a newline. IME confirmation never submits.
+    pub submit_on_enter: bool,
+    pub trailing_action: Option<StableNodeId>,
+    pub(crate) action_slot: Option<StableNodeId>,
     pub resize_vertical: bool,
     pub(crate) resized_height: Option<f32>,
     pub(crate) resize_drag: Option<TextAreaResizeDrag>,
@@ -2674,6 +2682,11 @@ impl TextArea {
     pub fn new(value: impl Into<String>) -> Self {
         Self {
             state: TextInputState::new(Into::<String>::into(value)),
+            character_counter: None,
+            auto_grow: None,
+            submit_on_enter: false,
+            trailing_action: None,
+            action_slot: None,
             resize_vertical: false,
             resized_height: None,
             resize_drag: None,
@@ -2705,6 +2718,31 @@ impl TextArea {
             sticky_scroll: false,
             style_override: false,
         }
+    }
+
+    /// Size to shaped wrapped content, bounded by visual rows (at least one).
+    pub fn auto_grow(mut self, min_rows: usize, max_rows: usize) -> Self {
+        let min_rows = min_rows.max(1);
+        self.auto_grow = Some((min_rows, max_rows.max(min_rows)));
+        self
+    }
+
+    pub fn character_counter(mut self, limit: usize) -> Self {
+        self.character_counter = Some(limit);
+        self
+    }
+
+    pub fn submit_on_enter(mut self, enabled: bool) -> Self {
+        self.submit_on_enter = enabled;
+        self
+    }
+
+    /// An application action in the bottom trailing corner, in a small-control slot.
+    /// The view layer assembles this slot automatically; imperative users call
+    /// [`crate::AppContext::assemble_text_area`].
+    pub fn trailing_action(mut self, node: StableNodeId) -> Self {
+        self.trailing_action = Some(node);
+        self
     }
 
     /// 启用代码编辑行为：括号配对、Enter 自动缩进、Tab/Shift+Tab 缩进与
@@ -2918,6 +2956,8 @@ impl TextArea {
 impl ComponentView for TextArea {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         editable: Some(&crate::framework::Editable::<Self>::EDITOR_HOOKS),
+        slot_assembler: Some(crate::AppContext::assemble_text_area),
+        lifecycle: Some(crate::AppContext::refresh_text_area_action_slot),
         ..crate::TypeBehavior::NONE
     };
 
@@ -2935,6 +2975,10 @@ impl ComponentView for TextArea {
             next.state = self.state.clone();
         }
         *self = next;
+    }
+
+    fn keep_framework_state(&mut self, previous: &Self) {
+        self.action_slot = self.action_slot.or(previous.action_slot);
     }
 
     fn node_kind(&self) -> NodeKind {
@@ -2960,7 +3004,7 @@ impl ComponentView for TextArea {
             secure: false,
             invalid: self.invalid,
             steppers: false,
-            character_counter: None,
+            character_counter: self.character_counter,
             diagnostics: Arc::clone(&self.diagnostics),
             matches: Arc::clone(&self.match_spans),
             color_swatches: Arc::clone(&self.color_swatches),
@@ -3041,6 +3085,39 @@ impl ComponentView for TextArea {
             }
         }
         let mut effective_style = self.style.clone();
+        if let Some((min_rows, max_rows)) = self.auto_grow {
+            let line = size.line_height();
+            let chrome = (size.height_in(world.theme_metrics()) - line).max(2.0);
+            effective_style.control_padding_y = None;
+            effective_style.control_height = None;
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.height = None;
+            layout.min_height = Some(nana_ui_core::LengthSpec::Px(
+                min_rows as f32 * line + chrome,
+            ));
+            layout.max_height = Some(nana_ui_core::LengthSpec::Px(
+                max_rows as f32 * line + chrome,
+            ));
+            layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(line));
+            layout.padding_top = Some(nana_ui_core::LengthSpec::Px((chrome - 2.0) / 2.0));
+            layout.padding_bottom = layout.padding_top;
+            layout.word_break = Some(nana_ui_core::WordBreakSpec::BreakAll);
+            layout.white_space_nowrap = false;
+            layout.flex_shrink = Some(0.0);
+        }
+        if self.trailing_action.is_some() {
+            let padding = effective_style
+                .control_padding_x
+                .map(|p| p.resolve(world.theme_metrics()))
+                .unwrap_or_else(|| effective_style.layout.resolved_padding().right);
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.position = nana_ui_core::PositionSpec::Relative;
+            layout.padding_right = Some(nana_ui_core::LengthSpec::Px(
+                padding + nana_ui_core::ControlSize::Small.height_in(world.theme_metrics()) + 4.0,
+            ));
+            layout.padding_left = Some(nana_ui_core::LengthSpec::Px(padding));
+            effective_style.control_padding_x = None;
+        }
         if self.resize_vertical
             && let Some(height) = self.resized_height
         {

@@ -1539,6 +1539,14 @@ impl AppContext {
             return Ok(false);
         }
         if key == "Enter" {
+            // An IME session can be active between updates with empty preedit.
+            // Its confirmation must neither submit nor insert an ordinary newline.
+            if self.world().ime(focused.node).is_some() {
+                return Ok(true);
+            }
+            if focused.multiline && !modifiers.shift && self.submit_focused_text_input(document)? {
+                return Ok(true);
+            }
             if focused.multiline {
                 return self.insert_focused_text_newline(document);
             }

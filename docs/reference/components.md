@@ -295,3 +295,11 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 ### HoverCard 编辑器焦点
 
 `HoverCard::preserve_editor_focus(true)` 用于扫码等非模态辅助卡。默认关闭。指针命中触发器或卡内操作时，保留卡外编辑器焦点和选区。按钮仍正常激活。Tab/Shift+Tab 仍可进入可访问操作。键盘焦点从卡外进入后，关闭时恢复最近的有效外部焦点。卡片或当前操作隐藏、停放、禁用、删除时也执行恢复。显式焦点请求和作用域恢复优先。失效或不可见的恢复目标不会重新获得焦点。内容容器需要参与命中（例如 `Stack::column(...).hittable()`），使二维码和空白区域的鼠标事件归属该卡。`QrCode` 本身仍是不可聚焦的可访问 Image。
+
+### 自适应多行发送框
+
+`TextArea::auto_grow(1, 6)`（Rust 构造属性）使用 Medium 控件行高和随主题变化的单行高度，按实际排版后的视觉行数增高、缩回，超过最大行数继续在编辑区内滚动。默认不启用；普通 `TextArea` 的尺寸与 Enter 换行行为不变。`character_counter(limit)` 与 `TextInput` 一样只统计已提交文本的 Unicode 标量，超限用错误色显示，不截断输入。多行计数固定在编辑区最后一行的尾部。
+
+`submit_on_enter(true)` 使 Enter 发出 `TextSubmitted`，Shift+Enter 仍换行；输入法正在组字时 Enter 不发送。只读和禁用时不提交。应用负责校验和处理提交。
+
+`view::text_area()` 或 `view::widget(TextArea::new(...))` 的 `.trailing_action(view)` 将真实操作控件装在框内右下角的 小号控件大小的槽位。编辑文本、软换行、光标和选区会为操作与计数预留相同的尾列，操作仍有独立焦点、Activate 和无障碍名称；键路径保留在字段下。命令式用 `TextArea::trailing_action(node)` 后调用 `AppContext::assemble_text_area`。
