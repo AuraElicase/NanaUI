@@ -1435,6 +1435,36 @@ mod tests {
     }
 
     #[test]
+    fn gpu_evaluate_matches_cpu_dense_keyframes() {
+        let (device, queue) = test_device();
+        let stops = (0..=64)
+            .map(|i| Keyframe {
+                offset: i as f32 / 64.0,
+                value: MotionValue::Scalar(0.5 + 0.4 * (i as f32 * 0.3).sin()),
+                easing: Some(Easing::Linear),
+            })
+            .collect();
+        let (world, scene, handle, track) = compositor_motion_scene(
+            opacity_spec(
+                MotionCurve::Easing(Easing::Linear),
+                MotionTo::Keyframes(stops),
+            ),
+            Duration::from_millis(16),
+        );
+        let times: Vec<_> = (0..=100).map(|i| Duration::from_millis(i * 4)).collect();
+        assert_cpu_gpu_eval_parity(
+            &device,
+            &queue,
+            &world,
+            &scene,
+            handle,
+            &track,
+            &times,
+            "dense keyframes",
+        );
+    }
+
+    #[test]
     fn gpu_evaluate_matches_cpu_transform_bezier() {
         let (device, queue) = test_device();
         let from = PaintTransform::default();
