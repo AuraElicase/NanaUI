@@ -71,8 +71,11 @@ impl WindowInputSource {
     pub(super) fn take_ime_apply(&mut self) -> ImeApply {
         let reset = std::mem::take(&mut self.ime_reset_pending);
         let (mut apply, session) = ime_apply(self.applied_ime.as_ref(), self.ime.as_ref());
-        if reset && let Some(session) = &session {
-            apply = ImeApply::Replace {
+        if reset
+            && !matches!(apply, ImeApply::Replace { .. })
+            && let Some(session) = &session
+        {
+            apply = ImeApply::Reset {
                 capabilities: ime_capabilities(session),
                 data: ime_request_data(session),
             };
@@ -191,6 +194,10 @@ pub(super) enum ImeApply {
         capabilities: ImeCapabilities,
         data: ImeRequestData,
     },
+    Reset {
+        capabilities: ImeCapabilities,
+        data: ImeRequestData,
+    },
     Update(ImeRequestData),
 }
 
@@ -305,6 +312,23 @@ pub(super) fn apply_text_input(window: &dyn winit::window::Window, apply: ImeApp
             let _ = window.request_ime_update(ImeRequest::Disable);
             enable_ime(window, capabilities, data);
         }
+        ImeApply::Reset { capabilities, data } => {
+            nana_window::discard_native_ime_preedit(window);
+            // AppKit's text client is now in Ground, with its input context
+            // still active. Disabling it again loses that activation across
+            // a window switch. Keep the existing session when its declared
+            // capabilities match; other platforms reset through Disable.
+            #[cfg(target_os = "macos")]
+            let disable = window
+                .ime_capabilities()
+                .is_some_and(|active| active != capabilities);
+            #[cfg(not(target_os = "macos"))]
+            let disable = true;
+            if disable {
+                let _ = window.request_ime_update(ImeRequest::Disable);
+            }
+            enable_ime(window, capabilities, data);
+        }
         ImeApply::Update(data) => {
             let _ = window.request_ime_update(ImeRequest::Update(data));
         }
@@ -412,7 +436,7 @@ mod tests {
         // Losing and regaining focus before about_to_wait must not erase
         // the cancellation, even though the requested editor is unchanged.
         source.reset_ime();
-        assert!(matches!(source.take_ime_apply(), ImeApply::Replace { .. }));
+        assert!(matches!(source.take_ime_apply(), ImeApply::Reset { .. }));
         assert_eq!(source.take_ime_apply(), ImeApply::None);
     }
 
@@ -436,8 +460,18 @@ mod tests {
             source.take_ime_apply();
         }
         first.reset_ime();
-        assert!(matches!(first.take_ime_apply(), ImeApply::Replace { .. }));
+        assert!(matches!(first.take_ime_apply(), ImeApply::Reset { .. }));
         assert_eq!(other.take_ime_apply(), ImeApply::None);
+    }
+
+    #[test]
+    fn a_focus_reset_still_replaces_a_changed_editor() {
+        let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
+        source.ime = Some(state(true, true));
+        source.take_ime_apply();
+        source.reset_ime();
+        source.ime.as_mut().unwrap().owner = 2;
+        assert!(matches!(source.take_ime_apply(), ImeApply::Replace { .. }));
     }
 
     #[test]

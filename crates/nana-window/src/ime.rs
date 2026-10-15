@@ -3,8 +3,8 @@
 
 /// Discard the text client's and AppKit's pending marked text without committing it.
 ///
-/// Call on the window event thread, before disabling or replacing the IME
-/// session. Clearing winit's marked-text buffer alone does not discard the
+/// Call on the window event thread when cancelling preedit, before any
+/// required IME disable. Clearing winit's marked-text buffer alone does not discard the
 /// input method's own buffer: Pinyin can otherwise resume invisible text
 /// after a window switch. Other backends cancel through their IME disable
 /// request and need no additional native operation here.
