@@ -770,6 +770,8 @@ pub enum StandardVisual {
         /// text input that also steps, so it reuses this visual instead of
         /// growing a second editable contract.
         steppers: bool,
+        /// Optional display-only Unicode scalar limit, excluding IME preedit.
+        character_counter: Option<usize>,
         /// 代码编辑器扩展：编译诊断 span 标记（含可选 message）。偏移由宿主
         /// 维护——文本变化后由宿主更新或清除，渲染层仅做越界钳制，不做偏移
         /// 迁移。Error/Warning 画 squiggle；有 message 时画行尾文案并可悬停。
@@ -1218,6 +1220,14 @@ pub struct ComponentTextRegion {
     pub font_weight: Option<u16>,
 }
 
+/// A trailing count label and the editor viewport it reserves. Derived from
+/// committed text, independently of selection, scroll, and IME preedit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextInputCharacterCounter {
+    pub text: ComponentTextRegion,
+    pub editor_bounds: LayoutBox,
+}
+
 /// Button chrome drawn behind a component's own trigger, so a menu can look
 /// pressable without the caller supplying a separate button node.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1526,6 +1536,7 @@ pub enum ComponentGeometry {
     },
     TextInput {
         resize_grip: Option<LayoutBox>,
+        character_counter: Option<TextInputCharacterCounter>,
         text: ComponentTextRegion,
         multiline: bool,
         /// `None` for a single-line field, whose scroll only follows its caret.

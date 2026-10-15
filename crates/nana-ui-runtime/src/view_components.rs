@@ -1959,6 +1959,8 @@ pub struct DialogToggled {
 pub struct TextInput {
     pub state: TextInputState,
     pub max_length: Option<usize>,
+    /// Show committed Unicode scalar count and this display-only limit.
+    pub character_counter: Option<usize>,
     pub label: Option<Arc<str>>,
     pub placeholder: Arc<str>,
     pub size: nana_ui_core::ControlSize,
@@ -1977,6 +1979,7 @@ impl TextInput {
         Self {
             state: TextInputState::new(Into::<String>::into(value)),
             max_length: None,
+            character_counter: None,
             label: None,
             placeholder: Arc::from(""),
             size: nana_ui_core::ControlSize::Medium,
@@ -2073,6 +2076,14 @@ impl TextInput {
         self
     }
 
+    /// Display `count/limit` inside the trailing edge of the field.
+    /// Counts committed Unicode scalar values (`chars`), excluding IME preedit.
+    /// This does not restrict edits or submission; `max_length` is independent.
+    pub fn character_counter(mut self, limit: usize) -> Self {
+        self.character_counter = Some(limit);
+        self
+    }
+
     pub(crate) fn accepts_edit_value(&self, value: &str) -> bool {
         crate::text_input_limit::accepts_value(&self.state.value, value, self.max_length)
     }
@@ -2121,6 +2132,7 @@ impl ComponentView for TextInput {
             secure: self.secure,
             invalid: self.invalid,
             steppers: false,
+            character_counter: self.character_counter,
             diagnostics: Arc::from([]),
             matches: Arc::from([]),
             color_swatches: Arc::from([]),
@@ -2483,6 +2495,7 @@ impl ComponentView for NumberInput {
             secure: false,
             invalid: self.invalid,
             steppers: true,
+            character_counter: None,
             diagnostics: Arc::from([]),
             matches: Arc::from([]),
             color_swatches: Arc::from([]),
@@ -2947,6 +2960,7 @@ impl ComponentView for TextArea {
             secure: false,
             invalid: self.invalid,
             steppers: false,
+            character_counter: None,
             diagnostics: Arc::clone(&self.diagnostics),
             matches: Arc::clone(&self.match_spans),
             color_swatches: Arc::clone(&self.color_swatches),

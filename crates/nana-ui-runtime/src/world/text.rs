@@ -6079,12 +6079,66 @@ impl UiWorld {
             })
     }
 
-    /// The box an editor's text is drawn in: its content box, less the
-    /// number steppers a numeric field keeps at its right edge. Component
-    /// geometry and pointer hits both read it, so the two agree on where the
-    /// text is.
+    /// Derive the counter from committed session text, never display/preedit text.
+    /// Chrome measurement and the text viewport share this result, so caret,
+    /// pointer probes, selection and the Scene clip reserve the same space.
+    pub(crate) fn text_input_character_counter(
+        &self,
+        id: StableNodeId,
+    ) -> Option<crate::TextInputCharacterCounter> {
+        let StandardVisual::TextInput {
+            size,
+            character_counter: Some(limit),
+            ..
+        } = self.nodes.visual(id)?
+        else {
+            return None;
+        };
+        let content = self.component_content_box(id)?;
+        let count = self.nodes.text_input(id)?.value.chars().count();
+        let label = format!("{count}/{limit}");
+        let font_size = size.caption_size();
+        let weight = self.computed_style(id)?.font_weight;
+        let measure = self.chrome_text_measure(id);
+        // Keep the editor stable throughout the normal 0..=limit range.
+        let width = measure
+            .width(&label, font_size, weight)
+            .max(measure.width(&format!("{limit}/{limit}"), font_size, weight))
+            .min(content.width);
+        let gap = 4.0;
+        Some(crate::TextInputCharacterCounter {
+            text: crate::ComponentTextRegion {
+                bounds: LayoutBox {
+                    x: content.x + content.width - width,
+                    width,
+                    ..content
+                },
+                content: label.into(),
+                color: Some(
+                    self.style_model
+                        .color(if count > *limit {
+                            nana_ui_core::SemanticColorRole::Danger
+                        } else {
+                            nana_ui_core::SemanticColorRole::Muted
+                        })
+                        .as_rgba_array(),
+                ),
+                font_size,
+                font_weight: weight,
+            },
+            editor_bounds: LayoutBox {
+                width: (content.width - width - gap).max(0.0),
+                ..content
+            },
+        })
+    }
+
+    /// The box an editor's text is drawn and hit in, less trailing chrome.
     pub(crate) fn text_input_text_box(&self, id: StableNodeId) -> Option<LayoutBox> {
         let (content, _) = self.text_input_pointer_context(id)?;
+        if let Some(counter) = self.text_input_character_counter(id) {
+            return Some(counter.editor_bounds);
+        }
         let Some(StandardVisual::TextInput {
             size,
             steppers: true,
