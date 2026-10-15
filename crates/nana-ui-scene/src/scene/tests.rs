@@ -11189,3 +11189,62 @@ fn an_assembled_toast_paints_no_text_regions_of_its_own() {
         "no text at all on the toast node"
     );
 }
+
+#[test]
+fn static_and_empty_glyph_effect_slots_do_not_request_looping_frames() {
+    use nana_ui_core::{
+        GlyphEffect, GlyphEffectChain, GlyphIntro, GlyphPresentation, RevealSchedule,
+        RichSpanStyle, RichText,
+    };
+    let text = RichText::new("静止").with_span(0..6, RichSpanStyle::new().effect(0));
+    assert!(
+        SceneGlyphPresentation::new(
+            text.text(),
+            Some(&text),
+            &GlyphPresentation::new(vec![GlyphEffect::shake(0.0)], None)
+        )
+        .is_none()
+    );
+    assert!(
+        SceneGlyphPresentation::new(
+            text.text(),
+            Some(&text),
+            &GlyphPresentation::chains(vec![GlyphEffectChain::default()], None)
+        )
+        .is_none()
+    );
+    let reveal =
+        RevealSchedule::uniform(std::time::Duration::ZERO, 2, 0.1).intro(GlyphIntro::fade(0.2));
+    let end = reveal.end();
+    let scene = SceneGlyphPresentation::new(
+        text.text(),
+        Some(&text),
+        &GlyphPresentation::chains(vec![GlyphEffectChain::default()], Some(reveal)),
+    )
+    .unwrap();
+    assert_eq!(scene.live_until(), Some(end));
+    let scene = SceneGlyphPresentation::new(
+        text.text(),
+        Some(&text),
+        &GlyphPresentation::chains(
+            vec![GlyphEffectChain::new(vec![
+                GlyphEffect::wave(2.0),
+                GlyphEffect::rainbow(),
+            ])],
+            None,
+        ),
+    )
+    .unwrap();
+    assert_eq!(scene.effects_of(0).len(), 2);
+    assert_eq!(scene.live_until(), None);
+}
+
+#[test]
+fn frozen_glyph_effect_keeps_its_pose_without_looping_frames() {
+    use nana_ui_core::{GlyphEffect, GlyphPresentation, RichSpanStyle, RichText};
+    let text = RichText::new("文字").with_span(0..6, RichSpanStyle::new().effect(0));
+    let presentation = GlyphPresentation::new(vec![GlyphEffect::wave(2.0).frequency(0.0)], None);
+    let scene = SceneGlyphPresentation::new(text.text(), Some(&text), &presentation).unwrap();
+    assert_eq!(scene.live_until(), Some(std::time::Duration::ZERO));
+    assert_eq!(scene.effects_of(1).len(), 1);
+}
