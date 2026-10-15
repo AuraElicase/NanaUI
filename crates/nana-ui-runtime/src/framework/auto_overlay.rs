@@ -235,11 +235,13 @@ impl AppContext {
     ) -> bool {
         let stage = self.world.parent_id(bar).unwrap_or(bar);
         // Captured events keep their original target even outside the stage.
-        // Geometry must reject those samples before considering ancestry.
+        // Compare in layout coordinates so ancestor scrolling and transforms
+        // follow the same projection as hit testing.
         if !self
             .world
-            .layout_box(stage)
-            .is_some_and(|frame| frame.contains(x, y))
+            .pointer_layout_position(stage, x, y)
+            .zip(self.world.layout_box(stage))
+            .is_some_and(|((x, y), frame)| frame.contains(x, y))
         {
             return false;
         }
