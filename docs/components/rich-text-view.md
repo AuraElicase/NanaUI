@@ -251,3 +251,10 @@ widget(RichTextView::new(RichText::new("欢迎来到直播间")))
 ## 参见
 
 [Text](text.md) · [总览](index.md) · [文本引擎](../reference/text-engine.md#富文本-span)
+
+
+### 组合效果
+
+`GlyphEffectChain::new(vec![GlyphEffect::wave(3.0), GlyphEffect::rainbow()])` 组合一段文字的持续效果。使用 `RichTextView::presentation_chains(chains, reveal)` 或 `AppContext::set_rich_presentation_chains(node, chains, reveal)`，span 的 `effect` 索引指向 chain 表。原来的 `presentation` / `set_rich_presentation` 单效果 API 保持可用。
+
+位移相加、缩放和透明度相乘，最后一个颜色效果提供文字颜色。CPU 行内对象求值使用 `evaluate_glyph_chain`，与文字 Shader 相同。空 chain、零幅度或非有限参数不构成持续动画；零频率保留静止姿态但不请求持续帧；只有 reveal 时在有限入场结束后停止请求帧。`GlyphEffect::flicker()` 保持原本亮度，非默认 amplitude 则控制闪烁强度。

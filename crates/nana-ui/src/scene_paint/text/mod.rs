@@ -3494,7 +3494,18 @@ fn pack_glyph_fx(fx: &mut Vec<u32>, presentation: &SceneGlyphPresentation) -> u3
         nana_ui_core::GlyphEasing::BackOut => 2,
     };
     let effects_at = at + HEADER;
-    let clusters_at = effects_at + presentation.effects.len() * 4;
+    let chain_count = presentation.chain_count();
+    let effect_words: usize = (0..chain_count)
+        .map(|i| {
+            presentation
+                .chain(i)
+                .iter()
+                .filter(|effect| effect.is_effective())
+                .count()
+                * 4
+        })
+        .sum();
+    let clusters_at = effects_at + chain_count * 2 + effect_words;
     fx.extend_from_slice(&[
         flags,
         clusters as u32,
@@ -3506,10 +3517,23 @@ fn pack_glyph_fx(fx: &mut Vec<u32>, presentation: &SceneGlyphPresentation) -> u3
         intro.duration_s.max(0.0).to_bits(),
         effects_at as u32,
         clusters_at as u32,
-        presentation.effects.len() as u32,
+        chain_count as u32,
         0,
     ]);
-    for effect in presentation.effects.iter() {
+    let mut next = effects_at + chain_count * 2;
+    for i in 0..chain_count {
+        let count = presentation
+            .chain(i)
+            .iter()
+            .filter(|effect| effect.is_effective())
+            .count();
+        fx.extend_from_slice(&[next as u32, count as u32]);
+        next += count * 4;
+    }
+    for effect in (0..chain_count)
+        .flat_map(|i| presentation.chain(i))
+        .filter(|effect| effect.is_effective())
+    {
         let kind = match effect.kind {
             nana_ui_core::GlyphEffectKind::Shake => 0u32,
             nana_ui_core::GlyphEffectKind::Wave => 1,
@@ -5045,6 +5069,7 @@ mod tests {
     ) -> Arc<SceneGlyphPresentation> {
         Arc::new(SceneGlyphPresentation {
             effects: effects.into(),
+            effect_chains: Arc::from([]),
             cluster_effects: cluster_effects.into(),
             reveal,
         })
@@ -5101,6 +5126,23 @@ mod tests {
             expected.offset[1]
         );
         assert_eq!(moved.0, still.0, "a wave only moves it up and down");
+
+        let chain = Arc::new(SceneGlyphPresentation {
+            effects: Arc::from([]),
+            effect_chains: vec![nana_ui_core::GlyphEffectChain::new(vec![
+                wave,
+                nana_ui_core::GlyphEffect::rainbow(),
+            ])]
+            .into(),
+            cluster_effects: vec![0].into(),
+            reveal: None,
+        });
+        let composed = paint_presented(&device, &queue, &mut pipeline, Some(&chain), crest)
+            .expect("combined effects draw");
+        assert_eq!(
+            composed, moved,
+            "rainbow preserves the wave geometry on the GPU"
+        );
 
         let reveal =
             nana_ui_core::RevealSchedule::new(std::time::Duration::from_secs(10), vec![0.5]);
