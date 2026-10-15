@@ -37,8 +37,8 @@ pub use eval::{
     retarget_track,
 };
 pub use glyph::{
-    GlyphEasing, GlyphEffect, GlyphEffectKind, GlyphIntro, GlyphPresentation, GlyphSample,
-    RevealSchedule, evaluate_glyph,
+    GlyphEasing, GlyphEffect, GlyphEffectChain, GlyphEffectKind, GlyphIntro, GlyphPresentation,
+    GlyphSample, RevealSchedule, evaluate_glyph, evaluate_glyph_chain,
 };
 pub use gpu::{
     MOTION_GPU_CURVE_DECAY, MOTION_GPU_CURVE_EASING, MOTION_GPU_CURVE_SPRING,

@@ -627,6 +627,7 @@ impl SceneTextEffects {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneGlyphPresentation {
     pub effects: Arc<[nana_ui_core::GlyphEffect]>,
+    pub effect_chains: Arc<[nana_ui_core::GlyphEffectChain]>,
     /// Effect index per grapheme of the content; `u16::MAX` for none. Empty
     /// when no grapheme plays an effect.
     pub cluster_effects: Arc<[u16]>,
@@ -644,18 +645,27 @@ impl SceneGlyphPresentation {
         use unicode_segmentation::UnicodeSegmentation;
         let mut any = false;
         let cluster_effects: Vec<u16> = match rich.filter(|rich| rich.text() == content) {
-            Some(rich) if !presentation.effects.is_empty() => content
-                .grapheme_indices(true)
-                .map(
-                    |(offset, _)| match rich.style_at(offset).and_then(|style| style.effect) {
-                        Some(effect) if usize::from(effect) < presentation.effects.len() => {
-                            any = true;
-                            effect
-                        }
-                        _ => u16::MAX,
-                    },
-                )
-                .collect(),
+            Some(rich)
+                if !presentation.effects.is_empty() || !presentation.effect_chains.is_empty() =>
+            {
+                content
+                    .grapheme_indices(true)
+                    .map(
+                        |(offset, _)| match rich.style_at(offset).and_then(|style| style.effect) {
+                            Some(effect)
+                                if presentation
+                                    .effect_chain(usize::from(effect))
+                                    .iter()
+                                    .any(nana_ui_core::GlyphEffect::is_effective) =>
+                            {
+                                any = true;
+                                effect
+                            }
+                            _ => u16::MAX,
+                        },
+                    )
+                    .collect()
+            }
             _ => Vec::new(),
         };
         if !any && presentation.reveal.is_none() {
@@ -663,6 +673,7 @@ impl SceneGlyphPresentation {
         }
         Some(Arc::new(Self {
             effects: Arc::clone(&presentation.effects),
+            effect_chains: Arc::clone(&presentation.effect_chains),
             cluster_effects: if any {
                 cluster_effects.into()
             } else {
@@ -674,18 +685,61 @@ impl SceneGlyphPresentation {
 
     /// Until when it changes what is drawn; `None` while an effect loops.
     pub fn live_until(&self) -> Option<std::time::Duration> {
-        if !self.cluster_effects.is_empty() {
+        if self
+            .cluster_effects
+            .iter()
+            .filter(|index| **index != u16::MAX)
+            .any(|index| {
+                self.chain(usize::from(*index))
+                    .iter()
+                    .any(nana_ui_core::GlyphEffect::is_animated)
+            })
+        {
             return None;
         }
-        self.reveal.as_ref().map(nana_ui_core::RevealSchedule::end)
+        Some(
+            self.reveal
+                .as_ref()
+                .map_or(std::time::Duration::ZERO, nana_ui_core::RevealSchedule::end),
+        )
+    }
+
+    pub fn effects_of(&self, ordinal: usize) -> &[nana_ui_core::GlyphEffect] {
+        let Some(index) = self
+            .cluster_effects
+            .get(ordinal)
+            .filter(|index| **index != u16::MAX)
+        else {
+            return &[];
+        };
+        self.chain(usize::from(*index))
+    }
+
+    pub fn chain(&self, index: usize) -> &[nana_ui_core::GlyphEffect] {
+        if self.effect_chains.is_empty() {
+            self.effects
+                .get(index)
+                .map(std::slice::from_ref)
+                .unwrap_or(&[])
+        } else {
+            self.effect_chains
+                .get(index)
+                .map(|chain| chain.0.as_ref())
+                .unwrap_or(&[])
+        }
+    }
+
+    pub fn chain_count(&self) -> usize {
+        if self.effect_chains.is_empty() {
+            self.effects.len()
+        } else {
+            self.effect_chains.len()
+        }
     }
 
     /// The effect grapheme `ordinal` plays.
     pub fn effect_of(&self, ordinal: usize) -> Option<&nana_ui_core::GlyphEffect> {
-        self.cluster_effects
-            .get(ordinal)
-            .filter(|index| **index != u16::MAX)
-            .and_then(|index| self.effects.get(usize::from(*index)))
+        self.effects_of(ordinal).first()
     }
 }
 
@@ -2396,8 +2450,8 @@ impl UiScene {
         let mut moved = false;
         for (node, (presentation, objects)) in &self.glyph_objects {
             for object in objects.iter() {
-                let sample = nana_ui_core::evaluate_glyph(
-                    presentation.effect_of(object.ordinal as usize),
+                let sample = nana_ui_core::evaluate_glyph_chain(
+                    presentation.effects_of(object.ordinal as usize),
                     presentation.reveal.as_ref(),
                     object.ordinal,
                     now,

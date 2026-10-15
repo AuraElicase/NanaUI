@@ -155,31 +155,37 @@ fn glyph_look(fx: u32, ordinal: u32) -> GlyphLook {
     }
     let effect_count = text_glyph_fx[fx + 10u];
     if (flags & 2u) != 0u && effect_index < effect_count {
-        let base = text_glyph_fx[fx + 8u] + effect_index * 4u;
-        let kind = text_glyph_fx[base];
-        let amplitude = bitcast<f32>(text_glyph_fx[base + 1u]);
-        let frequency = bitcast<f32>(text_glyph_fx[base + 2u]);
-        let stagger = bitcast<f32>(text_glyph_fx[base + 3u]);
-        let clock = bitcast<f32>(globals.motion.z);
-        let phase = clock * frequency - f32(ordinal) * stagger;
-        let tau = 6.2831855;
-        if kind == 0u {
-            let step = u32(i32(floor(clock * frequency)));
-            let seed = glyph_hash((ordinal * 0x9e3779b9u) ^ step);
-            look.offset.x = look.offset.x + (glyph_unit(seed) * 2.0 - 1.0) * amplitude;
-            look.offset.y = look.offset.y + (glyph_unit(glyph_hash(seed)) * 2.0 - 1.0) * amplitude;
-        } else if kind == 1u {
-            look.offset.y = look.offset.y - amplitude * sin(tau * phase);
-        } else if kind == 2u {
-            look.offset.y = look.offset.y - amplitude * abs(sin(3.1415927 * phase));
-        } else if kind == 3u {
-            look.color = vec4<f32>(glyph_rainbow(phase), 1.0);
-        } else if kind == 4u {
-            look.scale = look.scale * (1.0 + amplitude * (0.5 + 0.5 * sin(tau * phase)));
-        } else if kind == 5u {
-            let step = u32(i32(floor(clock * frequency)));
-            if glyph_unit(glyph_hash((ordinal * 0x85ebca6bu) ^ step)) < 0.2 {
-                look.alpha = look.alpha * 0.35;
+        let chain = text_glyph_fx[fx + 8u] + effect_index * 2u;
+        let chain_base = text_glyph_fx[chain];
+        let chain_count = text_glyph_fx[chain + 1u];
+        for (var i = 0u; i < chain_count; i = i + 1u) {
+            let base = chain_base + i * 4u;
+            let kind = text_glyph_fx[base];
+            let amplitude = bitcast<f32>(text_glyph_fx[base + 1u]);
+            let frequency = bitcast<f32>(text_glyph_fx[base + 2u]);
+            let stagger = bitcast<f32>(text_glyph_fx[base + 3u]);
+            if amplitude == 0.0 { continue; }
+            let clock = bitcast<f32>(globals.motion.z);
+            let phase = clock * frequency - f32(ordinal) * stagger;
+            let tau = 6.2831855;
+            if kind == 0u {
+                let step = u32(i32(floor(clock * frequency)));
+                let seed = glyph_hash((ordinal * 0x9e3779b9u) ^ step);
+                look.offset.x = look.offset.x + (glyph_unit(seed) * 2.0 - 1.0) * amplitude;
+                look.offset.y = look.offset.y + (glyph_unit(glyph_hash(seed)) * 2.0 - 1.0) * amplitude;
+            } else if kind == 1u {
+                look.offset.y = look.offset.y - amplitude * sin(tau * phase);
+            } else if kind == 2u {
+                look.offset.y = look.offset.y - amplitude * abs(sin(3.1415927 * phase));
+            } else if kind == 3u {
+                look.color = vec4<f32>(glyph_rainbow(phase), 1.0);
+            } else if kind == 4u {
+                look.scale = look.scale * (1.0 + amplitude * (0.5 + 0.5 * sin(tau * phase)));
+            } else if kind == 5u {
+                let step = u32(i32(floor(clock * frequency)));
+                if glyph_unit(glyph_hash((ordinal * 0x85ebca6bu) ^ step)) < 0.2 {
+                    look.alpha = look.alpha * (1.0 - 0.65 * clamp(amplitude, 0.0, 1.0));
+                }
             }
         }
     }
