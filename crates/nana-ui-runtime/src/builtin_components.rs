@@ -650,6 +650,7 @@ impl RegisterableComponent for TextInput {
             .read_only(spec.read_only)
             .secure(spec.secure)
             .invalid(spec.invalid);
+        component.character_counter = spec.attr("character-counter").and_then(|v| v.parse().ok());
         component.state = TextInputState::new(spec.value);
         if !spec.label.is_empty() {
             component = component.label(Arc::<str>::from(spec.label));
@@ -3924,6 +3925,20 @@ mod tests {
         assert_eq!(page.content, Some(content));
         assert_eq!(page.model.tabs().len(), 1);
         assert_eq!(page.model.tabs()[0].id().as_str(), "appearance");
+    }
+
+    #[test]
+    fn text_input_semantic_character_counter_is_optional_and_display_only() {
+        let type_id = ComponentTypeId::new("nana.text-input").unwrap();
+        let layout = Arc::new(LayoutStyle::default());
+        let attrs = [("character-counter", "2")];
+        let spec = spec_with(&type_id, &layout, &attrs, &[], &[], "你好😀", "");
+        let input = TextInput::from_semantic(&spec);
+        assert_eq!(input.character_counter, Some(2));
+        assert_eq!(input.max_length, None);
+        assert_eq!(input.state.value, "你好😀");
+        let spec = spec_with(&type_id, &layout, &[], &[], &[], "", "");
+        assert_eq!(TextInput::from_semantic(&spec).character_counter, None);
     }
 
     #[test]

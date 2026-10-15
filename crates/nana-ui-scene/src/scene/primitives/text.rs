@@ -16,10 +16,37 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
             selection,
             selection_color,
             steppers,
+            character_counter,
             resize_grip,
             ..
         }) => {
             let scroll = EditorScroll(*scroll);
+            if let Some(counter) = character_counter {
+                // Dedicated slot: 10 belongs to multiline indent guides.
+                let mut counter_clips = clips.to_vec();
+                counter_clips.push(ClipRegion {
+                    bounds: scene_rect(counter.text.bounds),
+                    transform,
+                    corner_radius: 0.0,
+                    polygon_clip: None,
+                });
+                let mut primitive = component_text_primitive(
+                    id,
+                    26,
+                    &counter.text,
+                    TextHorizontalAlignment::End,
+                    false,
+                    node,
+                    transform,
+                    counter_clips.into(),
+                    opacity,
+                    node_order,
+                );
+                if let ScenePrimitiveKind::Text { opentype, .. } = &mut primitive.kind {
+                    opentype.writing_mode = nana_ui_core::WritingModeSpec::HorizontalTb;
+                }
+                emit(primitive);
+            }
             if let Some(grip) = resize_grip {
                 emit(visual_quad_batch(
                     &VisualPrimitiveContext {

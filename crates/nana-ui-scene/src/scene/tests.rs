@@ -531,6 +531,7 @@ fn text_input_clip_em_padding_uses_computed_font_size() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -543,6 +544,7 @@ fn text_input_clip_em_padding_uses_computed_font_size() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -2386,6 +2388,7 @@ fn editor_input_with_markers_and_line_labels() -> ExtractedNode {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -2398,6 +2401,7 @@ fn editor_input_with_markers_and_line_labels() -> ExtractedNode {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -2689,6 +2693,7 @@ fn text_input_match_markers_paint_as_batches_and_current_match_emphasizes() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -2701,6 +2706,7 @@ fn text_input_match_markers_paint_as_batches_and_current_match_emphasizes() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -2840,6 +2846,7 @@ fn text_input_color_swatches_paint_as_one_per_item_color_batch_and_clear_with_fe
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -2852,6 +2859,7 @@ fn text_input_color_swatches_paint_as_one_per_item_color_batch_and_clear_with_fe
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -2968,6 +2976,7 @@ fn text_input_minimap_paints_panel_bars_and_indicator_batches() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -2980,6 +2989,7 @@ fn text_input_minimap_paints_panel_bars_and_indicator_batches() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -3151,6 +3161,7 @@ fn occurrence_whitespace_and_wrap_guides_paint_in_dedicated_slots() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -3163,6 +3174,7 @@ fn occurrence_whitespace_and_wrap_guides_paint_in_dedicated_slots() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -3344,6 +3356,7 @@ fn text_input_without_editor_extras_paints_no_occurrence_whitespace_or_wrap_slot
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -3356,6 +3369,7 @@ fn text_input_without_editor_extras_paints_no_occurrence_whitespace_or_wrap_slot
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -3436,6 +3450,7 @@ fn git_gutter_input(node_id: u64, git: nana_ui_runtime::TextGitGutterGeometry) -
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -3448,6 +3463,7 @@ fn git_gutter_input(node_id: u64, git: nana_ui_runtime::TextGitGutterGeometry) -
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -3782,6 +3798,7 @@ fn fold_gutter_marks_paint_as_two_batches_and_survive_beyond_the_slot_cap() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -3794,6 +3811,7 @@ fn fold_gutter_marks_paint_as_two_batches_and_survive_beyond_the_slot_cap() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -3937,6 +3955,7 @@ fn tab_arrows_paint_as_one_batch_and_survive_beyond_the_slot_cap() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -3949,6 +3968,7 @@ fn tab_arrows_paint_as_one_batch_and_survive_beyond_the_slot_cap() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -4056,6 +4076,7 @@ fn text_input_paints_additional_cursors_as_a_batch_beside_the_primary_caret() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -4068,6 +4089,7 @@ fn text_input_paints_additional_cursors_as_a_batch_beside_the_primary_caret() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -4180,6 +4202,7 @@ fn text_input_editor_chrome_paints_caret_line_brackets_and_indent_guides() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -4192,6 +4215,7 @@ fn text_input_editor_chrome_paints_caret_line_brackets_and_indent_guides() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -4371,6 +4395,7 @@ fn text_input_geometry_paints_selection_text_caret_preedit_and_focus_in_order() 
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -4383,6 +4408,7 @@ fn text_input_geometry_paints_selection_text_caret_preedit_and_focus_in_order() 
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -4496,6 +4522,7 @@ fn text_input_geometry_paints_selection_text_caret_preedit_and_focus_in_order() 
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -4527,6 +4554,7 @@ fn text_input_geometry_paints_selection_text_caret_preedit_and_focus_in_order() 
 fn input_component_geometry(multiline: bool) -> Option<Box<ComponentGeometry>> {
     Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline,
         scroll: None,
         text: nana_ui_runtime::ComponentTextRegion {
@@ -8784,6 +8812,7 @@ fn completion_and_hover_overlays_paint_above_editor_layers() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -8809,6 +8838,7 @@ fn completion_and_hover_overlays_paint_above_editor_layers() {
     };
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: text_region("fn", LayoutBox::default()),
@@ -8959,6 +8989,7 @@ fn completion_doc_rows_and_hover_overlay_coexist_without_slot_clashes() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -8984,6 +9015,7 @@ fn completion_doc_rows_and_hover_overlay_coexist_without_slot_clashes() {
     };
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: text_region("fn", LayoutBox::default()),
@@ -9133,6 +9165,7 @@ fn text_input_main_text_region_keeps_display_space_spans_but_labels_do_not() {
         secure: false,
         invalid: false,
         steppers: false,
+        character_counter: None,
         diagnostics: Arc::from([]),
         matches: Arc::from([]),
         color_swatches: Arc::from([]),
@@ -9145,6 +9178,7 @@ fn text_input_main_text_region_keeps_display_space_spans_but_labels_do_not() {
     });
     input.component_geometry = Some(Box::new(ComponentGeometry::TextInput {
         resize_grip: None,
+        character_counter: None,
         multiline: true,
         scroll: None,
         text: text_region(display),
@@ -11187,5 +11221,128 @@ fn an_assembled_toast_paints_no_text_regions_of_its_own() {
             .primitives()
             .all(|primitive| !matches!(primitive.kind, ScenePrimitiveKind::Text { .. })),
         "no text at all on the toast node"
+    );
+}
+
+#[test]
+fn character_counter_paints_outside_the_shared_editor_clip_and_updates_incrementally() {
+    let mut input = node(1, None, &[]);
+    input.standard_visual = Some(StandardVisual::TextInput {
+        placeholder: Arc::from(""),
+        size: nana_ui_core::ControlSize::Medium,
+        secure: false,
+        invalid: false,
+        steppers: false,
+        character_counter: Some(40),
+        diagnostics: Arc::from([]),
+        matches: Arc::from([]),
+        color_swatches: Arc::from([]),
+        atoms: Arc::from([]),
+        line_numbers: false,
+        indent_guides: None,
+        folds: Arc::from([]),
+        git_marks: Arc::from([]),
+        editor_options: nana_ui_runtime::TextEditorRenderOptions::default(),
+    });
+    input.component_geometry = input_component_geometry(false);
+    let editor_bounds = LayoutBox {
+        x: 8.0,
+        y: 4.0,
+        width: 40.0,
+        height: 24.0,
+    };
+    let label_bounds = LayoutBox {
+        x: 52.0,
+        y: 4.0,
+        width: 40.0,
+        height: 24.0,
+    };
+    let Some(ComponentGeometry::TextInput {
+        character_counter,
+        selection,
+        caret,
+        preedit,
+        ..
+    }) = input.component_geometry.as_deref_mut()
+    else {
+        unreachable!();
+    };
+    *character_counter = Some(nana_ui_runtime::TextInputCharacterCounter {
+        text: ComponentTextRegion {
+            bounds: label_bounds,
+            content: "40/40".into(),
+            color: Some([0.5, 0.5, 0.5, 1.0]),
+            font_size: 11.0,
+            font_weight: None,
+        },
+        editor_bounds,
+    });
+    *selection = vec![LayoutBox {
+        width: 100.0,
+        ..editor_bounds
+    }];
+    *caret = Some(LayoutBox {
+        width: 1.0,
+        ..editor_bounds
+    });
+    *preedit = vec![LayoutBox {
+        width: 100.0,
+        ..editor_bounds
+    }];
+    let mut scene = UiScene::new();
+    scene.apply_delta([input.clone()], []);
+    for slot in [1, 2, 4, 5] {
+        let primitive = scene.primitive(PrimitiveId { node: id(1), slot }).unwrap();
+        assert_eq!(
+            primitive.clips.last().unwrap().bounds,
+            scene_rect(editor_bounds)
+        );
+    }
+    let primitive = scene
+        .primitive(PrimitiveId {
+            node: id(1),
+            slot: 26,
+        })
+        .unwrap();
+    assert_eq!(primitive.bounds, scene_rect(label_bounds));
+    assert_eq!(
+        primitive.clips.last().unwrap().bounds,
+        scene_rect(label_bounds)
+    );
+    assert!(
+        matches!(&primitive.kind, ScenePrimitiveKind::Text { content, .. } if content == "40/40")
+    );
+    if let Some(ComponentGeometry::TextInput {
+        character_counter: Some(counter),
+        ..
+    }) = input.component_geometry.as_deref_mut()
+    {
+        counter.text.content = "41/40".into();
+        counter.text.color = Some([1.0, 0.0, 0.0, 1.0]);
+    }
+    scene.apply_delta([input.clone()], []);
+    let primitive = scene
+        .primitive(PrimitiveId {
+            node: id(1),
+            slot: 26,
+        })
+        .unwrap();
+    assert!(
+        matches!(&primitive.kind, ScenePrimitiveKind::Text { content, color: Some(color), .. } if content == "41/40" && color.to_srgb() == [1.0,0.0,0.0,1.0])
+    );
+    if let Some(ComponentGeometry::TextInput {
+        character_counter, ..
+    }) = input.component_geometry.as_deref_mut()
+    {
+        *character_counter = None;
+    }
+    scene.apply_delta([input], []);
+    assert!(
+        scene
+            .primitive(PrimitiveId {
+                node: id(1),
+                slot: 26
+            })
+            .is_none()
     );
 }

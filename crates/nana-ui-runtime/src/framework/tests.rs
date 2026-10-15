@@ -12453,3 +12453,176 @@ fn a_live_region_survives_its_component_projecting_its_own_state() {
     assert_eq!(projected.label.as_deref(), Some("Exported"));
     assert_eq!(projected.live, Some(crate::AccessibilityLive::Polite));
 }
+
+#[test]
+fn character_counter_tracks_committed_unicode_edits_without_limiting_them() {
+    let mut cx = AppContext::new();
+    let doc = DocumentId::new(1).unwrap();
+    let input = cx
+        .create_component(doc, TextInput::new("").character_counter(4))
+        .unwrap();
+    let node = input.stable_id();
+    let mut layout = MutationQueue::new();
+    layout.write_layout(
+        node,
+        crate::LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 180.0,
+            height: 32.0,
+        },
+    );
+    cx.commit_mutations(layout).unwrap();
+    cx.focus_node(doc, node).unwrap();
+    let counter = |cx: &mut AppContext| {
+        cx.resolve_styles(&[node]).unwrap();
+        cx.shape_text(&[node], &mut crate::MeasureTextShaper)
+            .unwrap();
+        match cx.world().component_geometry(node).unwrap() {
+            crate::ComponentGeometry::TextInput {
+                character_counter: Some(counter),
+                ..
+            } => counter,
+            other => panic!("missing counter: {other:?}"),
+        }
+    };
+    let empty = counter(&mut cx);
+    assert_eq!(empty.text.content, "0/4");
+    assert!(cx.paste_focused_text(doc, "中a😀 ").unwrap());
+    let exact = counter(&mut cx);
+    assert_eq!(exact.text.content, "4/4");
+    assert_eq!(exact.editor_bounds, empty.editor_bounds);
+    assert_eq!(exact.text.color, empty.text.color);
+    cx.set_ime_preedit(doc, "预编辑".into(), None).unwrap();
+    assert_eq!(counter(&mut cx).text.content, "4/4");
+    assert!(cx.commit_ime(doc, "👨‍👩").unwrap());
+    let over = counter(&mut cx);
+    assert_eq!(over.text.content, "7/4");
+    assert_ne!(over.text.color, exact.text.color);
+    assert!(cx.delete_focused_text_backward(doc).unwrap());
+    assert_eq!(counter(&mut cx).text.content, "4/4");
+    cx.select_all_focused_text(doc).unwrap();
+    cx.replace_focused_text(doc, "").unwrap();
+    assert_eq!(counter(&mut cx).text.content, "0/4");
+    // A separately requested UTF-16 editing cap remains independent.
+    cx.update_component(input, |input, _| input.max_length = Some(2))
+        .unwrap();
+    cx.paste_focused_text(doc, "😀abc").unwrap();
+    assert_eq!(cx.world().text(node), Some("😀"));
+    assert_eq!(counter(&mut cx).text.content, "1/4");
+}
+
+#[test]
+fn character_counter_reserves_the_editor_frame_for_scroll_pointer_and_ime() {
+    let mut cx = AppContext::new();
+    let doc = DocumentId::new(1).unwrap();
+    let value = "abcdefghijklmnopqrstuvwx";
+    let input = cx
+        .create_component(doc, TextInput::new(value).character_counter(40))
+        .unwrap();
+    let node = input.stable_id();
+    let mut layout = MutationQueue::new();
+    layout.write_layout(
+        node,
+        crate::LayoutBox {
+            x: 10.0,
+            y: 20.0,
+            width: 150.0,
+            height: 32.0,
+        },
+    );
+    cx.commit_mutations(layout).unwrap();
+    cx.focus_node(doc, node).unwrap();
+    cx.resolve_styles(&[node]).unwrap();
+    cx.shape_text(&[node], &mut crate::MeasureTextShaper)
+        .unwrap();
+    let (counter, text, caret) = match cx.world().component_geometry(node).unwrap() {
+        crate::ComponentGeometry::TextInput {
+            character_counter: Some(counter),
+            text,
+            caret: Some(caret),
+            ..
+        } => (counter, text, caret),
+        other => panic!("missing editor geometry: {other:?}"),
+    };
+    let end = counter.editor_bounds.x + counter.editor_bounds.width;
+    assert!(end < counter.text.bounds.x);
+    assert!(caret.x <= end);
+    assert!(
+        text.bounds.x < counter.editor_bounds.x,
+        "long committed text scrolls"
+    );
+    assert_eq!(
+        cx.world().text_input_text_box(node),
+        Some(counter.editor_bounds)
+    );
+    // Clicking beside the displayed caret resolves to the end, even though
+    // the counter removed width from the full field content box.
+    cx.text_editor_pointer_press(
+        doc,
+        node,
+        1,
+        caret.x,
+        caret.y + 2.0,
+        false,
+        false,
+        std::time::Duration::ZERO,
+        &mut crate::MeasureTextShaper,
+    )
+    .unwrap();
+    cx.text_editor_pointer_release(1);
+    assert_eq!(
+        cx.world().text_input(node).unwrap().selection.focus,
+        value.len()
+    );
+    cx.set_ime_preedit(doc, "很长的预编辑文字".into(), None)
+        .unwrap();
+    cx.shape_text(&[node], &mut crate::MeasureTextShaper)
+        .unwrap();
+    let crate::ComponentGeometry::TextInput {
+        caret: Some(ime_caret),
+        character_counter: Some(ime_counter),
+        preedit,
+        ..
+    } = cx.world().component_geometry(node).unwrap()
+    else {
+        panic!("missing IME geometry");
+    };
+    assert_eq!(ime_counter.editor_bounds, counter.editor_bounds);
+    assert!(ime_caret.x <= end);
+    assert!(!preedit.is_empty());
+    cx.clear_ime(doc).unwrap();
+    cx.update_component(input, |input, _| input.character_counter = None)
+        .unwrap();
+    assert!(matches!(
+        cx.world().component_geometry(node),
+        Some(crate::ComponentGeometry::TextInput {
+            character_counter: None,
+            ..
+        })
+    ));
+    assert!(cx.world().text_input_text_box(node).unwrap().width > counter.editor_bounds.width);
+    cx.update_component(input, |input, _| input.character_counter = Some(40))
+        .unwrap();
+    let mut layout = MutationQueue::new();
+    layout.write_layout(
+        node,
+        crate::LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 20.0,
+            height: 32.0,
+        },
+    );
+    cx.commit_mutations(layout).unwrap();
+    let crate::ComponentGeometry::TextInput {
+        character_counter: Some(narrow),
+        ..
+    } = cx.world().component_geometry(node).unwrap()
+    else {
+        panic!("missing narrow counter");
+    };
+    assert_eq!(narrow.editor_bounds.width, 0.0);
+    assert!(narrow.text.bounds.width >= 0.0);
+    assert!(narrow.text.bounds.x.is_finite());
+}

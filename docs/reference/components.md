@@ -230,6 +230,10 @@ if let Some(first) = validity.first_invalid() {
 
 `TextInput` / `TextArea` 持有已提交的 UTF-8、选区和 IME preedit。它们是视图侧编辑模型。撤销由 Runtime 提供（见下）。文档 revision、冲突与持久化仍由应用拥有。可选 feature `syntax-highlighting` 在同一 `TextArea` 上启用名为 `"highlight"` 的 presenter。不另造一套编辑器。
 
+`TextInput::character_counter(limit)` 可选在框内右侧显示已提交 Unicode 标量数与上限；
+超限使用危险色，IME 预编辑不计入，编辑区域自动避让。计数与 `max_length` 的 UTF-16 编辑硬限制独立，
+不限制输入或提交，业务门控由消费方负责。见 [TextInput](../components/text-input.md#字数计数)。
+
 Rust `TextArea::read_only(true)` 保留焦点、光标/选区、查找和复制。拒绝修改、替换、剪切及粘贴。它与 `disabled(true)` 不同。禁用控件不参与这些交互。运行时切换为只读会结束未提交的 IME 组合，并拒绝此前开始的文本拖放写入。程序仍可通过组件更新提供新的权威文本。`HostedTextarea` 转发同一属性。语义构造属性为 `readOnly`。应用显示只读文档时应使用此属性。而不是以禁用样式替代只读状态。
 
 ### 统一编辑入口与撤销
