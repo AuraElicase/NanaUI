@@ -967,6 +967,16 @@ fn layer_snapshot(
         }
     }
     for track_id in &node.compositor.bindings {
+        // Extracted nodes may outlive a completed presence track: stopping
+        // compositor motion does not require a style/layout extraction.
+        // A stale binding must not keep its layer eligible forever.
+        if store.get(*track_id).is_none()
+            && descriptors
+                .and_then(|store| store.handle_for(*track_id))
+                .is_none()
+        {
+            continue;
+        }
         if !bindings.iter().any(|binding| binding.track_id == *track_id) {
             bindings.push(CompositorMotionBinding::from_track(*track_id, descriptors));
         }
@@ -1554,6 +1564,23 @@ mod tests {
             scene.compositor_layer(id(1)).is_none(),
             "120ms after empty apply must demote"
         );
+    }
+
+    #[test]
+    fn completed_track_does_not_survive_through_stale_extraction_bindings() {
+        let mut scene = UiScene::new();
+        let mut extracted = node(1, None, &[]);
+        let track = opacity_track(1, 1, 0, 100, 0.0, 1.0);
+        extracted.compositor.bindings.push(track.id);
+        scene.apply_delta([extracted], []);
+        let mut store = PresentationStore::new();
+        store.insert(track, MotionValue::Scalar(1.0));
+        scene.apply_presentation(&store, LAYER_PROMOTE_HOLD, None);
+        assert!(scene.compositor_needs_tick());
+        scene.apply_presentation(&PresentationStore::new(), Duration::from_millis(100), None);
+        scene.apply_presentation(&PresentationStore::new(), Duration::from_millis(220), None);
+        assert!(!scene.compositor_needs_tick());
+        assert_eq!(scene.compositor_layer_count(), 0);
     }
 
     #[test]
