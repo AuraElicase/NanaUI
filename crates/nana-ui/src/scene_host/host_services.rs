@@ -41,6 +41,9 @@ pub(super) struct WindowInputSource {
     pub(super) ime: Option<TextInputContext>,
     /// The native IME session: the state last applied to the window.
     pub(super) applied_ime: Option<TextInputContext>,
+    /// Focus changed since the last native apply. Keep this edge even if
+    /// loss and regain arrive in the same turn with the same editor.
+    ime_reset_pending: bool,
 }
 
 impl WindowInputSource {
@@ -52,21 +55,28 @@ impl WindowInputSource {
             applied_cursor: None,
             ime: None,
             applied_ime: None,
+            ime_reset_pending: false,
         }
     }
 
-    /// The window regained focus. The platform may have dropped the IME
-    /// while it was away, so the state the Runtime sends again on focus is
-    /// applied as a fresh enable, not diffed into an update of a session
-    /// that is gone.
-    pub(super) fn forget_ime(&mut self) {
-        self.applied_ime = None;
+    /// Runtime cancels preedit on window focus loss. The native context
+    /// must cancel it too, rather than resume invisible marked text on
+    /// return. Defer the reset out of the platform's input callbacks.
+    pub(super) fn reset_ime(&mut self) {
+        self.ime_reset_pending = true;
     }
 
     /// What the native IME needs to catch up with the state the Runtime
     /// asked for, recorded as applied. `ImeApply::None` when it already has.
     pub(super) fn take_ime_apply(&mut self) -> ImeApply {
-        let (apply, session) = ime_apply(self.applied_ime.as_ref(), self.ime.as_ref());
+        let reset = std::mem::take(&mut self.ime_reset_pending);
+        let (mut apply, session) = ime_apply(self.applied_ime.as_ref(), self.ime.as_ref());
+        if reset && let Some(session) = &session {
+            apply = ImeApply::Replace {
+                capabilities: ime_capabilities(session),
+                data: ime_request_data(session),
+            };
+        }
         self.applied_ime = session;
         apply
     }
@@ -286,10 +296,12 @@ pub(super) fn apply_text_input(window: &dyn winit::window::Window, apply: ImeApp
     match apply {
         ImeApply::None => {}
         ImeApply::Disable => {
+            nana_window::discard_native_ime_preedit(window);
             let _ = window.request_ime_update(ImeRequest::Disable);
         }
         ImeApply::Enable { capabilities, data } => enable_ime(window, capabilities, data),
         ImeApply::Replace { capabilities, data } => {
+            nana_window::discard_native_ime_preedit(window);
             let _ = window.request_ime_update(ImeRequest::Disable);
             enable_ime(window, capabilities, data);
         }
@@ -392,12 +404,40 @@ mod tests {
     }
 
     #[test]
-    fn regaining_focus_enables_the_ime_afresh() {
+    fn focus_changes_cancel_the_native_session_even_for_the_same_editor() {
         let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
         source.ime = Some(state(true, true));
         assert!(matches!(source.take_ime_apply(), ImeApply::Enable { .. }));
-        source.forget_ime();
-        assert!(matches!(source.take_ime_apply(), ImeApply::Enable { .. }));
+        source.reset_ime();
+        // Losing and regaining focus before about_to_wait must not erase
+        // the cancellation, even though the requested editor is unchanged.
+        source.reset_ime();
+        assert!(matches!(source.take_ime_apply(), ImeApply::Replace { .. }));
+        assert_eq!(source.take_ime_apply(), ImeApply::None);
+    }
+
+    #[test]
+    fn a_focus_reset_without_an_editor_does_not_enable_ime() {
+        let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
+        source.ime = Some(state(true, true));
+        source.take_ime_apply();
+        source.reset_ime();
+        source.ime = None;
+        assert_eq!(source.take_ime_apply(), ImeApply::Disable);
+        assert_eq!(source.take_ime_apply(), ImeApply::None);
+    }
+
+    #[test]
+    fn resetting_one_window_leaves_the_other_composition_session_alone() {
+        let mut first = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
+        let mut other = WindowInputSource::new(InputSourceId(2), EndpointGeneration(1));
+        for source in [&mut first, &mut other] {
+            source.ime = Some(state(true, true));
+            source.take_ime_apply();
+        }
+        first.reset_ime();
+        assert!(matches!(first.take_ime_apply(), ImeApply::Replace { .. }));
+        assert_eq!(other.take_ime_apply(), ImeApply::None);
     }
 
     #[test]
