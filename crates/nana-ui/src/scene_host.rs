@@ -2604,10 +2604,16 @@ fn window_geometry(window: &dyn winit::window::Window) -> WindowGeometry {
 /// macOS 的 winit `is_maximized` 底层是 `is_zoomed`:窗口 mask 为 borderless(进入
 /// 全屏后)时它靠临时改回 Titled|Resizable 再回滚来查询,查询本身会触发 resize 事件,
 /// 在 resize 事件处理路径中调用就形成死循环。全屏(原生或 simple)语义上不
-/// maximized,直接短路;`simple_fullscreen()` 是纯状态读,无副作用。
+/// maximized,直接短路;`simple_fullscreen()` 是纯状态读,无副作用。窗口模式的
+/// mask 带 Titled|Resizable,`is_zoomed` 不会改 style,仍要查,否则每扇普通窗口
+/// 都会被记成最大化,位置和尺寸再也写不进去。
 #[cfg(target_os = "macos")]
 fn geometry_maximized(window: &dyn winit::window::Window) -> bool {
-    !(window.fullscreen().is_some() || WindowExtMacOS::simple_fullscreen(window))
+    if window.fullscreen().is_some() || WindowExtMacOS::simple_fullscreen(window) {
+        false
+    } else {
+        window.is_maximized()
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
