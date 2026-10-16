@@ -627,6 +627,8 @@ struct ComponentLifecycle {
     /// When each scroll view's hold on its auto-hiding bars runs out.
     scrollbar_holds: HashMap<StableNodeId, Duration, crate::BuildIdHasher>,
     wheel_scrolls: HashMap<StableNodeId, smooth_scroll::WheelScroll, crate::BuildIdHasher>,
+    /// Reused across samples; callbacks may mutate wheel_scrolls while we walk.
+    wheel_scroll_due: Vec<StableNodeId>,
     /// The scrollbar lane each pointer is on: the scroll view and the axis.
     scrollbar_hot: HashMap<
         (DocumentId, u64),

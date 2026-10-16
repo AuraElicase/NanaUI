@@ -229,14 +229,15 @@ impl AppContext {
     }
 
     pub(super) fn advance_wheel_scrolls(&mut self, now: Duration, frame: &mut AnimationFrame) {
-        let due: Vec<_> = self
-            .component_lifecycle
-            .wheel_scrolls
-            .iter()
-            .filter(|(id, scroll)| scroll.next <= now || !self.wheel_scroll_live(**id))
-            .map(|(id, _)| *id)
-            .collect();
-        for id in due {
+        let mut due = std::mem::take(&mut self.component_lifecycle.wheel_scroll_due);
+        due.extend(
+            self.component_lifecycle
+                .wheel_scrolls
+                .iter()
+                .filter(|(id, scroll)| scroll.next <= now || !self.wheel_scroll_live(**id))
+                .map(|(id, _)| *id),
+        );
+        for id in due.drain(..) {
             match self.sample_wheel_scroll(id, now) {
                 Ok(true) => frame.component_updates.push(id),
                 Ok(false) => {}
@@ -245,6 +246,7 @@ impl AppContext {
                 }
             }
         }
+        self.component_lifecycle.wheel_scroll_due = due;
     }
 
     pub(super) fn finish_wheel_scrolls(&mut self) {

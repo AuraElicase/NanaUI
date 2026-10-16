@@ -372,3 +372,15 @@ fixture 版本、设备代际、固定 BGRA extent 和预热范围必须符合�
 成功报告缺少必要工作计数、完成证明、consumer CPU 样本、有效计时，或出现 mock 升级为
 平台证据时，runner 返回 `error`，不能把坏报告降级为平台缺失。actual reference 的 CPU 时间按各自
 报告 scope 解读，不与 portable 稳态或 GPU execution time 混为同一指标。
+
+## 平滑滚轮 CPU 采样诊断
+
+```sh
+CARGO_INCREMENTAL=0 RUSTC_WRAPPER= CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_DEV_DEBUG=0 cargo test -p nana-ui-runtime --test smooth_scroll_cost --no-default-features --locked -- --ignored --nocapture
+```
+
+这是独立的 Runtime 微测量，不属于共享场景门禁。每种组合先预热 32 次，再测 512 次上下交替的 180ms 滚动；覆盖隐藏/自动隐藏滚动条、有/无事件监听器。报告采样数、线程内分配/重分配次数及每次完整过渡的 CPU 时间中位数和 p95；计时包含启用分配计数器的成本。测量包含动画 deadline 查询、采样和 system-work drain，不含起始滚轮输入、实际样式/布局执行、场景抽取、命中索引更新或 GPU 呈现。
+
+比较时必须使用同机、同构建配置和相同采样数，交替运行两个版本；调试构建绝对时间不能代表发布构建性能。该探针不能证明原生窗口帧率、输入延迟或耗电改善，真实长列表和订阅回调的业务开销需另测。
+
+本轮改动的同机交替测量和边界见 [2026-10-16 采样开销记录](../archive/docs-notes/smooth-scroll-cost-2026-10-16.md)。
