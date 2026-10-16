@@ -1539,7 +1539,7 @@ impl AppContext {
         if let Some(intent) = caret_intent(key, modifiers) {
             return self.move_focused_text_caret(document, intent, modifiers.shift, shaper);
         }
-        let delete = match (key, control || meta, modifiers.alt) {
+        let delete = match (key, meta, modifiers.alt || control) {
             ("Backspace", false, false) => Some(TextDeleteKind::Backward),
             ("Backspace", _, true) => Some(TextDeleteKind::WordBackward),
             ("Backspace", true, false) => Some(TextDeleteKind::LineStart),
