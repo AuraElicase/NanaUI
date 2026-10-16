@@ -364,6 +364,28 @@ fn source_editor_edge_drag_repeats_until_release_and_ime_owns_shortcuts() {
         .dispatch_with_shaper(
             &mut cx,
             doc,
+            &pointer(PointerPhase::Up, 12.0, 20.0),
+            Duration::from_millis(1),
+            Some(&mut shaper),
+        )
+        .unwrap();
+    input
+        .dispatch_with_shaper(
+            &mut cx,
+            doc,
+            &pointer(PointerPhase::Down, 12.0, 20.0),
+            Duration::from_millis(10),
+            Some(&mut shaper),
+        )
+        .unwrap();
+    assert!(
+        !cx.read(source, |area| area.state.selection.range().is_empty())
+            .unwrap()
+    );
+    input
+        .dispatch_with_shaper(
+            &mut cx,
+            doc,
             &pointer(PointerPhase::Move, 12.0, 130.0),
             Duration::from_millis(20),
             Some(&mut shaper),

@@ -2100,12 +2100,14 @@ impl AppContext {
                 Vec::new(),
             ),
         };
-        if count != 1 {
-            self.text_edit.text_pointer_drag = None;
+        // A multi-click starts a selection too. Keep capture so dragging the
+        // selected word/paragraph past the editor can extend and auto-scroll.
+        let anchor = if extend || count != 1 {
+            selection.anchor
         } else {
-            let anchor = if extend { selection.anchor } else { offset };
-            self.text_edit.text_pointer_drag = Some((pointer_id, node, anchor));
-        }
+            offset
+        };
+        self.text_edit.text_pointer_drag = Some((pointer_id, node, anchor));
         if self.text_edit.text_pointer_drag.is_some() {
             let mut mutations = MutationQueue::new();
             mutations.capture_pointer(pointer_id, node);
