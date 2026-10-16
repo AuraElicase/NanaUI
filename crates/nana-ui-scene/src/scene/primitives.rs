@@ -429,6 +429,12 @@ impl UiScene {
                 {
                     text_bounds = scene_rect(*content);
                 }
+                // A rich editor is a text node, so its own scroll translates
+                // glyphs and marks together; the surrounding chrome stays put.
+                if node.rich_editor.is_some() {
+                    text_bounds.x -= node.scroll_offset.x;
+                    text_bounds.y -= node.scroll_offset.y;
+                }
                 if !node.document_text_selection.is_empty() {
                     // Slot 1 sits under the glyph run at slot 2 (same as
                     // TextInput selection): CSS `::selection` background is

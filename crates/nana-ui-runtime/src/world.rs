@@ -2700,6 +2700,9 @@ impl UiWorld {
     /// and, while focused, moved to show the caret.
     pub fn scroll_offset(&self, id: StableNodeId) -> Option<ScrollOffset> {
         let node = self.nodes.get(id)?;
+        if let Some(offset) = self.rich_editor_scroll_offset(id) {
+            return Some(offset);
+        }
         if node.accessibility.multiline
             && let Some(frame) = self.editor_frame(id)
         {
@@ -3557,6 +3560,9 @@ impl UiWorld {
         let previous = self.nodes.rich_text(id).cloned();
         let text_changed =
             rich.is_some_and(|rich| self.record(id).text.value.as_str() != rich.text());
+        if text_changed && self.nodes.rich_editor_marks(id).is_some() {
+            self.nodes.set_text_viewport_pin(id, None);
+        }
         let mut dirty = if text_changed {
             // New text: whatever spans it has are styled afresh, and the
             // scene's paint runs follow them.

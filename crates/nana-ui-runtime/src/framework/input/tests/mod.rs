@@ -42,6 +42,7 @@ mod hover_card;
 mod menu_keys;
 mod modal_handles;
 mod popover_trigger;
+mod rich_editor;
 mod router;
 mod scrollbar_lane;
 mod select_menu;
