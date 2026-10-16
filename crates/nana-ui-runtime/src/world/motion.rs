@@ -231,6 +231,16 @@ impl UiWorld {
             self.closing_surfaces.insert(id);
             self.clear_surface_pointer_interactions(id);
         }
+        // Independent exit tracks can end before the surface is released.
+        // Hold their endpoint until reopening replaces them, so a finished
+        // fade cannot expose the logical opacity while the move still runs.
+        let exit_playback = (!open).then(|| {
+            crate::AnimationPlayback::running(
+                crate::AnimationIteration::ONCE,
+                crate::AnimationDirection::Normal,
+                crate::AnimationFillMode::Forwards,
+            )
+        });
         let to_opacity = f32::from(open);
         let modal = (!menu).then(|| self.modal_motion(id)).flatten();
         let moves = menu || modal.is_some_and(|(motion, card)| card && motion.moves());
@@ -255,7 +265,7 @@ impl UiWorld {
                 crate::MotionValue::Scalar(from_opacity),
                 crate::MotionValue::Scalar(to_opacity),
                 crate::MotionInterrupt::Retarget,
-                None,
+                exit_playback,
             );
             if card && motion.moves() {
                 let entrance = card_entrance(motion.enter_scale, motion.enter_offset_y);
@@ -290,7 +300,7 @@ impl UiWorld {
                     crate::MotionValue::Transform(from),
                     crate::MotionValue::Transform(to),
                     crate::MotionInterrupt::Retarget,
-                    None,
+                    exit_playback,
                 );
             }
             let from_scrim = self
@@ -324,7 +334,7 @@ impl UiWorld {
                 crate::MotionValue::Scalar(from_opacity),
                 crate::MotionValue::Scalar(to_opacity),
                 crate::MotionInterrupt::Retarget,
-                None,
+                exit_playback,
             );
         }
         if menu {
@@ -338,7 +348,7 @@ impl UiWorld {
                 crate::MotionValue::Transform(scale_transform(from_pop)),
                 crate::MotionValue::Transform(scale_transform(to_scale)),
                 crate::MotionInterrupt::Retarget,
-                None,
+                exit_playback,
             );
         }
         self.mark_subtree(
