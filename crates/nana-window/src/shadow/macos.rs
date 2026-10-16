@@ -4,7 +4,9 @@
 //! window it outlines whatever the client paints. For a transparent window
 //! the companion is a borderless child window ordered below the primary: the
 //! window server moves child windows with their parent, so a move costs
-//! nothing here. It holds one layer whose `shadowPath` is the body's rounded
+//! nothing here. With an independent underlay, the companion attaches below
+//! that underlay while its shape still follows the source window.
+//! It holds one layer whose `shadowPath` is the body's rounded
 //! rectangle, masked (even-odd) to outside that rectangle so a translucent
 //! card never shows its own shadow through itself. The render server draws
 //! the shadow from the path; nothing is rasterized by the app.
@@ -50,6 +52,8 @@ pub(super) fn set_native<W: HasWindowHandle + ?Sized>(window: &W, enabled: bool)
 
 pub(super) struct Companion {
     parent: Retained<NSWindow>,
+    /// Ordering/movement anchor; an underlay can sit between UI and shadow.
+    owner: Retained<NSWindow>,
     window: Retained<NSWindow>,
     shadow: Retained<CALayer>,
     mask: Retained<CAShapeLayer>,
@@ -109,6 +113,7 @@ impl Companion {
         // SAFETY: both windows are live and owned on the main thread.
         unsafe { parent.addChildWindow_ordered(&companion, NSWindowOrderingMode::Below) };
         Some(Ok(Self {
+            owner: parent.clone(),
             parent,
             window: companion,
             shadow,
@@ -207,7 +212,7 @@ impl Companion {
         if visible && !was_visible {
             // SAFETY: both windows are live and owned on the main thread.
             unsafe {
-                self.parent
+                self.owner
                     .addChildWindow_ordered(&self.window, NSWindowOrderingMode::Below)
             };
         } else if !visible && was_visible {
@@ -226,11 +231,29 @@ impl Companion {
     }
 
     pub(super) fn add_work(&self, _work: &mut ShadowWork) {}
+
+    /// Keep geometry relative to the source, but order below another window.
+    pub(super) fn set_ordering_parent<W: HasWindowHandle + ?Sized>(&mut self, window: &W) -> bool {
+        let Some(owner) = ns_window(window) else {
+            return false;
+        };
+        if std::ptr::eq(&*owner, &*self.owner) {
+            return true;
+        }
+        self.owner.removeChildWindow(&self.window);
+        // SAFETY: both windows are retained on the main thread.
+        unsafe { owner.addChildWindow_ordered(&self.window, NSWindowOrderingMode::Below) };
+        if !self.last.is_some_and(|(.., visible)| visible) {
+            self.window.orderOut(None);
+        }
+        self.owner = owner;
+        true
+    }
 }
 
 impl Drop for Companion {
     fn drop(&mut self) {
-        self.parent.removeChildWindow(&self.window);
+        self.owner.removeChildWindow(&self.window);
         self.window.orderOut(None);
         self.window.close();
     }

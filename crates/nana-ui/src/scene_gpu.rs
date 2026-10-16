@@ -323,6 +323,14 @@ impl SceneResourceEncodeContext<'_> {
 /// immediately. [`Self::submitted`] means this encode was queued, not that a
 /// UI frame sampling it has presented.
 pub trait SceneResourceProducer: fmt::Debug + Send + Sync + 'static {
+    /// Version of the pixels produced for this resource. Retained presenters
+    /// skip production when every referenced producer reports an unchanged
+    /// version. Change it whenever `encode` would change the sampled pixels.
+    /// The default preserves existing always-changing producer behavior.
+    fn preparation_version(&self, _node: &CustomRenderNode) -> Option<u64> {
+        None
+    }
+
     /// Encode one preparation pass. Returning an error drops this pass without
     /// submission; implementations must not retain a pending submission token
     /// until all fallible encoding work has succeeded.
@@ -375,6 +383,52 @@ impl SceneResourceProducerRegistry {
         self.producers.get(resource).cloned()
     }
 
+    /// Only graph-scheduled, registered producers affect retained output.
+    /// The first value distinguishes no production from volatile production;
+    /// the second is absent when any referenced producer is unversioned.
+    pub(crate) fn retained_revision(&self, scene: &UiScene) -> (bool, Option<u64>) {
+        use std::hash::{Hash, Hasher};
+        let Ok(plan) = scene.frame_plan() else {
+            return (false, None);
+        };
+        let mut used = false;
+        let mut revision = std::collections::hash_map::DefaultHasher::new();
+        for id in plan.preparations.iter() {
+            let Some(primitive) = scene.primitive(*id) else {
+                continue;
+            };
+            let ScenePrimitiveKind::Custom { node, .. } = &primitive.kind else {
+                continue;
+            };
+            let Some(producer) = self.producers.get(node.resource.as_ref()) else {
+                continue;
+            };
+            used = true;
+            let Some(version) = producer.preparation_version(node) else {
+                return (true, None);
+            };
+            id.hash(&mut revision);
+            node.renderer.hash(&mut revision);
+            node.revision.hash(&mut revision);
+            node.resource.hash(&mut revision);
+            node.fit.hash(&mut revision);
+            node.dedicated_pass.hash(&mut revision);
+            node.checkerboard.hash(&mut revision);
+            node.zoom.to_bits().hash(&mut revision);
+            node.sampling.hash(&mut revision);
+            node.params.is_some().hash(&mut revision);
+            if let Some(params) = &node.params {
+                params.len().hash(&mut revision);
+                for value in params.iter() {
+                    value.to_bits().hash(&mut revision);
+                }
+            }
+            (Arc::as_ptr(producer) as *const () as usize).hash(&mut revision);
+            version.hash(&mut revision);
+        }
+        (used, Some(if used { revision.finish() } else { 0 }))
+    }
+
     /// Encode preparation into the host frame. No submission happens here.
     /// Drop the frame if this returns an error.
     pub fn encode_scene(
@@ -424,6 +478,27 @@ pub struct SceneGpuRendererRegistry {
 }
 
 impl SceneGpuRendererRegistry {
+    /// Preparation identity of only the renderers actually used by this scene.
+    /// None means explicitly volatile, rather than an unconditionally active registry.
+    pub(crate) fn retained_revision(&self, scene: &UiScene) -> Option<u64> {
+        use std::hash::{Hash, Hasher};
+        let plan = scene.frame_plan().ok()?;
+        let mut revision = std::collections::hash_map::DefaultHasher::new();
+        for id in plan.custom_nodes.iter() {
+            let primitive = scene.primitive(*id)?;
+            let ScenePrimitiveKind::Custom { node, .. } = &primitive.kind else {
+                continue;
+            };
+            if let Some(renderer) = self.renderers.get(node.renderer.as_ref()) {
+                node.renderer.hash(&mut revision);
+                node.revision.hash(&mut revision);
+                (Arc::as_ptr(renderer) as *const () as usize).hash(&mut revision);
+                renderer.preparation_version(node)?.hash(&mut revision);
+            }
+        }
+        Some(revision.finish())
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -449,6 +524,53 @@ impl SceneGpuRendererRegistry {
 mod tests {
     use super::*;
 
+    #[test]
+    fn producer_parameters_change_the_preparation_key_without_a_version_bump() {
+        #[derive(Debug)]
+        struct StableProducer;
+        impl SceneResourceProducer for StableProducer {
+            fn preparation_version(&self, _: &CustomRenderNode) -> Option<u64> {
+                Some(1)
+            }
+            fn encode(
+                &self,
+                _: &CustomRenderNode,
+                _: SceneResourceEncodeContext<'_>,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        let id = nana_ui_runtime::DocumentId::new(1).unwrap();
+        let mut document = nana_ui_scene::RuntimeDocument::new(id);
+        let mut view = nana_ui_runtime::GpuTextureView::new("source");
+        let layout = Arc::make_mut(&mut view.style.layout);
+        layout.width = Some(nana_ui_core::LengthSpec::Px(64.0));
+        layout.height = Some(nana_ui_core::LengthSpec::Px(48.0));
+        let entity = document.context_mut().create_component(id, view).unwrap();
+        document
+            .flush(
+                nana_ui_runtime::LayoutViewport::new(64.0, 48.0),
+                &mut crate::NanaTextShaper::default(),
+            )
+            .unwrap();
+        let mut nodes = document
+            .context()
+            .world()
+            .extract_nodes(&[entity.stable_id()]);
+        let mut scene = UiScene::new();
+        scene.apply_delta(nodes.clone(), []);
+        let mut registry = SceneResourceProducerRegistry::new();
+        registry.insert("source", Arc::new(StableProducer));
+        let first = registry.retained_revision(&scene);
+        assert!(first.0 && first.1.is_some());
+        let custom = nodes[0].custom_render.as_mut().unwrap();
+        let version = custom.revision;
+        custom.params = Some(Arc::from([0.5f32]));
+        assert_eq!(custom.revision, version);
+        scene.apply_delta(nodes, []);
+        assert_ne!(registry.retained_revision(&scene), first);
+    }
+
     #[derive(Debug)]
     struct NoopRenderer;
 
@@ -464,6 +586,45 @@ mod tests {
         assert!(registry.insert("live2d", Arc::new(NoopRenderer)).is_none());
         assert!(registry.get("live2d").is_some());
         assert!(registry.insert("live2d", Arc::new(NoopRenderer)).is_some());
+    }
+
+    #[test]
+    fn retained_custom_revision_tracks_only_used_renderer_versions() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        #[derive(Debug)]
+        struct Versioned(Arc<AtomicU64>);
+        impl SceneGpuRenderer for Versioned {
+            fn preparation_version(&self, _: &CustomRenderNode) -> Option<u64> {
+                Some(self.0.load(Ordering::Relaxed))
+            }
+            fn prepare(&self, _: &SceneGpuNode, _: SceneGpuPrepareContext<'_>) {}
+            fn render(&self, _: &SceneGpuNode, _: SceneGpuRenderContext<'_>) {}
+        }
+        let id = nana_ui_runtime::DocumentId::new(1).unwrap();
+        let mut document = nana_ui_scene::RuntimeDocument::new(id);
+        let mut view = nana_ui_runtime::GpuView::new(7);
+        let layout = Arc::make_mut(&mut view.style.layout);
+        layout.width = Some(nana_ui_core::LengthSpec::Px(64.0));
+        layout.height = Some(nana_ui_core::LengthSpec::Px(48.0));
+        document.context_mut().create_component(id, view).unwrap();
+        document
+            .flush(
+                nana_ui_runtime::LayoutViewport::new(64.0, 48.0),
+                &mut crate::NanaTextShaper::default(),
+            )
+            .unwrap();
+        let mut registry = SceneGpuRendererRegistry::new();
+        let version = Arc::new(AtomicU64::new(1));
+        registry.insert("unused", Arc::new(NoopRenderer));
+        let empty_revision = registry.retained_revision(&UiScene::new());
+        assert!(empty_revision.is_some());
+        registry.insert("gpu-view", Arc::new(Versioned(Arc::clone(&version))));
+        let first = registry.retained_revision(document.scene()).unwrap();
+        assert_eq!(registry.retained_revision(document.scene()), Some(first));
+        version.store(2, Ordering::Relaxed);
+        assert_ne!(registry.retained_revision(document.scene()), Some(first));
+        registry.insert("gpu-view", Arc::new(NoopRenderer));
+        assert_eq!(registry.retained_revision(document.scene()), None);
     }
 }
 

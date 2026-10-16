@@ -1,9 +1,9 @@
-//! A window's content painted a second time into an offscreen output, for a
-//! consumer outside the window (a Spout sender, a recorder, a preview).
+//! A window's retained presentation supplied to another consumer (a Spout
+//! sender, a recorder, a preview).
 //!
-//! The output reuses the window's own `UiScene`: the host paints it into the
-//! output target inside the frame it already records for the window, after the
-//! window's paint and before the submit. Nothing is laid out twice. A window
+//! The shared presentation driver paints the window's own `UiScene` once per
+//! compatible pixel contract in the host's one frame. Compatible windows sample
+//! that canonical output; differing contracts paint separately. A window
 //! that is hidden, minimised or occluded keeps its output going when
 //! [`WindowOutputConfig::while_hidden`] is set: the host flushes the document
 //! and paints only the output on a GPU-only tick.
@@ -14,6 +14,15 @@
 //! into a DX12 shared texture another D3D device can open
 //! ([`nana_gpu::NativeExportPool`]); no pixel is read back to the CPU.
 
+#[cfg(test)]
+#[path = "window_output/production_tests.rs"]
+mod production_tests;
+
+use super::driver::frame_driver::{DirectPresentation, PreparedPresentation};
+use super::driver::frame_driver::{
+    PresentationFrameDriver, RecordedRetained, RetainedPresentation,
+};
+use std::hash::{Hash, Hasher};
 use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
@@ -24,7 +33,8 @@ use nana_gpu::{
 use nana_ui_platform::{WindowGeometry, WindowId};
 use nana_ui_scene::UiScene;
 
-use super::external::{ExternalFramePlan, ExternalPrepare, ExternalSurface, ExternalSurfaceConfig};
+use super::external::{ExternalFramePlan, ExternalSurface, ExternalSurfaceConfig};
+use super::window_trace::{self, WindowTrace};
 use crate::{
     AlphaEncoding, HostTextureRegistry, RenderTargetId, SceneGpuRendererRegistry,
     ScenePaintViewport, ScenePresentationProfile, SceneWgpuPainter,
@@ -219,9 +229,9 @@ impl WindowOutputConfig {
 ///
 /// [`Self::texture`] is on the host's device. Work submitted to that device
 /// from now on sees the frame (queue order), so copy or sample it in GPU work
-/// you submit before this callback returns, or keep the texture and use it
-/// before two more output frames are produced: the output recycles it after
-/// that. Nothing here waits for the GPU.
+/// you submit before this callback returns. For later or asynchronous use,
+/// retain [`Self::lease`] and attach it to each consuming GPU frame. The
+/// producer cannot recycle a leased slot. Nothing here waits for the GPU.
 #[derive(Debug)]
 pub struct WindowOutputFrame {
     window: WindowId,
@@ -229,11 +239,30 @@ pub struct WindowOutputFrame {
     content_revision: u64,
     resource_generation: u64,
     alpha: WindowOutputAlpha,
+    lease: super::ExternalFrame,
+    traces: [Option<super::OutputTraceSnapshot>; 3],
     #[cfg(all(windows, feature = "native-export"))]
     native: std::cell::RefCell<Option<nana_gpu::NativeFrameToken>>,
 }
 
 impl WindowOutputFrame {
+    pub fn source_id(&self) -> super::OutputSurfaceId {
+        self.lease.provenance().source()
+    }
+
+    /// Owner-attributed opt-in observations; all entries are None by default.
+    pub const fn output_traces(&self) -> [Option<super::OutputTraceSnapshot>; 3] {
+        self.traces
+    }
+    /// Retain this exact output revision across asynchronous same-device GPU
+    /// consumption. Merely cloning `texture()` does not reserve a producer slot.
+    pub fn lease(&self) -> WindowOutputLease {
+        WindowOutputLease {
+            texture: self.texture.clone(),
+            frame: self.lease.clone(),
+            alpha: self.alpha,
+        }
+    }
     pub fn window(&self) -> WindowId {
         self.window
     }
@@ -275,11 +304,54 @@ impl WindowOutputFrame {
     }
 }
 
+/// A persistent output reference, independent of the window callback's cadence.
+#[derive(Debug, Clone)]
+pub struct WindowOutputLease {
+    texture: GpuTexture,
+    frame: super::ExternalFrame,
+    alpha: WindowOutputAlpha,
+}
+
+impl WindowOutputLease {
+    pub fn texture(&self) -> Result<&GpuTexture, super::ExternalSurfaceError> {
+        self.frame.validate()?;
+        Ok(&self.texture)
+    }
+    pub fn alpha(&self) -> WindowOutputAlpha {
+        self.alpha
+    }
+    pub fn content_revision(&self) -> u64 {
+        self.frame.content_revision()
+    }
+    pub fn resource_generation(&self) -> u64 {
+        self.frame.resource_generation()
+    }
+    /// Attach sampling lifetime to the frame before submitting it. Discard
+    /// releases the reference; submit retains it until actual GPU completion.
+    pub fn keep_alive_until_complete(
+        &self,
+        frame: &mut FrameContext,
+    ) -> Result<(), super::ExternalSurfaceError> {
+        self.frame.validate()?;
+        if frame.generation() != self.texture.generation() {
+            return Err(super::ExternalSurfaceError::DeviceMismatch {
+                expected: self.texture.generation(),
+                found: frame.generation(),
+            });
+        }
+        frame.keep_alive_until_complete(self.clone());
+        Ok(())
+    }
+}
+
 /// A change in an output's state, reported once per transition to
 /// [`crate::RuntimeProgram::window_output_status`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum WindowOutputStatus {
+    /// Structural capability negotiation, including explicit reasons why
+    /// different rasterizations cannot share. Not emitted per frame.
+    Planned { plan: super::OutputPlan },
     /// Frames are produced at `extent`; `native` says whether they carry a
     /// native token.
     Active { extent: [u32; 2], native: bool },
@@ -346,9 +418,14 @@ pub(crate) struct WindowOutputState {
     window: WindowId,
     config: Option<WindowOutputConfig>,
     surface: Option<ExternalSurface>,
-    straight: Option<StraightAlpha>,
+    straight: Vec<StraightAlpha>,
+    planner: super::RenderTargetPlanner,
+    transfer: Option<super::transfer::OutputTransfer>,
+    work: nana_ui_core::OutputWorkObservation,
     #[cfg(all(windows, feature = "native-export"))]
     native: Option<nana_gpu::NativeExportPool>,
+    #[cfg(all(windows, feature = "native-export"))]
+    retired_native: Vec<nana_gpu::NativeExportRetirement>,
     /// Why native export is off, once found out for this device.
     native_unavailable: Option<String>,
     last_frame: Option<Instant>,
@@ -361,17 +438,172 @@ pub(crate) struct WindowOutputState {
     statuses: Vec<WindowOutputStatus>,
     /// Painter targets of retired surfaces, for the host to remove.
     retired_targets: Vec<RenderTargetId>,
+    trace: Option<Box<WindowTrace>>,
 }
 
 impl WindowOutputState {
+    pub(crate) fn set_output_trace_enabled(&mut self, enabled: bool) {
+        if enabled == self.trace.is_some() {
+            return;
+        }
+        self.trace = enabled.then(Box::default);
+        self.refresh_trace_source(0, super::OutputRecreateReason::None);
+    }
+
+    pub(crate) fn output_traces(&self) -> [Option<super::OutputTraceSnapshot>; 3] {
+        self.trace
+            .as_ref()
+            .map_or([None; 3], |trace| trace.snapshots)
+    }
+
+    fn refresh_trace_source(&mut self, recreated: usize, reason: super::OutputRecreateReason) {
+        if let (Some(trace), Some(surface)) = (&mut self.trace, &self.surface) {
+            trace.ensure_source(
+                surface.id().get(),
+                surface.gpu().generation(),
+                surface.resource_generation(),
+                surface.config().extent,
+                surface.config().presentation.target_format,
+                recreated,
+                reason,
+            );
+            #[cfg(all(windows, feature = "native-export"))]
+            if let Some(pool) = &self.native
+                && let (Some(generation), Some(extent)) = (pool.pool_generation(), pool.extent())
+            {
+                trace.native_target(generation, extent, nana_gpu::NATIVE_EXPORT_FORMAT);
+            }
+        }
+    }
+
+    fn trace_work(&mut self, owner: usize, work: nana_ui_core::OutputWorkObservation) {
+        if owner != window_trace::PRODUCER {
+            super::trace::consumer_metrics(work, None);
+        }
+        if let Some(trace) = &mut self.trace {
+            trace.observe(owner, work);
+        }
+    }
+
+    /// The host observes frame acquisition. It is outside consumer passes;
+    /// only the owner of the physical submit receives that observation.
+    pub(crate) fn trace_host_submission(
+        &mut self,
+        direct_ui: bool,
+        waits: Option<super::OutputTraceWait>,
+    ) {
+        if let Some(trace) = &mut self.trace {
+            trace.direct_owns_submission = direct_ui;
+            trace.host_waits = waits;
+            trace.restore_host_waits();
+        }
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn encode_presentation(
+        &mut self,
+        step: Option<OutputStep>,
+        direct: Option<DirectPresentation>,
+        scene: &UiScene,
+        frame: &mut FrameContext,
+        gpu: &GpuContext,
+        painters: &mut std::collections::HashMap<ScenePresentationProfile, SceneWgpuPainter>,
+        target: Option<&nana_gpu::GpuRenderTarget>,
+        textures: Option<&HostTextureRegistry>,
+        renderers: Option<&SceneGpuRendererRegistry>,
+        fetch_host: Option<nana_ui_platform::SharedFetchHost>,
+    ) -> Result<
+        (
+            Option<RecordedOutput>,
+            super::driver::frame_driver::RecordedPresentation,
+        ),
+        super::ExternalSurfaceError,
+    > {
+        let prepared = match step {
+            Some(OutputStep::Record { plan, viewport }) => PreparedPresentation::retained(
+                plan,
+                RetainedPresentation {
+                    revision: 0,
+                    viewport,
+                    alpha: AlphaEncoding::Gamma,
+                },
+            ),
+            _ => PresentationFrameDriver::prepare(scene, None, None, None, textures)?,
+        }
+        .with_direct(direct, Some(self.planner.plan()));
+        let mut encoded = PresentationFrameDriver::encode(
+            prepared,
+            scene,
+            frame,
+            gpu,
+            painters,
+            self.surface.as_mut(),
+            target,
+            &mut self.transfer,
+            textures,
+            renderers,
+            fetch_host,
+        )?;
+        if let Some(trace) = &mut self.trace {
+            trace.direct_owns_submission = encoded.direct_ui;
+            if let (Some(snapshot), Some(direct)) =
+                (&mut trace.snapshots[window_trace::WINDOW], direct)
+            {
+                snapshot.extent = direct.viewport.physical_size;
+                snapshot.format = direct.profile.target_format;
+                snapshot.path = if encoded.shared {
+                    super::OutputPath::GpuTransfer
+                } else {
+                    super::OutputPath::DirectSurface
+                };
+            }
+        }
+        if let Some(error) = encoded.retained_error.take() {
+            self.fail(error.to_string());
+        }
+        if encoded.shared {
+            self.work.extra_passes += 1;
+            self.work.gpu_convert_passes += 1;
+            self.trace_work(
+                window_trace::WINDOW,
+                nana_ui_core::OutputWorkObservation {
+                    extra_passes: 1,
+                    gpu_convert_passes: 1,
+                    ..Default::default()
+                },
+            );
+        }
+        let conversions = self.work.gpu_convert_passes;
+        let output = encoded
+            .retained
+            .take()
+            .and_then(|recorded| self.postprocess(recorded, frame));
+        let conversions = self.work.gpu_convert_passes - conversions;
+        if conversions != 0 {
+            super::driver::frame_driver::accumulate_gpu_work(
+                &mut encoded.gpu_work,
+                Some(nana_ui_core::GpuWorkObservation {
+                    draw_batches: conversions,
+                    draw_calls: conversions,
+                    ..Default::default()
+                }),
+            );
+        }
+        Ok((output, encoded))
+    }
+
     pub(crate) fn new(window: WindowId) -> Self {
         Self {
             window,
             config: None,
             surface: None,
-            straight: None,
+            straight: Vec::new(),
+            planner: super::RenderTargetPlanner::new(),
+            transfer: None,
+            work: Default::default(),
             #[cfg(all(windows, feature = "native-export"))]
             native: None,
+            #[cfg(all(windows, feature = "native-export"))]
+            retired_native: Vec::new(),
             native_unavailable: None,
             last_frame: None,
             throttled_until: None,
@@ -379,6 +611,7 @@ impl WindowOutputState {
             reported: None,
             statuses: Vec::new(),
             retired_targets: Vec::new(),
+            trace: None,
         }
     }
 
@@ -397,6 +630,24 @@ impl WindowOutputState {
             .map_or(crate::FrameDemand::OnDemand, crate::FrameDemand::At)
     }
 
+    pub(crate) fn defer_frame(&mut self, now: Instant) {
+        if let Some(trace) = &mut self.trace
+            && let Some(producer) = &mut trace.snapshots[window_trace::PRODUCER]
+        {
+            producer.deferral_reason = super::trace::OutputTraceDeferral::FrameSlots;
+        }
+        self.work.deferred += 1;
+        self.throttled_until = Some(now + Duration::from_millis(4));
+        nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_DEFERRED);
+        self.trace_work(
+            window_trace::PRODUCER,
+            nana_ui_core::OutputWorkObservation {
+                deferred: 1,
+                ..Default::default()
+            },
+        );
+    }
+
     /// Apply the program's answer for this frame. Withdrawing the output
     /// releases everything and reports `Stopped`.
     pub(crate) fn set_config(&mut self, config: Option<WindowOutputConfig>) {
@@ -408,10 +659,19 @@ impl WindowOutputState {
         if let (Some(old), Some(new)) = (self.config, config)
             && (old.alpha != new.alpha || old.export != new.export)
         {
-            // Different passes and pools: start over on the next frame.
-            self.release();
+            // Canonical storage is unchanged. Keep its generation and leases;
+            // only conversion/transport resources change at this boundary.
+            self.straight.clear();
+            self.retire_native();
+            self.volatile = self.volatile.wrapping_add(1);
         }
         self.config = config;
+        if config.is_none_or(|config| config.export != WindowOutputExport::Native) {
+            if let Some(trace) = &mut self.trace {
+                trace.clear_native_target();
+            }
+            self.refresh_trace_source(0, super::OutputRecreateReason::None);
+        }
     }
 
     /// The device changed: every resource was made on the old one.
@@ -424,7 +684,8 @@ impl WindowOutputState {
         if let Some(surface) = self.surface.take() {
             self.retired_targets.extend(surface.target_ids());
         }
-        self.straight = None;
+        self.straight.clear();
+        self.transfer = None;
         self.retire_native();
         self.throttled_until = None;
     }
@@ -432,6 +693,10 @@ impl WindowOutputState {
     fn retire_native(&mut self) {
         #[cfg(all(windows, feature = "native-export"))]
         if let Some(mut pool) = self.native.take() {
+            self.retired_native.retain(|ticket| !ticket.is_released());
+            if let Some(ticket) = pool.retirement_ticket() {
+                self.retired_native.push(ticket);
+            }
             if let Some(pool_generation) = pool.pool_generation() {
                 self.statuses
                     .push(WindowOutputStatus::NativeRetired { pool_generation });
@@ -465,9 +730,38 @@ impl WindowOutputState {
     }
 
     fn fail(&mut self, reason: String) {
+        self.trace_failed();
         if self.reported != Some(Reported::Failed) {
             self.reported = Some(Reported::Failed);
             self.statuses.push(WindowOutputStatus::Failed { reason });
+        }
+    }
+
+    pub(crate) fn trace_failed(&mut self) {
+        if let Some(trace) = &mut self.trace {
+            for snapshot in trace.snapshots.iter_mut().flatten() {
+                snapshot.state = super::trace::OutputTraceState::Failed;
+                snapshot.waits = None;
+            }
+        }
+    }
+
+    /// Observe a host deferral before `begin`, without reusing prior frame work.
+    pub(crate) fn trace_deferred(&mut self, reason: super::OutputTraceDeferral) {
+        if let Some(trace) = &mut self.trace {
+            trace.host_waits = None;
+            trace.observe(
+                window_trace::PRODUCER,
+                nana_ui_core::OutputWorkObservation {
+                    deferred: 1,
+                    ..Default::default()
+                },
+            );
+            if let Some(producer) = &mut trace.snapshots[window_trace::PRODUCER] {
+                producer.state = super::OutputTraceState::Deferred;
+                producer.deferral_reason = reason;
+                producer.waits = None;
+            }
         }
     }
 
@@ -485,6 +779,11 @@ impl WindowOutputState {
         clear_color: [f32; 4],
         now: Instant,
     ) -> OutputStep {
+        self.work = Default::default();
+        if let Some(trace) = &mut self.trace {
+            trace.direct_owns_submission = false;
+            trace.host_waits = None;
+        }
         let Some(config) = self.config else {
             return OutputStep::Idle;
         };
@@ -498,19 +797,61 @@ impl WindowOutputState {
             self.fail(reason);
             return OutputStep::Idle;
         }
+        let recreates = self.work.target_recreates;
         if volatile {
             self.volatile = self.volatile.wrapping_add(1);
         }
         let revision = host_revision ^ self.volatile.wrapping_mul(0x2545_F491_4F6C_DD1D);
         let surface = self.surface.as_mut().expect("surface was just ensured");
-        let plan = match surface.prepare(scene, revision, viewport, host_textures) {
-            Ok(ExternalPrepare::Record(plan)) => plan,
-            Ok(ExternalPrepare::Reused { .. }) => return OutputStep::Idle,
-            Ok(ExternalPrepare::Deferred) => {
-                // Every slot is in flight: come back for this content soon
-                // rather than leave the output a frame behind.
-                self.throttled_until = Some(now + Duration::from_millis(4));
-                return OutputStep::Idle;
+        let prepared = PresentationFrameDriver::prepare(
+            scene,
+            None,
+            Some((
+                surface,
+                RetainedPresentation {
+                    revision,
+                    viewport,
+                    alpha: AlphaEncoding::Gamma,
+                },
+            )),
+            None,
+            host_textures,
+        );
+        self.work = surface.last_work();
+        self.work.target_recreates += recreates;
+        let observed = nana_ui_core::OutputWorkObservation {
+            idle_reuse_frames: self.work.idle_reuse_frames,
+            deferred: self.work.deferred,
+            ..Default::default()
+        };
+        if self.work.deferred != 0
+            && let Some(trace) = &mut self.trace
+            && let Some(producer) = &mut trace.snapshots[window_trace::PRODUCER]
+        {
+            producer.deferral_reason = super::trace::OutputTraceDeferral::SourceSlots;
+        }
+        self.trace_work(window_trace::PRODUCER, observed);
+        let plan = match prepared {
+            Ok(prepared) => {
+                if let Some(crate::ExternalRenderOutcome::Reused {
+                    resource_generation,
+                    content_revision,
+                }) = prepared.outcome
+                    && let Some(trace) = &mut self.trace
+                {
+                    trace.versions(resource_generation, content_revision);
+                }
+                if matches!(
+                    prepared.outcome,
+                    Some(crate::ExternalRenderOutcome::Deferred)
+                ) {
+                    self.throttled_until = Some(now + Duration::from_millis(4));
+                    return OutputStep::Idle;
+                }
+                let Some((plan, _)) = prepared.into_retained() else {
+                    return OutputStep::Idle;
+                };
+                plan
             }
             Err(error) => {
                 self.fail(error.to_string());
@@ -529,6 +870,15 @@ impl WindowOutputState {
     }
 
     fn ensure_surface(&mut self, gpu: &GpuContext, extent: [u32; 2]) -> Result<(), String> {
+        let before = self.work.target_recreates;
+        let reason = match &self.surface {
+            None => super::OutputRecreateReason::Created,
+            Some(surface) if !surface.gpu().same_device(gpu) => super::OutputRecreateReason::Device,
+            Some(surface) if surface.config().extent != extent => {
+                super::OutputRecreateReason::Extent
+            }
+            Some(_) => super::OutputRecreateReason::Requirements,
+        };
         let config = ExternalSurfaceConfig::with_presentation(extent, output_profile())
             .with_copy_source(true);
         let current = self
@@ -538,22 +888,42 @@ impl WindowOutputState {
         if current {
             return Ok(());
         }
-        let mut surface =
-            ExternalSurface::with_host_painter(gpu, config, target_namespace(self.window))
+        if let Some(surface) = self.surface.as_mut() {
+            let old_targets: Vec<_> = surface.target_ids().collect();
+            if !surface.gpu().same_device(gpu) {
+                surface
+                    .replace_gpu(gpu)
+                    .map_err(|error| error.to_string())?;
+                self.work.target_recreates += surface.last_work().target_recreates;
+            }
+            surface
+                .resize(gpu, config)
                 .map_err(|error| error.to_string())?;
-        surface.set_alpha_encoding(AlphaEncoding::Gamma);
-        if let Some(old) = self.surface.replace(surface) {
-            self.retired_targets.extend(old.target_ids());
+            self.work.target_recreates += surface.last_work().target_recreates;
+            self.retired_targets.extend(old_targets);
+        } else {
+            let mut surface =
+                ExternalSurface::with_host_painter(gpu, config, target_namespace(self.window))
+                    .map_err(|error| error.to_string())?;
+            surface.set_alpha_encoding(AlphaEncoding::Gamma);
+            self.surface = Some(surface);
+            self.work.target_recreates += config.slots;
+            nana_diagnostics::metric!(
+                nana_diagnostics::framework::gpu::OUTPUT_TARGET_RECREATES,
+                config.slots as u64
+            );
         }
         // New extent, new device or first frame: conversion target and
         // native textures follow the surface.
-        self.straight = None;
+        self.straight.clear();
         self.retire_native();
+        self.refresh_trace_source(self.work.target_recreates - before, reason);
         Ok(())
     }
 
     /// Paint the scene into the output inside `frame`, then the conversion
     /// pass and the native copy when configured.
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn record(
         &mut self,
@@ -567,47 +937,101 @@ impl WindowOutputState {
         let OutputStep::Record { plan, viewport } = step else {
             return None;
         };
-        let config = self.config?;
         let surface = self.surface.as_mut()?;
-        // An output is composited by someone else: grayscale text, the alpha
-        // encoding compositors blend, and plain SDR parameters.
-        painter.set_subpixel_text(None);
-        painter.set_presentation_parameters(Default::default());
-        if let Err(error) = surface.record(
-            &plan,
-            frame,
-            Some(painter),
+        let recorded = match PresentationFrameDriver::encode_retained(
+            surface,
+            plan,
+            RetainedPresentation {
+                revision: 0,
+                viewport,
+                alpha: AlphaEncoding::Gamma,
+            },
+            painter,
             scene,
-            viewport,
+            frame,
             host_textures,
             gpu_renderers,
         ) {
-            self.fail(error.to_string());
-            return None;
-        }
-        let mut texture = match surface.plan_texture(&plan) {
-            Ok(texture) => texture.clone(),
+            Ok(recorded) => recorded,
             Err(error) => {
                 self.fail(error.to_string());
                 return None;
             }
         };
+        self.postprocess(recorded, frame)
+    }
+
+    /// Consumer transport work only. Scene encoding and target selection are
+    /// owned by the shared presentation driver.
+    pub(crate) fn postprocess(
+        &mut self,
+        recorded: RecordedRetained,
+        frame: &mut FrameContext,
+    ) -> Option<RecordedOutput> {
+        self.work.ui_renders += 1;
+        self.trace_work(
+            window_trace::PRODUCER,
+            nana_ui_core::OutputWorkObservation {
+                ui_renders: 1,
+                ..Default::default()
+            },
+        );
+        let config = self.config?;
+        let surface = self.surface.as_ref()?;
+        let RecordedRetained { plan, mut texture } = recorded;
         if config.alpha == WindowOutputAlpha::Straight {
             let gpu = frame.gpu().clone();
             let extent = surface.config().extent;
-            let straight = match self.straight.take() {
-                Some(straight) if straight.fits(&gpu, extent) => straight,
-                _ => match StraightAlpha::new(&gpu, extent) {
-                    Ok(straight) => straight,
+            // One conversion target per canonical slot. The output lease
+            // reserves both through asynchronous consumers, never one shared
+            // conversion texture that a later frame could overwrite.
+            let slot = plan.slot_index();
+            while self.straight.len() <= slot {
+                match StraightAlpha::new(&gpu, extent) {
+                    Ok(target) => {
+                        self.straight.push(target);
+                        self.work.target_recreates += 1;
+                        if let Some(trace) = &mut self.trace {
+                            trace.observe(
+                                window_trace::TRANSPORT,
+                                nana_ui_core::OutputWorkObservation {
+                                    target_recreates: 1,
+                                    ..Default::default()
+                                },
+                            );
+                            trace.reason(
+                                window_trace::TRANSPORT,
+                                super::OutputRecreateReason::Created,
+                            );
+                        }
+                        nana_diagnostics::metric!(
+                            nana_diagnostics::framework::gpu::OUTPUT_TARGET_RECREATES
+                        );
+                    }
                     Err(error) => {
                         self.fail(error.to_string());
                         return None;
                     }
-                },
-            };
+                }
+            }
+            let straight = &self.straight[slot];
             straight.record(frame, &texture);
             texture = straight.target.clone();
-            self.straight = Some(straight);
+            self.work.extra_passes += 1;
+            self.work.gpu_convert_passes += 1;
+            if let Some(trace) = &mut self.trace {
+                trace.transfer(window_trace::TRANSPORT);
+            }
+            self.trace_work(
+                window_trace::TRANSPORT,
+                nana_ui_core::OutputWorkObservation {
+                    extra_passes: 1,
+                    gpu_convert_passes: 1,
+                    ..Default::default()
+                },
+            );
+            nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_EXTRA_PASSES);
+            nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_GPU_CONVERT_PASSES);
         }
         #[cfg(all(windows, feature = "native-export"))]
         let native = if config.export == WindowOutputExport::Native {
@@ -632,6 +1056,103 @@ impl WindowOutputState {
         })
     }
 
+    /// Negotiate the actual Window + external consumer pair. A normal window
+    /// without an output never constructs or calls this planner.
+    pub(crate) fn can_share_window(
+        &mut self,
+        gpu: &GpuContext,
+        geometry: &WindowGeometry,
+        profile: ScenePresentationProfile,
+        viewport: ScenePaintViewport,
+        opaque: bool,
+    ) -> bool {
+        use super::*;
+        let Some(config) = self.config else {
+            return false;
+        };
+        let Some(extent) = config.resolve_extent(geometry) else {
+            return false;
+        };
+        let Some(output_viewport) = config.viewport(geometry, extent, viewport.clear_color) else {
+            return false;
+        };
+        let viewport_key = |v: ScenePaintViewport| {
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            for value in v
+                .logical_size
+                .into_iter()
+                .chain([v.scale_factor])
+                .chain(v.scene_origin)
+                .chain(v.target_origin)
+            {
+                value.to_bits().hash(&mut hash);
+            }
+            hash.finish()
+        };
+        let requirements = RenderTargetRequirements {
+            presentation: PresentationId(self.window.0),
+            viewport_revision: viewport_key(output_viewport),
+            extent,
+            profile: output_profile(),
+            alpha: OutputAlpha::GammaPremultiplied,
+            text_aa: OutputTextAa::Grayscale,
+            sample_count: 1,
+            device_generation: gpu.generation(),
+            ownership: OutputOwnership::SameDevice,
+            persistent: true,
+        };
+        let text_aa = if opaque {
+            match crate::scene_paint::SubpixelOrder::system() {
+                Some(crate::scene_paint::SubpixelOrder::Rgb) => OutputTextAa::SubpixelRgb,
+                Some(crate::scene_paint::SubpixelOrder::Bgr) => OutputTextAa::SubpixelBgr,
+                None => OutputTextAa::Grayscale,
+            }
+        } else {
+            OutputTextAa::Grayscale
+        };
+        let consumers = [
+            OutputConsumer {
+                id: OutputConsumerId(0),
+                kind: OutputConsumerKind::External,
+                requirements,
+                capabilities: PresenterCapabilities {
+                    sampled: true,
+                    ..Default::default()
+                },
+            },
+            OutputConsumer {
+                id: OutputConsumerId(1),
+                kind: OutputConsumerKind::Window,
+                requirements: RenderTargetRequirements {
+                    extent: viewport.physical_size,
+                    profile,
+                    viewport_revision: viewport_key(viewport),
+                    alpha: if opaque {
+                        OutputAlpha::LinearPremultiplied
+                    } else {
+                        OutputAlpha::GammaPremultiplied
+                    },
+                    text_aa,
+                    persistent: false,
+                    ..requirements
+                },
+                capabilities: PresenterCapabilities {
+                    direct_render: true,
+                    copy_destination: true,
+                    ..Default::default()
+                },
+            },
+        ];
+        if self.planner.update(&consumers) {
+            self.work.plan_rebuilds += 1;
+            self.statuses.push(WindowOutputStatus::Planned {
+                plan: self.planner.plan().clone(),
+            });
+            nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_PLAN_REBUILDS);
+        }
+        self.planner.plan().groups.len() == 1 && self.planner.plan().render_count() == 1
+    }
+
     #[cfg(all(windows, feature = "native-export"))]
     fn stage_native(
         &mut self,
@@ -642,9 +1163,40 @@ impl WindowOutputState {
             return None;
         }
         if self.native.is_none() {
+            self.retired_native.retain(|ticket| !ticket.is_released());
+            if self.retired_native.len() >= 2 {
+                self.report(Reported::NativeDeferred, WindowOutputStatus::NativeDeferred);
+                return None;
+            }
             let (width, height) = texture.size();
             match nana_gpu::NativeExportPool::new(frame.gpu(), [width, height]) {
-                Ok(pool) => self.native = Some(pool),
+                Ok(pool) => {
+                    if let Some(trace) = &mut self.trace
+                        && let (Some(generation), Some(extent)) =
+                            (pool.pool_generation(), pool.extent())
+                    {
+                        trace.native_target(generation, extent, nana_gpu::NATIVE_EXPORT_FORMAT);
+                    }
+                    self.native = Some(pool);
+                    self.work.target_recreates += nana_gpu::NATIVE_EXPORT_SLOTS;
+                    if let Some(trace) = &mut self.trace {
+                        trace.observe(
+                            window_trace::TRANSPORT,
+                            nana_ui_core::OutputWorkObservation {
+                                target_recreates: nana_gpu::NATIVE_EXPORT_SLOTS,
+                                ..Default::default()
+                            },
+                        );
+                        trace.reason(
+                            window_trace::TRANSPORT,
+                            super::OutputRecreateReason::Created,
+                        );
+                    }
+                    nana_diagnostics::metric!(
+                        nana_diagnostics::framework::gpu::OUTPUT_TARGET_RECREATES,
+                        nana_gpu::NATIVE_EXPORT_SLOTS as u64
+                    );
+                }
                 Err(error) => {
                     let reason = error.to_string();
                     self.native_unavailable = Some(reason.clone());
@@ -658,10 +1210,44 @@ impl WindowOutputState {
         }
         let pool = self.native.as_mut()?;
         match pool.stage(frame, texture) {
-            Ok(nana_gpu::NativeExportOutcome::Staged(staged)) => Some(staged),
+            Ok(nana_gpu::NativeExportOutcome::Staged(staged)) => {
+                self.work.gpu_copies += 1;
+                let (width, height) = texture.size();
+                let bytes = width as usize * height as usize * 4;
+                self.work.gpu_copy_bytes += bytes;
+                if let Some(trace) = &mut self.trace {
+                    trace.transfer(window_trace::TRANSPORT);
+                }
+                self.trace_work(
+                    window_trace::TRANSPORT,
+                    nana_ui_core::OutputWorkObservation {
+                        gpu_copies: 1,
+                        gpu_copy_bytes: bytes,
+                        ..Default::default()
+                    },
+                );
+                nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_GPU_COPIES);
+                nana_diagnostics::metric!(
+                    nana_diagnostics::framework::gpu::OUTPUT_GPU_COPY_BYTES,
+                    bytes as u64
+                );
+                Some(staged)
+            }
             Ok(nana_gpu::NativeExportOutcome::Deferred(
                 nana_gpu::NativeExportDeferral::ConsumerBusy { waiting },
             )) => {
+                if let Some(trace) = &mut self.trace
+                    && let Some(consumer) = &mut trace.snapshots[window_trace::TRANSPORT]
+                {
+                    consumer.deferral_reason = super::trace::OutputTraceDeferral::NativeRelease;
+                }
+                self.trace_work(
+                    window_trace::TRANSPORT,
+                    nana_ui_core::OutputWorkObservation {
+                        deferred: 1,
+                        ..Default::default()
+                    },
+                );
                 if waiting >= NATIVE_STALL {
                     // The consumer stopped releasing: give it a fresh pool
                     // rather than defer forever.
@@ -669,6 +1255,24 @@ impl WindowOutputState {
                 } else {
                     self.report(Reported::NativeDeferred, WindowOutputStatus::NativeDeferred);
                 }
+                None
+            }
+            Ok(nana_gpu::NativeExportOutcome::Deferred(
+                nana_gpu::NativeExportDeferral::ProducerBusy,
+            )) => {
+                if let Some(trace) = &mut self.trace
+                    && let Some(consumer) = &mut trace.snapshots[window_trace::TRANSPORT]
+                {
+                    consumer.deferral_reason = super::trace::OutputTraceDeferral::NativeReservation;
+                }
+                self.trace_work(
+                    window_trace::TRANSPORT,
+                    nana_ui_core::OutputWorkObservation {
+                        deferred: 1,
+                        ..Default::default()
+                    },
+                );
+                self.report(Reported::NativeDeferred, WindowOutputStatus::NativeDeferred);
                 None
             }
             Err(error) => {
@@ -688,8 +1292,16 @@ impl WindowOutputState {
         now: Instant,
     ) -> Option<WindowOutputFrame> {
         let surface = self.surface.as_mut()?;
-        let outcome = match surface.bind_submission(recorded.plan, submission) {
-            Ok(outcome) => outcome,
+        let completed = match PresentationFrameDriver::finish(
+            surface,
+            RecordedRetained {
+                plan: recorded.plan,
+                texture: recorded.texture.clone(),
+            },
+            submission,
+            true,
+        ) {
+            Ok(completed) => completed,
             Err(error) => {
                 self.fail(error.to_string());
                 return None;
@@ -699,12 +1311,28 @@ impl WindowOutputState {
             resource_generation,
             content_revision,
             ..
-        } = outcome
+        } = completed.outcome
         else {
             return None;
         };
+        let lease = completed
+            .lease
+            .expect("presenter requested its consumer lease");
         self.last_frame = Some(now);
         let alpha = self.config.map(|config| config.alpha).unwrap_or_default();
+        self.work.content_revisions += 1;
+        self.work.submissions += 1;
+        if let Some(trace) = &mut self.trace {
+            trace.versions(resource_generation, content_revision);
+            trace.observe(
+                window_trace::PRODUCER,
+                nana_ui_core::OutputWorkObservation {
+                    content_revisions: 1,
+                    submissions: usize::from(!trace.direct_owns_submission),
+                    ..Default::default()
+                },
+            );
+        }
         #[cfg(all(windows, feature = "native-export"))]
         let native = recorded.native.and_then(|staged| {
             let pool = self.native.as_mut()?;
@@ -732,24 +1360,25 @@ impl WindowOutputState {
                 native: has_native,
             },
         );
+        if let Some(trace) = &mut self.trace {
+            trace.restore_host_waits();
+        }
         Some(WindowOutputFrame {
             window: self.window,
             texture: recorded.texture,
             content_revision,
             resource_generation,
             alpha,
+            lease,
+            traces: self.output_traces(),
             #[cfg(all(windows, feature = "native-export"))]
             native: std::cell::RefCell::new(native),
         })
     }
 
     /// Work counters of the last output operation (CPU readbacks stay 0).
-    #[cfg(test)]
     pub(crate) fn last_work(&self) -> nana_ui_core::OutputWorkObservation {
-        self.surface
-            .as_ref()
-            .map(ExternalSurface::last_work)
-            .unwrap_or_default()
+        self.work
     }
 }
 
@@ -844,11 +1473,6 @@ impl StraightAlpha {
             layout,
             target,
         })
-    }
-
-    fn fits(&self, gpu: &GpuContext, extent: [u32; 2]) -> bool {
-        let (width, height) = self.target.size();
-        [width, height] == extent && self.target.generation() == gpu.generation()
     }
 
     fn record(&self, frame: &mut FrameContext, source: &GpuTexture) {
@@ -1062,5 +1686,96 @@ mod tests {
         let b = target_namespace(WindowId(2));
         assert_ne!(a, b);
         assert_ne!(a & 0xFFFF_0000_0000_0000, 0);
+    }
+
+    #[test]
+    fn compatible_window_uses_one_cached_plan_and_preserves_opaque_quality() {
+        let gpu = crate::test_gpu::context();
+        let window = geometry((64.0, 48.0), 1.0);
+        let mut state = WindowOutputState::new(WindowId(8));
+        let config = WindowOutputConfig::default().with_extent(WindowOutputExtent::MatchWindow);
+        state.set_config(Some(config));
+        let viewport = config.viewport(&window, [64, 48], [0.0; 4]).unwrap();
+        let profile = ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM_SRGB);
+        assert!(state.can_share_window(&gpu, &window, profile, viewport, false));
+        let rebuilds = state.planner.rebuild_count();
+        for _ in 0..240 {
+            assert!(state.can_share_window(&gpu, &window, profile, viewport, false));
+        }
+        assert_eq!(state.planner.rebuild_count(), rebuilds);
+        assert!(!state.can_share_window(&gpu, &window, profile, viewport, true));
+        assert!(
+            state
+                .planner
+                .plan()
+                .incompatibilities
+                .iter()
+                .any(|difference| difference
+                    .reasons
+                    .contains(&super::super::OutputIncompatibilityReason::Alpha))
+        );
+    }
+
+    #[test]
+    fn window_resize_advances_generation_and_rejects_old_leases() {
+        let gpu = crate::test_gpu::context();
+        let mut painter = SceneWgpuPainter::new_with_presentation(&gpu, output_profile());
+        let mut state = WindowOutputState::new(WindowId(9));
+        state.set_config(Some(
+            WindowOutputConfig::default().with_extent(WindowOutputExtent::MatchWindow),
+        ));
+        let scene = UiScene::new();
+        let first = record_one(
+            &mut state,
+            &mut painter,
+            &geometry((64.0, 48.0), 1.0),
+            &scene,
+        )
+        .unwrap();
+        let old = first.lease();
+        let second = record_one(
+            &mut state,
+            &mut painter,
+            &geometry((80.0, 48.0), 1.0),
+            &scene,
+        )
+        .unwrap();
+        assert!(second.resource_generation() > first.resource_generation());
+        assert!(matches!(
+            old.texture(),
+            Err(super::super::ExternalSurfaceError::StaleFrame)
+        ));
+        assert_eq!(second.extent(), [80, 48]);
+    }
+
+    #[test]
+    fn straight_output_uses_distinct_leased_targets_and_defers_when_full() {
+        let gpu = crate::test_gpu::context();
+        let mut painter = SceneWgpuPainter::new_with_presentation(&gpu, output_profile());
+        let mut state = WindowOutputState::new(WindowId(10));
+        state.set_config(Some(
+            WindowOutputConfig::default()
+                .with_extent(WindowOutputExtent::MatchWindow)
+                .with_alpha(WindowOutputAlpha::Straight),
+        ));
+        let window = geometry((64.0, 48.0), 1.0);
+        let scene = UiScene::new();
+        let mut held = Vec::new();
+        for _ in 0..3 {
+            state.volatile += 1;
+            let frame = record_one(&mut state, &mut painter, &window, &scene).unwrap();
+            let lease = frame.lease();
+            for previous in &held {
+                let previous: &WindowOutputLease = previous;
+                assert!(!previous.texture().unwrap().ptr_eq(lease.texture().unwrap()));
+            }
+            held.push(lease);
+        }
+        state.volatile += 1;
+        assert!(record_one(&mut state, &mut painter, &window, &scene).is_none());
+        assert_eq!(state.straight.len(), 3);
+        assert_eq!(state.last_work().ui_renders, 0);
+        assert_eq!(state.last_work().submissions, 0);
+        assert_eq!(state.last_work().gpu_convert_passes, 0);
     }
 }

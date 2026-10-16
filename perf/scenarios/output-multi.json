@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "id": "output-multi",
+  "kind": "PresentationOutput",
+  "params": {
+    "workload": "multi",
+    "frames": 240
+  },
+  "record": [
+    "output_work",
+    "producer_call_ms",
+    "proof",
+    "evidence"
+  ],
+  "invariants": [
+    {
+      "name": "multi_gpu_copies",
+      "path": "output_work.gpu_copies",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_gpu_copy_bytes",
+      "path": "output_work.gpu_copy_bytes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_cpu_readbacks",
+      "path": "output_work.cpu_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_plan_rebuilds",
+      "path": "output_work.plan_rebuilds",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_scene_primitives",
+      "path": "proof.scene_primitives",
+      "op": "gte",
+      "value": 1,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_consumer_samples",
+      "path": "proof.consumer_samples",
+      "op": "eq",
+      "value": 720,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_target_recreates",
+      "path": "output_work.target_recreates",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_ui_renders",
+      "path": "output_work.ui_renders",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_submissions",
+      "path": "output_work.submissions",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_canonical_targets",
+      "path": "proof.canonical_targets",
+      "op": "eq",
+      "value": 1,
+      "status": "required",
+      "note": "Measured window totals; missing is not zero. Actual GPU evidence required."
+    },
+    {
+      "name": "multi_frame_slot_waits",
+      "path": "gpu_policy.frame_slot_waits",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Real device-policy deltas; output must not hide CPU waiting or frame-slot stalls."
+    },
+    {
+      "name": "multi_frame_slot_stalls",
+      "path": "gpu_policy.frame_slot_stalls",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Real device-policy deltas; output must not hide CPU waiting or frame-slot stalls."
+    },
+    {
+      "name": "multi_upload_ring_waits",
+      "path": "gpu_policy.upload_ring_waits",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Real device-policy deltas; output must not hide CPU waiting or frame-slot stalls."
+    },
+    {
+      "name": "multi_measured_policy_samples",
+      "path": "measurement_gpu_policy.samples",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual measured iterations; excludes initialization and 30 warmup frames."
+    },
+    {
+      "name": "multi_producer_encode_count",
+      "path": "producer_painter.encoded_frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "One measured producer encode per changed content revision."
+    },
+    {
+      "name": "multi_producer_draw_calls",
+      "path": "producer_painter.work.draw_calls",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Real painter draw work must be observed on nonempty producer encodes."
+    },
+    {
+      "name": "multi_timing_samples",
+      "path": "timing_samples",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "CPU call quantiles must come from exactly 240 measured samples; warmup is excluded."
+    },
+    {
+      "name": "multi_content_revisions",
+      "path": "output_work.content_revisions",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "multi_deferred",
+      "path": "output_work.deferred",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "multi_extra_passes",
+      "path": "output_work.extra_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "multi_gpu_convert_passes",
+      "path": "output_work.gpu_convert_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "multi_idle_reuse_frames",
+      "path": "output_work.idle_reuse_frames",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    },
+    {
+      "name": "multi_resolve_count",
+      "path": "output_work.resolve_count",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Exact output workload budget; unexpected measured work must fail, including zero-only stages."
+    }
+  ],
+  "notes": "Issue #242/#248 actual GPU output gate. Direct needs a real Window/Surface probe. Other platform adapters and device-loss are explicit unavailable evidence, never synthetic zero reports. Outside cross-framework harness ids."
+}

@@ -1,0 +1,171 @@
+{
+  "scope": "Published summary only; all retained original evidence and frozen binaries listed in the local manifest remain local; historical results do not transfer to simplified-source evidence",
+  "local_manifest": "archive/docs-notes/performance-data/issue242-delivery-2026-10-15/local-evidence-manifest.json",
+  "local_manifest_sha256": "c7da068834085a8f59bb27f9f9649ddb66e070552d77cc0a43b90276601efde4",
+  "local_groups": [
+    {
+      "local_directory": "archive/docs-notes/performance-data/issue242-2026-10-15",
+      "files": 13,
+      "bytes": 410175
+    },
+    {
+      "local_directory": "archive/docs-notes/performance-data/issue242-r2-2026-10-15",
+      "files": 44,
+      "bytes": 2903164
+    },
+    {
+      "local_directory": "archive/docs-notes/performance-data/issue242-r3-2026-10-15",
+      "files": 271,
+      "bytes": 11990023
+    },
+    {
+      "local_directory": "archive/docs-notes/performance-data/issue242-r4-2026-10-15",
+      "files": 1216,
+      "bytes": 569907759
+    },
+    {
+      "local_directory": "archive/docs-notes/performance-data/issue242-r5-2026-10-15",
+      "files": 2346,
+      "bytes": 4272716764
+    }
+  ],
+  "frozen_binaries": [
+    {
+      "local_path": "target/issue242-r2-baseline/nana-output-benchmark",
+      "bytes": 40389632,
+      "sha256": "d25334d572a051d8f4112f9775ace9beb7408e94b8586b5fa6547b99c7b15226"
+    },
+    {
+      "local_path": "target/issue242-r2-baseline/presentation-output-probe",
+      "bytes": 46058544,
+      "sha256": "da2bb7a06cc05e319598f7cc8f456d22d33abfc1f53f1fa42e648c20ba7b563d"
+    },
+    {
+      "local_path": "target/issue242-r3-baseline/nana-output-benchmark",
+      "bytes": 40481216,
+      "sha256": "136a2210d214a1319cf76f82c49a54666c3365ca179d45b71aee146915ee96e9"
+    },
+    {
+      "local_path": "target/issue242-r3-baseline/presentation-output-probe",
+      "bytes": 46244128,
+      "sha256": "793f7a55bbd7acfbed2288afbf2c05d24d583c34d53c04b124c4ca763e164de4"
+    },
+    {
+      "local_path": "target/issue242-r4-before/nana-output-benchmark",
+      "bytes": 40621184,
+      "sha256": "cae5065dfda22e1562ae7a4fcbfe23dc120ddc5ba3492b5d530038397bd20631"
+    },
+    {
+      "local_path": "target/issue242-r4-before/presentation-output-probe",
+      "bytes": 46482384,
+      "sha256": "6caff1aee70af0e8a55d858ca9d74e97f1b4a942197d0ed36fb3ac0d3a4ea53d"
+    },
+    {
+      "local_path": "target/issue242-r4-diagnostic/nana-output-benchmark",
+      "bytes": 40621360,
+      "sha256": "62f46cbf6a2bf539be3b75322b11468dcae0fa85faba48708c0e5fa65a865257"
+    },
+    {
+      "local_path": "target/issue242-r4-diagnostic/presentation-output-probe",
+      "bytes": 46582128,
+      "sha256": "77cdd2c82e9a7c306ebf342f813906497959d33d02e61ac929571358fac75e4e"
+    },
+    {
+      "local_path": "target/issue242-r5-build2/presentation-output-probe",
+      "bytes": 46689024,
+      "sha256": "5e7a8b8226a81cba31384774a073e6b6c4b7aeeef1c53dd06a35def8f7275b7e"
+    },
+    {
+      "local_path": "target/issue242-r5-build3/presentation-output-probe",
+      "bytes": 46689024,
+      "sha256": "a9116f4fb1aa50b76b8fcd1424d8196762da57cc7a7d1f88b39ab1ad3a66140e"
+    },
+    {
+      "local_path": "target/issue242-r5-copy-fix/presentation-output-probe",
+      "bytes": 46689088,
+      "sha256": "c7b0320b74de5574f1bc3f80177d1b04d8a8e9a229704ce7fb8b1b5f1b7f06a3"
+    },
+    {
+      "local_path": "target/issue242-r5-diagnostic/presentation-output-probe",
+      "bytes": 46689024,
+      "sha256": "a9116f4fb1aa50b76b8fcd1424d8196762da57cc7a7d1f88b39ab1ad3a66140e"
+    },
+    {
+      "local_path": "target/issue242-r5-launch-control/LaunchControl.app/Contents/MacOS/presentation-output-probe",
+      "bytes": 46689088,
+      "sha256": "5461e57010c936e16575ce20c3a72ed70fd6c7913359e21f1e1d57352fd791a9"
+    },
+    {
+      "local_path": "target/issue242-r5-policy-diagnostic/nana-output-benchmark",
+      "bytes": 40621360,
+      "sha256": "dec751603ce7c9079f3f8d7cf7b2f75f01f114398f18d022af69c95b42d1bd59"
+    },
+    {
+      "local_path": "target/issue242-r5-policy-diagnostic/presentation-output-probe",
+      "bytes": 46689088,
+      "sha256": "5461e57010c936e16575ce20c3a72ed70fd6c7913359e21f1e1d57352fd791a9"
+    }
+  ],
+  "historical_results": {
+    "r3_workspace": {
+      "passed": 6126,
+      "ignored": 4,
+      "source_scope": "historical R3; not latest simplified source"
+    },
+    "r5_pre_copy_fix_work_gates": {
+      "passed": 100,
+      "latency_passed": false
+    },
+    "r5_post_copy_fix_work_gates": {
+      "passed": 100,
+      "latency_passed": false,
+      "paired_direct_p50_us": 381.458,
+      "paired_direct_p50_ratio": 1.253628989
+    },
+    "copy_single_variable": {
+      "processes": 20,
+      "blocks": 5,
+      "block_p50_difference_median_us": -5.187,
+      "stable_benefit_established": false
+    },
+    "scheduler_full": {
+      "frames_covered": 2640,
+      "measured_frames": 2400,
+      "actual_anchors": 23,
+      "continuous_slow_spans_frames": [
+        61,
+        76
+      ],
+      "upstream_cause_established": false
+    }
+  },
+  "open_followups": [
+    354,
+    355,
+    356,
+    357
+  ],
+  "preexisting_unrelated_failure": {
+    "issue": 345,
+    "test": "theme components design_number",
+    "observed": 25,
+    "baseline": 21
+  },
+  "unknown": [
+    "GPU execution duration",
+    "driver VRAM",
+    "frozen direct-only physical extent and actual present mode"
+  ],
+  "platform_unexecuted": [
+    "Windows DX12/D3D11",
+    "SteamVR compositor",
+    "Electron GPU bridge",
+    "real external-output device-loss/replacement recovery"
+  ],
+  "historical_missing_artifact": "R1 failed ~6.2GiB Metal trace had already been removed during that historical attempt; its command/error records remain. The retained-evidence manifest does not claim that trace exists.",
+  "code_boundaries": {
+    "multisampled_retained_target": "Unsupported for sample_count>1; issue355",
+    "headless_painter_instances": "One cached instance per incompatible ScenePresentationProfile, one GpuContext/Device/Queue and unified implementation; strict single instance remains issue357",
+    "native_metal_vulkan": "Unsupported until complete safe exchange contract"
+  }
+}

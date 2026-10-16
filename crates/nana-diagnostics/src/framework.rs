@@ -325,6 +325,142 @@ pub mod gpu {
     // stay taken: 40 gpu.output.target_plan_rebuilds, 43 gpu.output.cpu_readbacks,
     // 50 gpu.output.cpu_fallback_frames, 51 gpu.output.canonical_target_count,
     // 52 gpu.output.consumer_count.
+    pub static OUTPUT_PLAN_REBUILDS: Metric =
+        Metric::counter(D, 53, "gpu.output.plan_rebuilds", "count");
+    pub static OUTPUT_UI_RENDERS: Metric = Metric::counter(D, 54, "gpu.output.ui_renders", "count");
+    pub static OUTPUT_SUBMISSIONS: Metric =
+        Metric::counter(D, 55, "gpu.output.submissions", "count");
+    pub static OUTPUT_CPU_READBACKS: Metric =
+        Metric::counter(D, 56, "gpu.output.cpu_readbacks", "count");
+    pub static OUTPUT_DEFERRED: Metric = Metric::counter(D, 57, "gpu.output.deferred", "count");
+
+    // Explicit, low-frequency consumer snapshots. Frame paths update metrics only.
+    pub static OUTPUT_TRACE_ROUTE: EventDescriptor = EventDescriptor::new(
+        D,
+        21,
+        "gpu.output.trace.route",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("producer"),
+            F::u64("consumer"),
+            F::u64("path"),
+        ],
+    );
+    pub static OUTPUT_TRACE_TARGET: EventDescriptor = EventDescriptor::new(
+        D,
+        22,
+        "gpu.output.trace.target",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("format"),
+            F::u64("width"),
+            F::u64("height"),
+        ],
+    );
+    pub static OUTPUT_TRACE_VERSION: EventDescriptor = EventDescriptor::new(
+        D,
+        23,
+        "gpu.output.trace.version",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("device"),
+            F::u64("resource"),
+            F::u64("revision"),
+        ],
+    );
+    pub static OUTPUT_TRACE_WORK: EventDescriptor = EventDescriptor::new(
+        D,
+        24,
+        "gpu.output.trace.work",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("passes"),
+            F::u64("copies"),
+            F::u64("copy_bytes"),
+        ],
+    );
+    pub static OUTPUT_TRACE_WAIT: EventDescriptor = EventDescriptor::new(
+        D,
+        25,
+        "gpu.output.trace.wait",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("observed"),
+            F::u64("waits"),
+            F::u64("stalls"),
+        ],
+    );
+    pub static OUTPUT_TRACE_RECREATE: EventDescriptor = EventDescriptor::new(
+        D,
+        26,
+        "gpu.output.trace.recreate",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("count"),
+            F::u64("reason"),
+            F::u64("role"),
+        ],
+    );
+    pub static OUTPUT_TRACE_TRANSPORT: EventDescriptor = EventDescriptor::new(
+        D,
+        27,
+        "gpu.output.trace.transport",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("submissions"),
+            F::u64("readbacks"),
+            F::u64("deferred"),
+        ],
+    );
+    pub static OUTPUT_TRACE_PRODUCER: EventDescriptor = EventDescriptor::new(
+        D,
+        28,
+        "gpu.output.trace.producer",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("renders"),
+            F::u64("resolves"),
+            F::u64("reuses"),
+        ],
+    );
+    pub static OUTPUT_TRACE_STATE: EventDescriptor = EventDescriptor::new(
+        D,
+        29,
+        "gpu.output.trace.state",
+        Severity::Debug,
+        &[
+            F::u64("trace"),
+            F::u64("state"),
+            F::u64("reason"),
+            F::u64("role"),
+        ],
+    );
+    pub static OUTPUT_CONSUMER_PASSES: Metric =
+        Metric::counter(D, 58, "gpu.output.consumer.passes", "count");
+    pub static OUTPUT_CONSUMER_COPIES: Metric =
+        Metric::counter(D, 59, "gpu.output.consumer.copies", "count");
+    pub static OUTPUT_CONSUMER_COPY_BYTES: Metric =
+        Metric::counter(D, 60, "gpu.output.consumer.copy_bytes", "bytes");
+    pub static OUTPUT_CONSUMER_READBACKS: Metric =
+        Metric::counter(D, 61, "gpu.output.consumer.readbacks", "count");
+    pub static OUTPUT_CONSUMER_DEFERRED: Metric =
+        Metric::counter(D, 62, "gpu.output.consumer.deferred", "count");
+    pub static OUTPUT_CONSUMER_SUBMISSIONS: Metric =
+        Metric::counter(D, 63, "gpu.output.consumer.submissions", "count");
+    pub static OUTPUT_CONSUMER_WAITS: Metric =
+        Metric::counter(D, 64, "gpu.output.consumer.waits", "count");
+    pub static OUTPUT_CONSUMER_STALLS: Metric =
+        Metric::counter(D, 65, "gpu.output.consumer.stalls", "count");
+    pub static OUTPUT_CONSUMER_REUSES: Metric =
+        Metric::counter(D, 66, "gpu.output.consumer.reuses", "count");
 
     /// A low-volume frame-binding transition. `outcome`: 1 a live frame
     /// replaced the placeholder, 2 the placeholder replaced a frame, 3
@@ -438,6 +574,31 @@ pub mod host {
     /// them did not arrive within one frame period (Windows only).
     pub static FRAMES_SERVED_WITHOUT_PAINT: Metric =
         Metric::counter(D, 5, "host.frames_served_without_paint", "count");
+
+    // Latest per-stage wall times, sampled only with diagnostics metrics enabled.
+    // These are host-thread observations, not GPU execution durations.
+    pub static PRESENTATION_PREPARE_NS: Metric =
+        Metric::gauge(D, 40, "host.presentation.latest.prepare", "ns");
+    pub static PRESENTATION_SETTLE_NS: Metric =
+        Metric::gauge(D, 41, "host.presentation.latest.settle", "ns");
+    pub static PRESENTATION_RESERVE_NS: Metric =
+        Metric::gauge(D, 42, "host.presentation.latest.reserve", "ns");
+    pub static PRESENTATION_ACQUIRE_NS: Metric =
+        Metric::gauge(D, 43, "host.presentation.latest.acquire", "ns");
+    pub static PRESENTATION_RESOURCES_NS: Metric =
+        Metric::gauge(D, 44, "host.presentation.latest.resources", "ns");
+    pub static PRESENTATION_PLAN_NS: Metric =
+        Metric::gauge(D, 45, "host.presentation.latest.plan", "ns");
+    pub static PRESENTATION_ENCODE_NS: Metric =
+        Metric::gauge(D, 46, "host.presentation.latest.encode", "ns");
+    pub static PRESENTATION_SUBMIT_NS: Metric =
+        Metric::gauge(D, 47, "host.presentation.latest.submit", "ns");
+    pub static PRESENTATION_POST_SUBMIT_NS: Metric =
+        Metric::gauge(D, 48, "host.presentation.latest.post_submit", "ns");
+    pub static PRESENTATION_PRESENT_NS: Metric =
+        Metric::gauge(D, 49, "host.presentation.latest.present", "ns");
+    pub static PRESENTATION_FINISH_NS: Metric =
+        Metric::gauge(D, 50, "host.presentation.latest.finish", "ns");
 
     /// Fault, at most once per second per `kind` (see [`FAILURES`] for the
     /// full count). `kind` is the `HostFailure` variant's stable code.

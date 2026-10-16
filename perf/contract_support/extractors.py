@@ -45,6 +45,12 @@ def extract_nana(
 ) -> dict[str, Any]:
     kind = scenario["kind"]
     params = scenario["params"]
+    if kind == "PresentationOutput":
+        from .output_extractors import extract_output
+        return extract_output(scenario, reports, source_paths)
+    if kind == "OutputTransport":
+        from .transport_extractors import extract_transport
+        return extract_transport(scenario, reports, source_paths)
     if kind == "StaticTree":
         return _extract_nana_static_tree(scenario, reports, source_paths)
     if kind == "Mutation" and params.get("kind") == "PaintOnly":

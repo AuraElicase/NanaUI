@@ -20,9 +20,10 @@ pub struct ApplicationWindow {
     /// Keep one host per window: replacing the `Arc` refetches its images.
     pub fetch_host: Option<nana_ui_platform::SharedFetchHost>,
     pub demand: FrameDemand,
-    /// Paint this window a second time into an offscreen output; frames and
+    /// Retained output of this window's presentation; frames and
     /// state changes arrive at [`ApplicationState::output_frame`] and
-    /// [`ApplicationState::output_status`].
+    /// [`ApplicationState::output_status`]. Compatible pixel contracts share
+    /// one render; incompatible output requirements keep their own target.
     pub output: Option<crate::WindowOutputConfig>,
 }
 

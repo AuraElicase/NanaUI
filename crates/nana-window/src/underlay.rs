@@ -4,15 +4,16 @@
 //! it in z-order (in the parent's band, so a topmost parent keeps a topmost
 //! underlay), moves and resizes with it, hides while the parent is hidden or
 //! minimized, and never takes input or activation: every click lands on the
-//! parent above it. Unlike the shadow companion it is an ordinary top-level
-//! window with its own surface and title, so screen-capture software can list
-//! and capture it on its own — the point of splitting one visual window into
-//! two native ones.
+//! parent above it. It has its own native surface and title so capture can
+//! target its picture independently of the parent's controls. On macOS it
+//! stays independent of the parent's attachment group so capture cannot
+//! include the UI, even when the capturer includes attached windows.
 //!
 //! The parent's frame is the only authority; the underlay never persists or
 //! constrains its own geometry. The host calls [`Underlay::sync`] on every
 //! geometry, mode, focus or visibility change of the parent — not per frame:
-//! on macOS it re-orders the window, which is a window-server round trip. On
+//! on macOS synchronous AppKit notifications already follow native moves
+//! and resizes; host sync also conforms visibility and ordering. On
 //! Windows a subclass on the parent already follows it within the same
 //! message, and there `sync` returns early when nothing moved.
 
@@ -63,9 +64,17 @@ impl Underlay {
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use objc2::MainThreadMarker;
+    use std::cell::Cell;
+
     use objc2::rc::Retained;
-    use objc2_app_kit::{NSView, NSWindow, NSWindowCollectionBehavior, NSWindowOrderingMode};
+    use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+    use objc2_app_kit::{
+        NSApplicationDidBecomeActiveNotification, NSView, NSWindow, NSWindowCollectionBehavior,
+        NSWindowDidBecomeKeyNotification, NSWindowDidBecomeMainNotification,
+        NSWindowDidDeminiaturizeNotification, NSWindowDidMiniaturizeNotification,
+        NSWindowDidMoveNotification, NSWindowDidResizeNotification, NSWindowOrderingMode,
+    };
+    use objc2_foundation::{NSNotification, NSNotificationCenter, NSObject};
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
     use super::UnderlayError;
@@ -82,38 +91,23 @@ mod platform {
         view.window()
     }
 
-    pub(super) struct Underlay {
+    struct Binding {
         parent: Retained<NSWindow>,
         window: Retained<NSWindow>,
+        syncing: Cell<bool>,
     }
 
-    impl Underlay {
-        pub(super) fn attach<P, U>(parent: &P, underlay: &U) -> Result<Self, UnderlayError>
-        where
-            P: HasWindowHandle + ?Sized,
-            U: HasWindowHandle + ?Sized,
-        {
-            let failed = |reason: &str| UnderlayError::Failed(reason.into());
-            let parent = ns_window(parent).ok_or_else(|| failed("parent has no NSWindow"))?;
-            let window = ns_window(underlay).ok_or_else(|| failed("underlay has no NSWindow"))?;
-            // A window that never set it hit-tests by alpha, so a click on a
-            // transparent pixel of the parent would fall through to the
-            // underlay's content — or past it to the desktop.
-            parent.setIgnoresMouseEvents(false);
-            window.setIgnoresMouseEvents(true);
-            window.setHasShadow(false);
-            // Out of the window cycle; allowed into the parent's fullscreen
-            // Space.
-            window.setCollectionBehavior(
-                NSWindowCollectionBehavior::IgnoresCycle
-                    | NSWindowCollectionBehavior::FullScreenAuxiliary,
-            );
-            let this = Self { parent, window };
-            this.sync();
-            Ok(this)
+    impl Binding {
+        fn sync(&self) {
+            // Ordering can synchronously send more AppKit notifications.
+            if self.syncing.replace(true) {
+                return;
+            }
+            self.conform();
+            self.syncing.set(false);
         }
 
-        pub(super) fn sync(&self) {
+        fn conform(&self) {
             let parent = &self.parent;
             let window = &self.window;
             if !parent.isVisible() || parent.isMiniaturized() {
@@ -132,16 +126,98 @@ mod platform {
             if window.level() != parent.level() {
                 window.setLevel(parent.level());
             }
-            // Ordered, not attached: AppKit captures a window together with
-            // its child windows, so a child underlay would bring the parent's
-            // controls into every capture of it.
+            // Independent windows: ScreenCaptureKit's includeChildWindows
+            // otherwise captures the whole attachment group, including UI.
             window.orderWindow_relativeTo(NSWindowOrderingMode::Below, parent.windowNumber());
+        }
+    }
+
+    define_class!(
+        #[unsafe(super = NSObject)]
+        #[thread_kind = MainThreadOnly]
+        #[ivars = Binding]
+        struct UnderlayObserver;
+
+        impl UnderlayObserver {
+            #[unsafe(method(parentChanged:))]
+            fn parent_changed(&self, _notification: &NSNotification) {
+                // Runs inside AppKit's move/resize notification, before the
+                // application event queue or GPU work can delay following.
+                self.ivars().sync();
+            }
+        }
+    );
+
+    pub(super) struct Underlay {
+        observer: Retained<UnderlayObserver>,
+    }
+
+    impl Underlay {
+        pub(super) fn attach<P, U>(parent: &P, underlay: &U) -> Result<Self, UnderlayError>
+        where
+            P: HasWindowHandle + ?Sized,
+            U: HasWindowHandle + ?Sized,
+        {
+            let failed = |reason: &str| UnderlayError::Failed(reason.into());
+            let mtm = MainThreadMarker::new().ok_or_else(|| failed("not on main thread"))?;
+            let parent = ns_window(parent).ok_or_else(|| failed("parent has no NSWindow"))?;
+            let window = ns_window(underlay).ok_or_else(|| failed("underlay has no NSWindow"))?;
+            parent.setIgnoresMouseEvents(false);
+            window.setIgnoresMouseEvents(true);
+            window.setHasShadow(false);
+            window.setCollectionBehavior(
+                NSWindowCollectionBehavior::IgnoresCycle
+                    | NSWindowCollectionBehavior::FullScreenAuxiliary,
+            );
+            let allocated = UnderlayObserver::alloc(mtm).set_ivars(Binding {
+                parent,
+                window,
+                syncing: Cell::new(false),
+            });
+            // SAFETY: initialize our main-thread NSObject with installed ivars.
+            let observer: Retained<UnderlayObserver> = unsafe { msg_send![super(allocated), init] };
+            let center = NSNotificationCenter::defaultCenter();
+            // SAFETY: AppKit posts these notifications on the main thread;
+            // the retained observer implements parentChanged: and is removed
+            // before its windows are released.
+            unsafe {
+                for name in [
+                    NSWindowDidMoveNotification,
+                    NSWindowDidResizeNotification,
+                    NSWindowDidBecomeKeyNotification,
+                    NSWindowDidBecomeMainNotification,
+                    NSWindowDidMiniaturizeNotification,
+                    NSWindowDidDeminiaturizeNotification,
+                ] {
+                    center.addObserver_selector_name_object(
+                        &observer,
+                        sel!(parentChanged:),
+                        Some(name),
+                        Some(&observer.ivars().parent),
+                    );
+                }
+                center.addObserver_selector_name_object(
+                    &observer,
+                    sel!(parentChanged:),
+                    Some(NSApplicationDidBecomeActiveNotification),
+                    None,
+                );
+            }
+            let this = Self { observer };
+            this.sync();
+            Ok(this)
+        }
+
+        pub(super) fn sync(&self) {
+            self.observer.ivars().sync();
         }
     }
 
     impl Drop for Underlay {
         fn drop(&mut self) {
-            self.window.orderOut(None);
+            // SAFETY: this observer was registered above and is still retained.
+            unsafe { NSNotificationCenter::defaultCenter().removeObserver(&self.observer) };
+            self.observer.ivars().window.orderOut(None);
         }
     }
 }

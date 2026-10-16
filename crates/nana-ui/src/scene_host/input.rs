@@ -224,13 +224,20 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                     self.refresh_surface_display(id);
                 }
                 #[cfg(target_os = "macos")]
-                let native_live_resize = self.sync_native_live_resize_presents(id);
+                let native_live_resize = self.native_live_resize_gesture(id);
                 #[cfg(not(target_os = "macos"))]
                 let native_live_resize = false;
-                self.forward_window_event(event_loop, id, &event);
-                // Native macOS drags repaint through winit's live-resize
-                // hook, and a custom chrome drag paints its steps in-stack;
-                // both would only duplicate the per-step frame here.
+                // Native macOS drags repaint through winit's live-resize hook.
+                // Steps inside one refresh interval keep the last drawable and
+                // do not relayout; the hook still runs, but it returns before
+                // configure. A custom chrome drag paints its steps in-stack
+                // and is not this path.
+                let defer_program = native_live_resize
+                    && matches!(event, WinitWindowEvent::SurfaceResized(_))
+                    && self.defer_native_live_resize(id);
+                if !defer_program {
+                    self.forward_window_event(event_loop, id, &event);
+                }
                 if geometry_changed && !native_live_resize {
                     self.request_redraw(id);
                 }
@@ -278,8 +285,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                         return;
                     }
                 }
-                if *focused && let Some(host) = self.window_contexts.get_mut(&id) {
-                    host.input_source.forget_ime();
+                if let Some(host) = self.window_contexts.get_mut(&id) {
+                    host.input_source.reset_ime();
                 }
                 // Window focus is canonical input as well as a host
                 // observation. Routing it first lets the Runtime cancel what
@@ -675,9 +682,15 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     /// request made while the platform delivers a key or a composition
     /// re-enters the window procedure.
     pub(super) fn apply_window_ime(&mut self) {
-        for host in self.window_contexts.values_mut() {
+        for (id, host) in &mut self.window_contexts {
             let apply = host.input_source.take_ime_apply();
-            host_services::apply_text_input(host.surface.window().as_ref(), apply);
+            if let Err(error) =
+                host_services::apply_text_input(host.surface.window().as_ref(), apply)
+            {
+                host.input_source.applied_ime = None;
+                self.program
+                    .report_host_failure(HostFailure::ImeDispatch { window: *id, error });
+            }
         }
     }
 

@@ -719,8 +719,27 @@ pub trait RuntimeProgram: Sized + 'static {
         RuntimeProgramUpdate::default()
     }
 
-    /// Ask for this window's content to be painted a second time into an
-    /// offscreen output (a Spout sender, a recorder). Read every frame; `None`
+    /// Opt in to numeric, per-owner output observations for this window.
+    /// Disabled by default; enabling may allocate the retained diagnostic
+    /// owners once. Query callbacks do not publish per-frame log events.
+    fn output_trace_enabled(&self, _id: WindowId) -> bool {
+        false
+    }
+
+    /// Latest cumulative work for one presentation producer or consumer.
+    /// Called on the host thread when tracing is enabled. Keep it cheap:
+    /// copy the snapshot and publish diagnostics only on an explicit request,
+    /// never invoke `capture_diagnostics` from this frame callback.
+    fn window_output_trace(
+        &mut self,
+        _id: WindowId,
+        _trace: crate::output::OutputTraceSnapshot,
+        _context: &RuntimeProgramContext<Self::Message>,
+    ) {
+    }
+
+    /// Configure this window's retained output (a Spout sender, a recorder).
+    /// Compatible pixel contracts share one render. Read every frame; `None`
     /// (the default) stops an output that was running.
     ///
     /// The host paints the window's own scene into the output inside the

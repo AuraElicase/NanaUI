@@ -59,6 +59,16 @@ impl RichTextView {
         self
     }
 
+    /// Like presentation, with a chain of composable effects per span index.
+    pub fn presentation_chains(
+        mut self,
+        chains: impl Into<Arc<[nana_ui_core::GlyphEffectChain]>>,
+        reveal: Option<nana_ui_core::RevealSchedule>,
+    ) -> Self {
+        self.presentation = Some(nana_ui_core::GlyphPresentation::chains(chains, reveal));
+        self
+    }
+
     /// Replace the value. A clone of a value the node already shows is
     /// recognised and costs nothing.
     pub fn value(mut self, value: impl Into<RichText>) -> Self {
@@ -142,6 +152,21 @@ impl crate::AppContext {
         self.commit_mutations(queue).map(|_| ())
     }
 
+    /// Set composable effects without text shaping or layout work.
+    pub fn set_rich_presentation_chains(
+        &mut self,
+        node: impl Into<StableNodeId>,
+        chains: impl Into<Arc<[nana_ui_core::GlyphEffectChain]>>,
+        reveal: Option<nana_ui_core::RevealSchedule>,
+    ) -> Result<(), crate::FrameworkError> {
+        let mut queue = MutationQueue::new();
+        queue.set_glyph_presentation(
+            node.into(),
+            Some(nana_ui_core::GlyphPresentation::chains(chains, reveal)),
+        );
+        self.commit_mutations(queue).map(|_| ())
+    }
+
     /// Stop presenting a node's glyphs.
     pub fn clear_rich_presentation(
         &mut self,
@@ -172,6 +197,7 @@ impl ComponentView for RichTextView {
         if let Some(wanted) = &self.presentation {
             let running = world.glyph_presentation(id).is_some_and(|current| {
                 current.effects == wanted.effects
+                    && current.effect_chains == wanted.effect_chains
                     && match (&current.reveal, &wanted.reveal) {
                         (None, None) => true,
                         (Some(a), Some(b)) => {

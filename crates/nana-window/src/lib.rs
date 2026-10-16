@@ -12,6 +12,7 @@ mod contrast_preference;
 #[cfg(target_os = "windows")]
 mod dcomp;
 mod file_dialog;
+mod ime;
 mod keyboard;
 mod material;
 mod menu;
@@ -31,6 +32,8 @@ pub use chrome::LiveFrameResize;
 pub use chrome::arm_frameless_guard;
 pub use chrome::drag_custom_title_bar;
 pub use chrome::native_live_resize_active;
+#[cfg(target_os = "macos")]
+pub use chrome::native_window_maximized;
 pub use chrome::place_native_window_controls;
 pub use chrome::prepare_client_chrome;
 pub use chrome::prepare_custom_title_bar;
@@ -50,6 +53,7 @@ pub use file_dialog::{
     FileDialogSupport, FileFilter, describe_configured_dialog, file_dialog_support,
     open_file_dialog,
 };
+pub use ime::discard_native_ime_preedit;
 pub use keyboard::{KeyboardModifiers, keyboard_modifiers};
 pub use material::{
     Appearance, FallbackColor, MaterialEffect, MaterialFallback, MaterialOutcome,

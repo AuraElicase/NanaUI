@@ -50,6 +50,11 @@ macro_rules! dx12_or_skip {
         match dx12() {
             Some(gpu) => gpu,
             None => {
+                assert!(
+                    std::env::var_os("NANA_REQUIRE_DX12_NATIVE_TESTS").as_deref()
+                        != Some(std::ffi::OsStr::new("1")),
+                    "DX12 native-export conformance was required, but no usable DX12 adapter/device was found"
+                );
                 eprintln!("skipped: no DX12 adapter");
                 return;
             }
@@ -257,7 +262,7 @@ fn an_unreleased_frame_defers_the_next_and_a_dropped_token_releases_itself() {
 }
 
 #[test]
-fn a_discarded_frame_leaves_the_pool_where_it_was() {
+fn a_discarded_frame_releases_its_slot_without_reusing_its_fence_value() {
     let gpu = dx12_or_skip!();
     let source = source(&gpu, &pattern());
     let mut pool = NativeExportPool::new(&gpu, EXTENT).unwrap();
@@ -271,8 +276,94 @@ fn a_discarded_frame_leaves_the_pool_where_it_was() {
         NativeExportError::NotSubmitted
     );
     let token = export(&mut pool, &gpu, &source);
-    assert_eq!(token.ready_value(), 1);
+    assert_eq!(token.ready_value(), 3);
     assert_eq!(token.slot(), 0);
+}
+
+#[test]
+fn a_staged_copy_exclusively_reserves_its_slot_until_finish_or_discard() {
+    let gpu = dx12_or_skip!();
+    let source = source(&gpu, &pattern());
+    let mut pool = NativeExportPool::new(&gpu, EXTENT).unwrap();
+    let mut first = gpu.begin_frame("first staged export");
+    let NativeExportOutcome::Staged(stale) = pool.stage(&mut first, &source).unwrap() else {
+        panic!("first copy must reserve a slot");
+    };
+    let mut second = gpu.begin_frame("second staged export");
+    assert!(matches!(
+        pool.stage(&mut second, &source).unwrap(),
+        NativeExportOutcome::Deferred(NativeExportDeferral::ProducerBusy)
+    ));
+    first.discard();
+    let NativeExportOutcome::Staged(current) = pool.stage(&mut second, &source).unwrap() else {
+        panic!("discard must release the reservation");
+    };
+    assert_eq!(
+        pool.finish(stale).unwrap_err(),
+        NativeExportError::NotSubmitted
+    );
+    second.submit();
+    let token = pool.finish(current).unwrap();
+    assert_eq!(token.ready_value(), 3);
+    assert_eq!(token.slot(), 0);
+}
+
+#[test]
+fn a_submitted_stage_stays_reserved_until_its_token_is_finished() {
+    let gpu = dx12_or_skip!();
+    let source = source(&gpu, &pattern());
+    let mut pool = NativeExportPool::new(&gpu, EXTENT).unwrap();
+    let mut first = gpu.begin_frame("submitted unfinished export");
+    let NativeExportOutcome::Staged(staged) = pool.stage(&mut first, &source).unwrap() else {
+        panic!("first copy must reserve a slot");
+    };
+    first.submit();
+    let mut next = gpu.begin_frame("blocked second export");
+    assert!(matches!(
+        pool.stage(&mut next, &source).unwrap(),
+        NativeExportOutcome::Deferred(NativeExportDeferral::ProducerBusy)
+    ));
+    next.discard();
+    drop(pool.finish(staged).unwrap());
+    wait_completed(&pool, 2);
+    assert_eq!(export(&mut pool, &gpu, &source).ready_value(), 3);
+}
+
+#[test]
+fn an_abandoned_submitted_stage_cannot_make_the_next_ready_wait_pass_early() {
+    let gpu = dx12_or_skip!();
+    let bytes = pattern();
+    let first_source = source(&gpu, &bytes);
+    let next_bytes: Vec<_> = bytes.iter().map(|value| !value).collect();
+    let next_source = source(&gpu, &next_bytes);
+    for drop_before_submit in [false, true] {
+        let mut pool = NativeExportPool::new(&gpu, EXTENT).unwrap();
+        let mut recording = gpu.begin_frame("abandoned native copy");
+        let NativeExportOutcome::Staged(staged) =
+            pool.stage(&mut recording, &first_source).unwrap()
+        else {
+            panic!("new pool must reserve a copy");
+        };
+        if drop_before_submit {
+            drop(staged);
+            recording.submit();
+        } else {
+            recording.submit();
+            drop(staged);
+        }
+        // Its ready signal is already visible, even though no token was
+        // finished. Reusing 1 would let the next consumer read before copy 2.
+        wait_completed(&pool, 1);
+        assert_eq!(pool.issued(), 0);
+        let mut next = export(&mut pool, &gpu, &next_source);
+        assert_eq!(next.ready_value(), 3);
+        assert_eq!(next.release_value(), 4);
+        assert_eq!(pool.issued(), 1);
+        let consumer = Consumer::on_luid(next.adapter_luid());
+        assert_eq!(consumer.read(&mut next), next_bytes);
+        drop(next);
+        wait_completed(&pool, 4);
+    }
 }
 
 #[test]
@@ -308,6 +399,48 @@ fn retiring_closes_the_handles_once_the_last_token_is_gone() {
         handles.iter().all(|handle| !open(*handle)),
         "handles outlived the pool"
     );
+}
+
+#[test]
+fn retirement_waits_for_an_accepted_consumers_gpu_release_after_token_drop() {
+    let gpu = dx12_or_skip!();
+    let source = source(&gpu, &pattern());
+    let mut pool = NativeExportPool::new(&gpu, EXTENT).unwrap();
+    let mut token = export(&mut pool, &gpu, &source);
+    wait_completed(&pool, token.ready_value());
+    let release = token.release_value();
+    // Open the fence before retiring, just as an external consumer does.
+    let consumer = Consumer::on_luid(token.adapter_luid());
+    let device5: ID3D11Device5 = consumer.device.cast().unwrap();
+    let context4: ID3D11DeviceContext4 = consumer.context.cast().unwrap();
+    let mut fence: Option<ID3D11Fence> = None;
+    unsafe {
+        device5
+            .OpenSharedFence(HANDLE(token.fence_handle().as_raw_handle()), &mut fence)
+            .unwrap();
+    }
+    let fence = fence.unwrap();
+    let ticket = pool.retirement_ticket().unwrap();
+    token.accept_release();
+    pool.retire();
+    assert!(!ticket.is_released(), "a live token still owns the pool");
+    drop(token);
+    assert!(
+        !ticket.is_released(),
+        "dropping an accepted token cannot stand in for GPU release"
+    );
+    unsafe {
+        context4.Signal(&fence, release).unwrap();
+        consumer.context.Flush();
+    }
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !ticket.is_released() {
+        assert!(
+            Instant::now() < deadline,
+            "consumer release never completed"
+        );
+        std::thread::yield_now();
+    }
 }
 
 #[test]

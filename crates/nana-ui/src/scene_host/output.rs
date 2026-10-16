@@ -1,5 +1,6 @@
-//! Scene host side of window outputs: the second paint of a window's scene
-//! into its offscreen output, inside the frame the host records anyway.
+//! Retained window outputs, recorded in the host's frame. Compatible windows
+//! consume the canonical output through a final transfer; incompatible pixel
+//! contracts retain separate rasterizations.
 
 use super::*;
 use crate::output::window_output::{OutputStep, RecordedOutput, WindowOutputState, output_profile};
@@ -11,15 +12,24 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     pub(super) fn sync_window_output(&mut self, id: WindowId) -> bool {
         let config = self.program.window_output(id);
         if config.is_none() && !self.window_outputs.contains_key(&id) {
+            // Establish an unpublished direct owner before acquisition so an
+            // initial skip/failure is observable without inventing a frame.
+            self.ensure_direct_output_trace(id);
             return false;
         }
         self.window_outputs
             .entry(id)
             .or_insert_with(|| WindowOutputState::new(id))
             .set_config(config);
+        let tracing = self.program.output_trace_enabled(id);
+        self.window_outputs
+            .get_mut(&id)
+            .expect("inserted output state")
+            .set_output_trace_enabled(tracing);
         self.flush_window_output(id);
         if config.is_none() {
             self.window_outputs.remove(&id);
+            self.ensure_direct_output_trace(id);
         }
         config.is_some()
     }
@@ -48,21 +58,37 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         scene: &nana_ui_scene::UiScene,
         host_textures: Option<&crate::HostTextureRegistry>,
         gpu_renderers: Option<&crate::SceneGpuRendererRegistry>,
+        producers: Option<&crate::SceneResourceProducerRegistry>,
         clear_color: [f32; 4],
     ) -> Option<OutputStep> {
         if !self.window_outputs.contains_key(&id) {
             return None;
         }
         let geometry = self.geometry_of(id);
-        // Content that moves without the scene's projection moving: custom
-        // GPU renderers and compositor animation.
-        let volatile = gpu_renderers.is_some()
-            || self
-                .program
-                .read_document(id, |document| document.compositor_needs_tick())
-                .unwrap_or(false);
-        let image_revision = self.painter_mut(output_profile()).image_revision();
-        let host_revision = image_revision ^ self.surface_generation.rotate_left(32);
+        // Unknown custom renderer versions require invalidation. The shared
+        // render key tracks actual compositor clocks and presentation epochs.
+        let renderer_revision = gpu_renderers.map(|registry| registry.retained_revision(scene));
+        let producer_revision = producers
+            .map(|registry| registry.retained_revision(scene))
+            .filter(|(used, _)| *used)
+            .map(|(_, revision)| revision);
+        let volatile = renderer_revision.is_some_and(|revision| revision.is_none())
+            || producer_revision == Some(None);
+        let painter = self.painter_mut(output_profile());
+        let image_revision =
+            crate::output::driver::frame_driver::PresentationFrameDriver::refresh_image_revision(
+                painter,
+            );
+        let mut host_revision = image_revision
+            ^ self.surface_generation.rotate_left(32)
+            ^ renderer_revision.flatten().unwrap_or(0).rotate_left(11);
+        if let Some(revision) = producer_revision {
+            use std::hash::{Hash, Hasher};
+            let mut key = std::collections::hash_map::DefaultHasher::new();
+            host_revision.hash(&mut key);
+            revision.hash(&mut key);
+            host_revision = key.finish();
+        }
         let gpu = self.graphics.gpu().clone();
         let state = self.window_outputs.get_mut(&id)?;
         Some(state.begin(
@@ -77,28 +103,66 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         ))
     }
 
-    /// Paints `scene` into `id`'s output inside `frame`, as planned.
+    /// Supply native presenter resources to the same orchestration authority
+    /// used by windowless output. This adapter does not choose a render route.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn record_window_output(
+    pub(super) fn encode_presentation(
         &mut self,
         id: WindowId,
         step: Option<OutputStep>,
+        direct: Option<crate::output::driver::frame_driver::DirectPresentation>,
         scene: &nana_ui_scene::UiScene,
         frame: &mut nana_gpu::FrameContext,
+        target: Option<&nana_gpu::GpuRenderTarget>,
         host_textures: Option<&crate::HostTextureRegistry>,
         gpu_renderers: Option<&crate::SceneGpuRendererRegistry>,
         fetch_host: Option<nana_ui_platform::SharedFetchHost>,
-    ) -> Option<RecordedOutput> {
-        let step = step?;
-        if !matches!(step, OutputStep::Record { .. }) {
-            return None;
+    ) -> Result<
+        (
+            Option<RecordedOutput>,
+            crate::output::driver::frame_driver::RecordedPresentation,
+        ),
+        crate::ExternalSurfaceError,
+    > {
+        use crate::output::driver::frame_driver::PresentationFrameDriver;
+        if let Some(direct) = direct {
+            self.painter_mut(direct.profile);
         }
-        let mut state = self.window_outputs.remove(&id)?;
-        let painter = self.painter_mut(output_profile());
-        painter.set_resource_fetch_host(fetch_host);
-        let recorded = state.record(step, frame, painter, scene, host_textures, gpu_renderers);
-        self.window_outputs.insert(id, state);
-        recorded
+        if self.window_outputs.contains_key(&id) {
+            self.painter_mut(output_profile());
+        }
+        let gpu = self.graphics.gpu();
+        if let Some(state) = self.window_outputs.get_mut(&id) {
+            state.encode_presentation(
+                step,
+                direct,
+                scene,
+                frame,
+                gpu,
+                &mut self.painters,
+                target,
+                host_textures,
+                gpu_renderers,
+                fetch_host,
+            )
+        } else {
+            let prepared =
+                PresentationFrameDriver::prepare(scene, direct, None, None, host_textures)?;
+            let encoded = PresentationFrameDriver::encode(
+                prepared,
+                scene,
+                frame,
+                gpu,
+                &mut self.painters,
+                None,
+                target,
+                &mut None,
+                host_textures,
+                gpu_renderers,
+                fetch_host,
+            )?;
+            Ok((None, encoded))
+        }
     }
 
     /// Publishes a recorded output once its frame was submitted.
@@ -127,6 +191,118 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 .window_output_frame(id, &frame, &self.context_for(id));
         }
         self.flush_window_output(id);
+        self.deliver_output_traces(id);
+    }
+
+    /// Copy observations to the host. Publishing log events remains an
+    /// explicit diagnostic request outside the frame loop.
+    pub(super) fn deliver_output_traces(&mut self, id: WindowId) {
+        if !self.program.output_trace_enabled(id) || !self.window_contexts.contains_key(&id) {
+            return;
+        }
+        if let Some(trace) = self.direct_output_traces.get(&id).copied() {
+            self.program
+                .window_output_trace(id, trace, &self.context_for(id));
+        }
+        let traces = self
+            .window_outputs
+            .get(&id)
+            .map(|state| state.output_traces())
+            .unwrap_or([None; 3]);
+        for trace in traces.into_iter().flatten() {
+            self.program
+                .window_output_trace(id, trace, &self.context_for(id));
+        }
+    }
+
+    pub(super) fn fail_output_trace(&mut self, id: WindowId) {
+        if let Some(trace) = self.direct_output_traces.get_mut(&id) {
+            trace.state = crate::output::OutputTraceState::Failed;
+            trace.deferral_reason = crate::output::OutputTraceDeferral::None;
+            trace.waits = None;
+        }
+        if let Some(state) = self.window_outputs.get_mut(&id) {
+            state.trace_failed();
+        }
+        self.deliver_output_traces(id);
+    }
+
+    pub(super) fn defer_output_trace(
+        &mut self,
+        id: WindowId,
+        reason: crate::output::OutputTraceDeferral,
+    ) {
+        if let Some(trace) = self.direct_output_traces.get_mut(&id) {
+            trace.observe(
+                nana_ui_core::OutputWorkObservation {
+                    deferred: 1,
+                    ..Default::default()
+                },
+                None,
+            );
+            trace.deferral_reason = reason;
+        }
+        if let Some(state) = self.window_outputs.get_mut(&id) {
+            state.trace_deferred(reason);
+        }
+        self.deliver_output_traces(id);
+    }
+
+    fn ensure_direct_output_trace(&mut self, id: WindowId) {
+        use crate::output::{OutputConsumerId, OutputPath, OutputTraceRole, OutputTraceSnapshot};
+        if !self.program.output_trace_enabled(id) {
+            self.direct_output_traces.remove(&id);
+            return;
+        }
+        if self.direct_output_traces.contains_key(&id) {
+            return;
+        }
+        let Some(host) = self.window_contexts.get(&id) else {
+            return;
+        };
+        let profile = host.surface.profile().scene_profile();
+        let extent = self.geometry_of(id).physical_size;
+        self.direct_output_traces.insert(
+            id,
+            OutputTraceSnapshot::new(
+                crate::output::OutputSurfaceId::next().get(),
+                OutputConsumerId(1),
+                OutputTraceRole::Producer,
+                OutputPath::DirectSurface,
+                profile.target_format,
+                [extent.0, extent.1],
+                self.graphics.gpu().generation(),
+            ),
+        );
+    }
+
+    pub(super) fn observe_direct_output_trace(
+        &mut self,
+        id: WindowId,
+        profile: crate::ScenePresentationProfile,
+        extent: [u32; 2],
+        waits: Option<crate::output::OutputTraceWait>,
+    ) {
+        self.ensure_direct_output_trace(id);
+        let device = self.graphics.gpu().generation();
+        let Some(trace) = self.direct_output_traces.get_mut(&id) else {
+            return;
+        };
+        trace.extent = extent;
+        trace.format = profile.target_format;
+        trace.device_generation = device;
+        trace.resource_generation = self.surface_generation.saturating_add(1);
+        trace.content_revision = trace.content_revision.saturating_add(1);
+        trace.state = crate::output::OutputTraceState::Submitted;
+        trace.deferral_reason = crate::output::OutputTraceDeferral::None;
+        trace.observe(
+            nana_ui_core::OutputWorkObservation {
+                ui_renders: 1,
+                submissions: 1,
+                ..Default::default()
+            },
+            waits,
+        );
     }
 
     fn flush_window_output(&mut self, id: WindowId) {
@@ -188,10 +364,9 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         }
         let geometry = self.geometry_of(id);
         let viewport = LayoutViewport::new(geometry.logical_size.0, geometry.logical_size.1);
-        let Some(flush) = self
-            .program
-            .write_document(id, |document| document.flush(viewport, &mut self.text))
-        else {
+        let Some(flush) = self.program.write_document(id, |document| {
+            crate::output::driver::flush_presentation(document, viewport, &mut self.text)
+        }) else {
             return false;
         };
         let update = match flush {
@@ -215,6 +390,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             return false;
         };
         self.update_image_targets(id, scene.as_ref());
+        let producer_frame = self.producer_frames.prepare(
+            id,
+            self.graphics.gpu().generation().get(),
+            producers.as_ref().map_or((false, Some(0)), |registry| {
+                registry.retained_revision(scene.as_ref())
+            }),
+        );
         let host_textures = self.program.host_textures(id);
         let gpu_renderers = self.program.scene_gpu_renderers(id);
         let theme = self.program.theme();
@@ -228,23 +410,52 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             scene.as_ref(),
             host_textures.as_ref(),
             gpu_renderers.as_ref(),
+            producers.as_ref(),
             clear_color,
         );
-        if producers.is_none() && !matches!(step, Some(OutputStep::Record { .. })) {
+        if producer_frame.is_none() && !matches!(step, Some(OutputStep::Record { .. })) {
             // An unchanged output and no producers: nothing to record.
+            if let Some(state) = self.window_outputs.get(&id) {
+                let work = state.last_work();
+                self.program.write_document(id, |document| {
+                    let context = document.context_mut();
+                    context.record_output_work(work);
+                    context.record_presentation_gpu_work(None);
+                });
+            }
             self.flush_window_output(id);
+            self.deliver_output_traces(id);
             return true;
         }
+        let trace_enabled = self.program.output_trace_enabled(id);
         let fetch_host = self.program.resource_fetch_host(id);
-        let mut frame = self
+        let Some(mut frame) = self
             .graphics
             .gpu()
-            .begin_frame("NanaUI hidden window output");
-        let prepared = match producers {
+            .try_begin_frame("NanaUI hidden window output")
+        else {
+            // Dropping `step` releases its unrecorded reservation. A busy
+            // queue schedules a later attempt without blocking this host.
+            drop(step);
+            if let Some(state) = self.window_outputs.get_mut(&id) {
+                state.defer_frame(Instant::now());
+                let work = state.last_work();
+                self.program.write_document(id, |document| {
+                    let context = document.context_mut();
+                    context.record_output_work(work);
+                    context.record_presentation_gpu_work(None);
+                });
+            }
+            self.retry_frame_soon(id);
+            self.deliver_output_traces(id);
+            return false;
+        };
+        let prepared = match producers.filter(|_| producer_frame.is_some()) {
             Some(producers) => match producers.encode_scene(scene.as_ref(), &mut frame) {
                 Ok(prepared) => Some(prepared),
                 Err(error) => {
                     drop(frame);
+                    self.fail_output_trace(id);
                     self.program
                         .report_host_failure(HostFailure::ResourceProduction {
                             window: id,
@@ -255,20 +466,51 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             },
             None => None,
         };
-        let recorded = self.record_window_output(
+        let (recorded, gpu_work) = match self.encode_presentation(
             id,
             step,
+            None,
             scene.as_ref(),
             &mut frame,
+            None,
             host_textures.as_ref(),
             gpu_renderers.as_ref(),
             fetch_host,
-        );
+        ) {
+            Ok((recorded, encoded)) => (recorded, encoded.gpu_work),
+            Err(error) => {
+                drop(frame);
+                self.fail_output_trace(id);
+                self.program
+                    .report_host_failure(HostFailure::UnpaintableScene {
+                        window: id,
+                        error: error.to_string(),
+                    });
+                return false;
+            }
+        };
         let submission = frame.submit();
+        if let Some(producer_frame) = producer_frame {
+            self.producer_frames.submitted(producer_frame);
+        }
         if let Some(prepared) = prepared {
             prepared.submitted(&submission);
         }
+        let trace_waits =
+            trace_enabled.then(|| crate::output::OutputTraceWait::from_submission(&submission));
+        if let Some(state) = self.window_outputs.get_mut(&id) {
+            state.trace_host_submission(false, trace_waits);
+        }
         let output = self.complete_window_output(id, recorded, &submission);
+        if let Some(state) = self.window_outputs.get(&id) {
+            let mut work = state.last_work();
+            work.submissions = 1;
+            self.program.write_document(id, |document| {
+                let context = document.context_mut();
+                context.record_output_work(work);
+                context.record_presentation_gpu_work(gpu_work);
+            });
+        }
         // Only the output painted the scene: its images' sizes are the
         // window's too.
         let targets = self

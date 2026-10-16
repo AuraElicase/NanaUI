@@ -1,195 +1,129 @@
-# 架构
+# 架构合同
 
-这篇给改 NanaUI 的人。你写应用，请看 [框架如何运行](how-it-works.md) 和 [快速开始](../guide/quick-start.md)。
+本文面向参与 NanaUI 框架开发与维护的贡献者，固定工作区内各 crate 的职责边界与对象所有权，防止演进过程中长出第二棵树、第二套渲染器或第二个 GPU 设备。
 
-工作区、窗口、GPU、控件的消费合同分别在 [工作区](workspace.md)、[窗口](window.md)、[实时画面](gpu.md)、[控件](components.md)。
+- 如果你正在使用 NanaUI 开发桌面应用，请先阅读 [框架如何运行](how-it-works.md) 与 [快速开始](../guide/quick-start.md)。
+- 如果你想按模块与源码行号深入学习各子系统的内部实现，请阅读 [架构学习](/learn/) 板块。
+- 工作区、窗口、实时画面与内置控件的消费侧合同分别见 [工作区](workspace.md)、[窗口](window.md)、[实时画面](gpu.md) 与 [控件](components.md)。
 
-这里只固定 crate 边界和所有权。目的是避免再长出第二套权威树。
-
-## Crate 边界
+## Crate 边界与依赖方向
 
 ```text
 应用 / Demo
     │
     ▼
-nana-ui                 宿主适配器：run_runtime、控件再导出、SceneWgpuPainter、
-    │                   FrameBinding、窗口输出/ExternalSurface（gpu feature）
-    ├── nana-gpu        GPU 后端合同：GpuContext（设备、代次、能力、丢失、
-    │                   纹理与提交守卫）、FrameContext（独占 encoder 的一帧）、
-    │                   GpuTexture。WGPU 是唯一后端，wgpu-interop 是显式逃生口
-    ├── nana-frame-exchange  跨线程最新帧（建在 nana-gpu 上，再导出它的类型）。生产端 crate，
-    │                       渲染库不必依赖 nana-ui
-    ├── nana-ui-runtime 保留树权威（UiWorld）、内建控件、Shell、Workspace、
-    │                   Dock、GPU 槽。不依赖 WGPU
-    ├── nana-ui-scene   绘制图权威（UiScene）。依赖 runtime，不依赖 WGPU
-    ├── nana-ui-charts  图表模型：ChartOption、刻度、布局、命中与 GPU 标记数组。
-    │                   只依赖 nana-ui-core
-    ├── nana-ui-core    共享合同：Style Model、主题令牌、WorkspaceModel、几何
-    ├── nana-ui-platform  WindowId、输入、IME、剪贴板、显示器与全屏合同
-    │                     （与 winit 转换隔离）
-    └── nana-window     系统材质、标题栏拖拽 / 客户区 chrome / 缩放；
-                        普通控件不得拿窗口句柄
+nana-ui                  宿主适配器：run_runtime、控件再导出、SceneWgpuPainter、
+    │                    FrameBinding、窗口外输出 ExternalSurface（gpu feature）
+    ├── nana-gpu         GPU 后端合同：GpuContext（设备、代次、能力、丢失状态、纹理与提交守卫）、
+    │                    FrameContext（独占 encoder 的单帧上下文）、GpuTexture。
+    │                    WGPU 是唯一后端，wgpu-interop 是显式逃生口
+    ├── nana-frame-exchange  跨线程最新帧交换（建在 nana-gpu 之上并再导出合同类型；
+    │                        生产端渲染库只需依赖它，不必依赖 nana-ui）
+    ├── nana-ui-runtime  保留树权威（UiWorld）、内置控件、布局引擎、输入路由、
+    │                    Shell、Workspace、Dock、AreaLayout、GPU 槽声明（不依赖 WGPU）
+    ├── nana-ui-scene    绘制图权威（UiScene）与帧图（FramePlan）（依赖 runtime，不依赖 WGPU）
+    ├── nana-ui-charts   图表模型：ChartOption、刻度、布局、命中与 GPU 标记数组（仅依赖 nana-ui-core）
+    ├── nana-ui-core     共享基础合同：Style Model、主题令牌、WorkspaceModel、Motion IR、几何
+    ├── nana-ui-platform 平台中立窗口合同（WindowId、描述符、事件、命令、显示器）并再导出输入合同
+    └── nana-window      原生窗口句柄、系统材质、标题栏拖拽、客户区 chrome、缩放与全屏
 
-Vue + JS L1/L2（可选宿主）
+Vue + JS L1/L2（可选宿主适配）
     nana-ui-vue + nana-js-v8 + nanavue-runtime / nanavue-components
-    写入同一棵 UiWorld，不是另一套窗口
+    写入同一棵 UiWorld，不创建第二套窗口或绘制器
 
-文本引擎（Phase 0–8，产品唯一的排版权威）
-    nana-text            文本 IR、稳定代际 ID、结构化 diff 与迁移语料；
-                         字体层（注册 / 代际 / 匹配 / 变体坐标 / fallback）；
-                         shaping（分段 / BiDi / HarfRust / ShapeRun cache）；
-                         layout（Label fast path / UAX #14 断行 / 行内视觉序 /
-                         行盒度量 / 对齐 / 省略号 / layout cache）；
-                         retained layout 句柄（TextLayoutStore）。
-                         测量与绘制都经它：nana-ui/text_engine.rs 持有进程
-                         唯一的引擎，nana_text.rs（NanaTextShaper）测量，
-                         scene_paint/text/（NanaRenderer::text）画。
-                         见 [文本引擎](text-engine.md)
+文本引擎（产品唯一的排版权威）
+    nana-text            文本 IR、稳定代际 ID、字体层（注册/代际/匹配/变体轴/覆盖率回退）、
+                         整形（分段/BiDi/HarfRust/ShapeCache）、行布局（单行快路径/UAX #14 断行/
+                         视觉重排/行盒度量/对齐/省略号/LayoutCache）与保留布局句柄（TextLayoutStore）。
+                         测量与绘制共用进程内唯一引擎（nana-ui/text_engine.rs）：
+                         nana_text.rs（NanaTextShaper）负责测量，scene_paint/text/ 负责绘制。
+                         详见 [文本引擎](text-engine.md)
 
-图标目录（可选，独立构建，不在 workspace members）
-    nana-icons-tabler    Tabler outline 全量 `Icon` 常量（生成物，见
-                          scripts/generate_tabler_catalog.py）。应用直用常量，
-                          链接器剔除未引用图标；不属于产品绘制路径
+图标目录（可选，独立构建，不在 workspace members 中）
+    nana-icons-tabler    Tabler outline 全量 Icon 常量（由 scripts/generate_tabler_catalog.py 生成）。
+                         应用直接引用常量，未引用图标由链接器剔除，不属于产品绘制核
 ```
 
-依赖方向是这样的。`nana-ui`（适配器加 painter）依赖 `nana-ui-runtime` 和 `nana-ui-scene`。`nana-ui-scene` 依赖 `nana-ui-runtime`。三者都依赖 `nana-ui-charts`，它只依赖 `nana-ui-core`。`nana-ui` 和 `nana-frame-exchange` 依赖 `nana-gpu`。
+主线依赖单向流动：`nana-ui` 依赖 `nana-ui-scene` 与 `nana-ui-runtime`；`nana-ui-scene` 依赖 `nana-ui-runtime`；三者均依赖仅构建在 `nana-ui-core` 之上的 `nana-ui-charts`。`nana-ui` 与 `nana-frame-exchange` 依赖 `nana-gpu`。`SceneWgpuPainter` 位于 `nana-ui` 内，建立在宿主的 `GpuContext` 之上，每一帧画进宿主的 `FrameContext`。
 
-`SceneWgpuPainter` 在 `nana-ui` 里，建在宿主的 `GpuContext` 上。每一帧画进宿主的 `FrameContext`。
+### 无窗口输出与边界守护脚本
 
-窗口不是 output API 的语义根。窗口直接画进自己的 surface；其他消费同一场景的
-consumer（Spout、录制、嵌套宿主）通过窗口输出拿到画面：宿主在窗口本来就要录的那一帧里，
-用同一个 `SceneWgpuPainter` 把场景再画进 `ExternalSurface`，不会复制 UiWorld、UiScene
-或 renderer。`ExternalSurface` 为无窗口、嵌套和 headless consumer 保留持久 GPU 资源；
-静态 retained output 在 producer 入口跳过整帧，consumer 只采样最近 completed revision。
-没有拓扑协商，也没有 CPU 回读路径。详见 [`output.md`](output.md)。
+操作系统窗口并非输出 API 的唯一语义根：Window 与无窗口 `PresentationDriver` 共用真实的 presentation 编排。普通 Window-only 直接画进 Surface；`RenderTargetPlanner` 在消费者或显示需求变化时缓存兼容分组，兼容 Window/外部消费方共享一次 canonical 渲染，仅最终 transfer 独立计数；像素密度、文本 AA、HDR 等不兼容需求明确分组。`ExternalSurface` 为无窗口、嵌套与无头消费方保留有界 GPU 槽位和真实提交租约：静态生产端跳过渲染和提交，消费方只采样已完成版本。整个路径仍只有一份 `UiWorld → UiScene` 和同设备 `SceneWgpuPainter`，产品不提供 CPU 回读 fallback（详见 [窗口外输出](output.md)）。
 
-`scripts/check-engine-boundary.py` 保持 Runtime 和 Scene 对绘制后端中立，并守住 GPU 合同。`nana-gpu`、`nana-frame-exchange`、`nana-ui` 的公开签名，只有在 `wgpu-interop` 之下才能出现 `wgpu`。`nana_gpu::__framework` 只供框架 crate 自己的源码使用。见 [实时画面](gpu.md#gpu-合同与-wgpu-逃生口)。
+`scripts/check-engine-boundary.py` 在 CI 中静态守卫以下边界：
 
-`nana-text` 依赖 `nana-ui-core`，且只取排版词汇。这些词是变体轴、kerning、line-break、word-break、text-align、direction、writing-mode、wrap-break、line-height、feature，以及 CJK 行决策用的 text-spacing-trim、text-autospace、text-justify、text-wrap-style 和代价词汇 `dynamic_layout`（#211 按它给标点定价，不另造一套代价）。同一个脚本按 allowlist 守住。
+1. **后端中立与 `wgpu` 签名隔离**：保持 `nana-ui-runtime` 与 `nana-ui-scene` 对图形后端中立；`nana-gpu`、`nana-frame-exchange`、`nana-ui`、`nana-ui-vue`、`nana-ui-devtools` 的公开签名只有在 `wgpu-interop` feature 下才允许出现 `wgpu::*`；`nana_gpu::__framework` 仅供这些框架 crate 自身源码内部使用（详见 [实时画面](gpu.md#gpu-合同与-wgpu-逃生口)）。
+2. **排版词汇白名单**：`nana-text` 仅从 `nana-ui-core` 导入白名单内的排版与动态布局代价词汇（变体轴、字距、断行、对齐、方向、书写模式、行高、中日文标点挤压与 `dynamic_layout`）。
+3. **单一文本引擎**：`nana-ui-runtime` 的保留文本节点修订号、分级脏图及 `TextLayout` 句柄均以 `nana-text` 为唯一权威；`cosmic-text`、`cryoglyph` 与 `glyphon`（含改名 fork）已从 `Cargo.lock` 彻底移除，严禁任何工作区成员引入通向它们的非 dev 依赖边。
 
-`nana-ui-runtime` 依赖 `nana-text`。保留文本节点的 revision、分级 dirty graph，以及 retained 的 `TextLayout` 句柄，都以它为词汇。这是 #95。
+## 核心产品路径与 Motion IR 合同
 
-从 #99 起，Rust、NanaVue 和 Vue/CSS 的文本都由它测量。`NanaRenderer::text` 画 Runtime 保留的那份 layout。cosmic-text 和 cryoglyph（含参照引擎）已从 `Cargo.lock` 删除。脚本按全工作区禁止任何产品 crate 再有通向它们的非 dev 边。改名的 fork 也算。
-
-产品路径：
+产品渲染路径只有一条：
 
 ```text
 nana_ui::runtime → UiWorld → ExtractedNode → UiScene → SceneWgpuPainter
 ```
 
-动画意图编译为 Motion IR（`nana-ui-core::motion`）。
+### 逻辑状态与呈现 Overlay 分离
 
-`AnimationSpec` 是这条 IR 的 timing 和 playback 子集。字段是 id、target、start、duration、frame interval、easing、iteration、direction、fill、pause。它不是第二套 timeline。
+所有动画意图统一编译为 `nana-ui-core::motion`（Motion IR），Runtime 的 `AnimationSpec`（含 id、target、start、duration、frame_interval、easing、iteration、direction、fill、pause）是同一套时序与播放子集，而非第二套时间线：
 
-**逻辑值不是呈现值。** `UiWorld` 是逻辑和 base 的权威。瞬时呈现存在 transient 的 `PresentationStore` overlay 里。按 node 加 property 查询。`applies=false` 时用 `applied_value()`。
+- **`UiWorld` 是逻辑与基础样式的唯一权威**，过渡期间的瞬时呈现值保存在瞬态的 `PresentationStore` overlay 中，按「节点 + 属性」查询（`applies = false` 时使用 `applied_value()`）。例如 `opacity: 0 → 1` 启动时，节点的逻辑透明度立即是目标值 `1`，过渡过程由 overlay 承载，绝不每帧往 `UiWorld` 写 `0.01`、`0.02`。业务代码读取属性时拿到的是逻辑状态；绘制、命中测试、焦点与无障碍在需要时按同一时间戳求取呈现值。
+- **完成事件与末值保持（Hold）**：动画完成由启动与结束的 **deadline** 驱动，不靠逐帧 CPU 采样判断结束。带 `fill: forwards` 的轨道结束后，末值作为 **hold** 留在 overlay 上：
+  - 在 Rust L3 的 `transition()`、`motion(Spring)`、`Timeline`（`MotionLayer::Runtime`）中，hold 保持到该属性下一次被写入**不同的逻辑值**为止；组件重新投影或 Vue 级联同步写回相同的值不算新写入，不会打断 hold。
+  - 在 CSS `@keyframes` 中，hold 按 CSS 级联规则压过基础样式，直到 `animation-name` 不再引用该名称或指向不存在的规则时结束。
+  - 任何 hold 均可通过同 ID 重新启动、`StopAnimation`（对已结束的 hold 同样生效）或移除节点来清除。CSS `transition` 不留 hold，因为级联样式本身就是终点。
+- **取值校验与越界钳制**：轨道的目标值与关键帧按样式规则在提交时严格校验，越界或非有限值直接返回 `InvalidAnimation`（例如 `opacity` 超出 `0..=1` 或 `width` 为负数，框架不会静默替调用方钳制）。起点值只要求有限（因为被打断的弹簧或回弹轨道可能正处于越界区间）。起点与终点之间的采样过程不钳制，以保留回弹曲线与弹簧的有意过冲，最终由消费端钳制到可呈现范围（CPU/GPU 合成器将 `opacity` 钳到 `0..=1`，`width`/`height`/`padding` 下限为 `0`，字体变体轴由 `nana-text` 钳到字体自身轴范围）。
+- **同属性多轨道优先级**：同一属性同时存在多条活动轨道时，依次按 `MotionLayer`（`CSS transition > Runtime > CSS animation`，与 CSS 级联规范一致）→ 启动时刻（`start`）→ 轨道 `id` 决出唯一胜出者，不做多轨道混合。
 
-例如 `opacity: 0 → 1` 时，逻辑透明度在开始时已经是目标值。overlay 负责过渡。不是每帧把 `UiWorld` 写成 `0.01`、`0.02`。
+### 动画属性执行分类
 
-业务读属性，得到的是逻辑状态。绘制、命中、焦点、无障碍在需要时按同一个 timestamp 求 presentation。
+`AnimationClass::Compositor` 属性严禁实现为每帧修改 `UiWorld`。合成器轨道额外编译进代际化的 `MotionDescriptor` 表（仅在启动、retarget、取消时更新描述符），稳态帧只按时间戳执行 `evaluate_track`。默认分类由 `AnimatableProperty::animation_class()` 固定：
 
-动画完成走 start 和 completion 的 **deadline**。不靠逐帧 CPU sample 才知道结束。
-
-fill forwards 的 track 结束后，末值作为 **hold** 留在 overlay 上。
-
-L3 的 `transition()`、`motion(Spring)`、`Timeline`（`MotionLayer::Runtime`）里，hold 只保持到该属性下一次被写成**不同的值**。之后的 `set_style` 照常生效。
-
-组件重新投影，或 Vue 层叠同步把同一个值写回去，不算新写入。hold 不受影响。逻辑值由组件或层叠持有。L3 不去改写它。
-
-CSS `@keyframes` 的 hold 按 CSS 层叠压过样式。它由 `animation-name` 结束。不再命名它，或指向不存在的规则，都会结束。
-
-任何 hold 也可以被同 id 再启动结束，被 `StopAnimation` 结束（对已经结束的 hold 同样有效），或被节点移除结束。
-
-CSS transition 不留 hold。层叠本身就是终点。
-
-**取值范围**是这样的。track 的目标和关键帧按样式的规则校验。越界，或非有限值，在提交时返回 `InvalidAnimation`。例如 opacity 不在 `0..=1`，或 width 为负。框架不替你钳成别的值。
-
-起点只要求有限。被打断的 track 可能从回弹途中的越界值起步。
-
-两端之间的采样不钳。回弹曲线和 spring 的越界是有意的。由消费端钳到能呈现的范围。opacity 在 CPU compositor 和 GPU quad 上都钳到 `0..=1`。width、height、padding 停在 0。字体轴由 nana-text 钳到字体自身的轴范围。
-
-同一属性同时有多条 track 时，先比 `MotionLayer`。CSS transition 高于 Runtime，Runtime 高于 CSS animation。这和 CSS 层叠一致。再比 start。最后比 id。不混合。
-
-Compositor-safe 属性按 `AnimationClass::Compositor` 分类。不得实现成每帧改 `UiWorld` 属性。
-
-Compositor track 另编译为 generational 的 `MotionDescriptor` slab。start、retarget、cancel 更新 descriptor。稳态帧只按 timestamp 走同一套 `evaluate_track`。
-
-产品 present 禁止 CPU readback。Scene layer 和 GPU Quad 的分流见 [`runtime-scene.md`](runtime-scene.md)。
-
-默认执行类由 `AnimatableProperty::animation_class()` 决定。组件不能改 class：
-
-| 属性 | 默认 Class | 执行路径 | fallback / 性能含义 |
+| 属性 | 默认分类 | 执行路径 | 回退与性能边界 |
 | --- | --- | --- | --- |
-| `transform` / `opacity` | Compositor | overlay；Quad 走 GPU `evaluate()`；非 Quad 走 CPU overlay | 稳态不写 `UiWorld`；非 Quad 仍是 CPU presentation |
-| `clip` / `clip-path` | Compositor | overlay；Painter 目前只把 transform/opacity 的 `motion_id` 交给 shader | 稳态不写 `UiWorld`；clip 呈现仍 CPU overlay |
-| `shader-parameter` | Compositor | overlay；需注册 typed codec | 无默认 Quad GPU 路径 |
-| `color` / `background` / `blur` / `filter` / `shadow` | Paint | CPU 插值 | 可能每 sample 脏 paint/extract；不是 filter GPU |
-| `width` / `height` / `padding` / `margin` | Layout | CPU layout，写 px | 每 sample layout；不要偷成 scale |
-| `font-size` | Layout | 非 compositor（排版 / 绘制也会受影响） | 不强制 GPU |
-| `font-variation-settings`（`FontAxis(tag)`，每轴一条 track） | Layout | track 存在 `PresentationStore`（按 target 索引），样式解析时叠到计算样式的 `font_variations`，子孙随继承拿到（自己声明轴的子树不受影响、不被标脏）；#88 脏图按 `SHAPE_STYLE` 重新 shaping / 排版 / 栅格；值未变的 sample 不产生工作 | 每 sample 都是真实字形实例；不得换成 scale / transform（[#85](https://github.com/sena-nana/NanaUI/issues/85)）。字体没有的轴照常运行但不生效，`inspect_motion` 的 `ineffective_reason` 与 Vue `nana.css` 警告会报出来，不映射成 `wght` |
-| `display` | Discrete | snap | 不插值 |
+| `transform` / `opacity` | `Compositor` | 呈现 overlay；Quad 走 GPU `evaluate()`，非 Quad 走 CPU overlay | 稳态不写 `UiWorld`；非 Quad 仍为 CPU 呈现 |
+| `clip` / `clip-path` | `Compositor` | 呈现 overlay；Painter 当前仅将 transform / opacity 的 `motion_id` 传给着色器 | 稳态不写 `UiWorld`；裁剪呈现走 CPU overlay |
+| `shader-parameter` | `Compositor` | 呈现 overlay（需注册类型化编解码器） | 无默认 Quad GPU 路径 |
+| `color` / `background` / `blur` / `filter` / `shadow` | `Paint` | CPU 插值 | 每次采样可能标脏 paint / extract；无 GPU 滤镜轨道 |
+| `width` / `height` / `padding` / `margin` | `Layout` | CPU 布局求值，写回像素尺寸 | 每次采样触发局部布局；严禁偷换成 `scale` 变换 |
+| `font-size` | `Layout` | 非合成器路径（影响排版与绘制） | 不强制走 GPU |
+| `font-variation-settings`（`FontAxis(tag)`，每轴一条轨道） | `Layout` | 轨道存于 `PresentationStore`，样式解析时叠入计算样式的 `font_variations` 并向下继承（显式声明该轴的子树不受影响）；按 `SHAPE_STYLE` 脏图触发重新整形、排版与栅格化（采样值未变则零工作） | 每次有效采样均为真实字形实例，严禁替换成几何缩放（[#85](https://github.com/sena-nana/NanaUI/issues/85)）。字体缺失的轴照常计时但不生效，通过 `inspect_motion` 的 `ineffective_reason` 与 `nana.css` 警告上报，不映射为 `wght` |
+| `display` | `Discrete` | 离散跳变（snap） | 不做插值 |
 
-`#8` 的 `animations_considered` 和 `animation_deadlines_scanned` 稀疏门禁仍然有效。
+合成器稳态性能门禁（无查询时 `UiWorld`、布局、样式、抽取与 CPU 采样计数均为 0）定义在 [`perf/README.md`](../../perf/README.md) 的 `compositor-steady`。开发期诊断通过 `AnimatableProperty::diagnostic_hint()` 与 `UiWorld::inspect_motion()` 获取，提示文案不写进产品 UI。
 
-compositor-only 的稳态结构门禁是：没有 query 时，UiWorld、layout、style、extract、CPU sample 都为 0。见 [`perf/README.md`](../../perf/README.md) 的 `compositor-steady`。
+## 全局对象所有权表
 
-开发诊断走 `AnimatableProperty::diagnostic_hint()` 和 `UiWorld::inspect_motion()`。hint 文案以代码为准。文档不硬编码整句，也不写进产品 UI。
+| 对象 / 状态 | 权威所有者 | 边界说明 |
+| --- | --- | --- |
+| `Window`、`Surface` | 宿主（`run_runtime` 或 `EmbeddedRuntime` 的嵌入方） | 框架按窗口借用，普通控件不可触碰原生句柄 |
+| 设备：`GpuContext`（代次、能力、丢失状态、提交守卫） | 宿主 | 粘性丢失记在 `GpuContext::is_lost()`；替换设备即创建新的 `GpuContext`（新 `DeviceGeneration`）。Workspace 锁定唯一 `wgpu = "30.0.0"` 主版本 |
+| 单帧：`FrameContext`（encoder、提交与丢弃） | 宿主 | Painter 与资源生产者只往里录制命令；帧被丢弃（drop/discard）时 Painter 登记的保留写入自动回滚 |
+| 跨线程帧槽池（`FrameExchange`） | 生产线程 | 窗口侧通过 `FrameInbox` / `FrameBinding` 采样；已声明的色彩空间元数据随租约（lease）传递，消费端不得将 PQ/HLG/P3 未经转换当作 sRGB 或 linear scRGB |
+| 业务状态、应用配置、区域与窗格**内容** | 应用 | 框架不持有业务路由或领域数据 |
+| 可选的窗口 / Dock 视图状态恢复 | `ViewStateStore` | 应用指定稳定的 scope / key |
+| 持久化落盘（`PersistenceCoordinator`） | 宿主后台线程合并写盘 | 程序经 `RuntimeProgramContext::store()` 拿到 `ProgramStore`：`flush` 仅请求尽快落盘而不阻塞等待，`clear` 仅清理应用命名空间而不触碰 `nana.*` 框架键；关闭时宿主执行至多 2 s 的有界最终 flush（超时记录 `persistence.flush_timed_out`） |
+| 保留树、样式、未滚动布局、命中、焦点、IME、无障碍 | `UiWorld`（`nana-ui-runtime`） | 唯一 UI 树权威 |
+| Motion IR（曲线、时序、分类、求值、`PresentationStore`、`MotionDescriptor` 表） | `nana-ui-core::motion` | 内置控件动效、L3 过渡与 CSS 动效共用同一条时间线 |
+| 绘制图与合成层 | `UiScene`（`nana-ui-scene`） | `CompositorLayer` 持有呈现与 `CompositorMotionBinding`；`SceneWgpuPainter` 上传描述符存储缓冲与时间 uniform |
+| 系统材质与标题栏原生 chrome | `nana-window` | 失败返回实际生效结果或显式回退 |
+| Workspace 区域尺寸与折叠过渡 | `WorkspaceModel`（`nana-ui-core`） | `WorkspaceController` 仅做指针与时钟转换 |
+| Dock 停靠树 | Runtime `DockWorkspace` | `nana_ui::dock::*` 仅是宿主适配器 |
 
-FLIP 和 list-move 是显式策略。不是把 width 动画偷成 scale。
+## 三种输入入口与宿主内容边界
 
-`component-gallery` 是独立的 Demo crate。分类导航和示例状态不属于 `nana-ui` 的公共 API。
+Rust 声明式视图、Vue 的 HTML 1:1 控件与 `nana-*` 组件、以及 Vue 的 HTML/CSS 子集，是通向同一份 Style Model（Tokens + Semantics + Layout）和同一棵 `UiWorld` 的**三种输入合同**，而非三个独立运行时：
 
-## 所有权
+- **Vue 门面不复制树拓扑**：Vue Custom Renderer 产生的 host op 先进入待提交队列 `PendingHostOps`，在帧边界由 `flush_host_frame` 一次性 commit。`event_flags` 的权威在 `UiWorld` 的 `EventListeners`；GPU 槽位的权威在 Runtime 的 `CustomRenderNode`；JS 读取的几何盒子来自绘制阶段的投影 `LayoutBoxStore`，滚动偏移不写回 Runtime 的 `LayoutBox`。
+- **单一组件注册 ABI**：内置控件与扩展控件共用同一份 `ComponentRegistry` 与 `register_component`。`NativeComponentRegistry` 仅服务于 JS 宿主命令，不是第二套 Runtime 实例化 ABI（`PendingHostOps` 镜像、`WidgetKind`、`ComponentSupport` 同样不是实例化 ABI）。
+- **`BrowserView` 与 `WebSurface` 边界**：
+  - `BrowserView` 是显式的宿主原生子视图例外：Runtime 节点仍拥有布局、无障碍、可见性与生命周期锚点，宿主负责创建并管理原生 `WKWebView` 子视图（当前仅支持 macOS，Windows 与 Linux 返回明确的 `Unsupported`，不创建占位浏览器）。它不等同于 `GpuTextureView`，不进 Runtime/Scene 离屏截图；遇到非矩形裁剪、透明度/滤镜组或被后续 Runtime 内容遮挡时，由宿主自动隐藏。
+  - 无头 `WebSurface` 是宿主内容生产者：页面不进入任何窗口视图树，捕获帧经应用的 sink 离开框架（平台实现在 `nana-window`，支持 macOS `WKWebView` 与 Windows WebView2，`nana-ui` 按请求对账实例）。
+  - 盒模型对照工具 `tools/css-parity-webview` 独立于 workspace 之外，严禁链接进任何产品 crate。
 
-| 对象 | 所有者 |
-| --- | --- |
-| Window、Surface | 宿主（`run_runtime`，或 `EmbeddedRuntime` 的嵌入方） |
-| 设备：`GpuContext`（代次、能力、丢失状态、提交守卫） | 宿主；设备丢失只记在 `GpuContext::is_lost()`，替换设备就是换一个新的 `GpuContext` |
-| 帧：`FrameContext`（encoder、提交 / 丢弃） | 宿主；painter 与生产者只往里录，丢弃时 painter 的保留写入自动回滚 |
-| 最新帧槽池（`FrameExchange`） | 生产线程；`FrameInbox` / `FrameBinding` 在窗口侧取样。已声明的颜色元数据随 lease 传播，消费端不能把 PQ/HLG/P3 未转换地当作 sRGB 或 linear scRGB |
-| 业务状态、应用配置、Region / pane **内容** | 应用 |
-| opt-in 的窗口 / Dock view-state 恢复 | `ViewStateStore`；应用选择稳定 scope/key |
-| 持久化写盘 | 宿主的 `PersistenceCoordinator` 在后台线程合并写入；程序经 `RuntimeProgramContext::store()` 拿到的是 `ProgramStore`：`flush` 只请求尽快写、不等待，`clear` 只清程序自己的键，不动 `nana.*` 框架命名空间。关闭时宿主做一次有界（2 s）的最终 flush，超时发 `persistence.flush_timed_out` |
-| 树、样式、未滚动布局、命中、焦点、IME、无障碍 | `UiWorld` |
-| Motion IR（曲线、timing、属性分类、CPU 求值、presentation overlay、MotionDescriptor slab） | `nana-ui-core::motion`；Runtime `AnimationSpec` 是同一套 timing 子集；L3 `transition` / `Spring::to` / `Timeline` 编译进这条 IR；内建 hover/switch/spinner/surface 不再平行自管时钟；`PresentationStore` 是 IR overlay；descriptor 只覆盖 `AnimationClass::Compositor` |
-| 绘制图 | `UiScene`（`CompositorLayer` 持有 presentation 与 `CompositorMotionBinding`；`SceneWgpuPainter` 上传 MotionDescriptor storage + time uniform） |
-| 系统材质与标题栏 chrome | `nana-window` |
-| Workspace 尺寸 / 折叠 | `WorkspaceModel`（`WorkspaceController` 只做指针与时钟转换） |
-| Dock 树 | Runtime `DockWorkspace`（`nana_ui::dock::*` 仅是宿主适配器） |
+## Cargo Feature 与编译边界
 
-GPU 主版本锁定 workspace 的 `wgpu = "30.0.0"`。依赖图里只有一个主版本。禁止第二套设备。禁止正式路径上的 CPU 回读。
+`nana-ui` 的默认 feature 仅有 `wgpu-backends`（且只在同时启用 `gpu` 时选择平台图形后端），不会创建第二套宿主或 GPU 所有者。需要打开桌面窗口时必须显式启用 `hosted`；需要自选图形后端时设置 `default-features = false`。
 
-## 三种输入，一棵树
-
-Rust 控件、Vue 的 HTML 1:1 控件、`nana-*`，以及 Vue 的 HTML/CSS 子集，都写入同一份 Style Model。模型是 Tokens、Semantics 和 Layout。然后再进入同一棵 `UiWorld`。
-
-它们是三种输入合同，不是三个运行时。
-
-Vue 的 DOM/CSS facade **不**复制树拓扑。host op 进待提交队列。`flush_host_frame` 才 commit。
-
-`event_flags` 的权威是 `UiWorld` 的 `EventListeners`。GPU slot 的权威是 Runtime 的 `CustomRenderNode`。
-
-JS 查询用的盒子是绘制阶段的投影。滚动不写回 Runtime 的 `LayoutBox`。
-
-`PendingHostOps` 镜像、`WidgetKind`、`ComponentSupport` 都不是第二套实例化 ABI。
-
-内建控件和插件控件走同一份 `ComponentRegistry`，也走同一个 `register_component`。`NativeComponentRegistry` 只服务 JS host 命令。它不是这条 Runtime ABI。
-
-WebView 不是产品 UI 壳。`BrowserView` 是一个明确的宿主原生内容例外。
-
-Runtime 节点仍拥有布局、可访问性、可见性和生命周期锚点。宿主才创建并管理原生 `WKWebView` 子视图。
-
-当前正式实现只有 macOS。Windows 和 Linux 返回明确的 `Unsupported`，不会创建占位浏览器。
-
-它不等同于 `GpuTextureView`。它不复制 `UiWorld`。它也不创建第二个 GPU 设备。
-
-原生内容不进入 Runtime/Scene 的离屏截图。遇到非矩形裁剪、透明度或滤镜组，或被后续 Runtime 内容覆盖时，由宿主隐藏。
-
-盒模型对照仍在 workspace 外的 `tools/css-parity-webview`。不得链进产品 crate。
-
-无头 `WebSurface` 是另一种宿主内容：页面不进任何窗口，帧经应用的 sink 离开 framework。平台代码在 `nana-window`（macOS `WKWebView`、Windows WebView2），`nana-ui` 只按请求对账实例。
-
-## 编译边界
-
-`nana-ui` 的 default feature 只有 `wgpu-backends`，而且只在启用 `gpu` 时选择图形后端。它不创建第二套 host，也不创建第二套 GPU owner。要出窗口仍需显式打开 `hosted`；需要自选后端时使用 `default-features = false`。
-
-`hosted` 和 `gpu` 控制对应模块是否编译。控件族 feature（`calendar`、`charts`、`controls`、`graph-canvas`、`image-viewer`、`rich-text`）打开 `nana-ui-runtime` 与 `nana-ui-scene` 的 `cfg`，并决定 `ComponentSupport::compiled`。未打开的族不参与该次编译。`nana_ui::runtime` 再导出的是这次构建里实际编进来的控件。细节见 [应用 API](application-api.md)。
+控件族 feature（`calendar`、`charts`、`controls`、`graph-canvas`、`image-viewer`、`rich-text`）同步控制 `nana-ui-runtime` 与 `nana-ui-scene` 的条件编译，并决定 `ComponentSupport::compiled`。未启用的控件族及其专属依赖不参与编译，`nana_ui::runtime` 仅导出当前构建实际编入的控件（完整对照表见 [应用 API](application-api.md)）。`component-gallery` 是独立的示例 crate，其分类导航与演示状态不属于 `nana-ui` 的公共 API。
