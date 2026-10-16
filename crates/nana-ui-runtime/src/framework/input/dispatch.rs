@@ -209,6 +209,7 @@ impl AppContext {
                 *x,
                 *y,
                 modifiers.shift,
+                now,
             )?
         {
             return Ok(CONSUMED);
@@ -335,6 +336,40 @@ impl AppContext {
                     )?
                 {
                     return Ok(CONSUMED);
+                }
+                if let Some(target) = target {
+                    if let Some(editor) = self.view_entity::<crate::RichTextEditor>(target)
+                        && self.read(editor, |editor| !editor.disabled)?
+                    {
+                        self.focus_node(document, target)?;
+                        self.prepare_rich_editor_context_menu(editor, *x, *y)?;
+                    } else if self.world().text_input(target).is_some()
+                        && self
+                            .world()
+                            .accessibility(target)
+                            .is_some_and(|a| !a.disabled)
+                    {
+                        self.focus_node(document, target)?;
+                        if self
+                            .world()
+                            .text_input(target)
+                            .is_some_and(|s| s.selection.range().is_empty())
+                            && let Some(shaper) = reborrow_text_shaper(&mut text_shaper)
+                        {
+                            self.text_editor_pointer_press(
+                                document,
+                                target,
+                                *pointer_id,
+                                *x,
+                                *y,
+                                false,
+                                false,
+                                now,
+                                shaper,
+                            )?;
+                            self.text_editor_pointer_release(*pointer_id);
+                        }
+                    }
                 }
                 self.secondary_press_at(document, *x, *y)?.is_some()
             }
@@ -855,6 +890,11 @@ impl AppContext {
             canonical,
             ..
         } = stroke;
+        // Composition owns key transitions, including Enter and Escape,
+        // before application shortcuts and overlay dismissal see them.
+        if !stroke.is_text() && self.editor_composing(document) {
+            return Ok(CONSUMED);
+        }
         let keyboard_barrier = self.has_blocking_runtime_overlay(document);
         // An open menu bar, or one the keyboard holds, takes its keys first.
         if !keyboard_barrier
@@ -1269,7 +1309,7 @@ impl AppContext {
     /// nothing selected leaves the clipboard alone rather than clearing it,
     /// a cut deletes only once the clipboard took the text, and a paste of
     /// an empty clipboard is not an edit.
-    fn dispatch_clipboard_shortcut(
+    pub(super) fn dispatch_clipboard_shortcut(
         &mut self,
         document: DocumentId,
         key: &str,
@@ -1499,7 +1539,7 @@ impl AppContext {
         if let Some(intent) = caret_intent(key, modifiers) {
             return self.move_focused_text_caret(document, intent, modifiers.shift, shaper);
         }
-        let delete = match (key, control || meta, modifiers.alt) {
+        let delete = match (key, meta, modifiers.alt || control) {
             ("Backspace", false, false) => Some(TextDeleteKind::Backward),
             ("Backspace", _, true) => Some(TextDeleteKind::WordBackward),
             ("Backspace", true, false) => Some(TextDeleteKind::LineStart),
@@ -1539,6 +1579,14 @@ impl AppContext {
             return Ok(false);
         }
         if key == "Enter" {
+            // An IME session can be active between updates with empty preedit.
+            // Its confirmation must neither submit nor insert an ordinary newline.
+            if self.world().ime(focused.node).is_some() {
+                return Ok(true);
+            }
+            if focused.multiline && !modifiers.shift && self.submit_focused_text_input(document)? {
+                return Ok(true);
+            }
             if focused.multiline {
                 return self.insert_focused_text_newline(document);
             }

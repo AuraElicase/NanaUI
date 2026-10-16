@@ -1,8 +1,135 @@
 //! AppContext text input operations.
 
 use super::*;
+use crate::Stack;
 
 impl AppContext {
+    /// Assemble a retained small-control bottom trailing action slot without owning
+    /// application action state or its activation semantics.
+    pub fn assemble_text_area(&mut self, area: Entity<TextArea>) -> Result<bool, FrameworkError> {
+        let (action, action_slot) =
+            self.read(area, |area| (area.trailing_action, area.action_slot))?;
+        let Some(action) = action else {
+            if let Some(slot) = action_slot.filter(|id| self.world().contains(*id)) {
+                self.update_component(Entity::<Stack>::from_stable_id(slot), |slot, _| {
+                    Arc::make_mut(&mut slot.style_mut().layout).hidden = true;
+                })?;
+            }
+            return Ok(false);
+        };
+        let document = self
+            .world()
+            .node(area.stable_id())
+            .ok_or(FrameworkError::MissingView(area.stable_id()))?
+            .document;
+        let created = action_slot.is_none_or(|id| !self.world().contains(id));
+        let slot = match action_slot.filter(|id| self.world().contains(*id)) {
+            Some(id) => Entity::<Stack>::from_stable_id(id),
+            None => self.create_detached_component(document, Stack::column(0.0))?,
+        };
+        self.append_child(area, slot)?;
+        let mut mutations = MutationQueue::new();
+        if let Some(slot_node) = self.world().node(slot.stable_id()) {
+            for child in slot_node
+                .children
+                .iter()
+                .copied()
+                .filter(|id| *id != action)
+            {
+                mutations.park_subtree(child);
+                mutations.detach(child);
+            }
+        }
+        if self.world().parent_id(action) != Some(slot.stable_id()) {
+            mutations.insert(slot.stable_id(), action, None);
+        }
+        if !mutations.is_empty() {
+            self.commit_mutations(mutations)?;
+        }
+        self.update_component(area, |area, _| area.action_slot = Some(slot.stable_id()))?;
+        Ok(created)
+    }
+
+    pub(crate) fn refresh_text_area_action_slot(
+        &mut self,
+        area: Entity<TextArea>,
+    ) -> Result<(), FrameworkError> {
+        let (slot, hidden, expanded) = self.read(area, |area| {
+            (
+                area.action_slot,
+                area.trailing_action.is_none(),
+                area.uses_expanded_footer(),
+            )
+        })?;
+        let Some(slot) = slot.filter(|id| self.world().contains(*id)) else {
+            return Ok(());
+        };
+        let slot = Entity::<Stack>::from_stable_id(slot);
+        let extent = nana_ui_core::ControlSize::Small.height_in(self.world().theme_metrics());
+        self.update_component(slot, |slot, _| {
+            let layout = Arc::make_mut(&mut slot.style_mut().layout);
+            layout.hidden = hidden;
+            layout.position = nana_ui_core::PositionSpec::Absolute;
+            // Text fills the content box. The footer is the reserved bottom
+            // padding band, so its action cannot consume any text-column width.
+            layout.offset_right = Some(nana_ui_core::LengthSpec::Px(if expanded {
+                0.0
+            } else {
+                -(extent + 4.0)
+            }));
+            layout.offset_bottom = Some(nana_ui_core::LengthSpec::Px(if expanded {
+                -(extent + 4.0)
+            } else {
+                (nana_ui_core::ControlSize::Medium.line_height() - extent) / 2.0
+            }));
+            layout.width = Some(nana_ui_core::LengthSpec::Px(extent));
+            layout.height = Some(nana_ui_core::LengthSpec::Px(extent));
+        })?;
+        let mut mutations = MutationQueue::new();
+        if hidden {
+            mutations.park_subtree(slot.stable_id());
+        } else if self.world().is_mounted(area.stable_id())
+            && !self.world().is_mounted(slot.stable_id())
+        {
+            mutations.insert(area.stable_id(), slot.stable_id(), None);
+        }
+        if !mutations.is_empty() {
+            self.commit_mutations(mutations)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn refresh_text_area_compact_layout(
+        &mut self,
+        id: StableNodeId,
+    ) -> Result<bool, FrameworkError> {
+        let Some(area) = self.view_entity::<TextArea>(id) else {
+            return Ok(false);
+        };
+        if !self.read(area, TextArea::uses_adaptive_footer)? {
+            return Ok(false);
+        }
+        let Some(expanded) = self.world().text_input_needs_expanded_footer(id) else {
+            return Ok(false);
+        };
+        if self.read(area, TextArea::uses_expanded_footer)? == expanded {
+            return Ok(false);
+        }
+        self.update_component(area, |area, _| area.footer_expanded = Some(expanded))?;
+        Ok(true)
+    }
+
+    pub(crate) fn refresh_shaped_text_area_layouts(&mut self) -> Result<bool, FrameworkError> {
+        let mut changed = false;
+        let mut ids = self.world.take_text_input_adaptive_updates();
+        ids.sort_unstable();
+        ids.dedup();
+        for id in ids {
+            changed |= self.refresh_text_area_compact_layout(id)?;
+        }
+        Ok(changed)
+    }
+
     /// Native composition owns its pending text and committed insertion range.
     /// Ordinary key edits must wait for the IME commit/cancel event.
     pub(super) fn has_focused_ime_composition(&self, document: DocumentId) -> bool {
@@ -19,12 +146,25 @@ impl AppContext {
             .is_some_and(|composition| !composition.text.is_empty())
     }
 
-    /// Submit only a focused native single-line input. IME confirmation never
-    /// submits a form; non-input editors retain their existing Enter behavior.
+    /// Submit a focused single-line input or an opt-in submit-on-enter TextArea.
+    /// IME confirmation never submits; ordinary multiline fields keep Enter editing.
     pub fn submit_focused_text_input(
         &mut self,
         document: DocumentId,
     ) -> Result<bool, FrameworkError> {
+        if let Some(entity) = self.focused_editor::<TextArea>(document) {
+            if self.world.ime(entity.id).is_some()
+                || !self.read(entity, |area| area.submit_on_enter && area.accepts_input())?
+            {
+                return Ok(false);
+            }
+            self.update(entity, |area, cx| {
+                cx.emit(crate::TextSubmitted {
+                    value: area.state.value.to_string(),
+                });
+            })?;
+            return Ok(true);
+        }
         let Some(entity) = self.focused_editor::<TextInput>(document) else {
             return Ok(false);
         };

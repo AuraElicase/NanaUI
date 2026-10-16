@@ -138,7 +138,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 ### OverlayVisibility
 
-媒体/舞台 HUD 的自动隐藏用 `OverlayVisibility` **策略对象**。`MediaTransportBar::auto_hide(true)` 让运行时自己驱动它（路由过的指针、按键与指针离开窗口，加上运行时时钟），每次翻转发 `OverlayVisibilityChanged`；只放视频的窗口用这条，见 [MediaTransportBar](../components/media-transport-bar.md#自动收起)。下面是宿主自己驱动的写法。idle 超时隐藏。hover dwell 延迟显现。焦点 / 拖拽 / 菜单锁（`OverlayLocks`）保持可见。`active = false`（加载 / 暂停 / 空）保持可见。它不是叶子控件。不进 `register_component`。没有 Vue 标签。不参与布局或命中。`MediaTransportBar` 内持一份策略。用 `AppContext::sync_overlay_visibility(bar, now, active)` 从 world 收集锁（焦点 / capture 是否在条或其菜单内、任一子 `Popover.open`）、推进策略、返回 wakeup。画面上的指针活动用 `reveal_overlay`。祖先查询走公开的 `AppContext::is_descendant`。**空闲收起不写条的 `hidden`。** 条自己的 `hidden`（视图里 `.visible(..)` / `v-show`）只归应用。用来表达「传输不可用时整条不出现」。两者任一要藏，条就不出现（`MediaTransportBar::shown()` 读合起来的结果，投影出去的节点样式同样是它）。所以绑定重跑（播放进度每次刷新）不会把空闲收起的条又显出来。`reveal_overlay` 也不会显出应用藏起的条。
+媒体/舞台 HUD 的自动隐藏用 `OverlayVisibility` **策略对象**。`MediaTransportBar::auto_hide(true)` 让运行时自己驱动它（画面区域内的指针活动、按键与指针离开画面或窗口，加上运行时时钟），每次翻转发 `OverlayVisibilityChanged`；只放视频的窗口用这条，见 [MediaTransportBar](../components/media-transport-bar.md#自动收起)。下面是宿主自己驱动的写法。idle 超时隐藏。hover dwell 延迟显现。焦点 / 拖拽 / 菜单锁（`OverlayLocks`）保持可见。`active = false`（加载 / 暂停 / 空）保持可见。它不是叶子控件。不进 `register_component`。没有 Vue 标签。不参与布局或命中。`MediaTransportBar` 内持一份策略。用 `AppContext::sync_overlay_visibility(bar, now, active)` 从 world 收集锁（焦点 / capture 是否在条或其菜单内、任一子 `Popover.open`）、推进策略、返回 wakeup。画面上的指针活动用 `reveal_overlay`。祖先查询走公开的 `AppContext::is_descendant`。**空闲收起不写条的 `hidden`。** 条自己的 `hidden`（视图里 `.visible(..)` / `v-show`）只归应用。用来表达「传输不可用时整条不出现」。两者任一要藏，条就不出现（`MediaTransportBar::shown()` 读合起来的结果，投影出去的节点样式同样是它）。所以绑定重跑（播放进度每次刷新）不会把空闲收起的条又显出来。`reveal_overlay` 也不会显出应用藏起的条。
 
 ### MediaTransportBar
 
@@ -230,9 +230,23 @@ if let Some(first) = validity.first_invalid() {
 
 `TextInput` / `TextArea` 持有已提交的 UTF-8、选区和 IME preedit。它们是视图侧编辑模型。撤销由 Runtime 提供（见下）。文档 revision、冲突与持久化仍由应用拥有。可选 feature `syntax-highlighting` 在同一 `TextArea` 上启用名为 `"highlight"` 的 presenter。不另造一套编辑器。
 
+`TextInput::character_counter(limit)` 可选在框内右侧显示已提交 Unicode 标量数与上限；
+超限使用危险色，IME 预编辑不计入，编辑区域自动避让。计数与 `max_length` 的 UTF-16 编辑硬限制独立，
+不限制输入或提交，业务门控由消费方负责。见 [TextInput](../components/text-input.md#字数计数)。
+
 Rust `TextArea::read_only(true)` 保留焦点、光标/选区、查找和复制。拒绝修改、替换、剪切及粘贴。它与 `disabled(true)` 不同。禁用控件不参与这些交互。运行时切换为只读会结束未提交的 IME 组合，并拒绝此前开始的文本拖放写入。程序仍可通过组件更新提供新的权威文本。`HostedTextarea` 转发同一属性。语义构造属性为 `readOnly`。应用显示只读文档时应使用此属性。而不是以禁用样式替代只读状态。
 
 ### 统一编辑入口与撤销
+
+`RichTextEditor` 的 `scroll_offset` 是视口请求；`UiWorld::scroll_offset` 返回实际绘制的位置。
+滚轮可在未聚焦时滚动，保留选区，直到文字或光标改变才恢复光标跟随。绘制、命中与 IME 候选框读取同一个视口。
+它支持按字素/词导航与删除、保留列位置的上下及 PageUp/PageDown 导航、Shift 扩选、双击选词、三击选段和越界拖选滚动。
+富文本与普通输入框在 IME 组合期间都先保留按键给输入法，再恢复应用快捷键。
+
+应用编辑菜单可用 `TextEditAction` 和 `AppContext::text_edit_action_enabled` 查询状态，
+通过 `edit_text_action(document, node, action, services)` 执行撤销、重做、剪切、复制、粘贴与全选。
+剪贴板仍由宿主的 `HostServices` 提供；富文本编辑器的复制粘贴保留进程内的格式和对象。
+源码工具栏改写使用 `edit_text_area_value` 记为一个可撤销步骤；重新绑定业务文档仍使用普通程序设值并清空撤销会话。
 
 编辑器的文本**只有一条写路径**：`AppContext::commit_editor_edit(entity, origin, apply)`。键入、删除、粘贴、IME 提交、行变换、代码片段、应用设值，全部汇入这里。凡是「每次编辑都要做」的事只在这一处做：发变更事件、记撤销。新增一种编辑操作时，不要自己 `update_component` 写 `state.value`。走这个入口。否则它不会进撤销。
 
@@ -291,3 +305,15 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 ### HoverCard 编辑器焦点
 
 `HoverCard::preserve_editor_focus(true)` 用于扫码等非模态辅助卡。默认关闭。指针命中触发器或卡内操作时，保留卡外编辑器焦点和选区。按钮仍正常激活。Tab/Shift+Tab 仍可进入可访问操作。键盘焦点从卡外进入后，关闭时恢复最近的有效外部焦点。卡片或当前操作隐藏、停放、禁用、删除时也执行恢复。显式焦点请求和作用域恢复优先。失效或不可见的恢复目标不会重新获得焦点。内容容器需要参与命中（例如 `Stack::column(...).hittable()`），使二维码和空白区域的鼠标事件归属该卡。`QrCode` 本身仍是不可聚焦的可访问 Image。
+
+### 自适应多行发送框
+
+`TextArea::auto_grow(1, 6)`（Rust 构造属性）按实际排版后的视觉文本行增高、缩回，超过最大行数时在编辑区内部滚动。默认不启用；普通 `TextArea` 的尺寸与 Enter 换行行为不变。`character_counter(limit)` 与 `TextInput` 一样只统计已提交文本的 Unicode 标量，超限用错误色显示，不截断输入。
+
+最小行数为 1 且启用计数或操作槽时，短文本保持紧凑单行（默认 32px），计数和操作位于框内右侧。文本将越过计数左边界、操作左侧的可用边界，或存在显式换行时，才展开为上方完整宽度的编辑区和底部操作栏。判定由同一个宿主文本引擎对显示文本（含 IME 预编辑）测量，始终与假设的紧凑行宽比较；展开后即使完整宽度可容纳一行，也不会反复切换。删除、输入法取消和宽度变化可恢复紧凑单行；占位文字不触发展开。
+
+`submit_on_enter(true)` 使 Enter 发出 `TextSubmitted`，Shift+Enter 仍换行；输入法正在组字时 Enter 不发送。只读和禁用时不提交。应用负责校验和处理提交。
+
+`view::text_area()` 或 `view::widget(TextArea::new(...))` 的 `.trailing_action(view)` 将真实操作控件装在框内右侧的小号控件槽位。展开时操作栏通过底内边距预留高度，文本、软换行、光标、选区和输入法均使用上方完整宽度。操作有独立焦点、Activate 和无障碍名称，键路径保留在字段下。命令式用 `TextArea::trailing_action(node)` 后调用 `AppContext::assemble_text_area`。
+
+`auto_grow` 的行数不含底部操作栏。展开时计数加操作的一行文本为 64px（32px 单行输入 + 28px 小号操作 + 4px 间距），六行文本上限为 144px；只有计数时底栏为 16px 加 4px 间距。`min_rows > 1` 保持多行底栏布局。紧凑或展开状态都允许有高度约束的 Flex 父容器收缩到相应最小高度，余下内容内部滚动；保留消费方显式指定的 `flex_shrink` 策略。

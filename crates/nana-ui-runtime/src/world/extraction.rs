@@ -249,7 +249,7 @@ impl UiWorld {
             parent: hierarchy_parent,
             children: hierarchy_children,
             layout,
-            scroll_offset,
+            scroll_offset: self.rich_editor_scroll_offset(id).unwrap_or(scroll_offset),
             z_index: self.stacking_z_index_memo(id, memo),
             source_style,
             style,

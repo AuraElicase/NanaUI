@@ -93,6 +93,10 @@ impl OverlayVisibility {
         self.visible
     }
 
+    pub(crate) fn concealed(&self) -> bool {
+        self.concealed
+    }
+
     /// Up, not concealed, and counting down to an idle hide: activity now
     /// would only move that deadline later.
     pub(crate) fn counting_down(&self) -> bool {
@@ -397,6 +401,283 @@ pub(crate) fn report_visibility(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct AutoHideStage {
+        cx: crate::AppContext,
+        input: crate::HeadlessInput,
+        document: crate::DocumentId,
+        bar: crate::Entity<crate::MediaTransportBar>,
+    }
+
+    impl AutoHideStage {
+        fn new(playing: bool) -> Self {
+            use crate::{
+                AppContext, DocumentId, HeadlessInput, LayoutViewport, MediaTransportBar, Stack,
+            };
+            use nana_ui_core::LengthSpec;
+
+            let document = DocumentId::new(1).unwrap();
+            let mut cx = AppContext::new();
+            let window = cx
+                .create_component(
+                    document,
+                    Stack::column(0.0).hittable().with_layout(|layout| {
+                        layout.width = Some(LengthSpec::Px(960.0));
+                        layout.height = Some(LengthSpec::Px(600.0));
+                    }),
+                )
+                .unwrap();
+            let stage = cx
+                .create_detached_component(
+                    document,
+                    Stack::column(0.0).hittable().with_layout(|layout| {
+                        layout.width = Some(LengthSpec::Px(640.0));
+                        layout.height = Some(LengthSpec::Px(360.0));
+                    }),
+                )
+                .unwrap();
+            cx.append_child(window, stage).unwrap();
+            let mut transport = MediaTransportBar::new().auto_hide(true);
+            transport.playing = playing;
+            transport.duration = 120.0;
+            let bar = cx.create_detached_component(document, transport).unwrap();
+            cx.append_child(stage, bar).unwrap();
+            cx.assemble_media_transport_bar(bar).unwrap();
+            cx.layout_document(document, LayoutViewport::new(960.0, 600.0))
+                .unwrap();
+            cx.compat_world_mut().rebuild_hit_test(document);
+            let frame = cx.world().layout_box(stage.stable_id()).unwrap();
+            assert!(frame.contains(100.0, 100.0));
+            assert!(!frame.contains(800.0, 500.0));
+            let input = HeadlessInput::bind(&mut cx, document);
+            Self {
+                cx,
+                input,
+                document,
+                bar,
+            }
+        }
+
+        fn shown(&self) -> bool {
+            self.cx
+                .read(self.bar, crate::MediaTransportBar::shown)
+                .unwrap()
+        }
+
+        fn pointer(&mut self, phase: nana_ui_input::PointerPhase, x: f32, y: f32) {
+            self.input.advance(Duration::from_millis(10));
+            self.input.pointer(&mut self.cx, phase, x, y).unwrap();
+        }
+
+        fn key(&mut self, key: &'static str) {
+            self.input.advance(Duration::from_millis(10));
+            self.input
+                .press(
+                    &mut self.cx,
+                    nana_ui_input::KeyInput::named(
+                        key,
+                        key,
+                        nana_ui_input::KeyState::Pressed,
+                        Default::default(),
+                    ),
+                    None,
+                    None,
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn auto_hide_uses_the_stage_boundary_while_playing_and_paused() {
+        use nana_ui_input::PointerPhase::Move;
+
+        for playing in [false, true] {
+            let mut stage = AutoHideStage::new(playing);
+            stage.pointer(Move, 100.0, 100.0);
+            assert!(stage.shown());
+            stage.pointer(Move, 800.0, 500.0);
+            assert!(
+                !stage.shown(),
+                "leaving the picture hides without leaving the window"
+            );
+            assert_eq!(stage.cx.next_animation_deadline(), None);
+            stage
+                .cx
+                .update_component(stage.bar, |bar, _| bar.position = 15.0)
+                .unwrap();
+            assert!(
+                !stage.shown(),
+                "playback refresh must not reveal a concealed bar"
+            );
+            stage.pointer(Move, 100.0, 100.0);
+            assert!(
+                stage.shown(),
+                "the picture stays hittable after its bar hides"
+            );
+            if playing {
+                let deadline = stage.input.now() + OVERLAY_IDLE;
+                stage.cx.advance_animations(deadline);
+                assert!(!stage.shown(), "the existing idle timeout still applies");
+                stage.input.set_now(deadline + Duration::from_millis(10));
+                stage.pointer(Move, 100.0, 100.0);
+                assert!(
+                    stage.shown(),
+                    "motion in the picture reveals an idle-hidden bar"
+                );
+            } else {
+                assert_eq!(stage.cx.next_animation_deadline(), None);
+            }
+        }
+    }
+
+    #[test]
+    fn auto_hide_uses_the_transformed_stage_position_for_routed_pointers() {
+        use nana_ui_core::PaintTransform;
+        use nana_ui_input::PointerPhase::Move;
+
+        let mut stage = AutoHideStage::new(true);
+        let picture_id = stage.cx.world().parent_id(stage.bar.stable_id()).unwrap();
+        let picture = stage.cx.view_entity::<crate::Stack>(picture_id).unwrap();
+        stage
+            .cx
+            .update_component(picture, |picture, _| {
+                *picture = picture.clone().with_layout(|layout| {
+                    layout.transform = Some(PaintTransform {
+                        e: 200.0,
+                        f: 100.0,
+                        ..PaintTransform::default()
+                    });
+                });
+            })
+            .unwrap();
+        stage
+            .cx
+            .layout_document(stage.document, crate::LayoutViewport::new(960.0, 600.0))
+            .unwrap();
+        stage.cx.compat_world_mut().rebuild_hit_test(stage.document);
+
+        let raw_frame = stage.cx.world().layout_box(picture_id).unwrap();
+        assert!(raw_frame.contains(100.0, 200.0));
+        assert!(!raw_frame.contains(700.0, 200.0));
+        stage.pointer(Move, 100.0, 200.0);
+        assert!(
+            !stage.shown(),
+            "the old layout position is outside the translated picture"
+        );
+        stage.pointer(Move, 700.0, 200.0);
+        assert!(
+            stage.shown(),
+            "the actual picture reveals its bar beyond the raw layout box"
+        );
+        stage.pointer(Move, 900.0, 200.0);
+        assert!(
+            !stage.shown(),
+            "crossing the translated right edge conceals the bar"
+        );
+    }
+
+    #[test]
+    fn auto_hide_retains_an_outside_pointer_when_a_menu_closes() {
+        use nana_ui_input::PointerPhase::Move;
+
+        let mut stage = AutoHideStage::new(true);
+        stage.pointer(Move, 100.0, 100.0);
+        let settings = stage
+            .cx
+            .read(stage.bar, |bar| bar.settings())
+            .unwrap()
+            .unwrap();
+        assert!(stage.cx.toggle_action_menu(settings).unwrap());
+        stage.pointer(Move, 800.0, 500.0);
+        assert!(
+            stage.shown(),
+            "the open menu protects the controls outside the picture"
+        );
+        assert_eq!(stage.cx.overlay_wakeup(stage.bar).unwrap(), None);
+        assert!(stage.cx.dismiss_popovers_on_escape().unwrap());
+        assert!(
+            !stage.shown(),
+            "menu close must not restart visibility outside the picture"
+        );
+        assert_eq!(stage.cx.overlay_wakeup(stage.bar).unwrap(), None);
+        stage.pointer(Move, 100.0, 100.0);
+        assert!(stage.shown());
+    }
+
+    #[test]
+    fn auto_hide_uses_actual_drag_coordinates_and_hides_on_outside_release() {
+        use nana_ui_input::PointerPhase::{Cancel, Down, Move, Up};
+
+        for end in [Up, Cancel] {
+            let mut stage = AutoHideStage::new(true);
+            let seek = stage.cx.read(stage.bar, |bar| bar.seek()).unwrap().unwrap();
+            let track = match stage.cx.world().component_geometry(seek.stable_id()) {
+                Some(crate::ComponentGeometry::Range { track, .. }) => track,
+                _ => panic!("seek range geometry expected"),
+            };
+            let (x, y) = (track.x + track.width / 2.0, track.y + track.height / 2.0);
+            stage.pointer(Down, x, y);
+            assert!(
+                stage
+                    .cx
+                    .overlay_locks(stage.document, stage.bar.stable_id())
+                    .dragging
+            );
+            stage.pointer(Move, 800.0, 500.0);
+            assert!(
+                stage.shown(),
+                "pointer capture protects the active seek drag"
+            );
+            stage.pointer(end, 800.0, 500.0);
+            assert!(
+                !stage
+                    .cx
+                    .overlay_locks(stage.document, stage.bar.stable_id())
+                    .dragging
+            );
+            assert!(
+                !stage.shown(),
+                "ending outside hides even though the captured target was inside"
+            );
+            stage.pointer(Move, 100.0, 100.0);
+            assert!(stage.shown());
+        }
+    }
+
+    #[test]
+    fn auto_hide_preserves_keyboard_focus_and_keyboard_reveal() {
+        use nana_ui_input::PointerPhase::{Down, Move};
+
+        let mut stage = AutoHideStage::new(true);
+        stage.key("Tab");
+        assert!(
+            stage
+                .cx
+                .world()
+                .focus_visible(stage.document)
+                .is_some_and(|focused| stage.cx.is_descendant(focused, stage.bar.stable_id()))
+        );
+        stage.pointer(Move, 800.0, 500.0);
+        assert!(
+            stage.shown(),
+            "keyboard focus protects the controls while the pointer is away"
+        );
+        stage.pointer(Down, 800.0, 500.0);
+        assert_eq!(stage.cx.world().focused(stage.document), None);
+        assert!(
+            !stage.shown(),
+            "the controls hide once focus no longer protects them"
+        );
+        stage.key("KeyA");
+        assert!(
+            stage.shown(),
+            "keyboard activity still reveals controls while the pointer is away"
+        );
+        let deadline = stage.input.now() + OVERLAY_IDLE;
+        assert_eq!(stage.cx.next_animation_deadline(), Some(deadline));
+        stage.cx.advance_animations(deadline);
+        assert!(!stage.shown(), "keyboard reveal retains the idle timeout");
+    }
 
     fn t0() -> Instant {
         Instant::now()

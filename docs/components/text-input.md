@@ -40,6 +40,20 @@ text_input().placeholder("新任务").model(draft)
 | `label` | `Option<Arc<str>>` | 可访问名称 |
 | `placeholder` | `Arc<str>` | 空着时的提示 |
 | `disabled` | `bool` | 不能编辑 |
+| `character_counter` | `Option<usize>` | 在框内右侧显示已提交字数与上限，默认关闭 |
+
+## 字数计数
+
+Rust 组件用 `TextInput::new("").character_counter(40)`；视图用
+`text_input().character_counter(Some(40))` 或 `<TextInput character_counter={Some(40)} />`。
+语义属性是 `character-counter="40"`。
+
+计数按 `chars().count()`（Unicode 标量）统计，包括空格，排除输入法尚未提交的预编辑文字。
+空值显示 `0/40`，超过上限时计数使用危险色。组合 emoji 的多个标量分别计数。
+计数区保留在输入框内部右侧；正文、占位文字、光标、选区及预编辑文字的滚动、裁剪与命中共享剩余编辑区域。
+
+这是显示能力。它允许继续输入、粘贴和提交；应用负责业务发送门控。
+`max_length` 是独立的 UTF-16 编辑硬上限；两者可同时使用。
 
 ## 事件
 
