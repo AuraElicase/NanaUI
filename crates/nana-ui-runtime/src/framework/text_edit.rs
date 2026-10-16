@@ -2125,6 +2125,7 @@ impl AppContext {
         pointer_id: u64,
         target: ScrollOffset,
     ) -> Result<bool, FrameworkError> {
+        self.component_lifecycle.wheel_scrolls.remove(&node);
         let mut mutations = MutationQueue::new();
         mutations.set_scroll_offset(node, target);
         self.world.commit(mutations)?;
@@ -2844,6 +2845,7 @@ impl AppContext {
         selection: TextSelection,
         additional: Vec<TextSelection>,
     ) -> Result<bool, FrameworkError> {
+        self.component_lifecycle.wheel_scrolls.remove(&node);
         // 任一光标落在折叠隐藏区间内 → 该折叠自动展开（附加光标进入折叠
         // 的强制展开语义；跨越折叠的范围选择不展开）。
         let focuses: Vec<usize> = std::iter::once(selection.focus)

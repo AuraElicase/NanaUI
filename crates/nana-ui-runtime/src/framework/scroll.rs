@@ -58,6 +58,7 @@ impl AppContext {
         if !anchor.viewport_y.is_finite() {
             return Err(FrameworkError::InvalidInput);
         }
+        self.component_lifecycle.wheel_scrolls.remove(&scroll.id);
         self.update_scroll_view_visual(scroll, |view, _| view.pending_anchor = Some(anchor))?;
         // Anchor restoration depends on measured geometry. Include this
         // container in the next scoped layout even when its style is unchanged.
@@ -162,6 +163,17 @@ impl AppContext {
         if !offset.x.is_finite() || !offset.y.is_finite() {
             return Err(FrameworkError::InvalidComponentValue(entity.id));
         }
+        self.read(entity, |_| ())?;
+        self.component_lifecycle.wheel_scrolls.remove(&entity.id);
+        self.apply_scroll_to(entity, offset)
+    }
+
+    // Wheel samples use the same write/event path without cancelling themselves.
+    pub(super) fn apply_scroll_to(
+        &mut self,
+        entity: Entity<ScrollView>,
+        offset: ScrollOffset,
+    ) -> Result<bool, FrameworkError> {
         let axes = self.read(entity, |scroll| scroll.axes)?;
         let offset = ScrollOffset {
             x: if matches!(axes, ScrollAxes::Horizontal | ScrollAxes::Both) {
@@ -255,6 +267,7 @@ impl AppContext {
         margin: f32,
     ) -> Result<bool, FrameworkError> {
         let next = self.scroll_offset_for_target(scroll, target, margin)?;
+        self.component_lifecycle.wheel_scrolls.remove(&scroll);
         if self.is_scroll_view(scroll) {
             let moved = self.scroll_to(Entity::from_stable_id(scroll), next)?;
             if moved {
@@ -459,6 +472,15 @@ impl AppContext {
         if !delta.x.is_finite() || !delta.y.is_finite() {
             return Err(FrameworkError::InvalidInput);
         }
+        self.component_lifecycle.wheel_scrolls.remove(&id);
+        self.apply_scroll_node_by(id, delta)
+    }
+
+    pub(super) fn apply_scroll_node_by(
+        &mut self,
+        id: StableNodeId,
+        delta: ScrollOffset,
+    ) -> Result<bool, FrameworkError> {
         if self
             .views
             .get(&id)
@@ -501,7 +523,14 @@ impl AppContext {
         }
         if self.is_scroll_view(id) {
             let scroll = Entity::from_stable_id(id);
-            let changed = self.scroll_by(scroll, delta)?;
+            let current = self.world.scroll_offset(id).unwrap_or_default();
+            let changed = self.apply_scroll_to(
+                scroll,
+                ScrollOffset {
+                    x: current.x + delta.x,
+                    y: current.y + delta.y,
+                },
+            )?;
             if changed {
                 self.emit_user_scroll(scroll)?;
             }
@@ -639,6 +668,7 @@ impl AppContext {
         };
         let entity = Entity::<ScrollView>::from_stable_id(target);
         self.read(entity, |_| ())?;
+        self.component_lifecycle.wheel_scrolls.remove(&target);
         let position = bar.axis_position(axis, x, y);
         let track = bar.track_geometry(axis);
         // Cancel restores what the press started from, including any track jump.

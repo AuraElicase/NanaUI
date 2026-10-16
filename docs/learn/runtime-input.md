@@ -68,7 +68,7 @@ title: 输入链路
 `crates/nana-ui-runtime/src/framework/input/dispatch.rs` 将事件分为四条优先级明确的责任链（前面的环节消费后，后面的环节不再响应）：
 
 1. **指针链（`dispatch_pointer:88`）**：未捕获指针每次移动仅执行 **1 次**命中查询（`UiWorld::hit_test`），已捕获指针执行 **0 次**命中查询。按下（Down）依次经过：浮层外点击关闭（dismiss）→ 滚动条车道拦截 → 可达手柄 → `focus_node_in_place`（就地聚焦而不触发自动滚动，防止按下瞬间内容滚走导致释放落空）→ 文本编辑器与文档选区按下 → 各复合组件节点指针钩子（TreeView / AreaLayout / ScrubField / TimelineEditor / PropertyGrid / 图表 / Dock / SplitPane / Workspace 等）→ 通用 `press_pointer`。
-2. **滚轮链（`dispatch_wheel:690`）**：行滚轮增量乘以 `LINE_SCROLL_EXTENT = 60.0`，沿命中节点向最近的可滚动祖先容器传递。
+2. **滚轮链（`dispatch_wheel:690`）**：行滚轮增量乘以 `LINE_SCROLL_EXTENT = 60.0`，沿命中节点向最近仍能改变目标的可滚动祖先容器传递，以 180 毫秒 ease-out cubic 过渡推进；像素滚轮直接提交位移并取消该容器的过渡。浮层仍限制祖先遍历边界，图表等专用滚轮钩子保持优先。
 3. **按键与文本链（`dispatch_keystroke:800`）**：菜单栏按键路由（`AppMenuBar` 的 `Alt` / `F10` 与方向键）与模态阻断浮层 → 应用级按键策略 → 聚焦终端 / 富文本编辑器 / 纯文本编辑器（含 TreeView 行内重命名与 ScrubField 键入）→ Tab 顺序焦点遍历（`navigate_sequential_focus`）→ 分段控件与撤销/重做 → 剪贴板快捷键（经 `HostServices`）→ 聚焦控件自身按键 → 表格与 roving focus 方向键导航（`roving_focus_key`）→ 弹出菜单键盘触发（`keyboard_menu_key`）。在 `Ctrl` / `Cmd` 组合键下，`shortcut_key`（`framework/input.rs:214`）会将西里尔、希腊、希伯来等非拉丁键盘布局按物理键位映射回拉丁字母，使快捷键跨键盘布局一致生效。
 4. **输入法组字链（`dispatch_composition:1252`）**：路由至当前拥有 IME 会话的可编辑字段（`Start` → `set_ime_preedit("")`，`Update` → 更新 preedit 覆盖层，`Commit` → 通过组件提交文本，`DeleteSurrounding` → 删除光标周围字符）。
 

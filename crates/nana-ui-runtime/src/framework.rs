@@ -27,6 +27,7 @@ pub(crate) use text_edit::Editable;
 pub use text_edit::EditableHooks;
 mod scroll;
 mod select_menu;
+mod smooth_scroll;
 pub(crate) use select_menu::{
     DROPDOWN_MENU_POINTER, SEARCH_DROPDOWN_MENU_POINTER, SELECT_MENU_POINTER,
 };
@@ -625,6 +626,7 @@ struct ComponentLifecycle {
     auto_overlays: std::collections::BTreeMap<StableNodeId, auto_overlay::AutoOverlay>,
     /// When each scroll view's hold on its auto-hiding bars runs out.
     scrollbar_holds: HashMap<StableNodeId, Duration, crate::BuildIdHasher>,
+    wheel_scrolls: HashMap<StableNodeId, smooth_scroll::WheelScroll, crate::BuildIdHasher>,
     /// The scrollbar lane each pointer is on: the scroll view and the axis.
     scrollbar_hot: HashMap<
         (DocumentId, u64),
@@ -1650,6 +1652,9 @@ impl AppContext {
             return;
         }
         self.world.set_reduced_motion(reduced);
+        if reduced {
+            self.finish_wheel_scrolls();
+        }
         let ids: Vec<_> = self
             .reduced_motion_reproject_views
             .keys()
@@ -1924,6 +1929,23 @@ impl AppContext {
         &mut self,
         mut mutations: MutationQueue,
     ) -> Result<crate::CommitReport, FrameworkError> {
+        let wheel_writes: Vec<_> = if self.component_lifecycle.wheel_scrolls.is_empty() {
+            Vec::new()
+        } else {
+            mutations
+                .as_slice()
+                .iter()
+                .filter_map(|mutation| match mutation {
+                    crate::UiMutation::SetScrollOffset { id, .. }
+                    | crate::UiMutation::SetTextInput { id, .. }
+                    | crate::UiMutation::SetTextSelection { id, .. }
+                    | crate::UiMutation::SetRichText { id, .. }
+                    | crate::UiMutation::SetRichEditorMarks { id, .. }
+                    | crate::UiMutation::ReplaceTextSelection { id, .. } => Some(*id),
+                    _ => None,
+                })
+                .collect()
+        };
         // Re-appending or re-parking what is already in place: the world
         // skips it, and there is no focus, surface or lifecycle to follow.
         // A structural no-op only matches nodes that exist in a consistent
@@ -1931,6 +1953,9 @@ impl AppContext {
         if !mutations.is_empty() && self.world.is_noop_batch(&mutations) {
             for mutation in mutations.as_slice() {
                 self.world.note_noop_text_scale(mutation);
+            }
+            for id in wheel_writes {
+                self.component_lifecycle.wheel_scrolls.remove(&id);
             }
             self.collect_child_reprojects();
             self.drain_child_reprojects()?;
@@ -2004,6 +2029,12 @@ impl AppContext {
             .world
             .pointer_captures_released_since(captures_before)
             .collect();
+        for id in wheel_writes {
+            self.component_lifecycle.wheel_scrolls.remove(&id);
+        }
+        self.component_lifecycle
+            .wheel_scrolls
+            .retain(|id, _| self.world.is_mounted(*id));
         self.verify_text_histories(written_editors);
         for (document, root, previous, restore) in hover_restore {
             // Other focus owners (including overlay and scope restoration) win.
@@ -4045,6 +4076,7 @@ impl AppContext {
             .rich_text_presses
             .retain(|_, target| !removed.contains(target));
         for id in removed {
+            self.component_lifecycle.wheel_scrolls.remove(id);
             self.component_lifecycle.tooltips.remove(id);
             self.component_lifecycle.loading.remove(id);
             self.component_lifecycle.toast_timers.remove(id);
@@ -4217,6 +4249,9 @@ mod scroll_origin_tests;
 
 #[cfg(test)]
 mod scrollbar_tests;
+
+#[cfg(test)]
+mod smooth_scroll_tests;
 
 /// A view an event handler ran on during another view's update.
 pub(super) struct TouchedObserver {
