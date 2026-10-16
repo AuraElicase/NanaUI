@@ -3653,6 +3653,7 @@ fn pointer_press_places_the_caret_and_multi_click_selects() {
             secure: false,
             invalid: false,
             steppers: false,
+            character_counter: None,
             diagnostics: std::sync::Arc::from([]),
             matches: std::sync::Arc::from([]),
             color_swatches: std::sync::Arc::from([]),
@@ -3773,6 +3774,7 @@ fn pointer_drag_extends_the_selection_from_the_press_anchor() {
             secure: false,
             invalid: false,
             steppers: false,
+            character_counter: None,
             diagnostics: std::sync::Arc::from([]),
             matches: std::sync::Arc::from([]),
             color_swatches: std::sync::Arc::from([]),
@@ -5697,6 +5699,7 @@ fn alt_click_adds_and_removes_cursors_and_plain_click_collapses() {
             secure: false,
             invalid: false,
             steppers: false,
+            character_counter: None,
             diagnostics: std::sync::Arc::from([]),
             matches: std::sync::Arc::from([]),
             color_swatches: std::sync::Arc::from([]),
@@ -6745,4 +6748,57 @@ fn a_press_in_a_scrolled_field_places_the_caret_where_the_text_shows() {
         textarea_selection(&context, node),
         ("hello world".into(), 11, 11)
     );
+}
+
+#[test]
+fn composer_enter_submits_shift_enter_wraps_and_ime_confirmation_does_not_submit() {
+    use std::sync::{Arc, Mutex};
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let area = context
+        .create_component(document, TextArea::new("你好").submit_on_enter(true))
+        .unwrap();
+    context.focus_node(document, area.stable_id()).unwrap();
+    let submitted = Arc::new(Mutex::new(Vec::new()));
+    let output = submitted.clone();
+    context
+        .on(area, move |_, event: &crate::TextSubmitted, _| {
+            output.lock().unwrap().push(event.value.clone())
+        })
+        .unwrap();
+    let mut input = TestInput::default();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(*submitted.lock().unwrap(), ["你好"]);
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好");
+    input
+        .dispatch(&mut context, document, &shift_key("Enter"))
+        .unwrap();
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好\n");
+    assert_eq!(submitted.lock().unwrap().len(), 1);
+    context
+        .set_ime_preedit(document, String::new(), None)
+        .unwrap();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好\n");
+    assert_eq!(submitted.lock().unwrap().len(), 1);
+    context
+        .set_ime_preedit(document, "shi".into(), None)
+        .unwrap();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(submitted.lock().unwrap().len(), 1);
+    assert_eq!(textarea_selection(&context, area.stable_id()).0, "你好\n");
+    context.commit_ime(document, "世").unwrap();
+    context
+        .update_component(area, |area, _| area.read_only = true)
+        .unwrap();
+    input
+        .dispatch(&mut context, document, &plain_key("Enter"))
+        .unwrap();
+    assert_eq!(submitted.lock().unwrap().len(), 1);
 }

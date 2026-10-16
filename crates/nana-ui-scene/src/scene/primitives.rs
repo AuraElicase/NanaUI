@@ -143,16 +143,23 @@ impl UiScene {
                     .layout
                     .resolved_padding_against(Some(bounds.width));
                 let border = node.source_style.layout.resolved_border_width();
+                let editor_bounds = match node.component_geometry.as_deref() {
+                    Some(ComponentGeometry::TextInput {
+                        character_counter: Some(counter),
+                        ..
+                    }) => Some(counter.editor_bounds),
+                    _ => None,
+                };
                 let mut text_input_clips = clips.to_vec();
                 text_input_clips.push(ClipRegion {
-                    bounds: SceneRect {
+                    bounds: editor_bounds.map(scene_rect).unwrap_or(SceneRect {
                         x: bounds.x + border + padding.left,
                         y: bounds.y + border + padding.top,
                         width: (bounds.width - border * 2.0 - padding.left - padding.right)
                             .max(0.0),
                         height: (bounds.height - border * 2.0 - padding.top - padding.bottom)
                             .max(0.0),
-                    },
+                    }),
                     transform,
                     corner_radius: 0.0,
                     polygon_clip: None,
@@ -421,6 +428,12 @@ impl UiScene {
                 }) = node.component_geometry.as_deref()
                 {
                     text_bounds = scene_rect(*content);
+                }
+                // A rich editor is a text node, so its own scroll translates
+                // glyphs and marks together; the surrounding chrome stays put.
+                if node.rich_editor.is_some() {
+                    text_bounds.x -= node.scroll_offset.x;
+                    text_bounds.y -= node.scroll_offset.y;
                 }
                 if !node.document_text_selection.is_empty() {
                     // Slot 1 sits under the glyph run at slot 2 (same as

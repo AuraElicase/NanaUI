@@ -216,12 +216,13 @@ pub use components::{
     TextCompletionSnapshot, TextContent, TextDiagnosticSeverity, TextDiagnosticSpan,
     TextEditorRenderOptions, TextFoldGeometry, TextFoldGutter, TextGitGutterGeometry, TextGitMark,
     TextGitMarkKind, TextHit, TextHorizontalAlignment, TextHover, TextHoverPopup, TextInlay,
-    TextInputScroll, TextInputState, TextInputView, TextMatchMarker, TextMatchSpan, TextMetrics,
-    TextMinimapGeometry, TextSelection, TextShapeConstraints, TextShaper, TextShaping,
-    TextSignatureHelp, TextSignaturePopup, TextSnippet, TextStickyLineGeometry, TextValue,
-    TextVerticalAlignment, TextWhitespaceKind, TooltipVisual, TriggeredMenuOverlay,
-    decode_virtual_menu_item, decode_virtual_tree_item, decode_virtual_tree_toggle, menu_row_index,
-    menu_row_slots, virtual_menu_item_id, virtual_tree_item_id, virtual_tree_toggle_id,
+    TextInputCharacterCounter, TextInputScroll, TextInputState, TextInputView, TextMatchMarker,
+    TextMatchSpan, TextMetrics, TextMinimapGeometry, TextSelection, TextShapeConstraints,
+    TextShaper, TextShaping, TextSignatureHelp, TextSignaturePopup, TextSnippet,
+    TextStickyLineGeometry, TextValue, TextVerticalAlignment, TextWhitespaceKind, TooltipVisual,
+    TriggeredMenuOverlay, decode_virtual_menu_item, decode_virtual_tree_item,
+    decode_virtual_tree_toggle, menu_row_index, menu_row_slots, virtual_menu_item_id,
+    virtual_tree_item_id, virtual_tree_toggle_id,
 };
 pub use custom_paint::{
     AFFINE_IDENTITY, Affine, BlendMode, BoxPaint, ColorStop, CornerRadii, FillRule, Gradient,
@@ -257,8 +258,8 @@ pub use framework::{
     Entity, ExtensionRegistrar, FormValidity, FrameworkError, HeadlessInput, InputBindError,
     InputCounters, InputRouteError, InputRouteOutcome, NodePointer, NodePointerHooks, NodeWheel,
     OverlayKey, OverlayPointerDecision, OverlayPointerPhase, RoutedEvent, RuntimeOverlayKind,
-    Subscription, Task, TextDeleteKind, TextEditOrigin, TextFindScope, UiExtension, View,
-    ViewContext, VirtualListItems, VirtualTableItems, VirtualTreeItems,
+    Subscription, Task, TextDeleteKind, TextEditAction, TextEditOrigin, TextFindScope, UiExtension,
+    View, ViewContext, VirtualListItems, VirtualTableItems, VirtualTreeItems,
 };
 #[doc(hidden)]
 pub use framework::{EditableHooks, TypeBehavior, TypeHooks};

@@ -71,7 +71,7 @@ impl AppContext {
         if ran == Some(active) && !snapshot.menu_toggled {
             return Ok(());
         }
-        self.drive_auto_overlay(bar, false, false).map(drop)
+        self.drive_auto_overlay(bar, None).map(drop)
     }
 
     pub(crate) fn has_auto_overlays(&self) -> bool {
@@ -127,18 +127,18 @@ impl AppContext {
         for bar in self.driven_bars(Some(document)) {
             let reveal = match activity {
                 OverlayActivity::Pointer { x, y, target } => {
-                    self.over_stage(document, bar.stable_id(), x, y, target)
+                    Some(self.over_stage(document, bar.stable_id(), x, y, target))
                 }
-                OverlayActivity::Key => true,
-                OverlayActivity::None | OverlayActivity::Leave => false,
+                OverlayActivity::Key => Some(true),
+                OverlayActivity::Leave => Some(false),
+                OverlayActivity::None => None,
             };
-            let leave = activity == OverlayActivity::Leave;
-            if !leave
+            if reveal != Some(false)
                 && self
                     .read(bar, |bar| bar.visibility.counting_down())
                     .unwrap_or(false)
             {
-                if reveal
+                if reveal == Some(true)
                     && let Some(driven) = self
                         .component_lifecycle
                         .auto_overlays
@@ -148,7 +148,7 @@ impl AppContext {
                 }
                 continue;
             }
-            let _ = self.drive_auto_overlay(bar, reveal, leave);
+            let _ = self.drive_auto_overlay(bar, reveal);
         }
     }
 
@@ -163,7 +163,7 @@ impl AppContext {
                     bar.visibility.wakeup().is_some_and(|wakeup| wakeup <= now)
                 })
                 .unwrap_or(false);
-            if due && self.drive_auto_overlay(bar, false, false).unwrap_or(false) {
+            if due && self.drive_auto_overlay(bar, None).unwrap_or(false) {
                 flipped.push(bar.stable_id());
             }
         }
@@ -171,16 +171,17 @@ impl AppContext {
     }
 
     /// Run `bar`'s policy at the runtime's current time, with the activity
-    /// noted for it, a reveal now or the pointer leaving the window; answers
+    /// noted for it, a reveal now or the pointer leaving the stage; answers
     /// whether its visibility flipped.
     fn drive_auto_overlay(
         &mut self,
         bar: Entity<MediaTransportBar>,
-        reveal: bool,
-        conceal: bool,
+        reveal: Option<bool>,
     ) -> Result<bool, FrameworkError> {
         let now = instant(self.component_lifecycle.now);
-        let active = self.read(bar, |bar| bar.playing && !bar.disabled)?;
+        let (active, concealed) = self.read(bar, |bar| {
+            (bar.playing && !bar.disabled, bar.visibility.concealed())
+        })?;
         let noted = self
             .component_lifecycle
             .auto_overlays
@@ -194,8 +195,14 @@ impl AppContext {
             OverlayStep {
                 now,
                 active,
-                activity: if reveal { Some(now) } else { noted },
-                conceal,
+                activity: if reveal == Some(true) {
+                    Some(now)
+                } else {
+                    noted
+                },
+                // Menu close restarts activity in the policy; preserve its
+                // existing conceal request unless new input replaces it.
+                conceal: reveal.map_or(concealed, |reveal| !reveal),
                 // A control a click left focused would otherwise keep the
                 // bar up for good.
                 focus_visible_only: true,
@@ -217,12 +224,20 @@ impl AppContext {
         target: Option<StableNodeId>,
     ) -> bool {
         let stage = self.world.parent_id(bar).unwrap_or(bar);
+        // Captured events keep their original target even outside the stage.
+        // Compare in layout coordinates so ancestor scrolling and transforms
+        // follow the same projection as hit testing.
+        if !self
+            .world
+            .pointer_layout_position(stage, x, y)
+            .zip(self.world.layout_box(stage))
+            .is_some_and(|((x, y), frame)| frame.contains(x, y))
+        {
+            return false;
+        }
         match target.or_else(|| self.world.hit_test(document, x, y)) {
             Some(hit) => self.world.is_descendant_or_self(hit, stage),
-            None => self
-                .world
-                .layout_box(stage)
-                .is_some_and(|frame| frame.contains(x, y)),
+            None => true,
         }
     }
 }

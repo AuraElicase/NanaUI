@@ -146,6 +146,10 @@ struct EditState {
     /// The last edit was typing at a caret, so the next one joins its step.
     coalesce: bool,
     dragging: Option<u64>,
+    click: Option<(u64, std::time::Duration, f32, f32, u8)>,
+    drag_range: Option<Range<usize>>,
+    drag_unit: u8,
+    preferred_x: Option<f32>,
 }
 
 /// A rich text field: edits a [`RichText`] the application owns.
@@ -157,6 +161,8 @@ pub struct RichTextEditor {
     pub read_only: bool,
     pub disabled: bool,
     pub style: NodeStyle,
+    /// Requested viewport offset. User scrolling leaves the selection intact.
+    pub scroll_offset: crate::ScrollOffset,
     state: EditState,
 }
 
@@ -164,11 +170,14 @@ impl RichTextEditor {
     pub fn new(value: impl Into<RichText>) -> Self {
         let mut style = NodeStyle::default();
         Arc::make_mut(&mut style.layout).cursor = Some(nana_ui_core::CursorSpec::Text);
+        Arc::make_mut(&mut style.layout).overflow_x = nana_ui_core::OverflowSpec::Hidden;
+        Arc::make_mut(&mut style.layout).overflow_y = nana_ui_core::OverflowSpec::Hidden;
         Self {
             value: value.into(),
             read_only: false,
             disabled: false,
             style,
+            scroll_offset: crate::ScrollOffset::default(),
             state: EditState::default(),
         }
     }
@@ -223,6 +232,13 @@ impl RichTextEditor {
     /// The IME preedit, while one is open.
     pub fn preedit(&self) -> Option<&str> {
         self.state.preedit.as_ref().map(|(text, _)| text.as_str())
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.editable() && !self.state.undo.is_empty()
+    }
+    pub fn can_redo(&self) -> bool {
+        self.editable() && !self.state.redo.is_empty()
     }
 
     fn range(&self) -> Range<usize> {
@@ -309,6 +325,7 @@ impl RichTextEditor {
     }
 
     fn set_caret(&mut self, offset: usize) {
+        self.state.preferred_x = None;
         self.state.anchor = offset;
         self.state.focus = offset;
     }
@@ -674,6 +691,24 @@ fn next_word(text: &str, offset: usize) -> usize {
     text.len()
 }
 
+fn selection_unit(text: &str, byte: usize, count: u8) -> Range<usize> {
+    let byte = floor_char(text, byte.min(text.len()));
+    if count == 3 {
+        let start = text[..byte].rfind('\n').map_or(0, |i| i + 1);
+        let end = text[byte..].find('\n').map_or(text.len(), |i| byte + i + 1);
+        return start..end;
+    }
+    if count == 2 {
+        return text
+            .split_word_bound_indices()
+            .find_map(|(start, word)| {
+                (byte >= start && byte < start + word.len()).then_some(start..start + word.len())
+            })
+            .unwrap_or(byte..byte);
+    }
+    byte..byte
+}
+
 /// The line of `layout` a caret at `byte` sits on.
 fn line_of(layout: &TextLayout, byte: usize) -> Option<usize> {
     let lines = &layout.lines;
@@ -723,12 +758,16 @@ impl Geometry {
         })
     }
 
-    fn vertical(&self, byte: usize, down: bool) -> Option<usize> {
-        let line = line_of(&self.layout, byte)?;
-        let target = if down { line + 1 } else { line.checked_sub(1)? };
-        let target = self.layout.lines.get(target)?;
-        let (x, _, _) = caret_box(&self.layout, byte)?;
-        let y = target.metrics.top_y_px + target.metrics.height_px * 0.5;
+    fn move_vertical(&self, byte: usize, x: f32, down: bool, page: Option<f32>) -> Option<usize> {
+        let (_, top, height) = caret_box(&self.layout, byte)?;
+        let y = if let Some(page) = page {
+            top + height * 0.5 + if down { page } else { -page }
+        } else {
+            let line = line_of(&self.layout, byte)?;
+            let target = if down { line + 1 } else { line.checked_sub(1)? };
+            let line = self.layout.lines.get(target)?;
+            line.metrics.top_y_px + line.metrics.height_px * 0.5
+        };
         Some(self.layout.hit_test_text(&self.text, x, y).caret.byte)
     }
 
@@ -788,6 +827,9 @@ impl ComponentView for RichTextEditor {
     }
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
+        if world.scroll_request(id) != Some(self.scroll_offset) {
+            mutations.set_scroll_offset(id, self.scroll_offset);
+        }
         let (display, marks) = self.display();
         if world.rich_text(id) != Some(&display) {
             mutations.set_rich_text(id, display);
@@ -902,7 +944,7 @@ impl AppContext {
         }
         let primary = (modifiers.control || modifiers.meta) && !modifiers.alt;
         let shift = modifiers.shift;
-        if primary {
+        if primary && (!shift || key.eq_ignore_ascii_case("z")) {
             let lower = key.to_ascii_lowercase();
             match lower.as_str() {
                 "z" if shift => return self.rich_edit(entity, RichEditCommand::Redo).map(Some),
@@ -951,7 +993,12 @@ impl AppContext {
                     return self
                         .edit_with(entity, |view, _| match &piece {
                             Some(piece) => view.replace_selection(piece, false),
-                            None => view.insert_text(&text),
+                            None => {
+                                view.state.coalesce = false;
+                                let changed = view.insert_text(&text.replace("\r\n", "\n"));
+                                view.state.coalesce = false;
+                                changed
+                            }
                         })
                         .map(Some);
                 }
@@ -959,42 +1006,81 @@ impl AppContext {
             }
         }
         let geometry = Geometry::of(self.world(), entity.stable_id());
+        let page_height = self
+            .world()
+            .component_content_box(entity.stable_id())
+            .map_or(100.0, |content| content.height);
         let handled = match key {
-            "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End" => self
-                .edit_with(entity, |view, _| {
-                    let text = view.value.text().to_owned();
-                    let range = view.range();
-                    let focus = view.state.focus;
-                    let collapsed = range.is_empty();
-                    let target = match key {
-                        "ArrowLeft" if primary => previous_word(&text, focus),
-                        "ArrowRight" if primary => next_word(&text, focus),
-                        "ArrowLeft" if !shift && !collapsed => range.start,
-                        "ArrowRight" if !shift && !collapsed => range.end,
-                        "ArrowLeft" => previous_grapheme(&text, focus),
-                        "ArrowRight" => next_grapheme(&text, focus),
-                        "Home" if primary => 0,
-                        "End" if primary => text.len(),
-                        "ArrowUp" | "ArrowDown" => geometry
+            "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End" | "PageUp"
+            | "PageDown" => self.edit_with(entity, |view, _| {
+                let text = view.value.text().to_owned();
+                let range = view.range();
+                let focus = view.state.focus;
+                let collapsed = range.is_empty();
+                let vertical = matches!(key, "ArrowUp" | "ArrowDown" | "PageUp" | "PageDown");
+                let x = view
+                    .state
+                    .preferred_x
+                    .or_else(|| {
+                        geometry
                             .as_ref()
-                            .filter(|geometry| *geometry.text == *text)
-                            .and_then(|geometry| geometry.vertical(focus, key == "ArrowDown"))
-                            .unwrap_or(if key == "ArrowDown" { text.len() } else { 0 }),
-                        "Home" | "End" => geometry
-                            .as_ref()
-                            .filter(|geometry| *geometry.text == *text)
-                            .and_then(|geometry| geometry.line_edge(focus, key == "End"))
-                            .unwrap_or(if key == "End" { text.len() } else { 0 }),
-                        _ => focus,
-                    };
-                    view.state.focus = target;
-                    if !shift {
-                        view.state.anchor = target;
+                            .and_then(|g| caret_box(&g.layout, focus).map(|c| c.0))
+                    })
+                    .unwrap_or(0.0);
+                view.state.preferred_x = vertical.then_some(x);
+                let target = match key {
+                    "ArrowLeft" if primary => previous_word(&text, focus),
+                    "ArrowRight" if primary => next_word(&text, focus),
+                    "ArrowLeft" if !shift && !collapsed => range.start,
+                    "ArrowRight" if !shift && !collapsed => range.end,
+                    "ArrowLeft" => previous_grapheme(&text, focus),
+                    "ArrowRight" => next_grapheme(&text, focus),
+                    "Home" if primary => 0,
+                    "End" if primary => text.len(),
+                    "ArrowUp" if primary => {
+                        let start = text[..focus].rfind('\n').map_or(0, |i| i + 1);
+                        if start < focus {
+                            start
+                        } else {
+                            text[..start.saturating_sub(1)]
+                                .rfind('\n')
+                                .map_or(0, |i| i + 1)
+                        }
                     }
-                    view.state.typing = None;
-                    view.state.coalesce = false;
-                    true
-                })?,
+                    "ArrowDown" if primary => text[focus..]
+                        .find('\n')
+                        .map_or(text.len(), |i| focus + i + 1),
+                    "ArrowUp" | "ArrowDown" | "PageUp" | "PageDown" => geometry
+                        .as_ref()
+                        .filter(|geometry| *geometry.text == *text)
+                        .and_then(|geometry| {
+                            geometry.move_vertical(
+                                focus,
+                                x,
+                                matches!(key, "ArrowDown" | "PageDown"),
+                                matches!(key, "PageUp" | "PageDown").then_some(page_height),
+                            )
+                        })
+                        .unwrap_or(if matches!(key, "ArrowDown" | "PageDown") {
+                            text.len()
+                        } else {
+                            0
+                        }),
+                    "Home" | "End" => geometry
+                        .as_ref()
+                        .filter(|geometry| *geometry.text == *text)
+                        .and_then(|geometry| geometry.line_edge(focus, key == "End"))
+                        .unwrap_or(if key == "End" { text.len() } else { 0 }),
+                    _ => focus,
+                };
+                view.state.focus = target;
+                if !shift {
+                    view.state.anchor = target;
+                }
+                view.state.typing = None;
+                view.state.coalesce = false;
+                true
+            })?,
             "Backspace" | "Delete" => self.edit_with(entity, |view, _| {
                 let text = view.value.text().to_owned();
                 let range = view.range();
@@ -1057,7 +1143,9 @@ impl AppContext {
             }
             CompositionInput::Commit(text) => {
                 view.state.preedit = None;
+                view.state.coalesce = false;
                 view.insert_text(text);
+                view.state.coalesce = false;
                 true
             }
             CompositionInput::Disabled => {
@@ -1092,6 +1180,7 @@ impl AppContext {
         x: f32,
         y: f32,
         shift: bool,
+        now: std::time::Duration,
     ) -> Result<bool, FrameworkError> {
         let entity = if phase == 0 {
             target
@@ -1110,23 +1199,83 @@ impl AppContext {
             return Ok(false);
         };
         let id = entity.stable_id();
+        if phase >= 2 {
+            self.set_rich_drag_scroll(None);
+        }
+        if phase == 1 {
+            let (px, py) = self
+                .world()
+                .pointer_layout_position(id, x, y)
+                .unwrap_or((x, y));
+            if let Some(content) = self.world().component_content_box(id) {
+                let dy = if py < content.y {
+                    (py - content.y).max(-32.0)
+                } else if py > content.y + content.height {
+                    (py - content.y - content.height).min(32.0)
+                } else {
+                    0.0
+                };
+                let dx = if px < content.x {
+                    (px - content.x).max(-32.0)
+                } else if px > content.x + content.width {
+                    (px - content.x - content.width).min(32.0)
+                } else {
+                    0.0
+                };
+                if (dx != 0.0 || dy != 0.0)
+                    && self.scroll_node_by(id, crate::ScrollOffset { x: dx, y: dy })?
+                {
+                    self.set_rich_drag_scroll(Some((
+                        document,
+                        id,
+                        pointer,
+                        x,
+                        y,
+                        now + std::time::Duration::from_millis(16),
+                    )));
+                } else {
+                    self.set_rich_drag_scroll(None);
+                }
+            }
+        }
         let hit = self.rich_editor_hit(id, x, y);
         if phase == 0 {
             self.focus_node(document, id)?;
             self.press_pointer(document, pointer, id)?;
+            let mut mutations = MutationQueue::new();
+            mutations.capture_pointer(pointer, id);
+            self.commit_mutations(mutations)?;
         }
         if phase >= 2 {
             self.release_pointer(document, pointer);
+            self.release_pointer_capture(document, pointer);
         }
         self.edit_with(entity, |view, cx| {
             match phase {
                 0 => {
                     view.state.dragging = Some(pointer);
                     view.state.preedit = None;
+                    view.state.preferred_x = None;
+                    let count = match view.state.click {
+                        Some((p, at, px, py, count))
+                            if p == pointer
+                                && now.saturating_sub(at)
+                                    <= std::time::Duration::from_millis(500)
+                                && (px - x).abs() < 4.0
+                                && (py - y).abs() < 4.0 =>
+                        {
+                            count % 3 + 1
+                        }
+                        _ => 1,
+                    };
+                    view.state.click = Some((pointer, now, x, y, count));
+                    view.state.drag_unit = count;
                     if let Some((byte, object)) = hit {
-                        view.state.focus = byte;
+                        let range = selection_unit(view.value.text(), byte, count);
+                        view.state.drag_range = Some(range.clone());
+                        view.state.focus = range.end;
                         if !shift {
-                            view.state.anchor = byte;
+                            view.state.anchor = range.start;
                         }
                         if let Some((id, offset)) = object {
                             cx.emit(RichTextEditorEvent::ObjectActivated { id, offset });
@@ -1135,13 +1284,23 @@ impl AppContext {
                 }
                 1 => {
                     if let Some((byte, _)) = hit {
-                        view.state.focus = byte;
+                        let range = selection_unit(view.value.text(), byte, view.state.drag_unit);
+                        if view.state.drag_unit == 1 {
+                            view.state.focus = byte;
+                        } else if let Some(start) = &view.state.drag_range {
+                            if byte < start.start {
+                                view.state.anchor = start.end;
+                                view.state.focus = range.start;
+                            } else if view.state.drag_unit > 1 {
+                                view.state.anchor = start.start;
+                                view.state.focus = range.end;
+                            } else {
+                                view.state.focus = byte;
+                            }
+                        }
                     }
                 }
                 2 => {
-                    if let Some((byte, _)) = hit {
-                        view.state.focus = byte;
-                    }
                     view.state.dragging = None;
                 }
                 _ => view.state.dragging = None,
@@ -1200,6 +1359,49 @@ impl AppContext {
             view.report(&before, &attrs, cx);
             changed
         })
+    }
+
+    /// Position a context-menu caret without destroying an existing selection.
+    pub fn prepare_rich_editor_context_menu(
+        &mut self,
+        entity: Entity<RichTextEditor>,
+        x: f32,
+        y: f32,
+    ) -> Result<(), FrameworkError> {
+        let byte = self
+            .rich_editor_hit(entity.stable_id(), x, y)
+            .map(|hit| hit.0);
+        if self.read(entity, |view| view.range().is_empty())?
+            && let Some(byte) = byte
+        {
+            self.rich_edit(entity, RichEditCommand::Select(byte..byte))?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn rich_drag_deadline(&self) -> Option<std::time::Duration> {
+        self.rich_drag_scroll()
+            .and_then(|(doc, id, pointer, _, _, deadline)| {
+                (self.world().is_mounted(id)
+                    && self.world().focused(doc) == Some(id)
+                    && self.world().pointer_capture(doc, pointer) == Some(id))
+                .then_some(deadline)
+            })
+    }
+
+    pub(crate) fn advance_rich_drag(&mut self, now: std::time::Duration) -> Option<StableNodeId> {
+        let (doc, id, pointer, x, y, deadline) = self.rich_drag_scroll()?;
+        if self.rich_drag_deadline().is_none() {
+            self.set_rich_drag_scroll(None);
+            return None;
+        }
+        if deadline > now {
+            return None;
+        }
+        self.rich_editor_pointer(doc, Some(id), pointer, 1, x, y, false, now)
+            .ok()
+            .filter(|done| *done)
+            .map(|_| id)
     }
 }
 

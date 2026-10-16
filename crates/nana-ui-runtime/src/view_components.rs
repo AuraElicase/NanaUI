@@ -149,6 +149,22 @@ fn text_field_style(multiline: bool) -> NodeStyle {
     }
 }
 
+/// The footer is independent of the text row budget. Its action uses the
+/// theme's small-control extent; a count-only footer needs one caption row.
+pub(crate) fn text_area_footer_extent(
+    counter: bool,
+    action: bool,
+    metrics: nana_ui_core::ThemeMetrics,
+) -> f32 {
+    if action {
+        nana_ui_core::ControlSize::Small.height_in(metrics)
+    } else if counter {
+        nana_ui_core::ControlSize::Medium.line_height()
+    } else {
+        0.0
+    }
+}
+
 struct TextFieldProjection<'a> {
     state: &'a TextInputState,
     label: &'a Option<Arc<str>>,
@@ -1959,6 +1975,8 @@ pub struct DialogToggled {
 pub struct TextInput {
     pub state: TextInputState,
     pub max_length: Option<usize>,
+    /// Show committed Unicode scalar count and this display-only limit.
+    pub character_counter: Option<usize>,
     pub label: Option<Arc<str>>,
     pub placeholder: Arc<str>,
     pub size: nana_ui_core::ControlSize,
@@ -1977,6 +1995,7 @@ impl TextInput {
         Self {
             state: TextInputState::new(Into::<String>::into(value)),
             max_length: None,
+            character_counter: None,
             label: None,
             placeholder: Arc::from(""),
             size: nana_ui_core::ControlSize::Medium,
@@ -2073,6 +2092,14 @@ impl TextInput {
         self
     }
 
+    /// Display `count/limit` inside the trailing edge of the field.
+    /// Counts committed Unicode scalar values (`chars`), excluding IME preedit.
+    /// This does not restrict edits or submission; `max_length` is independent.
+    pub fn character_counter(mut self, limit: usize) -> Self {
+        self.character_counter = Some(limit);
+        self
+    }
+
     pub(crate) fn accepts_edit_value(&self, value: &str) -> bool {
         crate::text_input_limit::accepts_value(&self.state.value, value, self.max_length)
     }
@@ -2121,6 +2148,7 @@ impl ComponentView for TextInput {
             secure: self.secure,
             invalid: self.invalid,
             steppers: false,
+            character_counter: self.character_counter,
             diagnostics: Arc::from([]),
             matches: Arc::from([]),
             color_swatches: Arc::from([]),
@@ -2483,6 +2511,7 @@ impl ComponentView for NumberInput {
             secure: false,
             invalid: self.invalid,
             steppers: true,
+            character_counter: None,
             diagnostics: Arc::from([]),
             matches: Arc::from([]),
             color_swatches: Arc::from([]),
@@ -2568,6 +2597,15 @@ pub(crate) struct TextAreaResizeDrag {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextArea {
     pub state: TextInputState,
+    /// Optional committed Unicode scalar count; display only, without truncation.
+    pub character_counter: Option<usize>,
+    /// Grow and shrink between these visual row counts; overflow scrolls.
+    pub auto_grow: Option<(usize, usize)>,
+    /// Enter submits; Shift+Enter still inserts a newline. IME confirmation never submits.
+    pub submit_on_enter: bool,
+    pub trailing_action: Option<StableNodeId>,
+    pub(crate) action_slot: Option<StableNodeId>,
+    pub(crate) footer_expanded: Option<bool>,
     pub resize_vertical: bool,
     pub(crate) resized_height: Option<f32>,
     pub(crate) resize_drag: Option<TextAreaResizeDrag>,
@@ -2661,6 +2699,12 @@ impl TextArea {
     pub fn new(value: impl Into<String>) -> Self {
         Self {
             state: TextInputState::new(Into::<String>::into(value)),
+            character_counter: None,
+            auto_grow: None,
+            submit_on_enter: false,
+            trailing_action: None,
+            action_slot: None,
+            footer_expanded: None,
             resize_vertical: false,
             resized_height: None,
             resize_drag: None,
@@ -2691,6 +2735,46 @@ impl TextArea {
             minimap: false,
             sticky_scroll: false,
             style_override: false,
+        }
+    }
+
+    /// Size to shaped wrapped content, bounded by visual text rows (at least one).
+    /// With min_rows=1, counter/action stay on the first row until displayed
+    /// text (including IME) exceeds that compact row; then they move below it.
+    pub fn auto_grow(mut self, min_rows: usize, max_rows: usize) -> Self {
+        let min_rows = min_rows.max(1);
+        self.auto_grow = Some((min_rows, max_rows.max(min_rows)));
+        self
+    }
+
+    pub fn character_counter(mut self, limit: usize) -> Self {
+        self.character_counter = Some(limit);
+        self
+    }
+
+    pub fn submit_on_enter(mut self, enabled: bool) -> Self {
+        self.submit_on_enter = enabled;
+        self
+    }
+
+    /// An application action in the bottom trailing corner, in a small-control slot.
+    /// The view layer assembles this slot automatically; imperative users call
+    /// [`crate::AppContext::assemble_text_area`].
+    pub fn trailing_action(mut self, node: StableNodeId) -> Self {
+        self.trailing_action = Some(node);
+        self
+    }
+
+    pub(crate) fn uses_adaptive_footer(&self) -> bool {
+        matches!(self.auto_grow, Some((1, _)))
+            && (self.character_counter.is_some() || self.trailing_action.is_some())
+    }
+
+    pub(crate) fn uses_expanded_footer(&self) -> bool {
+        if self.uses_adaptive_footer() {
+            self.footer_expanded.unwrap_or(false)
+        } else {
+            self.character_counter.is_some() || self.trailing_action.is_some()
         }
     }
 
@@ -2905,6 +2989,8 @@ impl TextArea {
 impl ComponentView for TextArea {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         editable: Some(&crate::framework::Editable::<Self>::EDITOR_HOOKS),
+        slot_assembler: Some(crate::AppContext::assemble_text_area),
+        lifecycle: Some(crate::AppContext::refresh_text_area_action_slot),
         ..crate::TypeBehavior::NONE
     };
 
@@ -2922,6 +3008,11 @@ impl ComponentView for TextArea {
             next.state = self.state.clone();
         }
         *self = next;
+    }
+
+    fn keep_framework_state(&mut self, previous: &Self) {
+        self.action_slot = self.action_slot.or(previous.action_slot);
+        self.footer_expanded = self.footer_expanded.or(previous.footer_expanded);
     }
 
     fn node_kind(&self) -> NodeKind {
@@ -2947,6 +3038,7 @@ impl ComponentView for TextArea {
             secure: false,
             invalid: self.invalid,
             steppers: false,
+            character_counter: self.character_counter,
             diagnostics: Arc::clone(&self.diagnostics),
             matches: Arc::clone(&self.match_spans),
             color_swatches: Arc::clone(&self.color_swatches),
@@ -2960,6 +3052,9 @@ impl ComponentView for TextArea {
             git_marks: Arc::clone(&self.git_gutter),
             editor_options: TextEditorRenderOptions {
                 resize_vertical: self.supports_vertical_resize(),
+                footer_action: self.trailing_action.is_some(),
+                adaptive_footer: self.uses_adaptive_footer(),
+                expanded_footer: self.uses_expanded_footer(),
                 occurrence_highlight: self.occurrence_highlight,
                 relative_line_numbers: self.relative_line_numbers,
                 show_whitespace: self.show_whitespace,
@@ -3027,6 +3122,79 @@ impl ComponentView for TextArea {
             }
         }
         let mut effective_style = self.style.clone();
+        let expanded_footer = self.uses_expanded_footer();
+        let footer_extent = if expanded_footer {
+            text_area_footer_extent(
+                self.character_counter.is_some(),
+                self.trailing_action.is_some(),
+                world.theme_metrics(),
+            )
+        } else {
+            0.0
+        };
+        let footer_band = if footer_extent > 0.0 {
+            footer_extent + 4.0
+        } else {
+            0.0
+        };
+        if let Some((min_rows, max_rows)) = self.auto_grow {
+            let max_rows = if self.uses_adaptive_footer() && !expanded_footer {
+                min_rows
+            } else {
+                max_rows
+            };
+            let line = size.line_height();
+            let chrome = (size.height_in(world.theme_metrics()) - line).max(2.0);
+            effective_style.control_padding_y = None;
+            effective_style.control_height = None;
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.height = None;
+            layout.min_height = Some(nana_ui_core::LengthSpec::Px(
+                min_rows as f32 * line + chrome + footer_band,
+            ));
+            layout.max_height = Some(nana_ui_core::LengthSpec::Px(
+                max_rows as f32 * line + chrome + footer_band,
+            ));
+            layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(line));
+            layout.padding_top = Some(nana_ui_core::LengthSpec::Px((chrome - 2.0) / 2.0));
+            layout.padding_bottom = layout.padding_top;
+            layout.word_break = Some(nana_ui_core::WordBreakSpec::BreakAll);
+            layout.white_space_nowrap = false;
+            // Natural rows are a preferred size. A bounded flex parent may
+            // reduce the text viewport down to min_rows while the footer stays.
+            // Preserve an explicit consumer policy.
+            layout.flex_shrink.get_or_insert(1.0);
+        }
+        if footer_band > 0.0 {
+            let padding = effective_style
+                .control_padding_y
+                .map(|padding| padding.resolve(world.theme_metrics()));
+            let top = padding.unwrap_or_else(|| effective_style.layout.resolved_padding().top);
+            let bottom =
+                padding.unwrap_or_else(|| effective_style.layout.resolved_padding().bottom);
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.position = nana_ui_core::PositionSpec::Relative;
+            layout.padding_top = Some(nana_ui_core::LengthSpec::Px(top));
+            layout.padding_bottom = Some(nana_ui_core::LengthSpec::Px(bottom + footer_band));
+            effective_style.control_padding_y = None;
+        }
+        if self.uses_adaptive_footer() && !expanded_footer && self.trailing_action.is_some() {
+            let padding = effective_style
+                .control_padding_x
+                .map(|padding| padding.resolve(world.theme_metrics()))
+                .unwrap_or_else(|| effective_style.layout.resolved_padding().right);
+            let left_padding = effective_style
+                .control_padding_x
+                .map(|padding| padding.resolve(world.theme_metrics()))
+                .unwrap_or_else(|| effective_style.layout.resolved_padding().left);
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.position = nana_ui_core::PositionSpec::Relative;
+            layout.padding_right = Some(nana_ui_core::LengthSpec::Px(
+                padding + nana_ui_core::ControlSize::Small.height_in(world.theme_metrics()) + 4.0,
+            ));
+            layout.padding_left = Some(nana_ui_core::LengthSpec::Px(left_padding));
+            effective_style.control_padding_x = None;
+        }
         if self.resize_vertical
             && let Some(height) = self.resized_height
         {

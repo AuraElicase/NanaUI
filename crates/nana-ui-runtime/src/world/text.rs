@@ -1350,6 +1350,14 @@ pub(super) fn build_text_input_presentation_source(
     // 归默认（不显示 minimap），收集结果只会被丢弃；仅多行且开启选项时
     // 由 [`UiWorld::text_input_presentation_source`] 在早退判定之后收集。
 
+    // Placeholder and IME suppress code decorations, not the composer's
+    // structural chrome or its adaptive-fit measurement contract.
+    let editor_chrome = TextEditorRenderOptions {
+        footer_action: extras.editor.footer_action,
+        adaptive_footer: extras.editor.adaptive_footer,
+        expanded_footer: extras.editor.expanded_footer,
+        ..TextEditorRenderOptions::default()
+    };
     let mask = |value: &str| {
         if secure {
             "•".repeat(value.graphemes(true).count())
@@ -1386,7 +1394,7 @@ pub(super) fn build_text_input_presentation_source(
             // 占位符态没有真实文档内容，git 标记随行号栏一并跳过（避免在
             // 占位文本旁渲染指向不存在行的标记）。
             git_marks: Arc::from([]),
-            editor: TextEditorRenderOptions::default(),
+            editor: editor_chrome,
             focused: false,
             fold: None,
             completions: None,
@@ -1483,7 +1491,7 @@ pub(super) fn build_text_input_presentation_source(
             indent_guides: None,
             // 组合期标记按原值行号继续锚定（与诊断一致，宿主拥有生命周期）。
             git_marks: map_git_marks(state.value, &composed, extras.git_marks, fold_view.as_ref()),
-            editor: TextEditorRenderOptions::default(),
+            editor: editor_chrome,
             focused,
             fold: fold_view,
             completions: None,
@@ -2028,16 +2036,44 @@ pub(super) fn shape_text_input_presentation(
         source.multiline,
         style.writing_mode.is_vertical(),
     );
-    shaper.with_text_probes(&source.text, style, presentation_constraints, |shaper| {
-        shape_text_input_probes(
-            id,
-            &source,
-            style,
-            presentation_constraints,
-            previous_overlays,
-            shaper,
-        )
-    })
+    let compact_measure = source.editor.adaptive_footer.then(|| {
+        if source.placeholder || source.text.value.is_empty() {
+            return (0.0, false);
+        }
+        let unwrapped = crate::TextShapeConstraints {
+            max_width: None,
+            max_height: None,
+            wrap: false,
+            ellipsis: false,
+            max_lines: None,
+            ..presentation_constraints
+        };
+        shaper.with_text_probes(&source.text, style, unwrapped, |shaper| {
+            let width = shaper.shape(id, &source.text, style, unwrapped).width;
+            let (_, block, _) = shaper.text_caret_position(
+                id,
+                &source.text,
+                source.text.value.len(),
+                crate::TextAffinity::Downstream,
+                style,
+                unwrapped,
+            );
+            (width, block > 0.0)
+        })
+    });
+    let mut presentation =
+        shaper.with_text_probes(&source.text, style, presentation_constraints, |shaper| {
+            shape_text_input_probes(
+                id,
+                &source,
+                style,
+                presentation_constraints,
+                previous_overlays,
+                shaper,
+            )
+        });
+    presentation.compact_measure = compact_measure;
+    presentation
 }
 
 fn shape_text_input_probes(
@@ -2553,6 +2589,7 @@ fn shape_text_input_probes(
     }
     TextInputPresentation {
         content_size,
+        compact_measure: None,
         display_value: source.text.value.clone(),
         placeholder: source.placeholder,
         // Single-line fields draw these x ranges; multiline editors draw the
@@ -3342,7 +3379,7 @@ impl UiWorld {
     pub(crate) fn text_preserves_lines(&self, id: StableNodeId) -> bool {
         Self::preserves_lines(
             &self.record(id).style,
-            self.text_input_kind(id).unwrap_or(false),
+            self.text_input_kind(id).unwrap_or(false) || self.nodes.rich_editor_marks(id).is_some(),
         )
     }
 
@@ -3392,8 +3429,10 @@ impl UiWorld {
         let layout = self
             .component_layout_box(id)
             .expect("text node layout is available");
-        let text_input_multiline = editor_multiline.unwrap_or(false);
-        let is_text_input = editor_multiline.is_some();
+        let text_input_multiline =
+            editor_multiline.unwrap_or(false) || self.nodes.rich_editor_marks(id).is_some();
+        let is_text_input =
+            editor_multiline.is_some() || self.nodes.rich_editor_marks(id).is_some();
         let wrap = if is_text_input {
             text_input_multiline && source.layout.text_wraps()
         } else {
@@ -3424,6 +3463,13 @@ impl UiWorld {
         let padding = self.used_layout_padding(id);
         let border = source.layout.resolved_border_edges();
         let leading_visual = text_leading_inset(self.nodes.visual(id));
+        let counter_reserved = self
+            .text_input_character_counter(id)
+            .map(|counter| {
+                self.component_content_box(id)
+                    .map_or(0.0, |content| content.width - counter.editor_bounds.width)
+            })
+            .unwrap_or(0.0);
         crate::TextShapeConstraints {
             max_width: if is_text_input && !text_input_multiline {
                 None
@@ -3434,7 +3480,8 @@ impl UiWorld {
                         - padding.right
                         - border.left
                         - border.right
-                        - leading_visual)
+                        - leading_visual
+                        - counter_reserved)
                         .max(0.0),
                 )
             },
@@ -3840,6 +3887,7 @@ impl UiWorld {
         let mut glyphs = std::mem::take(&mut self.glyph_cache);
         let mut shaper = CountingShaper::new(host, &mut cache, &mut glyphs);
         let mut shaped = Vec::new();
+        let mut adaptive_updates = Vec::new();
         let mut empty_shaped = Vec::new();
         let mut modal_shaped = Vec::new();
         let mut resolved = Vec::new();
@@ -4007,6 +4055,9 @@ impl UiWorld {
                     .text_input_presentation(id)
                     .map(|stored| stored.overlay_metrics.clone())
                     .unwrap_or_default();
+                if presentation.editor.adaptive_footer {
+                    adaptive_updates.push(id);
+                }
                 let presentation = shape_text_input_presentation(
                     id,
                     presentation,
@@ -4040,6 +4091,7 @@ impl UiWorld {
             self.glyph_cache = glyphs;
             return outcome.map(|()| false);
         }
+        self.text_input_adaptive_updates.extend(adaptive_updates);
         let (mut scaled, mut unbreakable_moved) =
             self.apply_plain_resolutions(resolved, backend.epoch, &mut work);
         // Text whose widest line was found not to break, or to break after
@@ -4892,6 +4944,7 @@ impl UiWorld {
             );
         }
         let mut shaped = Vec::with_capacity(ids.len());
+        let mut adaptive_updates = Vec::new();
         let mut empty_shaped = Vec::new();
         let mut modal_shaped = Vec::new();
         let mut resolved = Vec::new();
@@ -4996,6 +5049,9 @@ impl UiWorld {
                     .text_input_presentation(id)
                     .map(|stored| stored.overlay_metrics.clone())
                     .unwrap_or_default();
+                if presentation.editor.adaptive_footer {
+                    adaptive_updates.push(id);
+                }
                 let presentation = shape_text_input_presentation(
                     id,
                     presentation,
@@ -5024,6 +5080,7 @@ impl UiWorld {
             self.glyph_cache = glyphs;
             return outcome;
         }
+        self.text_input_adaptive_updates.extend(adaptive_updates);
         let (mut scaled, unbreakable_moved) =
             self.apply_plain_resolutions(resolved, backend.epoch, &mut work);
         let mut stopped = 0usize;
@@ -5134,7 +5191,7 @@ impl UiWorld {
     ) -> Option<(LayoutBox, ScrollOffset)> {
         Some((
             self.component_content_box(id)?,
-            self.record(id).scroll_offset,
+            self.scroll_offset(id).unwrap_or_default(),
         ))
     }
 
@@ -5669,6 +5726,35 @@ impl UiWorld {
 }
 
 impl UiWorld {
+    /// Rich editors share the retained text layout for painting, hit testing
+    /// and caret reveal. A wheel request pins the viewport until editing moves it.
+    pub(crate) fn rich_editor_scroll_offset(&self, id: StableNodeId) -> Option<ScrollOffset> {
+        let marks = self.nodes.rich_editor_marks(id)?;
+        let content = self.component_content_box(id)?;
+        let (_, layout) = self.text_layout(id)?;
+        let requested = self.record(id).scroll_offset;
+        let mut offset = self.clamp_scroll_offset(id, requested);
+        if self.text_viewport_pin(id) != Some(requested)
+            && let Some(byte) = marks.caret
+            && let Some((x, y, height)) = crate::rich_text_editor::caret_box(layout, byte)
+        {
+            if x < offset.x {
+                offset.x = x;
+            }
+            if x + 1.0 > offset.x + content.width {
+                offset.x = x + 1.0 - content.width;
+            }
+            if y < offset.y {
+                offset.y = y;
+            }
+            if y + height > offset.y + content.height {
+                offset.y = y + height - content.height;
+            }
+            offset = self.clamp_scroll_offset(id, offset);
+        }
+        Some(offset)
+    }
+
     /// A multiline editor's scrolling area: its text box over the value it
     /// shaped. The value runs from the block-start edge, which `vertical-rl`
     /// puts on the right, so there the later columns overflow to the left and
@@ -5676,6 +5762,20 @@ impl UiWorld {
     pub(crate) fn text_scroll_metrics(&self, id: StableNodeId) -> Option<ScrollMetrics> {
         if !self.nodes.get(id)?.accessibility.multiline {
             return None;
+        }
+        if self.nodes.rich_editor_marks(id).is_some() {
+            let content = self.component_content_box(id)?;
+            let (_, layout) = self.text_layout(id)?;
+            return Some(ScrollMetrics::scrolling_area(
+                content,
+                [
+                    content.x,
+                    content.y,
+                    content.x + layout.bounds.width,
+                    content.y + layout.bounds.height,
+                ],
+                [false, false],
+            ));
         }
         let presentation = self.nodes.text_input_presentation(id)?;
         let text_box = self.text_input_text_box(id)?;
@@ -6079,12 +6179,130 @@ impl UiWorld {
             })
     }
 
-    /// The box an editor's text is drawn in: its content box, less the
-    /// number steppers a numeric field keeps at its right edge. Component
-    /// geometry and pointer hits both read it, so the two agree on where the
-    /// text is.
+    /// Derive the counter from committed session text, never display/preedit text.
+    /// Chrome measurement and the text viewport share this result, so caret,
+    /// pointer probes, selection and the Scene clip reserve the same space.
+    pub(crate) fn text_input_character_counter(
+        &self,
+        id: StableNodeId,
+    ) -> Option<crate::TextInputCharacterCounter> {
+        let StandardVisual::TextInput {
+            size,
+            character_counter: Some(limit),
+            editor_options,
+            ..
+        } = self.nodes.visual(id)?
+        else {
+            return None;
+        };
+        let content = self.component_content_box(id)?;
+        let count = self.nodes.text_input(id)?.value.chars().count();
+        let label = format!("{count}/{limit}");
+        let font_size = size.caption_size();
+        let weight = self.computed_style(id)?.font_weight;
+        let measure = self.chrome_text_measure(id);
+        // Keep the editor stable throughout the normal 0..=limit range.
+        let multiline = self.nodes.get(id)?.accessibility.multiline;
+        let expanded_footer = multiline && editor_options.expanded_footer;
+        let action_extent = if expanded_footer && editor_options.footer_action {
+            nana_ui_core::ControlSize::Small.height_in(self.style_model.metrics) + 4.0
+        } else {
+            0.0
+        };
+        let width = measure
+            .width(&label, font_size, weight)
+            .max(measure.width(&format!("{limit}/{limit}"), font_size, weight))
+            .min((content.width - action_extent).max(0.0));
+        let line_height = size.line_height();
+        let bounds = if expanded_footer {
+            let footer_extent = crate::view_components::text_area_footer_extent(
+                true,
+                editor_options.footer_action,
+                self.style_model.metrics,
+            );
+            LayoutBox {
+                y: content.y + content.height + 4.0 + (footer_extent - line_height) / 2.0,
+                height: line_height,
+                ..content
+            }
+        } else {
+            content
+        };
+        let gap = 4.0;
+        Some(crate::TextInputCharacterCounter {
+            text: crate::ComponentTextRegion {
+                bounds: LayoutBox {
+                    x: content.x + content.width - action_extent - width,
+                    width,
+                    ..bounds
+                },
+                content: label.into(),
+                color: Some(
+                    self.style_model
+                        .color(if count > *limit {
+                            nana_ui_core::SemanticColorRole::Danger
+                        } else {
+                            nana_ui_core::SemanticColorRole::Muted
+                        })
+                        .as_rgba_array(),
+                ),
+                font_size,
+                font_weight: weight,
+            },
+            editor_bounds: if expanded_footer {
+                content
+            } else {
+                LayoutBox {
+                    width: (content.width - width - gap).max(0.0),
+                    ..content
+                }
+            },
+        })
+    }
+
+    pub(crate) fn take_text_input_adaptive_updates(&mut self) -> Vec<StableNodeId> {
+        std::mem::take(&mut self.text_input_adaptive_updates)
+    }
+
+    /// Compare with the hypothetical compact viewport, independent of the
+    /// currently expanded layout, so an expanded one-line fit cannot oscillate.
+    pub(crate) fn text_input_needs_expanded_footer(&self, id: StableNodeId) -> Option<bool> {
+        let StandardVisual::TextInput {
+            character_counter,
+            editor_options,
+            ..
+        } = self.nodes.visual(id)?
+        else {
+            return None;
+        };
+        if !editor_options.adaptive_footer {
+            return None;
+        }
+        let (width, hard_break) = self.nodes.text_input_presentation(id)?.compact_measure?;
+        let content = self.component_content_box(id)?;
+        let action_band = if editor_options.expanded_footer && editor_options.footer_action {
+            nana_ui_core::ControlSize::Small.height_in(self.style_model.metrics) + 4.0
+        } else {
+            0.0
+        };
+        let counter_band = if character_counter.is_some() {
+            self.text_input_character_counter(id)
+                .map_or(0.0, |counter| counter.text.bounds.width + 4.0)
+        } else {
+            0.0
+        };
+        let compact_width = (content.width - action_band - counter_band).max(0.0);
+        // A fraction below one logical pixel absorbs arithmetic roundoff when
+        // the caller sets an exact-fit width from the same shaped advances.
+        Some(hard_break || width > compact_width + 0.001)
+    }
+
+    /// The box an editor's text is drawn and hit in, less trailing chrome.
     pub(crate) fn text_input_text_box(&self, id: StableNodeId) -> Option<LayoutBox> {
         let (content, _) = self.text_input_pointer_context(id)?;
+        if let Some(counter) = self.text_input_character_counter(id) {
+            return Some(counter.editor_bounds);
+        }
         let Some(StandardVisual::TextInput {
             size,
             steppers: true,

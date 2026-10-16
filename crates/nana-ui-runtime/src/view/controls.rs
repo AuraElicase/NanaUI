@@ -818,6 +818,18 @@ impl FieldText for f32 {
     }
 }
 
+impl FieldText for Option<usize> {
+    fn parse(text: &str) -> Result<Self, String> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Ok(None);
+        }
+        text.parse()
+            .map(Some)
+            .map_err(|_| format!("`{text}` is not a non-negative integer"))
+    }
+}
+
 impl FieldText for Option<f64> {
     /// Empty text is `None`.
     fn parse(text: &str) -> Result<Self, String> {
@@ -1010,3 +1022,10 @@ macro_rules! item_slots {
 }
 
 item_slots!(ListItem, crate::SidebarRow);
+
+impl<K> El<TextArea, K> {
+    /// A real action inside the field's bottom trailing corner.
+    pub fn trailing_action(self, view: impl IntoView) -> Self {
+        self.child_slot(view, TextArea::trailing_action)
+    }
+}

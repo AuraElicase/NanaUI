@@ -770,6 +770,8 @@ pub enum StandardVisual {
         /// text input that also steps, so it reuses this visual instead of
         /// growing a second editable contract.
         steppers: bool,
+        /// Optional display-only Unicode scalar limit, excluding IME preedit.
+        character_counter: Option<usize>,
         /// 代码编辑器扩展：编译诊断 span 标记（含可选 message）。偏移由宿主
         /// 维护——文本变化后由宿主更新或清除，渲染层仅做越界钳制，不做偏移
         /// 迁移。Error/Warning 画 squiggle；有 message 时画行尾文案并可悬停。
@@ -1218,6 +1220,14 @@ pub struct ComponentTextRegion {
     pub font_weight: Option<u16>,
 }
 
+/// A trailing count label and the editor viewport it reserves. Derived from
+/// committed text, independently of selection, scroll, and IME preedit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextInputCharacterCounter {
+    pub text: ComponentTextRegion,
+    pub editor_bounds: LayoutBox,
+}
+
 /// Button chrome drawn behind a component's own trigger, so a menu can look
 /// pressable without the caller supplying a separate button node.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1526,6 +1536,7 @@ pub enum ComponentGeometry {
     },
     TextInput {
         resize_grip: Option<LayoutBox>,
+        character_counter: Option<TextInputCharacterCounter>,
         text: ComponentTextRegion,
         multiline: bool,
         /// `None` for a single-line field, whose scroll only follows its caret.
@@ -2793,6 +2804,12 @@ pub struct TextSwatchMark {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextEditorRenderOptions {
     pub resize_vertical: bool,
+    /// A real action occupies the trailing side of the multiline footer.
+    pub footer_action: bool,
+    /// Auto-growing controls may begin with their count/action on the same row.
+    pub adaptive_footer: bool,
+    /// Count/action occupy a bottom row, leaving the editor its full width.
+    pub expanded_footer: bool,
     /// 光标处单词/选中文本的出现高亮（内部派生，聚焦时绘制）。
     pub occurrence_highlight: bool,
     /// 相对行号：光标行显示绝对行号，其余行显示与光标所在显示行的距离
@@ -2822,6 +2839,9 @@ impl Default for TextEditorRenderOptions {
     fn default() -> Self {
         Self {
             resize_vertical: false,
+            footer_action: false,
+            adaptive_footer: false,
+            expanded_footer: false,
             occurrence_highlight: false,
             relative_line_numbers: false,
             show_whitespace: false,
@@ -2923,6 +2943,9 @@ pub struct LineLabel {
 pub struct TextInputPresentation {
     /// Full shaped text extent, including visual soft-wrapped rows.
     pub content_size: TextMetrics,
+    /// Unwrapped display-text width and hard-break flag, measured by the host
+    /// shaper only for adaptive composers. Excludes placeholder text; includes IME.
+    pub compact_measure: Option<(f32, bool)>,
     pub display_value: TextValue,
     pub placeholder: bool,
     pub selection: Option<(f32, f32)>,

@@ -100,6 +100,7 @@ macro_rules! for_each_control {
             model span: (f64, f64) => RangeSpanInput |event| (event.low, event.high);
             TextInput => text_input() for TextInput {
                 value: String = text_state,
+                character_counter: Option<usize> = set,
                 label: Option<Arc<str>> = set,
                 placeholder: Arc<str> = set,
                 disabled: bool = set,
@@ -112,8 +113,10 @@ macro_rules! for_each_control {
                 placeholder: Arc<str> = set,
                 disabled: bool = set,
                 read_only: bool = set,
+                character_counter: Option<usize> = set,
+                submit_on_enter: bool = set,
             }
-            with { on_input: TextChanged }
+            with { on_input: TextChanged, on_submit: TextSubmitted }
             model value: String => TextChanged |event| event.value.to_string();
             NumberInput => number_input() for NumberInput {
                 value: f64 = assign,
