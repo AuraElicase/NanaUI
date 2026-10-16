@@ -114,3 +114,7 @@ Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-sh
 - **壳层过渡**：Runtime 侧栏折叠与分组展开时长均为 `260 ms`，缓动曲线为 `EaseInOutCubic`。只有动画进行中才请求帧，中途反向操作会从当前进度平滑接续。
 - **Motion IR 分流**：Vue 路径的 `@keyframes` 同样编译进 `nana-ui-core::motion` 的 Motion IR。`opacity` 与 `transform` 走合成器 overlay；`color` 与 `filter` 走 Paint 类 CPU 插值；`width`、`height` 与逐轴的 `font-variation-settings` 走 Layout 类轨道（可变字体轴每帧生成真实的字形变体、重新整形并栅格化，绝不用几何缩放伪造）。
 - **浮层与拖拽阈值**：菜单默认与触发控件的起始边对齐，靠近窗口边缘时由框架自动收回视口内，应用无需手算坐标。可拖拽的 Tab 与列表在按下后移动超过 `4 px` 才进入拖拽态，未越过阈值仍视为普通点击选中。命令面板（`CommandPalette`）标准宽度为 `680 px`，打开后输入框自动获取焦点。
+
+### 通知操作按钮
+
+`ToastRecipe::control_radius` 独立控制通知内部操作按钮与关闭按钮的圆角，默认 `RadiusTier::Sm`。主题切换会原地更新已有按钮。需要胶囊外观时可选择较大的圆角档位（如 `Xl`）；按钮大小仍由 `control_size` 决定，颜色与交互反馈沿用按钮种类。
