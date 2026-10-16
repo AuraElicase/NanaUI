@@ -84,3 +84,9 @@ Runtime 按节点的脏标记（`DirtyMask`）确定性地生成各阶段工作�
 代码高亮等富文本着色通过声明式的 `HighlightRequest` 与 `TextPresentation` 表达，具体词法分析算法由按名称注册的 `TextPresenter`（经 `ExtensionRegistrar::register_presenter` 安装）提供。Presenter 仅读取已提交的 UTF-8 文本，IME 组字（preedit）期间保持单色；当语言未知或对应 presenter 未注册时，Scene 安全退回单色文本。
 
 `HighlightRequest::with_overlay` 允许宿主叠加额外的语义着色区间（重叠处以 overlay 优先）。`SelectableRichText` 的 `RichSpan::color` 即复用该通道：所有分段仍合并为同一段连续文本与单个文本图元，带色分段按 UTF-8 字节区间写入 overlay，并在 Scene 抽取时按当前激活主题的调色板解析为最终颜色。
+
+## 平滑滚轮的交互状态
+
+行滚轮的目标属于 `AppContext` 的短期交互状态；`UiWorld::ScrollOffset` 仍是当前有效位置的唯一权威。该行为复用 Motion IR 的 easing 求值与 Runtime 绝对时钟，通过 `advance_animations` / `next_animation_deadline` 推进，按 8 毫秒采样间隔请求宿主帧，不另建定时器或变换动画。每次实际移动沿原有滚动提交路径同步命中、无障碍、滚动条与虚拟列表，不写未滚动布局盒，不触发整棵树布局。
+
+连续输入从当前采样位置重定向：同向累加目标，反向按当前可见位置计算新目标。公开定位 API 和像素滚动保持即时语义并取消过渡；减少动态效果使过渡立即落到目标。范围变化时重新夹紧目标，节点卸载、移除或文档销毁时丢弃短期状态，空闲没有滚动 deadline。

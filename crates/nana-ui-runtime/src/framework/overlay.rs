@@ -547,7 +547,10 @@ impl AppContext {
             })
     }
 
-    fn active_runtime_overlays(&self, document: DocumentId) -> Vec<ActiveRuntimeOverlay> {
+    pub(super) fn active_runtime_overlays(
+        &self,
+        document: DocumentId,
+    ) -> Vec<ActiveRuntimeOverlay> {
         // Start from the overlay-host index, not document order. This runs on
         // every pointer event -- `route_overlay_pointer` calls it to ask whether
         // anything blocks the pointer -- and walking the document to find hosts

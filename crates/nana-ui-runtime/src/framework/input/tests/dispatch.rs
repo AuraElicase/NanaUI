@@ -1631,6 +1631,7 @@ fn wheel_routes_to_nearest_scrollview_and_bubbles_at_edge() {
             .unwrap()
             .prevent_default
     );
+    context.advance_animations(context.animation_now() + Duration::from_millis(180));
     assert_eq!(
         context.world().scroll_offset(inner.stable_id()).unwrap().y,
         60.0
@@ -1648,6 +1649,7 @@ fn wheel_routes_to_nearest_scrollview_and_bubbles_at_edge() {
             .unwrap()
             .prevent_default
     );
+    context.advance_animations(context.animation_now() + Duration::from_millis(180));
     assert_eq!(
         context.world().scroll_offset(inner.stable_id()).unwrap().y,
         60.0
@@ -1708,6 +1710,7 @@ fn wheel_on_overflow_auto_updates_scroll_offset() {
             .unwrap()
             .prevent_default
     );
+    context.advance_animations(context.animation_now() + Duration::from_millis(180));
     assert_eq!(context.world().scroll_offset(scroller).unwrap().y, 60.0);
     assert_eq!(context.world().scroll_offset(child).unwrap().y, 0.0);
     assert!(
@@ -1781,7 +1784,9 @@ fn a_wheel_scroll_moves_the_hover_to_what_is_under_the_pointer() {
     adapter
         .dispatch(&mut context, document, &wheel(10.0, 10.0, -1.0))
         .unwrap();
-    assert_eq!(context.world().scroll_offset(scroller).unwrap().y, 60.0);
+    context.advance_animations(Duration::from_millis(90));
+    let offset = context.world().scroll_offset(scroller).unwrap().y;
+    assert!(offset > 50.0 && offset < 60.0);
     // The frame that shows the scroll: hit index, then the host's refresh.
     context.rebuild_hit_test(document);
     context.refresh_input_effects(HeadlessInput::SOURCE, &mut adapter.services);

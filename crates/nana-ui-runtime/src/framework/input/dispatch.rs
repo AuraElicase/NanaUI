@@ -841,7 +841,9 @@ impl AppContext {
         let scrolled = if overlay.prevent_default {
             overlay
                 .target
-                .map(|target| self.scroll_overlay_from(document, target, delta))
+                .map(|target| {
+                    self.wheel_scroll_from(document, Some(target), delta, *line_delta, true)
+                })
                 .transpose()?
                 .flatten()
                 .is_some()
@@ -859,7 +861,8 @@ impl AppContext {
                 )
             )?
         } else {
-            self.scroll_from_hit(overlay.target, delta)?.is_some()
+            self.wheel_scroll_from(document, overlay.target, delta, *line_delta, false)?
+                .is_some()
         };
         let handled = overlay.prevent_default || scrolled;
         Ok(InputDisposition {

@@ -48,6 +48,79 @@ mod tests {
     struct View;
 
     #[test]
+    fn line_wheel_wakes_the_host_until_the_effective_offset_finishes() {
+        use nana_ui_platform::{InputModifiers, InputPayload, PointerId, WheelInput, WheelUnit};
+        use nana_ui_runtime::{
+            DocumentId, HeadlessInput, LayoutBox, MutationQueue, ScrollAxes, ScrollMetrics,
+            ScrollView,
+        };
+        let epoch = Instant::now();
+        let clock = RuntimeAnimationClock::new(epoch);
+        let mut cx = AppContext::new();
+        let doc = DocumentId::new(1).unwrap();
+        let scroll = cx
+            .create_component(
+                doc,
+                ScrollView::new(ScrollAxes::Vertical)
+                    .scrollbars(nana_ui_core::ScrollbarVisibility::Hidden),
+            )
+            .unwrap();
+        let mut q = MutationQueue::new();
+        q.write_layout(
+            scroll.stable_id(),
+            LayoutBox {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            },
+        );
+        cx.commit_mutations(q).unwrap();
+        cx.set_scroll_metrics(
+            scroll,
+            ScrollMetrics {
+                viewport_width: 100.0,
+                viewport_height: 100.0,
+                content_width: 100.0,
+                content_height: 1000.0,
+                origin_x: 0.0,
+                origin_y: 0.0,
+            },
+        )
+        .unwrap();
+        cx.rebuild_hit_test(doc);
+        let mut input = HeadlessInput::bind(&mut cx, doc);
+        input
+            .route(
+                &mut cx,
+                InputPayload::Wheel(WheelInput {
+                    pointer_id: PointerId(1),
+                    x: 10.0,
+                    y: 10.0,
+                    delta_x: 0.0,
+                    delta_y: -1.0,
+                    unit: WheelUnit::Lines,
+                    modifiers: InputModifiers::default(),
+                }),
+            )
+            .unwrap();
+        let wakeup = clock
+            .next_wakeup(&cx)
+            .expect("a line wheel requests a host frame");
+        assert!(wakeup > epoch);
+        let frame = clock.wake(&mut cx, epoch + Duration::from_millis(90));
+        assert!(frame.has_updates());
+        let middle = cx.world().scroll_offset(scroll.stable_id()).unwrap().y;
+        assert!(middle > 0.0 && middle < 60.0);
+        clock.wake(&mut cx, epoch + Duration::from_millis(180));
+        assert_eq!(
+            cx.world().scroll_offset(scroll.stable_id()).unwrap().y,
+            60.0
+        );
+        assert_eq!(clock.next_wakeup(&cx), None);
+    }
+
+    #[test]
     fn maps_runtime_deadline_without_owning_redraw_policy() {
         let epoch = Instant::now();
         let clock = RuntimeAnimationClock::new(epoch);
