@@ -1,0 +1,556 @@
+{
+  "scope": "descriptive frozen-fixture macOS evidence only; product root cause unconfirmed; original raw files retained locally",
+  "date": "2026-10-16",
+  "historical": {
+    "orders": [
+      "ABBA",
+      "BAAB",
+      "ABBA",
+      "BAAB",
+      "ABBA"
+    ],
+    "processes": 20,
+    "warmup_frames": 30,
+    "measured_frames_per_process": 240,
+    "trace_or_helper": false,
+    "aggregate": {
+      "p50": {
+        "five_block_deltas_ms": [
+          0.001687500000000064,
+          -0.32520899999999997,
+          -0.3046460000000001,
+          -0.07081349999999986,
+          -0.39277050000000013
+        ],
+        "median_delta_ms": -0.3046460000000001,
+        "positive_blocks": 1,
+        "negative_blocks": 4,
+        "zero_blocks": 0
+      },
+      "p95": {
+        "five_block_deltas_ms": [
+          0.07402100000000011,
+          -0.5540619999999999,
+          -0.47277100000000005,
+          -0.012125000000000163,
+          -0.12212500000000004
+        ],
+        "median_delta_ms": -0.12212500000000004,
+        "positive_blocks": 1,
+        "negative_blocks": 4,
+        "zero_blocks": 0
+      },
+      "p99": {
+        "five_block_deltas_ms": [
+          0.150833,
+          -0.5297715000000001,
+          -0.6032914999999999,
+          -0.03774949999999988,
+          -0.5366874999999998
+        ],
+        "median_delta_ms": -0.5297715000000001,
+        "positive_blocks": 1,
+        "negative_blocks": 4,
+        "zero_blocks": 0
+      }
+    },
+    "binaries": {
+      "R1": "da2bb7a06cc05e319598f7cc8f456d22d33abfc1f53f1fa42e648c20ba7b563d",
+      "R2": "793f7a55bbd7acfbed2288afbf2c05d24d583c34d53c04b124c4ca763e164de4"
+    }
+  },
+  "launch_control": {
+    "processes": 20,
+    "captures": 10,
+    "warmup_frames": 240,
+    "measured_frames_per_process": 600,
+    "trace_seconds_per_capture": 20,
+    "complete_frame_intervals": 16800,
+    "measured_frame_intervals": 12000,
+    "excluded": 0,
+    "anchors": {
+      "per_process": 8,
+      "per_capture": 16,
+      "total": 160
+    },
+    "binary_sha256": "5461e57010c936e16575ce20c3a72ed70fd6c7913359e21f1e1d57352fd791a9",
+    "blocks": [
+      {
+        "block": 1,
+        "status": "accepted-limited-block",
+        "metrics": {
+          "wall_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 11902910000000001,
+                "denominator": 20000000000000000
+              },
+              "launchservices": {
+                "numerator": 2146667,
+                "denominator": 2000000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 9563759999999999,
+              "denominator": 20000000000000000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": -5977910000000001,
+                "denominator": 10000000000000000
+              },
+              "launchservices": {
+                "numerator": -304333,
+                "denominator": 1000000
+              }
+            }
+          },
+          "thread_cpu_p50_ns": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 1179375,
+                "denominator": 2
+              },
+              "launchservices": {
+                "numerator": 2119249,
+                "denominator": 2
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 469937,
+              "denominator": 1
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": -592875,
+                "denominator": 1
+              },
+              "launchservices": {
+                "numerator": -301167,
+                "denominator": 1
+              }
+            }
+          },
+          "benchmark_thread_cpu_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 1180583,
+                "denominator": 2000000
+              },
+              "launchservices": {
+                "numerator": 530427,
+                "denominator": 500000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 7529,
+              "denominator": 16000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": -593917,
+                "denominator": 1000000
+              },
+              "launchservices": {
+                "numerator": -150937,
+                "denominator": 500000
+              }
+            }
+          }
+        }
+      },
+      {
+        "block": 2,
+        "status": "accepted-limited-block",
+        "metrics": {
+          "wall_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 1396583,
+                "denominator": 2000000
+              },
+              "launchservices": {
+                "numerator": 2062959,
+                "denominator": 2000000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 83297,
+              "denominator": 250000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": -803833,
+                "denominator": 1000000
+              },
+              "launchservices": {
+                "numerator": -404041,
+                "denominator": 1000000
+              }
+            }
+          },
+          "thread_cpu_p50_ns": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 1387501,
+                "denominator": 2
+              },
+              "launchservices": {
+                "numerator": 1021000,
+                "denominator": 1
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 654499,
+              "denominator": 2
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": -797917,
+                "denominator": 1
+              },
+              "launchservices": {
+                "numerator": -396750,
+                "denominator": 1
+              }
+            }
+          },
+          "benchmark_thread_cpu_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 86737,
+                "denominator": 125000
+              },
+              "launchservices": {
+                "numerator": 255427,
+                "denominator": 250000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 81953,
+              "denominator": 250000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": -199677,
+                "denominator": 250000
+              },
+              "launchservices": {
+                "numerator": -99521,
+                "denominator": 250000
+              }
+            }
+          }
+        }
+      },
+      {
+        "block": 3,
+        "status": "accepted-limited-block",
+        "metrics": {
+          "wall_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 79383300000000007,
+                "denominator": 200000000000000000
+              },
+              "launchservices": {
+                "numerator": 741,
+                "denominator": 800
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 105866699999999993,
+              "denominator": 200000000000000000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 1208300000000001,
+                "denominator": 100000000000000000
+              },
+              "launchservices": {
+                "numerator": -1080000000000001,
+                "denominator": 5000000000000000
+              }
+            }
+          },
+          "thread_cpu_p50_ns": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 787875,
+                "denominator": 2
+              },
+              "launchservices": {
+                "numerator": 1834083,
+                "denominator": 2
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 523104,
+              "denominator": 1
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 12209,
+                "denominator": 1
+              },
+              "launchservices": {
+                "numerator": -209833,
+                "denominator": 1
+              }
+            }
+          },
+          "benchmark_thread_cpu_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 19697900000000001,
+                "denominator": 50000000000000000
+              },
+              "launchservices": {
+                "numerator": 1836457,
+                "denominator": 2000000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 26213524999999999,
+              "denominator": 50000000000000000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 306249999999999,
+                "denominator": 25000000000000000
+              },
+              "launchservices": {
+                "numerator": -337,
+                "denominator": 1600
+              }
+            }
+          }
+        }
+      },
+      {
+        "block": 4,
+        "status": "accepted-limited-block",
+        "metrics": {
+          "wall_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 6834169999999999,
+                "denominator": 10000000000000000
+              },
+              "launchservices": {
+                "numerator": 1227167,
+                "denominator": 1000000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 5437500000000001,
+              "denominator": 10000000000000000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 3722079999999999,
+                "denominator": 5000000000000000
+              },
+              "launchservices": {
+                "numerator": 18333,
+                "denominator": 500000
+              }
+            }
+          },
+          "thread_cpu_p50_ns": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 675479,
+                "denominator": 1
+              },
+              "launchservices": {
+                "numerator": 1215396,
+                "denominator": 1
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 539917,
+              "denominator": 1
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 739708,
+                "denominator": 1
+              },
+              "launchservices": {
+                "numerator": 35458,
+                "denominator": 1
+              }
+            }
+          },
+          "benchmark_thread_cpu_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 675979,
+                "denominator": 1000000
+              },
+              "launchservices": {
+                "numerator": 24342500000000001,
+                "denominator": 20000000000000000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 10822920000000001,
+              "denominator": 20000000000000000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 92651,
+                "denominator": 125000
+              },
+              "launchservices": {
+                "numerator": 353339999999999,
+                "denominator": 10000000000000000
+              }
+            }
+          }
+        }
+      },
+      {
+        "block": 5,
+        "status": "accepted-limited-block",
+        "metrics": {
+          "wall_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 2008041,
+                "denominator": 2000000
+              },
+              "launchservices": {
+                "numerator": 4039,
+                "denominator": 3200
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 258167,
+              "denominator": 1000000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 216459,
+                "denominator": 1000000
+              },
+              "launchservices": {
+                "numerator": 7043,
+                "denominator": 1000000
+              }
+            }
+          },
+          "thread_cpu_p50_ns": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 989688,
+                "denominator": 1
+              },
+              "launchservices": {
+                "numerator": 1250125,
+                "denominator": 1
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 260437,
+              "denominator": 1
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 210792,
+                "denominator": 1
+              },
+              "launchservices": {
+                "numerator": 10250,
+                "denominator": 1
+              }
+            }
+          },
+          "benchmark_thread_cpu_p50_ms": {
+            "route_process_p50_means": {
+              "direct": {
+                "numerator": 991479,
+                "denominator": 1000000
+              },
+              "launchservices": {
+                "numerator": 25020840000000001,
+                "denominator": 20000000000000000
+              }
+            },
+            "paired_launchservices_minus_direct": {
+              "numerator": 5191260000000001,
+              "denominator": 20000000000000000
+            },
+            "same_arm_second_pair_minus_first": {
+              "direct": {
+                "numerator": 106021,
+                "denominator": 500000
+              },
+              "launchservices": {
+                "numerator": 96659999999999,
+                "denominator": 10000000000000000
+              }
+            }
+          }
+        }
+      }
+    ],
+    "route_summary": {
+      "wall_p50_ms": {
+        "block_replicates": 5,
+        "mean_paired_launchservices_minus_direct": {
+          "numerator": 428525300000000003,
+          "denominator": 1000000000000000000
+        }
+      },
+      "thread_cpu_p50_ns": {
+        "block_replicates": 5,
+        "mean_paired_launchservices_minus_direct": {
+          "numerator": 4241289,
+          "denominator": 10
+        }
+      },
+      "benchmark_thread_cpu_p50_ms": {
+        "block_replicates": 5,
+        "mean_paired_launchservices_minus_direct": {
+          "numerator": 26541925000000001,
+          "denominator": 62500000000000000
+        }
+      }
+    },
+    "attribution_counts": {
+      "direct": {
+        "P95": 3874,
+        "E95": 2100,
+        "mixed": 26
+      },
+      "launchservices": {
+        "P95": 0,
+        "E95": 6000,
+        "mixed": 0
+      }
+    },
+    "classification": ">=95% observed performance-level ticks; not fixed physical core/frequency or independent random frame trials"
+  },
+  "evidence_hashes": {
+    "historical/runs/r6-historical-control-20261016-1-state.json": "480b9da0ae9acdce70ac1dd6d2e30444cfbaab839be676be3f13d4dc65633585",
+    "review/historical-actual-control-review.json": "3254646d47aebda0e17a5c1198997f572095830587a6e69ae5c4bf133712716e",
+    "analysis/v6-five-block-summary-v2.json": "f87f5ac12700c17ae8ed83af12aeb770c2dc60827b9fe683e523113c04f73e9b",
+    "review/review_v6_five_block_statistics_v2.json": "267ef75f5738076215edbb87b68fa55d9ab73861a096d2db0e1f0cc9522f5822",
+    "review/v6-five-block-independent-review-manifest.json": "b023fd765bdd6cdc22eef740b2a168f221eaa5efdbdc2baaf6d40c2432ac1f8a",
+    "review/review_process_strata_actual.json": "2a41d12c233158aae0eb25838d516860d547b6973d924c61f8e45792da85c892",
+    "review/review_related_policy_actual_v2.json": "4e174ed024ef3209898d1cc6fb3f679a04265065d817b95d4b92e9af47e7a6a4",
+    "analysis/v6-series-actual-artifact-manifest.json": "4256219146ec41c23c2495069211d16cc3bc6dc7de3e7f8fc293628fe3703780",
+    "analysis/v6-postanalysis-evidence-manifest.json": "803acecc9bc19c10a212d2fbddea8acdee75f530ac91e921e166ff388c0a5147",
+    "validation/root-post-capture-checks.json": "7bdf23c12a7e4e01e090976b4c5138767d1e974df09de354661e46e59e1deda5"
+  },
+  "limits": [
+    "No NanaUI product root cause or framework fix established.",
+    "Old historical and new traced launch populations differ; do not pool them.",
+    "Launch route changes multiple contexts; observed TG number is capture-local.",
+    "No matching running-XNU packed ABI; parent/tracer chains can be unknown.",
+    "GPU timestamps, actual historical per-frame physical extent/present mode unavailable.",
+    "Current external load was not stopped; no isolation claim."
+  ]
+}
