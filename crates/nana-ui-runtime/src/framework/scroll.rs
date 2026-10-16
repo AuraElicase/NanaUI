@@ -486,37 +486,60 @@ impl AppContext {
             return Err(FrameworkError::InvalidInput);
         }
         self.component_lifecycle.wheel_scrolls.remove(&id);
-        self.apply_scroll_node_by(id, delta)
+        let current = self.world.scroll_offset(id).unwrap_or_default();
+        self.apply_scroll_node_to(
+            id,
+            ScrollOffset {
+                x: current.x + delta.x,
+                y: current.y + delta.y,
+            },
+        )
     }
 
-    pub(super) fn apply_scroll_node_by(
+    // Immediate input and wheel samples share one absolute-offset commit path.
+    pub(super) fn apply_scroll_node_to(
         &mut self,
         id: StableNodeId,
-        delta: ScrollOffset,
+        offset: ScrollOffset,
     ) -> Result<bool, FrameworkError> {
-        if self
+        if self.is_scroll_view(id) {
+            let scroll = Entity::from_stable_id(id);
+            let changed = self.apply_scroll_to(scroll, offset)?;
+            if changed {
+                self.emit_user_scroll(scroll)?;
+            }
+            return Ok(changed);
+        }
+        let editor = self
             .views
             .get(&id)
-            .is_some_and(|view| view.is::<TextArea>() || view.is::<crate::RichTextEditor>())
-        {
+            .is_some_and(|view| view.is::<TextArea>() || view.is::<crate::RichTextEditor>());
+        let (x, y) = if editor {
             // An editor scrolls once it has shaped a value to scroll over.
             if self.world.text_scroll_metrics(id).is_none() {
                 return Ok(false);
             }
-            let current = self.world.scroll_offset(id).unwrap_or_default();
-            let next = self.world.clamp_scroll_offset(
-                id,
-                ScrollOffset {
-                    x: current.x + delta.x,
-                    y: current.y + delta.y,
-                },
-            );
-            if self.world.scroll_offset(id).unwrap_or_default() == next {
-                return Ok(false);
-            }
-            let mut mutations = MutationQueue::new();
-            mutations.set_scroll_offset(id, next);
-            self.world.commit(mutations)?;
+            (true, true)
+        } else if let Some(axes) = self.overflow_axes(id) {
+            axes
+        } else {
+            return Ok(false);
+        };
+        let current = self.world.scroll_offset(id).unwrap_or_default();
+        let next = self.world.clamp_scroll_offset(
+            id,
+            ScrollOffset {
+                x: if x { offset.x } else { current.x },
+                y: if y { offset.y } else { current.y },
+            },
+        );
+        if next == current {
+            return Ok(false);
+        }
+        let mut mutations = MutationQueue::new();
+        mutations.set_scroll_offset(id, next);
+        self.world.commit(mutations)?;
+        if editor {
             // Pinned to the request, which the caret reveal then yields to.
             let applied = self.world.scroll_request(id).unwrap_or(next);
             self.world.set_text_viewport_pin(id, Some(applied));
@@ -527,53 +550,10 @@ impl AppContext {
             } else {
                 self.update_component(
                     Entity::<crate::RichTextEditor>::from_stable_id(id),
-                    |area, _| {
-                        area.scroll_offset = applied;
-                    },
+                    |area, _| area.scroll_offset = applied,
                 )?;
             }
-            return Ok(true);
         }
-        if self.is_scroll_view(id) {
-            let scroll = Entity::from_stable_id(id);
-            let current = self.world.scroll_offset(id).unwrap_or_default();
-            let changed = self.apply_scroll_to(
-                scroll,
-                ScrollOffset {
-                    x: current.x + delta.x,
-                    y: current.y + delta.y,
-                },
-            )?;
-            if changed {
-                self.emit_user_scroll(scroll)?;
-            }
-            return Ok(changed);
-        }
-        let Some((scrolls_x, scrolls_y)) = self.overflow_axes(id) else {
-            return Ok(false);
-        };
-        let current = self.world.scroll_offset(id).unwrap_or_default();
-        let next = self.world.clamp_scroll_offset(
-            id,
-            ScrollOffset {
-                x: if scrolls_x {
-                    current.x + delta.x
-                } else {
-                    current.x
-                },
-                y: if scrolls_y {
-                    current.y + delta.y
-                } else {
-                    current.y
-                },
-            },
-        );
-        if next == current {
-            return Ok(false);
-        }
-        let mut mutations = MutationQueue::new();
-        mutations.set_scroll_offset(id, next);
-        self.world.commit(mutations)?;
         Ok(true)
     }
 
