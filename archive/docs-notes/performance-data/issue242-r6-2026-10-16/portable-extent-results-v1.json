@@ -1,0 +1,1741 @@
+{
+  "schema_version": 1,
+  "scope": "Issue358 maintained diagnostic cached-geometry repair; actual macOS functional/work evidence; no historical or product p50 root-cause acceptance",
+  "recorded_comparison_build_head": "3a37b9490ecc070fad7b9a9670afe7518bbf7b13",
+  "source_sha256": "a8fc5212dd4a1094e21c619fba412b0265892825144757e8b912f8fba3d9c0df",
+  "six_phase_processes": 20,
+  "order": [
+    "ABBA",
+    "BAAB",
+    "ABBA",
+    "BAAB",
+    "ABBA"
+  ],
+  "runs": [
+    {
+      "block": 1,
+      "position": 1,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 8.453267542005051,
+      "timing_ms": {
+        "p50": 0.512625,
+        "p95": 1.365666,
+        "p99": 1.9265
+      },
+      "heap_counts": {
+        "alloc_calls": 60850,
+        "alloc_requested_bytes": 10693278,
+        "dealloc_bytes": 13104615,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 1,
+      "position": 2,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.7778484169975854,
+      "timing_ms": {
+        "p50": 0.41175,
+        "p95": 1.362125,
+        "p99": 6.773000000000001
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10691062,
+        "dealloc_bytes": 13104615,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 1,
+      "position": 3,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.781157250050455,
+      "timing_ms": {
+        "p50": 0.35958300000000004,
+        "p95": 1.3121669999999999,
+        "p99": 1.413209
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 1,
+      "position": 4,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.75574333401164,
+      "timing_ms": {
+        "p50": 0.298666,
+        "p95": 1.254625,
+        "p99": 1.398292
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 2,
+      "position": 1,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.77644958399469,
+      "timing_ms": {
+        "p50": 0.944375,
+        "p95": 1.3832499999999999,
+        "p99": 1.681042
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 2,
+      "position": 2,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.794894540973473,
+      "timing_ms": {
+        "p50": 0.987334,
+        "p95": 1.363041,
+        "p99": 1.589
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 2,
+      "position": 3,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.772349875012878,
+      "timing_ms": {
+        "p50": 0.512541,
+        "p95": 1.3705,
+        "p99": 1.464833
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 2,
+      "position": 4,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.676920333993621,
+      "timing_ms": {
+        "p50": 0.411916,
+        "p95": 1.347625,
+        "p99": 1.490583
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10691062,
+        "dealloc_bytes": 13104615,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 3,
+      "position": 1,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.798148958012462,
+      "timing_ms": {
+        "p50": 0.36208399999999996,
+        "p95": 1.2696669999999999,
+        "p99": 1.398583
+      },
+      "heap_counts": {
+        "alloc_calls": 60850,
+        "alloc_requested_bytes": 10683150,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 3,
+      "position": 2,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.799718374968506,
+      "timing_ms": {
+        "p50": 0.345833,
+        "p95": 1.3119589999999999,
+        "p99": 1.4855
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10691062,
+        "dealloc_bytes": 13104615,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 3,
+      "position": 3,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.7337663330254145,
+      "timing_ms": {
+        "p50": 0.31283299999999997,
+        "p95": 1.269041,
+        "p99": 1.384917
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10691062,
+        "dealloc_bytes": 13104615,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 3,
+      "position": 4,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.777339499967638,
+      "timing_ms": {
+        "p50": 0.358625,
+        "p95": 1.313292,
+        "p99": 1.464083
+      },
+      "heap_counts": {
+        "alloc_calls": 60850,
+        "alloc_requested_bytes": 10693278,
+        "dealloc_bytes": 13104615,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 4,
+      "position": 1,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.806487749970984,
+      "timing_ms": {
+        "p50": 0.820583,
+        "p95": 1.2977500000000002,
+        "p99": 1.371
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 4,
+      "position": 2,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.789102374983486,
+      "timing_ms": {
+        "p50": 0.9077080000000001,
+        "p95": 1.355,
+        "p99": 2.339709
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 4,
+      "position": 3,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.764170665992424,
+      "timing_ms": {
+        "p50": 0.414291,
+        "p95": 1.235916,
+        "p99": 1.487291
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 4,
+      "position": 4,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.788059249985963,
+      "timing_ms": {
+        "p50": 0.355792,
+        "p95": 1.271708,
+        "p99": 1.732
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 5,
+      "position": 1,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.77238804200897,
+      "timing_ms": {
+        "p50": 0.38741699999999996,
+        "p95": 1.3185829999999998,
+        "p99": 1.46275
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 5,
+      "position": 2,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.81241133302683,
+      "timing_ms": {
+        "p50": 1.032,
+        "p95": 1.543375,
+        "p99": 2.234208
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 5,
+      "position": 3,
+      "arm": "B",
+      "binary_sha256": "5ef1d6f34398a72bab405d054a0cdf298bb6d33795c4f508993fcca19e988cbc",
+      "exit_code": 0,
+      "elapsed_seconds": 6.802271291962825,
+      "timing_ms": {
+        "p50": 0.9281670000000001,
+        "p95": 1.403167,
+        "p99": 1.5859999999999999
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    },
+    {
+      "block": 5,
+      "position": 4,
+      "arm": "A",
+      "binary_sha256": "2b51fea60e82d875ad4ea4ee781b856d9487264afb8da66d04528407afe9bdfe",
+      "exit_code": 0,
+      "elapsed_seconds": 6.815353833022527,
+      "timing_ms": {
+        "p50": 0.9787089999999999,
+        "p95": 1.42625,
+        "p99": 2.081458
+      },
+      "heap_counts": {
+        "alloc_calls": 60849,
+        "alloc_requested_bytes": 10680934,
+        "dealloc_bytes": 13094487,
+        "dealloc_calls": 57154,
+        "realloc_calls": 10082,
+        "realloc_old_bytes": 3589749,
+        "realloc_requested_bytes": 7187434
+      }
+    }
+  ],
+  "summary": {
+    "blocks": [
+      {
+        "block": 1,
+        "order": "ABBA",
+        "effects": {
+          "p50": {
+            "A_pair_ms": [
+              0.512625,
+              0.298666
+            ],
+            "B_pair_ms": [
+              0.41175,
+              0.35958300000000004
+            ],
+            "B_minus_A_pair_mean_ms": -0.01997899999999997,
+            "relative_delta_percent": -4.92523644413656,
+            "A_second_minus_first_ms": -0.213959,
+            "B_second_minus_first_ms": -0.05216699999999996
+          },
+          "p95": {
+            "A_pair_ms": [
+              1.365666,
+              1.254625
+            ],
+            "B_pair_ms": [
+              1.362125,
+              1.3121669999999999
+            ],
+            "B_minus_A_pair_mean_ms": 0.027000499999999983,
+            "relative_delta_percent": 2.0608779711871694,
+            "A_second_minus_first_ms": -0.11104099999999995,
+            "B_second_minus_first_ms": -0.04995800000000017
+          },
+          "p99": {
+            "A_pair_ms": [
+              1.9265,
+              1.398292
+            ],
+            "B_pair_ms": [
+              6.773000000000001,
+              1.413209
+            ],
+            "B_minus_A_pair_mean_ms": 2.4307084999999997,
+            "relative_delta_percent": 146.21717689407333,
+            "A_second_minus_first_ms": -0.528208,
+            "B_second_minus_first_ms": -5.359791
+          }
+        }
+      },
+      {
+        "block": 2,
+        "order": "BAAB",
+        "effects": {
+          "p50": {
+            "A_pair_ms": [
+              0.987334,
+              0.512541
+            ],
+            "B_pair_ms": [
+              0.944375,
+              0.411916
+            ],
+            "B_minus_A_pair_mean_ms": -0.07179200000000008,
+            "relative_delta_percent": -9.573064422035182,
+            "A_second_minus_first_ms": -0.474793,
+            "B_second_minus_first_ms": -0.532459
+          },
+          "p95": {
+            "A_pair_ms": [
+              1.363041,
+              1.3705
+            ],
+            "B_pair_ms": [
+              1.3832499999999999,
+              1.347625
+            ],
+            "B_minus_A_pair_mean_ms": -0.0013329999999998066,
+            "relative_delta_percent": -0.0975291755272556,
+            "A_second_minus_first_ms": 0.0074590000000001044,
+            "B_second_minus_first_ms": -0.035624999999999796
+          },
+          "p99": {
+            "A_pair_ms": [
+              1.589,
+              1.464833
+            ],
+            "B_pair_ms": [
+              1.681042,
+              1.490583
+            ],
+            "B_minus_A_pair_mean_ms": 0.05889599999999984,
+            "relative_delta_percent": 3.8571853798161193,
+            "A_second_minus_first_ms": -0.12416699999999992,
+            "B_second_minus_first_ms": -0.19045899999999993
+          }
+        }
+      },
+      {
+        "block": 3,
+        "order": "ABBA",
+        "effects": {
+          "p50": {
+            "A_pair_ms": [
+              0.36208399999999996,
+              0.358625
+            ],
+            "B_pair_ms": [
+              0.345833,
+              0.31283299999999997
+            ],
+            "B_minus_A_pair_mean_ms": -0.031021500000000035,
+            "relative_delta_percent": -8.608606247459106,
+            "A_second_minus_first_ms": -0.0034589999999999343,
+            "B_second_minus_first_ms": -0.03300000000000003
+          },
+          "p95": {
+            "A_pair_ms": [
+              1.2696669999999999,
+              1.313292
+            ],
+            "B_pair_ms": [
+              1.3119589999999999,
+              1.269041
+            ],
+            "B_minus_A_pair_mean_ms": -0.000979499999999911,
+            "relative_delta_percent": -0.07584324799579933,
+            "A_second_minus_first_ms": 0.043625000000000025,
+            "B_second_minus_first_ms": -0.04291799999999979
+          },
+          "p99": {
+            "A_pair_ms": [
+              1.398583,
+              1.464083
+            ],
+            "B_pair_ms": [
+              1.4855,
+              1.384917
+            ],
+            "B_minus_A_pair_mean_ms": 0.0038754999999999207,
+            "relative_delta_percent": 0.2707615907688865,
+            "A_second_minus_first_ms": 0.06550000000000011,
+            "B_second_minus_first_ms": -0.10058300000000009
+          }
+        }
+      },
+      {
+        "block": 4,
+        "order": "BAAB",
+        "effects": {
+          "p50": {
+            "A_pair_ms": [
+              0.9077080000000001,
+              0.414291
+            ],
+            "B_pair_ms": [
+              0.820583,
+              0.355792
+            ],
+            "B_minus_A_pair_mean_ms": -0.0728120000000001,
+            "relative_delta_percent": -11.015439497306744,
+            "A_second_minus_first_ms": -0.49341700000000005,
+            "B_second_minus_first_ms": -0.46479099999999995
+          },
+          "p95": {
+            "A_pair_ms": [
+              1.355,
+              1.235916
+            ],
+            "B_pair_ms": [
+              1.2977500000000002,
+              1.271708
+            ],
+            "B_minus_A_pair_mean_ms": -0.010728999999999989,
+            "relative_delta_percent": -0.8282013002351318,
+            "A_second_minus_first_ms": -0.11908399999999997,
+            "B_second_minus_first_ms": -0.02604200000000012
+          },
+          "p99": {
+            "A_pair_ms": [
+              2.339709,
+              1.487291
+            ],
+            "B_pair_ms": [
+              1.371,
+              1.732
+            ],
+            "B_minus_A_pair_mean_ms": -0.3620000000000001,
+            "relative_delta_percent": -18.918212699242233,
+            "A_second_minus_first_ms": -0.8524180000000001,
+            "B_second_minus_first_ms": 0.361
+          }
+        }
+      },
+      {
+        "block": 5,
+        "order": "ABBA",
+        "effects": {
+          "p50": {
+            "A_pair_ms": [
+              0.38741699999999996,
+              0.9787089999999999
+            ],
+            "B_pair_ms": [
+              1.032,
+              0.9281670000000001
+            ],
+            "B_minus_A_pair_mean_ms": 0.29702050000000013,
+            "relative_delta_percent": 43.483617177332135,
+            "A_second_minus_first_ms": 0.5912919999999999,
+            "B_second_minus_first_ms": -0.10383299999999995
+          },
+          "p95": {
+            "A_pair_ms": [
+              1.3185829999999998,
+              1.42625
+            ],
+            "B_pair_ms": [
+              1.543375,
+              1.403167
+            ],
+            "B_minus_A_pair_mean_ms": 0.10085450000000007,
+            "relative_delta_percent": 7.348680229361859,
+            "A_second_minus_first_ms": 0.10766700000000018,
+            "B_second_minus_first_ms": -0.1402079999999999
+          },
+          "p99": {
+            "A_pair_ms": [
+              1.46275,
+              2.081458
+            ],
+            "B_pair_ms": [
+              2.234208,
+              1.5859999999999999
+            ],
+            "B_minus_A_pair_mean_ms": 0.1379999999999999,
+            "relative_delta_percent": 7.787353338178793,
+            "A_second_minus_first_ms": 0.618708,
+            "B_second_minus_first_ms": -0.6482080000000003
+          }
+        }
+      }
+    ],
+    "aggregate": {
+      "p50": {
+        "five_block_deltas_ms": [
+          -0.01997899999999997,
+          -0.07179200000000008,
+          -0.031021500000000035,
+          -0.0728120000000001,
+          0.29702050000000013
+        ],
+        "median_delta_ms": -0.031021500000000035,
+        "positive_blocks": 1,
+        "negative_blocks": 4,
+        "zero_blocks": 0
+      },
+      "p95": {
+        "five_block_deltas_ms": [
+          0.027000499999999983,
+          -0.0013329999999998066,
+          -0.000979499999999911,
+          -0.010728999999999989,
+          0.10085450000000007
+        ],
+        "median_delta_ms": -0.000979499999999911,
+        "positive_blocks": 2,
+        "negative_blocks": 3,
+        "zero_blocks": 0
+      },
+      "p99": {
+        "five_block_deltas_ms": [
+          2.4307084999999997,
+          0.05889599999999984,
+          0.0038754999999999207,
+          -0.3620000000000001,
+          0.1379999999999999
+        ],
+        "median_delta_ms": 0.05889599999999984,
+        "positive_blocks": 4,
+        "negative_blocks": 1,
+        "zero_blocks": 0
+      }
+    },
+    "scope": "descriptive paired means of process quantiles, not pooled frame quantiles or source/TG causality; all drifts retained"
+  },
+  "direct_only": [
+    {
+      "arm": "A",
+      "exit_code": 0,
+      "proof": {
+        "extent": [
+          0,
+          0
+        ],
+        "extent_scope": null,
+        "work": {
+          "content_revisions": 0,
+          "cpu_readbacks": 0,
+          "deferred": 0,
+          "extra_passes": 0,
+          "frames": 240,
+          "gpu_convert_passes": 0,
+          "gpu_copies": 0,
+          "gpu_copy_bytes": 0,
+          "idle_reuse_frames": 0,
+          "missing_observations": 0,
+          "output_frames": 0,
+          "plan_rebuilds": 0,
+          "resolve_count": 0,
+          "submissions": 240,
+          "target_recreates": 0,
+          "ui_renders": 240
+        },
+        "painter": {
+          "encoded_frames": 240,
+          "missing_observations": 0,
+          "scope": "measured real Window Scene painter encodes from Runtime WorkCounters; setup and warmup excluded; GPU buffer reallocations are not process malloc",
+          "skipped_frames": 0,
+          "status": "measured",
+          "work": {
+            "batch_rebuilds": 240,
+            "draw_batches": 720,
+            "draw_calls": 720,
+            "gpu_buffer_reallocations": 0,
+            "gpu_upload_bytes": 323473
+          }
+        },
+        "timing_acceptance": false,
+        "actual_acquired_texture_extent": null,
+        "actual_present_mode": null,
+        "continuous_foreground": null
+      },
+      "raw_sha256": "df8f4a608358ad3f8a2c34d8b9b209aae2d022aa75428822548a614359be88c8"
+    },
+    {
+      "arm": "B",
+      "exit_code": 0,
+      "proof": {
+        "extent": [
+          480,
+          320
+        ],
+        "extent_scope": "cached WindowGeometry at first direct presented frame",
+        "work": {
+          "content_revisions": 0,
+          "cpu_readbacks": 0,
+          "deferred": 0,
+          "extra_passes": 0,
+          "frames": 240,
+          "gpu_convert_passes": 0,
+          "gpu_copies": 0,
+          "gpu_copy_bytes": 0,
+          "idle_reuse_frames": 0,
+          "missing_observations": 0,
+          "output_frames": 0,
+          "plan_rebuilds": 0,
+          "resolve_count": 0,
+          "submissions": 240,
+          "target_recreates": 0,
+          "ui_renders": 240
+        },
+        "painter": {
+          "encoded_frames": 240,
+          "missing_observations": 0,
+          "scope": "measured real Window Scene painter encodes from Runtime WorkCounters; setup and warmup excluded; GPU buffer reallocations are not process malloc",
+          "skipped_frames": 0,
+          "status": "measured",
+          "work": {
+            "batch_rebuilds": 240,
+            "draw_batches": 720,
+            "draw_calls": 720,
+            "gpu_buffer_reallocations": 0,
+            "gpu_upload_bytes": 323473
+          }
+        },
+        "timing_acceptance": false,
+        "actual_acquired_texture_extent": null,
+        "actual_present_mode": null,
+        "continuous_foreground": null
+      },
+      "raw_sha256": "fa64a3cbbbf7987c4fca30707d96cf7f23c34d339b69fb0a4779e5d46bc1b319"
+    }
+  ],
+  "common_direct_output_work": {
+    "content_revisions": 0,
+    "cpu_readbacks": 0,
+    "deferred": 0,
+    "extra_passes": 0,
+    "frames": 240,
+    "gpu_convert_passes": 0,
+    "gpu_copies": 0,
+    "gpu_copy_bytes": 0,
+    "idle_reuse_frames": 0,
+    "missing_observations": 0,
+    "output_frames": 0,
+    "plan_rebuilds": 0,
+    "resolve_count": 0,
+    "submissions": 240,
+    "target_recreates": 0,
+    "ui_renders": 240
+  },
+  "common_direct_painter": {
+    "encoded_frames": 240,
+    "missing_observations": 0,
+    "scope": "measured real Window Scene painter encodes from Runtime WorkCounters; setup and warmup excluded; GPU buffer reallocations are not process malloc",
+    "skipped_frames": 0,
+    "status": "measured",
+    "work": {
+      "batch_rebuilds": 240,
+      "draw_batches": 720,
+      "draw_calls": 720,
+      "gpu_buffer_reallocations": 0,
+      "gpu_upload_bytes": 323473
+    }
+  },
+  "trace_feature_execution": {
+    "consumer_trace_attribution": "not_executed",
+    "trace_failure_recovery": "not_executed"
+  },
+  "limits": [
+    "Aggregate timing descriptive only; all five block deltas and same-arm drift retained.",
+    "Actual final environment, continuous foreground/physical geometry, acquired texture extent, present mode, P/E and TG unknown in this comparison.",
+    "Inherited compiler environment not archived in original pair build; explicit command/head recorded, complete code-generation equality unproven.",
+    "Other-party compositor commit11c24c388 already on main after recorded pair builds; current-HEAD compatibility evidence separately recorded.",
+    "macOS Metal Apple M4 only; Windows/native/OpenVR/Web bridge/device-loss acceptance not established here.",
+    "Post-capture independent review observed later unrelated live Runtime/document edits; preserved build-input snapshots and immutable binaries do not validate those later edits. They are excluded from this change."
+  ],
+  "evidence": [
+    {
+      "path": "analysis/extent-native-control-v2/adapter-receipts/r6-extent-control-20261016-1.json",
+      "bytes": 19638,
+      "sha256": "9e938fed87ff7f004baec6d76556d6f55bfd76de39186b97dabb88583c2dbf15"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/definition-freeze-v2.json",
+      "bytes": 1018,
+      "sha256": "51d073d37f6ea8fd7ebe180379544e9ecdb9f791bf6d9c6847a19e909f5d8c8f"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/r6-extent-control-20261016-1-console.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/r6-extent-control-20261016-1-root-preflight.json",
+      "bytes": 1382,
+      "sha256": "0566c73b8ae0946c33510190cdc1e5a434338dab0cd17024655c370679ec0f94"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/r6-extent-control-20261016-1-root-result.json",
+      "bytes": 226,
+      "sha256": "2d68f657162576ce5423c6db1c1fe9fad0b1ae2ce9c4b4ca0ed2d9287624bf4b"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/r6-extent-control-20261016-1-session-prelaunch-failure.json",
+      "bytes": 511,
+      "sha256": "3e4ead8df52beb9d84be90078f3cf71d06ed8518ea4f15ae94c9eac2671f4af1"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position1-A-report.json",
+      "bytes": 6931,
+      "sha256": "0479afbc87b50f195009ac31ecdf442548d58c3d3ed2245a7fff925a96119193"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position1-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position1-A-stdout.log",
+      "bytes": 4549,
+      "sha256": "15de72285de8006245b2857259756edf4f993ad76286295b2f0de6663722dd60"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position2-B-report.json",
+      "bytes": 7035,
+      "sha256": "4be493262d3b8754f811e6e4b90f70037158253e0d86b0b689d7ebc77c65e7eb"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position2-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position2-B-stdout.log",
+      "bytes": 4643,
+      "sha256": "a1258384d895cdaa92a5a766c2e72379625131bdc2f28e5f883d5e1577c3d5a4"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position3-B-report.json",
+      "bytes": 7048,
+      "sha256": "9cdf2bdbd13527a128a7199a5aca6892daf3a96ca2a91b1a337f4c03e2e5a6a2"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position3-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position3-B-stdout.log",
+      "bytes": 4656,
+      "sha256": "8b034d309b84c589abd0e4d5687a974fb78759dc8eec73ad0d560a2872baf29e"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position4-A-report.json",
+      "bytes": 6933,
+      "sha256": "4c47f7f44ca63fa9fe68308cfdf01ab95823c61803ead743415bfd1b6dcb53f0"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position4-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block1-position4-A-stdout.log",
+      "bytes": 4551,
+      "sha256": "52499ed911d98a9a6caf1ae92f3568fe18361d41bf58ccc0370ff61e25e272b8"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position1-B-report.json",
+      "bytes": 7037,
+      "sha256": "71b6af413e2596d5d2d75402bf6ecf6f2ea08c49db7fb33c1c311707b3137d85"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position1-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position1-B-stdout.log",
+      "bytes": 4645,
+      "sha256": "c745d89707617f1f759fdd8d7fb3cb80fb67952bd6191de0d58b070e7e108c9b"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position2-A-report.json",
+      "bytes": 6930,
+      "sha256": "b4789f188cea1ef08fc22996fdbbc047e5ebea15cdda0c9b6e491dec000a2d7e"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position2-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position2-A-stdout.log",
+      "bytes": 4548,
+      "sha256": "64b254d92a9b7a7f3523cf62754fd9f49ed17f65517f3ed2e3cc3efa01eda1b4"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position3-A-report.json",
+      "bytes": 6931,
+      "sha256": "5db43a822c77a1c4f79b024c69420fa00398cc671f592df4dccdffbad7ec4d4d"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position3-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position3-A-stdout.log",
+      "bytes": 4549,
+      "sha256": "1489707ab5b2ad9585e389a0ee867eeb65c944bb0dab6c2ebd925f077c785f03"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position4-B-report.json",
+      "bytes": 7027,
+      "sha256": "ccb9978c2e14dc9cb6c101d59ad4b1eccd06c900c8acb16cb65751b17813e4e3"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position4-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block2-position4-B-stdout.log",
+      "bytes": 4635,
+      "sha256": "a26ed3c76e4f9c35f45012494a7744570220f3268a61a89b5ad34fe96cf36caa"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position1-A-report.json",
+      "bytes": 6954,
+      "sha256": "2af5292f08d77fa1ed58ba9387b5897c64c7b68bbde7d9f7d8cb4acba9af6f48"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position1-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position1-A-stdout.log",
+      "bytes": 4572,
+      "sha256": "f48fb9d241bec3a83d2f70e813cc38ea0c7cae0302f2546e25dbd220f0e96c1e"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position2-B-report.json",
+      "bytes": 7035,
+      "sha256": "55623780e9311758acf023d56f482d3f42822dec6a05842cce00ed5dd06aed5d"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position2-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position2-B-stdout.log",
+      "bytes": 4643,
+      "sha256": "464c1dc54fc7941e44fcfc7245f58f0515d3e7bb3a311ed796f926e138a2965f"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position3-B-report.json",
+      "bytes": 7038,
+      "sha256": "fde615cf430c7bd363ebc38cdd313ba582012a556a4f8438787317c06097f8a0"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position3-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position3-B-stdout.log",
+      "bytes": 4646,
+      "sha256": "9813eef40ebae0e1b4d00f9b963bb6a00bb090c4c3e5bb0b3c32744d45523b99"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position4-A-report.json",
+      "bytes": 6933,
+      "sha256": "46c6814169f3df6189deae99b41bec464ba0cb09f6f2cf0c3cc1b2b32e565b27"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position4-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block3-position4-A-stdout.log",
+      "bytes": 4551,
+      "sha256": "b019852f21de8b819e7844530888fe38bb9692807c08983a93178a4a0787ffb3"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position1-B-report.json",
+      "bytes": 7034,
+      "sha256": "2b8a4d17735c59be377a731cc617eb8e25439df088dca1cdc13bbfbe6eeeb158"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position1-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position1-B-stdout.log",
+      "bytes": 4642,
+      "sha256": "7e9f59ad1310fe5ca86a6509653c2f96efb0241ec84138872b6d9bbcea34477c"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position2-A-report.json",
+      "bytes": 6940,
+      "sha256": "572da884209ab260ea0b7d9ae337739fb259063389445f63a6ddb5efb7a07b7d"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position2-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position2-A-stdout.log",
+      "bytes": 4558,
+      "sha256": "7ec47e2daf13f3785852eaf82c2c34b903f37646e20fb733a95f20c68d013a19"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position3-A-report.json",
+      "bytes": 6933,
+      "sha256": "c5ddd5554c1539170588b7644c9f0c117487e2c6394c4b48bf6e163d2c443522"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position3-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position3-A-stdout.log",
+      "bytes": 4551,
+      "sha256": "6cb4516ba1715423c63237eecbbc5fe555c498995eb25a19acd395652f8a5a85"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position4-B-report.json",
+      "bytes": 7024,
+      "sha256": "c9faa0c240aa4ea67cd425ff74d537b7a9130c58cfe3ef1ff557857fc7f444a3"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position4-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block4-position4-B-stdout.log",
+      "bytes": 4632,
+      "sha256": "ba289c2b6d390fecc5533a7474e385cc0a2d96b084fa00b37c73b2853fde61c8"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position1-A-report.json",
+      "bytes": 6953,
+      "sha256": "dd61380cd3195aa4e0dd5e600c273f655c4492807bee7aad03cd248add25e8fe"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position1-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position1-A-stdout.log",
+      "bytes": 4571,
+      "sha256": "edf1e969af9272517e447b2ca75a7d77c7955e108252114954b2aef45a4ec059"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position2-B-report.json",
+      "bytes": 7024,
+      "sha256": "070154cdedb24ea9dfbf9a2982995a57bd5fe76733ab7486a66696fdc6743deb"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position2-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position2-B-stdout.log",
+      "bytes": 4632,
+      "sha256": "3d65f6603eeedc2ddb78d34547c75f476e08f3830bd757a186a124c203f79d7e"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position3-B-report.json",
+      "bytes": 7047,
+      "sha256": "fb98e41c5641f07b7ce24370650c1b2834452a9542feed7cce5dcc004ce1f70d"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position3-B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position3-B-stdout.log",
+      "bytes": 4655,
+      "sha256": "25d471305825234e7d9fea29f70b729086953759f4e48015d19351fa33fa203a"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position4-A-report.json",
+      "bytes": 6942,
+      "sha256": "7fccb0a9a5ffa43a7aaf00215ab0474e8742bcf0c6d925de62e6de51bdf04664"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position4-A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-block5-position4-A-stdout.log",
+      "bytes": 4560,
+      "sha256": "e3152ada88c460051b31d633f11bb89bb0d1de1cb2af04c9fee0d38615432a10"
+    },
+    {
+      "path": "analysis/extent-native-control-v2/runs/r6-extent-control-20261016-1-state.json",
+      "bytes": 287332,
+      "sha256": "d2fd01dc75e766cf46c6b1058ead8a4e1e5910cb30e25364b7d4ac9a353d2dc7"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-20261016-1/direct-only-report.json",
+      "bytes": 6694,
+      "sha256": "9622520c1eaf727484719b27e690c4e6ce23621e2f35eb50108bcd7eeed6ca84"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-20261016-1/direct-only-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-20261016-1/direct-only-stdout.log",
+      "bytes": 4303,
+      "sha256": "425c79894240ebf4a2d2a5ede90d70c660b8b4b7c3517af411583cff69ff4ed2"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-20261016-1/full-six-report.json",
+      "bytes": 7037,
+      "sha256": "bf181307ff9f42bcaa08e348be9c71efe934053226a36eb7b7552bdb1d9658f9"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-20261016-1/full-six-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-20261016-1/full-six-stdout.log",
+      "bytes": 4645,
+      "sha256": "881d316b326c8a3e8a95b594b46ceb62fe68b5706c70aed38b138978218842a2"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-20261016-1/state.json",
+      "bytes": 12453,
+      "sha256": "f0265362904c96b76d341f833e0c1146d62f3641d91132c247cdb24272af5343"
+    },
+    {
+      "path": "probe-extent-current-v1/actual-console.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-current-v1/all-tracked-build-verification.json",
+      "bytes": 889913,
+      "sha256": "bfaadbd395455398365ced6b32be79c5dc4bc99b41d318b949c66091f93a74f8"
+    },
+    {
+      "path": "probe-extent-current-v1/all-tracked-build-verification.log",
+      "bytes": 62,
+      "sha256": "85c8dbac64ed6a362d668bf3988686e26e947620bb15cfdbe2e999a0ff8261b2"
+    },
+    {
+      "path": "probe-extent-current-v1/build-test.json",
+      "bytes": 236693,
+      "sha256": "b638af34513aa48ae6651003ceab360f078553f4351e42b33ae9c1f2b5a8ae42"
+    },
+    {
+      "path": "probe-extent-current-v1/check-api.log",
+      "bytes": 20,
+      "sha256": "2e6d73b02227030252f8e11daf149b4e3ef71aa0639e8f39cfd395077146fc56"
+    },
+    {
+      "path": "probe-extent-current-v1/check-diff.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-current-v1/check-engine.log",
+      "bytes": 340,
+      "sha256": "eea6c7b2a8c65a029b6acfb3290d583117fe88931f5553f00f1f591ea114cca3"
+    },
+    {
+      "path": "probe-extent-current-v1/check-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-current-v1/check-perf-self-test.log",
+      "bytes": 28,
+      "sha256": "cb6580c9099fa5d5051e35fbc36817e2966649fc4a43240ceba03f882b2efe0b"
+    },
+    {
+      "path": "probe-extent-current-v1/check-schema.log",
+      "bytes": 20,
+      "sha256": "66e2e9d02a82dc3360f083b507804865bf7b99628401c31d2ed82b61b070519b"
+    },
+    {
+      "path": "probe-extent-current-v1/example-tests.log",
+      "bytes": 868,
+      "sha256": "ebbb964ea46a819a51497e156e0d4610a535f5c37888484c7700d916a6265f94"
+    },
+    {
+      "path": "probe-extent-current-v1/functional-definition.json",
+      "bytes": 289,
+      "sha256": "a19d8e83b0fa472c9544a6865a027a57693bb0f73b91bde1c7d3464858a229e8"
+    },
+    {
+      "path": "probe-extent-current-v1/release-build.log",
+      "bytes": 162,
+      "sha256": "1f428a6d07eaabc1644bbb5e3b5093a0bdeefac0b4e43bc9ffeba2250efa6a71"
+    },
+    {
+      "path": "probe-extent-current-v1/repository-checks.json",
+      "bytes": 1068,
+      "sha256": "45d560efd27053187db8fc40de76c0d17f25cbcf5ffd8fbfcad125f422f778ec"
+    },
+    {
+      "path": "probe-extent-current-v1/root-execution.json",
+      "bytes": 254,
+      "sha256": "2f4384c551c5de6b67491d6cb20b3db7553eb13950d1ebf72abb9d40f89407e5"
+    },
+    {
+      "path": "probe-extent-current-v1/run_functional.py",
+      "bytes": 4802,
+      "sha256": "0525cb05abf52ffe4b67d1342887e715af8a1ef34d4310dc269e07fcffba49f0"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-20261016-1/A-report.json",
+      "bytes": 6590,
+      "sha256": "df8f4a608358ad3f8a2c34d8b9b209aae2d022aa75428822548a614359be88c8"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-20261016-1/A-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-20261016-1/A-stdout.log",
+      "bytes": 4209,
+      "sha256": "cd3c19b7917c7ebbaa3b11c9f371fe318b72a6be6e0ccd8e50f06d864e00173b"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-20261016-1/B-report.json",
+      "bytes": 6694,
+      "sha256": "fa64a3cbbbf7987c4fca30707d96cf7f23c34d339b69fb0a4779e5d46bc1b319"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-20261016-1/B-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-20261016-1/B-stdout.log",
+      "bytes": 4303,
+      "sha256": "f3da317ff3ee532b0fdc16f7ebf8ea0431b9fa0f168766bca0fe5b3b5076c02d"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-20261016-1/state.json",
+      "bytes": 5358,
+      "sha256": "a51d537c636aa7902de33b1acfa89131acda388ac679f5c1c194d327737e9193"
+    },
+    {
+      "path": "probe-extent-direct-v1/actual-console.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "probe-extent-direct-v1/cpu-validator-tests-v2.json",
+      "bytes": 215,
+      "sha256": "7c3de9e26ff7593a9c46e6f77144cc309ac9ff2baca587477784d0e71ec3a6b5"
+    },
+    {
+      "path": "probe-extent-direct-v1/cpu-validator-tests.json",
+      "bytes": 215,
+      "sha256": "0303524c2df6add99ff649e0d1372dff69e553e934e5e33fc6fef4af3e11a8b5"
+    },
+    {
+      "path": "probe-extent-direct-v1/definition-v2.json",
+      "bytes": 659,
+      "sha256": "53c57b25e500a28db7dc7d2c97dd4a9b3b184fab92d9fa8808708554c0712906"
+    },
+    {
+      "path": "probe-extent-direct-v1/root-execution.json",
+      "bytes": 254,
+      "sha256": "bd0c62a53864fcbab2d2cd14ae66af1e9b200839905ef4e516a02738be8b59ec"
+    },
+    {
+      "path": "probe-extent-direct-v1/run.py",
+      "bytes": 7499,
+      "sha256": "59a135d5ddcd8611ef847dcd0ddc9f3e649a22b85e95e52f2431977630b9dc56"
+    },
+    {
+      "path": "probe-extent-v2/build-command-supplement.json",
+      "bytes": 875,
+      "sha256": "4415e3473b9e6cb9e1e458c6de27268c9109953089a2fa1360a1cfa0cb70905a"
+    },
+    {
+      "path": "probe-extent-v2/build-result.json",
+      "bytes": 287,
+      "sha256": "58a1cbba02171dadc0937c7493d11e8ec315b02d4f874172d6a8322aa1c9eac1"
+    },
+    {
+      "path": "probe-extent-v2/example-tests.log",
+      "bytes": 755,
+      "sha256": "ea741ce1066ef8ffcdf4efabb55c90a6f5648ee8ea4d252972ba3505a108265b"
+    },
+    {
+      "path": "probe-extent-v2/repository-checks.json",
+      "bytes": 1009,
+      "sha256": "373d4e76c5d5487c845ac40de0d2a66216b4758398cd75245f3668dfb1a69644"
+    },
+    {
+      "path": "probe-extent-v2/source-receipt.json",
+      "bytes": 431,
+      "sha256": "48796911eb0ce64b36d0572483c63c2f4533f01be3d64f6289b56e84147bcf5d"
+    },
+    {
+      "path": "review/extent-native-control-v1-definition-review.json",
+      "bytes": 2774,
+      "sha256": "f0dd60aee7dc761310d5890b5d51e137358b790485196a4a3775ed6ad2a5ce27"
+    },
+    {
+      "path": "review/extent-native-control-v1-tests-independent.log",
+      "bytes": 1281,
+      "sha256": "451f0a4461d7b153c00a1240654eadacec820e3a978003a2be0ff46e50bcf3ff"
+    },
+    {
+      "path": "review/extent-native-control-v2-actual-review.json",
+      "bytes": 31631,
+      "sha256": "f90e5745b91dbfa94ec1938112df61faa888f4f1e634cd8e2da8a09b63d5351c"
+    },
+    {
+      "path": "review/extent-native-control-v2-definition-review.json",
+      "bytes": 3844,
+      "sha256": "bd71856517b0ddc3fdf6c058c06addfd1cb1d0471f8c3d670f9fa46c230bb713"
+    },
+    {
+      "path": "review/probe-extent-build-provenance-limitation-supplement.json",
+      "bytes": 6449,
+      "sha256": "27a46e448398619408fefc128a9cbf385051903e43935a627f2b6420c0a027e9"
+    },
+    {
+      "path": "review/probe-extent-current-actual-review.json",
+      "bytes": 4315,
+      "sha256": "06b63e19da619541b22a40df3d7781fcd579ebbf428e90642322fa3f4af17cc8"
+    },
+    {
+      "path": "review/probe-extent-direct-actual-review.json",
+      "bytes": 4146,
+      "sha256": "37f33707ee363c0451ef5df011c43df862d8ef1f4ea80575e9467f501c3fdee9"
+    },
+    {
+      "path": "review/probe-extent-v1-code-review.json",
+      "bytes": 1702,
+      "sha256": "7abb857401433c34d6e5f2841d0085cda4fb0d37b3bb20e324cc4d940472d4d2"
+    },
+    {
+      "path": "review/probe-extent-v2-code-build-review.json",
+      "bytes": 5604,
+      "sha256": "9388297bbaf616e9cda7cd4cd35ef49c5b3a09b0fb0ce4165bd7355a32b4ee70"
+    }
+  ],
+  "independent_actual_review": {
+    "extent-native-control-v2-actual-review.json": "accepted-limited-frozen-binary-functional-work-and-descriptive-statistics",
+    "probe-extent-direct-actual-review.json": "accepted-limited-direct-functional-work-evidence",
+    "probe-extent-current-actual-review.json": "accepted-limited-current-functional-work-evidence",
+    "probe-extent-build-provenance-limitation-supplement.json": "accepted-immutable-binary-functional-evidence-with-build-causality-limitation"
+  },
+  "current_head_compatibility": {
+    "head": "11c24c388810e503464601a6bc264a1966233668",
+    "binary_sha256": "4b1571e52a0c5939b235895dcf44a1c1cbebd58a925354d6fa127766cd6bb8e8",
+    "example_tests": 3,
+    "head_build_inputs_pre_post_equal": true,
+    "tracked_build_file_count": 3186,
+    "runs": [
+      {
+        "mode": "full-six",
+        "pid": 65716,
+        "exit_code": 0,
+        "actual_wait_returncode": 0,
+        "raw_sha256": "bf181307ff9f42bcaa08e348be9c71efe934053226a36eb7b7552bdb1d9658f9",
+        "proof": {
+          "timing_ms": {
+            "p50": 0.18645799999999998,
+            "p95": 0.42975,
+            "p99": 0.800125
+          },
+          "output_work": {
+            "content_revisions": 0,
+            "cpu_readbacks": 0,
+            "deferred": 0,
+            "extra_passes": 0,
+            "frames": 240,
+            "gpu_convert_passes": 0,
+            "gpu_copies": 0,
+            "gpu_copy_bytes": 0,
+            "idle_reuse_frames": 0,
+            "missing_observations": 0,
+            "output_frames": 0,
+            "plan_rebuilds": 0,
+            "resolve_count": 0,
+            "submissions": 240,
+            "target_recreates": 0,
+            "ui_renders": 240
+          },
+          "painter": {
+            "encoded_frames": 240,
+            "missing_observations": 0,
+            "scope": "measured real Window Scene painter encodes from Runtime WorkCounters; setup and warmup excluded; GPU buffer reallocations are not process malloc",
+            "skipped_frames": 0,
+            "status": "measured",
+            "work": {
+              "batch_rebuilds": 240,
+              "draw_batches": 720,
+              "draw_calls": 720,
+              "gpu_buffer_reallocations": 0,
+              "gpu_upload_bytes": 323473
+            }
+          },
+          "heap": {
+            "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+            "counts": {
+              "alloc_calls": 60849,
+              "alloc_requested_bytes": 10691062,
+              "dealloc_bytes": 13104615,
+              "dealloc_calls": 57154,
+              "realloc_calls": 10082,
+              "realloc_old_bytes": 3589749,
+              "realloc_requested_bytes": 7187434
+            },
+            "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+            "samples": 240,
+            "scope": "prepare_window_frame through window_frame_presented; aggregation and serialization excluded",
+            "status": "measured"
+          },
+          "phase_work": [
+            {
+              "content_revisions": 0,
+              "cpu_readbacks": 0,
+              "deferred": 0,
+              "extra_passes": 0,
+              "frames": 240,
+              "gpu_convert_passes": 0,
+              "gpu_copies": 0,
+              "gpu_copy_bytes": 0,
+              "idle_reuse_frames": 0,
+              "missing_observations": 0,
+              "output_frames": 0,
+              "plan_rebuilds": 0,
+              "resolve_count": 0,
+              "submissions": 240,
+              "target_recreates": 0,
+              "ui_renders": 240
+            },
+            {
+              "content_revisions": 60,
+              "cpu_readbacks": 0,
+              "deferred": 0,
+              "extra_passes": 60,
+              "frames": 60,
+              "gpu_convert_passes": 60,
+              "gpu_copies": 0,
+              "gpu_copy_bytes": 0,
+              "idle_reuse_frames": 0,
+              "missing_observations": 0,
+              "output_frames": 0,
+              "plan_rebuilds": 0,
+              "resolve_count": 0,
+              "submissions": 60,
+              "target_recreates": 0,
+              "ui_renders": 60
+            },
+            {
+              "content_revisions": 60,
+              "cpu_readbacks": 0,
+              "deferred": 0,
+              "extra_passes": 0,
+              "frames": 60,
+              "gpu_convert_passes": 0,
+              "gpu_copies": 0,
+              "gpu_copy_bytes": 0,
+              "idle_reuse_frames": 0,
+              "missing_observations": 0,
+              "output_frames": 0,
+              "plan_rebuilds": 0,
+              "resolve_count": 0,
+              "submissions": 60,
+              "target_recreates": 0,
+              "ui_renders": 120
+            },
+            {
+              "content_revisions": 0,
+              "cpu_readbacks": 0,
+              "deferred": 0,
+              "extra_passes": 0,
+              "frames": 60,
+              "gpu_convert_passes": 0,
+              "gpu_copies": 0,
+              "gpu_copy_bytes": 0,
+              "idle_reuse_frames": 0,
+              "missing_observations": 0,
+              "output_frames": 0,
+              "plan_rebuilds": 0,
+              "resolve_count": 0,
+              "submissions": 60,
+              "target_recreates": 0,
+              "ui_renders": 60
+            },
+            {
+              "content_revisions": 60,
+              "cpu_readbacks": 0,
+              "deferred": 0,
+              "extra_passes": 60,
+              "frames": 60,
+              "gpu_convert_passes": 60,
+              "gpu_copies": 0,
+              "gpu_copy_bytes": 0,
+              "idle_reuse_frames": 0,
+              "missing_observations": 0,
+              "output_frames": 0,
+              "plan_rebuilds": 0,
+              "resolve_count": 0,
+              "submissions": 60,
+              "target_recreates": 0,
+              "ui_renders": 60
+            },
+            {
+              "content_revisions": 0,
+              "cpu_readbacks": 0,
+              "deferred": 0,
+              "extra_passes": 0,
+              "frames": 96,
+              "gpu_convert_passes": 0,
+              "gpu_copies": 0,
+              "gpu_copy_bytes": 0,
+              "idle_reuse_frames": 96,
+              "missing_observations": 0,
+              "output_frames": 0,
+              "plan_rebuilds": 0,
+              "resolve_count": 0,
+              "submissions": 0,
+              "target_recreates": 0,
+              "ui_renders": 0
+            }
+          ],
+          "adapter": "Metal: Apple M4",
+          "scene_primitives": 2,
+          "later_original_extent": [
+            480,
+            320
+          ],
+          "later_resize_extent": [
+            520,
+            360
+          ],
+          "actual_direct_frame_extent": null,
+          "actual_present_mode": null,
+          "scope": "all six functional phases; direct aggregate quantiles only, no frame samples/anchors/continuous state",
+          "current_window_cases": {
+            "compatible_shared_render": true,
+            "consumer_trace_attribution": true,
+            "detach_restores_direct": true,
+            "direct_surface": true,
+            "hidden_static_zero_output": true,
+            "incompatible_separate_renders": true,
+            "resize_matches_output": true,
+            "trace_failure_recovery": true
+          },
+          "trace_feature_execution": {
+            "trace_failure_recovery": "not_executed",
+            "consumer_trace_attribution": "not_executed"
+          },
+          "validation_projection": "raw retained unchanged; exact eight checks all true, six legacy checks deep-copy projected solely for immutable six-phase validator compatibility. Trace-disabled booleans do not prove actual trace/fault execution."
+        }
+      },
+      {
+        "mode": "direct-only",
+        "pid": 65760,
+        "exit_code": 0,
+        "actual_wait_returncode": 0,
+        "raw_sha256": "9622520c1eaf727484719b27e690c4e6ce23621e2f35eb50108bcd7eeed6ca84",
+        "proof": {
+          "extent": [
+            480,
+            320
+          ],
+          "extent_scope": "cached WindowGeometry at first direct presented frame",
+          "work": {
+            "content_revisions": 0,
+            "cpu_readbacks": 0,
+            "deferred": 0,
+            "extra_passes": 0,
+            "frames": 240,
+            "gpu_convert_passes": 0,
+            "gpu_copies": 0,
+            "gpu_copy_bytes": 0,
+            "idle_reuse_frames": 0,
+            "missing_observations": 0,
+            "output_frames": 0,
+            "plan_rebuilds": 0,
+            "resolve_count": 0,
+            "submissions": 240,
+            "target_recreates": 0,
+            "ui_renders": 240
+          },
+          "painter": {
+            "encoded_frames": 240,
+            "missing_observations": 0,
+            "scope": "measured real Window Scene painter encodes from Runtime WorkCounters; setup and warmup excluded; GPU buffer reallocations are not process malloc",
+            "skipped_frames": 0,
+            "status": "measured",
+            "work": {
+              "batch_rebuilds": 240,
+              "draw_batches": 720,
+              "draw_calls": 720,
+              "gpu_buffer_reallocations": 0,
+              "gpu_upload_bytes": 323473
+            }
+          },
+          "timing_acceptance": false,
+          "actual_acquired_texture_extent": null,
+          "actual_present_mode": null,
+          "continuous_foreground": null
+        }
+      }
+    ],
+    "scope": "current HEAD candidate compatibility only: full six phases plus direct-only; no new timing control or causal acceptance"
+  },
+  "timing_acceptance": false,
+  "source_only_causality": false,
+  "gpu_timestamp_ms": null,
+  "vram_bytes": null
+}
