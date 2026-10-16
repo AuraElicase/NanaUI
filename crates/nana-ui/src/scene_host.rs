@@ -11,6 +11,7 @@ mod input;
 mod output;
 mod presence;
 mod present;
+mod production;
 mod schedule;
 mod startup;
 mod tasks;
@@ -288,6 +289,9 @@ struct WindowManager<Program: RuntimeProgram> {
     frame_schedules: HashMap<WindowId, crate::runtime_host::FrameSchedule>,
     /// Offscreen outputs of windows whose program asked for one.
     window_outputs: HashMap<WindowId, crate::output::window_output::WindowOutputState>,
+    producer_frames: production::WindowProducerCache,
+    /// Allocated only for windows that opt in to output diagnostics.
+    direct_output_traces: HashMap<WindowId, crate::output::OutputTraceSnapshot>,
     /// Host-texture slots each window's scene samples, with the subscription
     /// that wakes it; re-subscribed only when the slot set or registry changes.
     texture_subscriptions: HashMap<WindowId, (HashSet<Arc<str>>, crate::TextureSubscription)>,
@@ -331,6 +335,10 @@ struct WindowManager<Program: RuntimeProgram> {
     live_frame_move: Option<(WindowId, i16, nana_window::LiveFrameMove)>,
     #[cfg(target_os = "macos")]
     present_transaction_pinned: HashSet<WindowId>,
+    /// Last live-resize commit on macOS. Steps inside one refresh interval
+    /// keep that drawable instead of reconfiguring and laying out again.
+    #[cfg(target_os = "macos")]
+    live_resize_commit: HashMap<WindowId, windows::LiveResizeCoalescer>,
     /// This host's startup: the coordinator, the splash it owns until
     /// handoff, and the record programs read.
     startup: startup::HostStartup,
@@ -1277,6 +1285,8 @@ fn complete_startup<Program: RuntimeProgram>(
         surface_generation: 0,
         frame_schedules: HashMap::new(),
         window_outputs: HashMap::new(),
+        producer_frames: production::WindowProducerCache::default(),
+        direct_output_traces: HashMap::new(),
         texture_subscriptions: HashMap::new(),
         texture_redraws: Arc::new(Mutex::new(HashSet::new())),
         image_targets: Arc::new(Mutex::new(HashMap::new())),
@@ -1304,6 +1314,8 @@ fn complete_startup<Program: RuntimeProgram>(
         live_frame_move: None,
         #[cfg(target_os = "macos")]
         present_transaction_pinned: HashSet::new(),
+        #[cfg(target_os = "macos")]
+        live_resize_commit: HashMap::new(),
         startup: host_startup,
         input_generations: HashMap::from([(WindowId::PRIMARY, 1)]),
         clipboard: host_services::process_clipboard(),
@@ -2595,13 +2607,18 @@ fn window_geometry(window: &dyn winit::window::Window) -> WindowGeometry {
     }
 }
 
-/// macOS 的 winit `is_maximized` 底层是 `is_zoomed`:窗口 mask 为 borderless(进入
-/// 全屏后)时它靠临时改回 Titled|Resizable 再回滚来查询,查询本身会触发 resize 事件,
-/// 在 resize 事件处理路径中调用就形成死循环。全屏(原生或 simple)语义上不
-/// maximized,直接短路;`simple_fullscreen()` 是纯状态读,无副作用。
+/// AppKit state reads must not change native styles: winit's `is_maximized`
+/// temporarily makes borderless/fixed-size windows titled and resizable,
+/// generating more move/resize events while handling those same events.
+/// Keep fullscreen out of persisted maximized state and read windowed zoom
+/// directly, so ordinary windows still persist their actual maximized state.
 #[cfg(target_os = "macos")]
 fn geometry_maximized(window: &dyn winit::window::Window) -> bool {
-    !(window.fullscreen().is_some() || WindowExtMacOS::simple_fullscreen(window))
+    if window.fullscreen().is_some() || WindowExtMacOS::simple_fullscreen(window) {
+        false
+    } else {
+        nana_window::native_window_maximized(window).unwrap_or(false)
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -2707,6 +2724,7 @@ fn platform_composition(ime: &winit::event::Ime) -> CompositionInput {
     match ime {
         winit::event::Ime::Enabled => CompositionInput::Enabled,
         winit::event::Ime::Disabled => CompositionInput::Disabled,
+        winit::event::Ime::Preedit(text, _) if text.is_empty() => CompositionInput::End,
         winit::event::Ime::Preedit(text, selection) => CompositionInput::Update {
             text: text.clone(),
             selection: *selection,

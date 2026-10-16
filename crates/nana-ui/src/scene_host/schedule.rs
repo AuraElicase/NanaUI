@@ -189,7 +189,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.drain_host_work(event_loop);
         }
         #[cfg(target_os = "macos")]
-        self.unpin_idle_present_transactions();
+        {
+            self.unpin_idle_present_transactions();
+            self.commit_finished_live_resizes(event_loop);
+        }
         let surface_retry_due = self
             .window_contexts
             .values()

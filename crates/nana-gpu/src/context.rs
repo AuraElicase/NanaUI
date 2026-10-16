@@ -643,7 +643,15 @@ impl GpuContext {
                 }
             }
         };
-        self.make_frame(label, id, slot)
+        self.make_frame(
+            label,
+            id,
+            slot,
+            crate::FrameAcquisition {
+                frame_slot_waits: u64::from(waited),
+                frame_slot_stalls: u64::from(slot.is_none()),
+            },
+        )
     }
 
     /// Start a frame without waiting for an in-flight slot. Hosts that have
@@ -652,7 +660,7 @@ impl GpuContext {
     pub fn try_begin_frame(&self, label: &'static str) -> Option<FrameContext> {
         let id = FrameId::new(self.inner.next_frame.fetch_add(1, Ordering::Relaxed));
         let slot = self.inner.policy.take_frame_slot(id.get()).ok()?;
-        Some(self.make_frame(label, id, Some(slot)))
+        Some(self.make_frame(label, id, Some(slot), crate::FrameAcquisition::default()))
     }
 
     /// Run `callback` after work submitted through this queue has completed.
@@ -686,12 +694,13 @@ impl GpuContext {
         label: &'static str,
         id: FrameId,
         frame_slot: Option<crate::FrameSlotId>,
+        acquisition: crate::FrameAcquisition,
     ) -> FrameContext {
         let encoder = self
             .inner
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
-        FrameContext::new(self.clone(), id, encoder, frame_slot)
+        FrameContext::new(self.clone(), id, encoder, frame_slot, acquisition)
     }
 
     /// What WGPU will allow for `format`, chosen the way WGPU validates it:

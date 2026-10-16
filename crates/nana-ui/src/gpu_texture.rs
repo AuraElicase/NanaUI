@@ -376,7 +376,16 @@ struct HostTextureState {
     id: u64,
     instance_identity: u64,
     version: AtomicU64,
-    texture: VersionedResource<GpuTexture>,
+    texture: VersionedResource<HostTextureResource>,
+}
+
+pub(crate) type HostTextureLifetime = Arc<dyn std::fmt::Debug + Send + Sync>;
+
+#[derive(Debug, Clone)]
+struct HostTextureResource {
+    texture: GpuTexture,
+    lifetime: Option<HostTextureLifetime>,
+    provenance: Option<crate::output::OutputProvenance>,
 }
 
 #[derive(Debug)]
@@ -385,6 +394,7 @@ struct HostTextureSnapshot {
     generation: u64,
     instance_identity: u64,
     view: wgpu::TextureView,
+    lifetime: Option<HostTextureLifetime>,
 }
 
 #[derive(Debug)]
@@ -444,7 +454,14 @@ impl HostTexture {
                 id,
                 instance_identity: next_host_texture_instance_id(),
                 version: AtomicU64::new(generation),
-                texture: VersionedResource::new(generation, texture.clone()),
+                texture: VersionedResource::new(
+                    generation,
+                    HostTextureResource {
+                        texture: texture.clone(),
+                        lifetime: None,
+                        provenance: None,
+                    },
+                ),
             }),
         }
     }
@@ -475,6 +492,7 @@ impl HostTexture {
             .read()
             .expect("versioned resource lock")
             .resource
+            .texture
             .generation()
     }
 
@@ -494,8 +512,65 @@ impl HostTexture {
     /// The stable handle is intentionally retained so the Scene painter
     /// observes the replacement without rebuilding layout.
     pub fn replace_texture(&self, texture: &GpuTexture) -> u64 {
-        self.state.texture.replace(texture.clone());
+        self.state.texture.replace(HostTextureResource {
+            texture: texture.clone(),
+            lifetime: None,
+            provenance: None,
+        });
         self.invalidate()
+    }
+
+    /// Atomically replace both a producer resource and the lease that prevents
+    /// its storage being recycled. Registry clones retain this same ownership.
+    pub(crate) fn replace_retained_texture(
+        &self,
+        texture: &GpuTexture,
+        lifetime: HostTextureLifetime,
+        provenance: crate::output::OutputProvenance,
+    ) -> u64 {
+        self.state.texture.replace(HostTextureResource {
+            texture: texture.clone(),
+            lifetime: Some(lifetime),
+            provenance: Some(provenance),
+        });
+        self.invalidate()
+    }
+
+    pub(crate) fn new_retained(
+        id: u64,
+        generation: u64,
+        texture: &GpuTexture,
+        lifetime: HostTextureLifetime,
+        provenance: crate::output::OutputProvenance,
+    ) -> Self {
+        let handle = Self::new(id, generation, texture);
+        {
+            let mut state = handle
+                .state
+                .texture
+                .state
+                .write()
+                .expect("versioned resource lock");
+            state.resource.lifetime = Some(lifetime);
+            state.resource.provenance = Some(provenance);
+        }
+        handle
+    }
+
+    fn frozen_output_resource(&self) -> (Self, Option<crate::output::OutputProvenance>) {
+        let (generation, resource) = self.state.texture.snapshot();
+        let provenance = resource.provenance.clone();
+        (
+            Self {
+                state: Arc::new(HostTextureState {
+                    id: self.state.id,
+                    instance_identity: self.state.instance_identity,
+                    version: AtomicU64::new(self.version()),
+                    texture: VersionedResource::new(generation, resource),
+                }),
+            },
+            provenance,
+        )
     }
 
     fn snapshot(&self) -> HostTextureSnapshot {
@@ -504,7 +579,8 @@ impl HostTexture {
             id: self.id(),
             generation,
             instance_identity: self.state.instance_identity,
-            view: __framework::texture_view(&texture).clone(),
+            view: __framework::texture_view(&texture.texture).clone(),
+            lifetime: texture.lifetime,
         }
     }
 
@@ -821,6 +897,81 @@ impl HostTextureRegistry {
             .and_then(|bindings| bindings.get(slot).map(|entry| entry.binding.clone()))
     }
 
+    /// Refresh a retained attachment only while this exact handle still owns
+    /// its slot. Replacing an owner and refreshing its version are serialized
+    /// by the same lock; a withdrawn/replaced attachment cannot be revived.
+    pub(crate) fn register_if_instance(
+        &self,
+        slot: &str,
+        texture: HostTexture,
+        width: u32,
+        height: u32,
+        alpha_mode: HostTextureAlphaMode,
+    ) -> bool {
+        let mut bindings = self.bindings.write().expect("host texture registry");
+        let Some(current) = bindings.get(slot) else {
+            return false;
+        };
+        if current.binding.texture.instance_identity() != texture.instance_identity() {
+            return false;
+        }
+        let binding = HostTextureBinding {
+            slot: slot.to_owned(),
+            texture,
+            width: width.max(1),
+            height: height.max(1),
+            alpha_mode,
+        };
+        if current.matches(&binding) {
+            return true;
+        }
+        bindings.insert(slot.to_owned(), RegisteredHostTextureBinding::new(binding));
+        self.revision.fetch_add(1, Ordering::AcqRel);
+        drop(bindings);
+        self.notify(slot);
+        true
+    }
+
+    /// Freeze only resources referenced by this output's Scene. The painter
+    /// uses these exact views/leases, so a concurrent producer replacement
+    /// cannot change the ancestry after validation. Painted demand and its
+    /// observers remain attached to the original registry.
+    pub(crate) fn snapshot_output_bindings<'a>(
+        &self,
+        slots: impl Iterator<Item = &'a str>,
+    ) -> (Self, Vec<crate::output::OutputProvenance>) {
+        let bindings = self.bindings.read().expect("host texture registry");
+        let mut frozen = HashMap::new();
+        let mut provenance = Vec::new();
+        for slot in slots {
+            if frozen.contains_key(slot) {
+                continue;
+            }
+            let Some(entry) = bindings.get(slot) else {
+                continue;
+            };
+            let mut entry = entry.clone();
+            let (texture, dependency) = entry.binding.texture.frozen_output_resource();
+            entry.binding.texture = texture;
+            entry.generation = entry.binding.texture.generation();
+            entry.version = entry.binding.texture.version();
+            if let Some(dependency) = dependency {
+                provenance.push(dependency);
+            }
+            frozen.insert(slot.to_owned(), entry);
+        }
+        (
+            Self {
+                bindings: Arc::new(RwLock::new(frozen)),
+                painted: Arc::clone(&self.painted),
+                revision: Arc::new(AtomicU64::new(self.revision.load(Ordering::Acquire))),
+                observers: Arc::clone(&self.observers),
+                painted_observers: Arc::clone(&self.painted_observers),
+            },
+            provenance,
+        )
+    }
+
     pub fn remove(&self, slot: &str) -> Option<HostTextureBinding> {
         // 连同绘制需求一起丢掉:slot 被重新登记时,在它第一次被画之前读到
         // 旧尺寸比读到 `None` 更难排查。
@@ -838,6 +989,32 @@ impl HostTextureRegistry {
             self.notify(slot);
         }
         removed
+    }
+
+    /// Revoke an attachment only while this exact shared handle owns its slot.
+    /// Identity checking and removal share one write lock, so a concurrent
+    /// replacement cannot be mistaken for the attachment being detached.
+    pub(crate) fn remove_if_instance(
+        &self,
+        slot: &str,
+        instance: u64,
+    ) -> Option<HostTextureBinding> {
+        let removed = {
+            let mut bindings = self.bindings.write().ok()?;
+            if bindings.get(slot)?.binding.texture.instance_identity() != instance {
+                return None;
+            }
+            let removed = bindings.remove(slot)?.binding;
+            // Prevent a new owner registering between removal and clearing
+            // its predecessor's painted demand. No callbacks run under locks.
+            if let Ok(mut painted) = self.painted.write() {
+                painted.remove(slot);
+            }
+            self.revision.fetch_add(1, Ordering::AcqRel);
+            removed
+        };
+        self.notify(slot);
+        Some(removed)
     }
 
     /// Marks a slot's content as changed while retaining its texture view.
@@ -874,6 +1051,29 @@ impl HostTextureRegistry {
 
     pub fn revision(&self) -> u64 {
         self.revision.load(Ordering::Acquire)
+    }
+
+    /// Identity of only the bindings this presentation can sample. Include
+    /// missing slots so adding a previously unresolved texture invalidates it;
+    /// unrelated producers sharing this registry must leave static output idle.
+    pub(crate) fn output_revision<'a>(&self, slots: impl Iterator<Item = &'a str>) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let bindings = self.bindings.read().expect("host texture registry");
+        let mut revision = std::collections::hash_map::DefaultHasher::new();
+        for slot in slots {
+            slot.hash(&mut revision);
+            let binding = bindings.get(slot).map(|entry| &entry.binding);
+            binding.is_some().hash(&mut revision);
+            if let Some(binding) = binding {
+                binding.texture.instance_identity().hash(&mut revision);
+                binding.texture.generation().hash(&mut revision);
+                binding.texture.version().hash(&mut revision);
+                binding.width.hash(&mut revision);
+                binding.height.hash(&mut revision);
+                binding.alpha_mode.as_str().hash(&mut revision);
+            }
+        }
+        revision.finish()
     }
 
     pub fn len(&self) -> usize {
@@ -1151,6 +1351,7 @@ impl GpuTexturePrimitive {
                     mask_url,
                     sampling: self.layer.sampling,
                     used: true,
+                    lifetime: texture.lifetime,
                 },
             );
         } else if let Some(prepared) = pipeline.textures.get_mut(&key) {
@@ -1246,6 +1447,16 @@ pub struct GpuTexturePipeline {
 }
 
 impl GpuTexturePipeline {
+    /// Pin the exact revisions cached in the bind groups until this frame
+    /// completes. This also covers cached paints with no new preparation.
+    pub(crate) fn keep_alive_until_complete(&self, frame: &mut nana_gpu::FrameContext) {
+        for prepared in self.textures.values() {
+            if let Some(lifetime) = &prepared.lifetime {
+                frame.keep_alive_until_complete(Arc::clone(lifetime));
+            }
+        }
+    }
+
     pub(crate) fn invalidate_image_bindings(&mut self) {
         self.textures.clear();
     }
@@ -1457,6 +1668,7 @@ struct PreparedTexture {
     mask_url: Option<String>,
     sampling: nana_ui_core::ImageSampling,
     used: bool,
+    lifetime: Option<HostTextureLifetime>,
 }
 
 impl PreparedTexture {

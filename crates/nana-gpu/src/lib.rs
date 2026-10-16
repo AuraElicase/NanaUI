@@ -49,7 +49,7 @@ pub use context::{
     GpuDeviceLost, GpuDeviceType, GpuFeatureSet, GpuLimits, GpuLossReason,
 };
 pub use error::GpuError;
-pub use frame::{FrameContext, FrameId, GpuSubmission, RetainedWrites};
+pub use frame::{FrameAcquisition, FrameContext, FrameId, GpuSubmission, RetainedWrites};
 pub use policy::{FrameSlotId, GpuDeviceState, GpuPolicyStats, PipelineKey, TransientResourceKey};
 pub use realization::{GpuBuffer, GpuBufferDescriptor, GpuBufferUsages, GpuSampler};
 pub use realization::{GpuResourceGroup, GpuResourceLayout};
@@ -64,5 +64,6 @@ pub use wgpu_interop::{WgpuInterop, wgpu};
 #[cfg(all(windows, feature = "native-export"))]
 pub use export::{
     NATIVE_EXPORT_FORMAT, NATIVE_EXPORT_SLOTS, NativeExportDeferral, NativeExportError,
-    NativeExportOutcome, NativeExportPool, NativeFrameToken, StagedNativeFrame,
+    NativeExportOutcome, NativeExportPool, NativeExportRetirement, NativeFrameToken,
+    StagedNativeFrame,
 };

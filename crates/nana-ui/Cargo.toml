@@ -130,6 +130,7 @@ windows = { version = "0.62", features = [
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
+    "Win32_System_LibraryLoader",
 ] }
 
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
@@ -208,6 +209,23 @@ required-features = ["hosted", "bundled-fonts"]
 [[example]]
 name = "window-output-probe"
 required-features = ["hosted", "bundled-fonts", "native-export"]
+
+[[example]]
+name = "presentation-output-probe"
+required-features = ["hosted", "bundled-fonts"]
+
+[[example]]
+name = "openvr-output-probe"
+required-features = ["gpu", "bundled-fonts", "native-export", "wgpu-interop"]
+
+[[example]]
+name = "web-output-producer"
+required-features = ["gpu", "bundled-fonts", "native-export", "wgpu-interop"]
+
+[[bin]]
+name = "nana-output-benchmark"
+path = "src/bin/nana-output-benchmark.rs"
+required-features = ["gpu"]
 
 [[example]]
 name = "native-content-probe"

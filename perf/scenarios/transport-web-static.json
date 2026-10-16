@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "id": "transport-web-static",
+  "kind": "OutputTransport",
+  "params": {
+    "workload": "web-static",
+    "frames": 240
+  },
+  "record": [
+    "producer_work",
+    "consumer_work",
+    "proof",
+    "evidence"
+  ],
+  "invariants": [
+    {
+      "name": "web_static_producer_work_content_revisions",
+      "path": "producer_work.content_revisions",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_cpu_readbacks",
+      "path": "producer_work.cpu_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_deferred",
+      "path": "producer_work.deferred",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_extra_passes",
+      "path": "producer_work.extra_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_gpu_convert_passes",
+      "path": "producer_work.gpu_convert_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_gpu_copies",
+      "path": "producer_work.gpu_copies",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_gpu_copy_bytes",
+      "path": "producer_work.gpu_copy_bytes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_idle_reuse_frames",
+      "path": "producer_work.idle_reuse_frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_plan_rebuilds",
+      "path": "producer_work.plan_rebuilds",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_resolve_count",
+      "path": "producer_work.resolve_count",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_submissions",
+      "path": "producer_work.submissions",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_target_recreates",
+      "path": "producer_work.target_recreates",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_work_ui_renders",
+      "path": "producer_work.ui_renders",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_content_revisions",
+      "path": "consumer_work.content_revisions",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_cpu_readbacks",
+      "path": "consumer_work.cpu_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_deferred",
+      "path": "consumer_work.deferred",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_extra_passes",
+      "path": "consumer_work.extra_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_gpu_convert_passes",
+      "path": "consumer_work.gpu_convert_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_gpu_copies",
+      "path": "consumer_work.gpu_copies",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_gpu_copy_bytes",
+      "path": "consumer_work.gpu_copy_bytes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_idle_reuse_frames",
+      "path": "consumer_work.idle_reuse_frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_plan_rebuilds",
+      "path": "consumer_work.plan_rebuilds",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_resolve_count",
+      "path": "consumer_work.resolve_count",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_submissions",
+      "path": "consumer_work.submissions",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_target_recreates",
+      "path": "consumer_work.target_recreates",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_consumer_work_ui_renders",
+      "path": "consumer_work.ui_renders",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_proof_attempts",
+      "path": "proof.attempts",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_proof_consumers",
+      "path": "proof.consumers",
+      "op": "eq",
+      "value": 1,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_proof_foreign_submissions",
+      "path": "proof.foreign_submissions",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_proof_deferred_attempts",
+      "path": "proof.deferred_attempts",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_proof_recovered_after_release",
+      "path": "proof.recovered_after_release",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_proof_independent_target_slots",
+      "path": "proof.independent_target_slots",
+      "op": "eq",
+      "value": 2,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_proof_scene_primitives",
+      "path": "proof.scene_primitives",
+      "op": "gte",
+      "value": 1,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_platform_conformance",
+      "path": "platform_conformance",
+      "op": "eq",
+      "value": false,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_samples",
+      "path": "measurement_gpu_policy.samples",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_frame_slot_waits",
+      "path": "measurement_gpu_policy.frame_slot_waits",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_frame_slot_stalls",
+      "path": "measurement_gpu_policy.frame_slot_stalls",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_upload_ring_waits",
+      "path": "measurement_gpu_policy.upload_ring_waits",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_upload_bytes",
+      "path": "measurement_gpu_policy.upload_bytes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_upload_writes",
+      "path": "measurement_gpu_policy.upload_writes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_upload_copies",
+      "path": "measurement_gpu_policy.upload_copies",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_measurement_gpu_policy_buffer_reallocations",
+      "path": "measurement_gpu_policy.buffer_reallocations",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_painter_encoded_frames",
+      "path": "producer_painter.encoded_frames",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_static_producer_painter_skipped_frames",
+      "path": "producer_painter.skipped_frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    }
+  ],
+  "notes": "Portable transfer fixtures explicitly mock only foreign retirement; native-host/OpenVR/Electron scenarios require their actual platform reference reports and remain unavailable where not executed."
+}

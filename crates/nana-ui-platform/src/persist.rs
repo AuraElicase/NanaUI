@@ -466,6 +466,7 @@ impl PersistedWindowGeometry {
     }
 
     pub fn apply(&self, settings: &mut crate::WindowDescriptor) {
+        let defaults = Self::from_descriptor(settings);
         if self.width.is_finite()
             && self.height.is_finite()
             && self.width > 0.0
@@ -476,7 +477,10 @@ impl PersistedWindowGeometry {
         if self.x.is_finite() && self.y.is_finite() {
             settings.initial_position = Some((self.x, self.y));
         }
-        settings.maximized = self.maximized;
+        // maximized on the descriptor's own frame was never a live zoom.
+        settings.maximized = self.maximized
+            && (self.x, self.y, self.width, self.height)
+                != (defaults.x, defaults.y, defaults.width, defaults.height);
     }
 
     pub fn load(store: &ViewStateStore, key: &str) -> Result<Option<Self>, StoreError> {
@@ -766,6 +770,26 @@ mod tests {
         assert_eq!(restored.initial_size, (800.0, 600.0));
         assert_eq!(restored.initial_position, Some((10.0, 20.0)));
         assert!(restored.maximized);
+    }
+
+    #[test]
+    fn maximized_on_the_descriptor_frame_is_not_a_zoom() {
+        let backend = nana_ui_core::memory_store();
+        let store = ViewStateStore::new(backend.clone(), nana_ui_core::RestorationPath::root());
+        let mut settings = crate::WindowDescriptor::new("nana");
+        settings.persist_key = Some("main".into());
+        settings.initial_size = (1280.0, 800.0);
+        let mut poisoned = PersistedWindowGeometry::from_descriptor(&settings);
+        poisoned.maximized = true;
+        poisoned.save(&store, "main").unwrap();
+
+        let mut restored = crate::WindowDescriptor::new("nana");
+        restored.persist_key = Some("main".into());
+        restored.initial_size = (1280.0, 800.0);
+        restore_window_geometry(&mut restored, &store);
+        assert_eq!(restored.initial_size, (1280.0, 800.0));
+        assert_eq!(restored.initial_position, Some((0.0, 0.0)));
+        assert!(!restored.maximized);
     }
 
     #[test]

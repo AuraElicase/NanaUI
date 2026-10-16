@@ -4,13 +4,81 @@ use super::*;
 use nana_diagnostics::{framework::window as diagnostics_window, metric};
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-fn uses_host_managed_drag(settings: &WindowDescriptor, button: i16) -> bool {
-    settings.host_managed_drag || button != PRIMARY_MOUSE_BUTTON
+fn uses_host_managed_drag(settings: &WindowDescriptor, button: i16, has_underlay: bool) -> bool {
+    settings.host_managed_drag
+        || button != PRIMARY_MOUSE_BUTTON
+        || (cfg!(target_os = "macos") && has_underlay)
 }
 
 /// The content aspect ratio of a checked descriptor, for [`LiveSizeMove`].
 pub(super) fn content_aspect_ratio(settings: &WindowDescriptor) -> Option<f64> {
     settings.content_aspect_ratio.map(f64::from)
+}
+
+/// Gap between full surface commits while a live-resize gesture is moving
+/// the frame. One display frame: intermediate steps keep the last drawable
+/// (AppKit may scale it) instead of reconfiguring and laying out every pixel.
+pub(super) const LIVE_RESIZE_COMMIT_INTERVAL: Duration = Duration::from_millis(16);
+
+/// What one live-resize step should do with the surface and the document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LiveResizeStep {
+    /// Forward the resize and present at the current size.
+    Commit,
+    /// Keep the last drawable and the last layout.
+    Defer,
+}
+
+/// Coalesces live-resize steps to [`LIVE_RESIZE_COMMIT_INTERVAL`].
+///
+/// The interval starts when a frame is actually presented, not when the step
+/// is chosen. A commit runs synchronously inside AppKit's tracking loop, so
+/// stamping the decision would make the next step look overdue the moment
+/// that commit returned.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct LiveResizeCoalescer {
+    presented_at: Option<Instant>,
+    deferred: bool,
+}
+
+impl LiveResizeCoalescer {
+    pub(super) const fn new() -> Self {
+        Self {
+            presented_at: None,
+            deferred: false,
+        }
+    }
+
+    pub(super) fn on_step(self, now: Instant) -> (Self, LiveResizeStep) {
+        if live_resize_commit_due(self.presented_at, now) {
+            (self, LiveResizeStep::Commit)
+        } else {
+            (
+                Self {
+                    presented_at: self.presented_at,
+                    deferred: true,
+                },
+                LiveResizeStep::Defer,
+            )
+        }
+    }
+
+    /// A frame was presented; the next interval starts now.
+    pub(super) fn on_presented(self, now: Instant) -> Self {
+        Self {
+            presented_at: Some(now),
+            deferred: false,
+        }
+    }
+
+    /// `true` when a skipped size still has to be committed.
+    pub(super) fn finish(self) -> bool {
+        self.deferred
+    }
+}
+
+pub(super) fn live_resize_commit_due(presented_at: Option<Instant>, now: Instant) -> bool {
+    presented_at.is_none_or(|at| now.saturating_duration_since(at) >= LIVE_RESIZE_COMMIT_INTERVAL)
 }
 
 /// Advance a native window's input endpoint identity without ever reusing it.
@@ -218,6 +286,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     /// request, material or presentation changes.
     pub(super) fn apply_window_shadow(&mut self, id: WindowId) {
         let held = self.startup_presentation_held(id);
+        #[cfg(target_os = "macos")]
+        let shadow_owner = self
+            .window_contexts
+            .values()
+            .find(|host| host.settings.parent == Some(id) && host.underlay.is_some())
+            .map(|host| Arc::clone(host.surface.window()))
+            .or_else(|| self.window(id).cloned());
         let Some(host) = self.window_contexts.get_mut(&id) else {
             return;
         };
@@ -248,12 +323,20 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             }
         }
         if host.shadow.has_companion() {
+            #[cfg(target_os = "macos")]
+            if let Some(owner) = shadow_owner {
+                host.shadow.set_ordering_parent(owner.as_ref());
+            }
             let visible = !held && window.fullscreen().is_none();
             host.shadow
                 .set_shape(window.as_ref(), crate::window_shadow::shape(body), visible);
         }
         host.presentation
             .record_shadow(crate::window_shadow::outcome(intent, applied));
+        // The picture remains independent of the UI's capture group and
+        // above the shadow, whose native owner is now the picture.
+        #[cfg(target_os = "macos")]
+        self.sync_underlays_of(id);
     }
 
     /// Follow the window's visible body with its shadow companion. The scene
@@ -883,6 +966,15 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         {
             underlay.sync();
         }
+        #[cfg(target_os = "macos")]
+        if let Some(parent) = self
+            .window_contexts
+            .get(&id)
+            .filter(|host| host.underlay.is_some())
+            .and_then(|host| host.settings.parent)
+        {
+            self.apply_window_shadow(parent);
+        }
         window.request_redraw();
         self.prepare_window_chrome(id, geometry.maximized);
         crate::host_diagnostics::window_opened(id, &geometry);
@@ -934,8 +1026,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         self.native_content.remove(&id);
         self.bind_after_present.remove(&id);
         #[cfg(target_os = "macos")]
-        self.present_transaction_pinned.remove(&id);
+        {
+            self.present_transaction_pinned.remove(&id);
+            self.live_resize_commit.remove(&id);
+        }
         self.frame_schedules.remove(&id);
+        self.producer_frames.remove(id);
+        self.direct_output_traces.remove(&id);
         self.close_window_output(id);
         self.texture_subscriptions.remove(&id);
         if let Ok(mut targets) = self.image_targets.lock() {
@@ -983,6 +1080,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 self.focus_window(parent_id);
             }
             self.window_ids.remove(&host.surface.window().id());
+            #[cfg(target_os = "macos")]
+            if let Some(parent) = host.underlay.as_ref().and(host.settings.parent) {
+                self.apply_window_shadow(parent);
+            }
             drop(host);
             nana_diagnostics::event!(nana_diagnostics::framework::window::CLOSED, window = id.0);
             let update = self
@@ -1265,18 +1366,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             minimized,
         );
     }
-    /// Pins transaction presents while the OS's own frame-resize gesture is
-    /// moving the window, and reports whether that gesture is active.
-    #[cfg(target_os = "macos")]
-    pub(super) fn sync_native_live_resize_presents(&mut self, id: WindowId) -> bool {
-        let active = self
-            .window(id)
-            .is_some_and(|window| nana_window::native_live_resize_active(window.as_ref()));
-        if active {
-            self.pin_present_transaction(id);
-        }
-        active
-    }
     #[cfg(target_os = "macos")]
     pub(super) fn pin_present_transaction(&mut self, id: WindowId) {
         if self.present_transaction_pinned.contains(&id) {
@@ -1288,9 +1377,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.present_transaction_pinned.insert(id);
         }
     }
-    /// Releases transaction presents once their resize gesture is over; the
-    /// pinned mode serializes every present with a Core Animation commit and
-    /// costs latency in steady-state frames.
+    /// Releases transaction presents once their resize gesture is over. The
+    /// pinned mode serializes every present with a Core Animation commit.
+    /// Native AppKit live resize does not pin: coalesced frames already
+    /// return to the tracking loop, and a transaction present would wait.
     #[cfg(target_os = "macos")]
     pub(super) fn unpin_idle_present_transactions(&mut self) {
         let pinned: Vec<WindowId> = self.present_transaction_pinned.iter().copied().collect();
@@ -1299,7 +1389,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 self.present_transaction_pinned.remove(&id);
                 continue;
             };
-            if nana_window::native_live_resize_active(window.as_ref()) || self.is_live_resize(id) {
+            if self.is_live_resize(id) {
                 continue;
             }
             nana_window::set_present_transaction(window.as_ref(), false);
@@ -1310,25 +1400,111 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         if self.render_suspended {
             return;
         }
-        let live = self.is_live_resize(id);
+        // Native macOS drags coalesce to the refresh interval and present the
+        // window's real size. They do not take the latency-2 policy: leaving
+        // it would reconfigure the swapchain again when the gesture ends.
+        let live = self.size_move_active(id) || self.custom_frame_resize_active(id);
         if let Some(host) = self.window_contexts.get_mut(&id)
             && host.surface_retry.is_none()
         {
             self.graphics.prepare_surface_frame(&mut host.surface, live);
         }
     }
+    /// Windows size-move, a host-driven frame drag, or AppKit's live-resize
+    /// tracking loop. The native macOS loop does not set [`LiveSizeMove`].
     pub(super) fn is_live_resize(&self, id: WindowId) -> bool {
+        self.size_move_active(id)
+            || self.custom_frame_resize_active(id)
+            || self.native_live_resize_gesture(id)
+    }
+    fn custom_frame_resize_active(&self, id: WindowId) -> bool {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
-            self.size_move_active(id)
-                || self
-                    .live_frame_resize
-                    .as_ref()
-                    .is_some_and(|(session, _)| *session == id)
+            self.live_frame_resize
+                .as_ref()
+                .is_some_and(|(session, _)| *session == id)
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            self.size_move_active(id)
+            let _ = id;
+            false
+        }
+    }
+    #[cfg(target_os = "macos")]
+    pub(super) fn native_live_resize_gesture(&self, id: WindowId) -> bool {
+        self.window(id)
+            .is_some_and(|window| nana_window::native_live_resize_active(window.as_ref()))
+    }
+    #[cfg(not(target_os = "macos"))]
+    pub(super) fn native_live_resize_gesture(&self, id: WindowId) -> bool {
+        let _ = id;
+        false
+    }
+    /// `true` when this native live-resize step should return before layout
+    /// and before configuring the swapchain. The last presented drawable is
+    /// the previous commit's real window size. AppKit may scale it until the
+    /// next commit, which configures the window's real size again.
+    pub(super) fn defer_native_live_resize(&mut self, id: WindowId) -> bool {
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = id;
+            return false;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if !self.native_live_resize_gesture(id) {
+                return false;
+            }
+            let now = Instant::now();
+            let coalescer = self
+                .live_resize_commit
+                .get(&id)
+                .copied()
+                .unwrap_or(LiveResizeCoalescer::new());
+            let (next, step) = coalescer.on_step(now);
+            if step == LiveResizeStep::Defer {
+                self.live_resize_commit.insert(id, next);
+                return true;
+            }
+            false
+        }
+    }
+    /// Starts the coalesce interval from a frame that really presented.
+    pub(super) fn note_native_live_resize_presented(&mut self, id: WindowId) {
+        #[cfg(target_os = "macos")]
+        if self.native_live_resize_gesture(id) {
+            let next = self
+                .live_resize_commit
+                .get(&id)
+                .copied()
+                .unwrap_or(LiveResizeCoalescer::new())
+                .on_presented(Instant::now());
+            self.live_resize_commit.insert(id, next);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = id;
+    }
+    /// After the tracking loop exits, deliver a skipped size at the window's
+    /// real size.
+    #[cfg(target_os = "macos")]
+    pub(super) fn commit_finished_live_resizes(&mut self, event_loop: &dyn ActiveEventLoop) {
+        let ids: Vec<WindowId> = self.live_resize_commit.keys().copied().collect();
+        for id in ids {
+            if self.native_live_resize_gesture(id) {
+                continue;
+            }
+            let Some(coalescer) = self.live_resize_commit.remove(&id) else {
+                continue;
+            };
+            if !coalescer.finish() || !self.window_contexts.contains_key(&id) {
+                continue;
+            }
+            let geometry = self.geometry_of(id);
+            let update = self
+                .program
+                .window_event(WindowEvent::Resized { id, geometry }, &self.context_for(id));
+            self.apply_update(event_loop, update, None);
+            self.request_redraw(id);
         }
     }
     pub(super) fn size_move_active(&self, id: WindowId) -> bool {
@@ -1353,7 +1529,11 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     /// trigger uses to say "move this window with the gesture in flight".
     ///
     /// A gesture held with the primary button keeps the platform's own move
-    /// unless the window asks for `host_managed_drag`: the platform path is
+    /// unless the window asks for `host_managed_drag` or has an independent
+    /// macOS underlay: AppKit's server-driven drag can move the UI ahead of
+    /// its move notifications, leaving that underlay visibly behind. Moving
+    /// both in the host's input turn keeps their geometry together without
+    /// joining the capture attachment group. The platform path is
     /// the only one with edge snapping, and on macOS with Spaces. Any other
     /// button is followed by the host, because the platform drag assumes a
     /// primary press — AppKit ignores a drag whose current event is not one,
@@ -1366,7 +1546,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     ) -> Result<(), winit::error::RequestError> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         if let Some(button) = held_mouse_button(self.input_of(id).buttons)
-            && uses_host_managed_drag(self.settings_of(id), button)
+            && uses_host_managed_drag(
+                self.settings_of(id),
+                button,
+                self.window_contexts
+                    .values()
+                    .any(|host| host.settings.parent == Some(id) && host.underlay.is_some()),
+            )
         {
             // A gesture the host declines — a fullscreen window has nowhere to
             // move to — reports that, rather than falling back to the platform,
@@ -1400,7 +1586,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         if window.fullscreen().is_some() {
             return false;
         }
-        let live = if window.is_maximized() {
+        let live = if geometry_maximized(window.as_ref()) {
             let grab = nana_window::LiveFrameMove::grab(window.as_ref());
             window.set_maximized(false);
             match grab {
@@ -2386,6 +2572,46 @@ mod request_error_tests {
     }
 }
 
+#[cfg(test)]
+mod live_resize_coalesce_tests {
+    use super::*;
+
+    #[test]
+    fn the_first_step_commits_and_the_interval_starts_at_the_present() {
+        let mut clock = Instant::now();
+        let state = LiveResizeCoalescer::new();
+        let (state, step) = state.on_step(clock);
+        assert_eq!(step, LiveResizeStep::Commit);
+        assert!(!state.finish());
+
+        // The commit blocked the tracking loop. Stamp when it presents, not
+        // when it was chosen, or the next step would already look overdue.
+        clock += Duration::from_millis(40);
+        let state = state.on_presented(clock);
+        let (state, step) = state.on_step(clock);
+        assert_eq!(step, LiveResizeStep::Defer);
+        assert!(state.finish());
+
+        let (state, step) = state.on_step(clock + Duration::from_millis(15));
+        assert_eq!(step, LiveResizeStep::Defer);
+        assert!(state.finish());
+
+        let (state, step) = state.on_step(clock + LIVE_RESIZE_COMMIT_INTERVAL);
+        assert_eq!(step, LiveResizeStep::Commit);
+        let state = state.on_presented(clock + LIVE_RESIZE_COMMIT_INTERVAL);
+        assert!(!state.finish());
+    }
+
+    #[test]
+    fn a_gesture_that_only_deferred_still_owes_a_final_commit() {
+        let start = Instant::now();
+        let state = LiveResizeCoalescer::new().on_presented(start);
+        let (state, step) = state.on_step(start + Duration::from_millis(1));
+        assert_eq!(step, LiveResizeStep::Defer);
+        assert!(state.finish());
+    }
+}
+
 #[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
 mod drag_policy_tests {
     use super::*;
@@ -2393,11 +2619,34 @@ mod drag_policy_tests {
     #[test]
     fn host_managed_drag_overrides_the_primary_button_native_default() {
         let native = WindowDescriptor::new("native");
-        assert!(!uses_host_managed_drag(&native, PRIMARY_MOUSE_BUTTON));
-        assert!(uses_host_managed_drag(&native, 1));
+        assert!(!uses_host_managed_drag(
+            &native,
+            PRIMARY_MOUSE_BUTTON,
+            false
+        ));
+        assert!(uses_host_managed_drag(&native, 1, false));
 
         let managed = WindowDescriptor::new("managed").host_managed_drag(true);
-        assert!(uses_host_managed_drag(&managed, PRIMARY_MOUSE_BUTTON));
+        assert!(uses_host_managed_drag(
+            &managed,
+            PRIMARY_MOUSE_BUTTON,
+            false
+        ));
+    }
+
+    #[test]
+    fn independent_underlays_use_the_same_input_turn_for_macos_movement() {
+        let native = WindowDescriptor::new("native");
+        assert_eq!(
+            uses_host_managed_drag(&native, PRIMARY_MOUSE_BUTTON, true),
+            cfg!(target_os = "macos")
+        );
+        // Removing the underlay restores the descriptor's native policy.
+        assert!(!uses_host_managed_drag(
+            &native,
+            PRIMARY_MOUSE_BUTTON,
+            false
+        ));
     }
 }
 

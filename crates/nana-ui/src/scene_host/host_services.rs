@@ -41,6 +41,9 @@ pub(super) struct WindowInputSource {
     pub(super) ime: Option<TextInputContext>,
     /// The native IME session: the state last applied to the window.
     pub(super) applied_ime: Option<TextInputContext>,
+    /// Focus changed since the last native apply. Keep this edge even if
+    /// loss and regain arrive in the same turn with the same editor.
+    ime_reset_pending: bool,
 }
 
 impl WindowInputSource {
@@ -52,21 +55,31 @@ impl WindowInputSource {
             applied_cursor: None,
             ime: None,
             applied_ime: None,
+            ime_reset_pending: false,
         }
     }
 
-    /// The window regained focus. The platform may have dropped the IME
-    /// while it was away, so the state the Runtime sends again on focus is
-    /// applied as a fresh enable, not diffed into an update of a session
-    /// that is gone.
-    pub(super) fn forget_ime(&mut self) {
-        self.applied_ime = None;
+    /// Runtime cancels preedit on window focus loss. The native context
+    /// must cancel it too, rather than resume invisible marked text on
+    /// return. Defer the reset out of the platform's input callbacks.
+    pub(super) fn reset_ime(&mut self) {
+        self.ime_reset_pending = true;
     }
 
     /// What the native IME needs to catch up with the state the Runtime
     /// asked for, recorded as applied. `ImeApply::None` when it already has.
     pub(super) fn take_ime_apply(&mut self) -> ImeApply {
-        let (apply, session) = ime_apply(self.applied_ime.as_ref(), self.ime.as_ref());
+        let reset = std::mem::take(&mut self.ime_reset_pending);
+        let (mut apply, session) = ime_apply(self.applied_ime.as_ref(), self.ime.as_ref());
+        if reset
+            && !matches!(apply, ImeApply::Replace { .. })
+            && let Some(session) = &session
+        {
+            apply = ImeApply::Reset {
+                capabilities: ime_capabilities(session),
+                data: ime_request_data(session),
+            };
+        }
         self.applied_ime = session;
         apply
     }
@@ -181,6 +194,10 @@ pub(super) enum ImeApply {
         capabilities: ImeCapabilities,
         data: ImeRequestData,
     },
+    Reset {
+        capabilities: ImeCapabilities,
+        data: ImeRequestData,
+    },
     Update(ImeRequestData),
 }
 
@@ -272,30 +289,58 @@ fn enable_ime(
     window: &dyn winit::window::Window,
     capabilities: ImeCapabilities,
     data: ImeRequestData,
-) {
+) -> Result<(), String> {
     let Some(enable) = ImeEnableRequest::new(capabilities, data.clone()) else {
-        return;
+        return Err("IME capabilities do not match initial request data".into());
     };
-    if window.request_ime_update(ImeRequest::Enable(enable)) == Err(ImeRequestError::AlreadyEnabled)
-    {
-        let _ = window.request_ime_update(ImeRequest::Update(data));
+    match window.request_ime_update(ImeRequest::Enable(enable)) {
+        Err(ImeRequestError::AlreadyEnabled) => window.request_ime_update(ImeRequest::Update(data)),
+        result => result,
     }
+    .map_err(|error| error.to_string())
 }
 
-pub(super) fn apply_text_input(window: &dyn winit::window::Window, apply: ImeApply) {
+pub(super) fn apply_text_input(
+    window: &dyn winit::window::Window,
+    apply: ImeApply,
+) -> Result<(), String> {
     match apply {
-        ImeApply::None => {}
+        ImeApply::None => Ok(()),
         ImeApply::Disable => {
-            let _ = window.request_ime_update(ImeRequest::Disable);
+            nana_window::discard_native_ime_preedit(window);
+            window
+                .request_ime_update(ImeRequest::Disable)
+                .map_err(|error| error.to_string())
         }
         ImeApply::Enable { capabilities, data } => enable_ime(window, capabilities, data),
         ImeApply::Replace { capabilities, data } => {
-            let _ = window.request_ime_update(ImeRequest::Disable);
-            enable_ime(window, capabilities, data);
+            nana_window::discard_native_ime_preedit(window);
+            window
+                .request_ime_update(ImeRequest::Disable)
+                .map_err(|error| error.to_string())?;
+            enable_ime(window, capabilities, data)
         }
-        ImeApply::Update(data) => {
-            let _ = window.request_ime_update(ImeRequest::Update(data));
+        ImeApply::Reset { capabilities, data } => {
+            nana_window::discard_native_ime_preedit(window);
+            // unmarkText cancels AppKit's composition without changing its
+            // declared capabilities. Keep a matching session; other
+            // platforms cancel through Disable.
+            #[cfg(target_os = "macos")]
+            let disable = window
+                .ime_capabilities()
+                .is_some_and(|active| active != capabilities);
+            #[cfg(not(target_os = "macos"))]
+            let disable = true;
+            if disable {
+                window
+                    .request_ime_update(ImeRequest::Disable)
+                    .map_err(|error| error.to_string())?;
+            }
+            enable_ime(window, capabilities, data)
         }
+        ImeApply::Update(data) => window
+            .request_ime_update(ImeRequest::Update(data))
+            .map_err(|error| error.to_string()),
     }
 }
 
@@ -392,12 +437,114 @@ mod tests {
     }
 
     #[test]
-    fn regaining_focus_enables_the_ime_afresh() {
+    fn focus_changes_cancel_the_native_session_even_for_the_same_editor() {
         let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
         source.ime = Some(state(true, true));
         assert!(matches!(source.take_ime_apply(), ImeApply::Enable { .. }));
-        source.forget_ime();
-        assert!(matches!(source.take_ime_apply(), ImeApply::Enable { .. }));
+        source.reset_ime();
+        // Losing and regaining focus before about_to_wait must not erase
+        // the cancellation, even though the requested editor is unchanged.
+        source.reset_ime();
+        assert!(matches!(source.take_ime_apply(), ImeApply::Reset { .. }));
+        assert_eq!(source.take_ime_apply(), ImeApply::None);
+    }
+
+    #[test]
+    fn a_focus_reset_without_an_editor_does_not_enable_ime() {
+        let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
+        source.ime = Some(state(true, true));
+        source.take_ime_apply();
+        source.reset_ime();
+        source.ime = None;
+        assert_eq!(source.take_ime_apply(), ImeApply::Disable);
+        assert_eq!(source.take_ime_apply(), ImeApply::None);
+    }
+
+    #[test]
+    fn resetting_one_window_leaves_the_other_composition_session_alone() {
+        let mut first = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
+        let mut other = WindowInputSource::new(InputSourceId(2), EndpointGeneration(1));
+        for source in [&mut first, &mut other] {
+            source.ime = Some(state(true, true));
+            source.take_ime_apply();
+        }
+        first.reset_ime();
+        assert!(matches!(first.take_ime_apply(), ImeApply::Reset { .. }));
+        assert_eq!(other.take_ime_apply(), ImeApply::None);
+    }
+
+    #[test]
+    fn a_focus_reset_still_replaces_a_changed_editor() {
+        let mut source = WindowInputSource::new(InputSourceId(1), EndpointGeneration(1));
+        source.ime = Some(state(true, true));
+        source.take_ime_apply();
+        source.reset_ime();
+        source.ime.as_mut().unwrap().owner = 2;
+        assert!(matches!(source.take_ime_apply(), ImeApply::Replace { .. }));
+    }
+
+    #[test]
+    fn native_unmark_after_window_regain_does_not_start_an_empty_composition() {
+        use nana_ui_platform::{InputModifiers, InputPayload, KeyInput, KeyState};
+        use nana_ui_runtime::{AppContext, DocumentId, HeadlessInput, TextInput};
+
+        let mut context = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let editor = context
+            .create_component(document, TextInput::new("ce"))
+            .unwrap();
+        context.focus_node(document, editor.stable_id()).unwrap();
+        let mut input = HeadlessInput::bind(&mut context, document);
+        input
+            .route(&mut context, InputPayload::Focus { focused: true })
+            .unwrap();
+        input
+            .composition(
+                &mut context,
+                super::super::platform_composition(&winit::event::Ime::Preedit(
+                    "ha".into(),
+                    Some((2, 2)),
+                )),
+            )
+            .unwrap();
+        input
+            .route(&mut context, InputPayload::Focus { focused: false })
+            .unwrap();
+        input
+            .route(&mut context, InputPayload::Focus { focused: true })
+            .unwrap();
+        // AppKit unmarkText queues this after the focus event. It cancels
+        // the native conversion; it must not re-enter Runtime composition.
+        input
+            .composition(
+                &mut context,
+                super::super::platform_composition(&winit::event::Ime::Preedit(
+                    String::new(),
+                    None,
+                )),
+            )
+            .unwrap();
+        assert!(context.world().ime(editor.stable_id()).is_none());
+        let select_all = KeyInput::named(
+            "KeyA",
+            "a",
+            KeyState::Pressed,
+            InputModifiers {
+                meta: cfg!(target_os = "macos"),
+                control: !cfg!(target_os = "macos"),
+                ..InputModifiers::default()
+            },
+        );
+        input
+            .press(&mut context, select_all.clone(), Some("a"), None)
+            .unwrap();
+        // Cancel restores the original selection. Repeating Select All is
+        // a no-op, but its native key text must still not insert an 'a'.
+        input
+            .press(&mut context, select_all, Some("a"), None)
+            .unwrap();
+        input.text(&mut context, "好").unwrap();
+        assert_eq!(context.world().text(editor.stable_id()), Some("好"));
     }
 
     #[test]

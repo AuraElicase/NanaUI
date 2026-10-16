@@ -368,6 +368,11 @@ pub struct WorkCounters {
     pub output_resolve_count: Option<usize>,
     pub output_gpu_copy_bytes: Option<usize>,
     pub output_gpu_convert_passes: Option<usize>,
+    pub output_plan_rebuilds: Option<usize>,
+    pub output_ui_renders: Option<usize>,
+    pub output_submissions: Option<usize>,
+    pub output_cpu_readbacks: Option<usize>,
+    pub output_deferred: Option<usize>,
 }
 
 /// What localization cost (Issues #268, #269, #270). Work counters add up;
@@ -560,9 +565,32 @@ pub struct OutputWorkObservation {
     pub resolve_count: usize,
     pub gpu_copy_bytes: usize,
     pub gpu_convert_passes: usize,
+    pub plan_rebuilds: usize,
+    pub ui_renders: usize,
+    pub submissions: usize,
+    pub cpu_readbacks: usize,
+    pub deferred: usize,
 }
 
 impl OutputWorkObservation {
+    pub fn accumulate(&mut self, other: Self) {
+        macro_rules! add { ($($field:ident),* $(,)?) => { $(self.$field = self.$field.saturating_add(other.$field);)* }; }
+        add!(
+            extra_passes,
+            gpu_copies,
+            target_recreates,
+            content_revisions,
+            idle_reuse_frames,
+            resolve_count,
+            gpu_copy_bytes,
+            gpu_convert_passes,
+            plan_rebuilds,
+            ui_renders,
+            submissions,
+            cpu_readbacks,
+            deferred
+        );
+    }
     pub fn record_target_recreate(&mut self) {
         self.target_recreates = self.target_recreates.saturating_add(1);
     }
@@ -633,7 +661,8 @@ accumulate_counters! {
             validation_nodes_scanned, hit_test_nodes_rebuilt, output_extra_passes,
             output_gpu_copies, output_target_recreates, output_content_revisions,
             output_idle_reuse_frames, output_resolve_count, output_gpu_copy_bytes,
-            output_gpu_convert_passes;
+            output_gpu_convert_passes, output_plan_rebuilds, output_ui_renders,
+            output_submissions, output_cpu_readbacks, output_deferred;
     }
 }
 
@@ -1004,6 +1033,11 @@ impl WorkCounters {
             *slot = Some(slot.unwrap_or(0).saturating_add(value));
         };
         record(&mut self.output_extra_passes, observed.extra_passes);
+        record(&mut self.output_plan_rebuilds, observed.plan_rebuilds);
+        record(&mut self.output_ui_renders, observed.ui_renders);
+        record(&mut self.output_submissions, observed.submissions);
+        record(&mut self.output_cpu_readbacks, observed.cpu_readbacks);
+        record(&mut self.output_deferred, observed.deferred);
         record(&mut self.output_gpu_copies, observed.gpu_copies);
         record(&mut self.output_target_recreates, observed.target_recreates);
         record(

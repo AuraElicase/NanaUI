@@ -48,6 +48,8 @@ KIND_PARAM_KEYS: dict[str, tuple[str, ...]] = {
     # publishes to the OS compositor for a window whose scene is standing
     # still. Only real target hardware can answer it.
     "WindowsComposition": ("target", "workload"),
+    "PresentationOutput": ("workload", "frames"),
+    "OutputTransport": ("workload", "frames"),
 }
 
 
@@ -183,6 +185,16 @@ def validate_scenario(scenario: Mapping[str, Any]) -> list[str]:
         errors.append(f"GpuScene.composition must be one of {sorted(GPU_COMPOSITIONS)}")
     if kind == "GpuScene" and params.get("composition") == "UiOnly":
         errors.extend(_validate_gpu_scene_ui_only(params))
+    if kind == "PresentationOutput":
+        if params.get("workload") not in {"direct", "static", "multi", "nested", "conversion", "slow", "recovery"}:
+            errors.append("PresentationOutput.workload is not implemented")
+        if params.get("frames") != 240:
+            errors.append("PresentationOutput.frames must be 240; measurements are not rescaled")
+    if kind == "OutputTransport":
+        if params.get("workload") not in {"overlay-static", "overlay-changing", "overlay-multi", "overlay-slow", "web-static", "web-changing", "native-host", "openvr-native", "web-native"}:
+            errors.append("OutputTransport.workload is not implemented")
+        if params.get("frames") != 240:
+            errors.append("OutputTransport.frames must be 240; measurements are not rescaled")
     if kind == "StaticTree" and not _positive_int(params.get("nodes")):
         errors.append("StaticTree.nodes must be a positive integer")
     if kind == "VirtualList":
@@ -1003,6 +1015,8 @@ def validate_all_scenarios(root: Path | None = None) -> list[str]:
     errors.extend(_validate_motion_ids(catalog, base))
     errors.extend(_validate_text_ids(catalog, base))
     errors.extend(_validate_theme_ids(catalog, base))
+    errors.extend(_validate_named_id_list(catalog, base, key="nana_output_ids", must_stay_out_of_harness=True))
+    errors.extend(_validate_named_id_list(catalog, base, key="nana_transport_ids", must_stay_out_of_harness=True))
     issue12 = catalog.get("issue12") if isinstance(catalog.get("issue12"), Mapping) else {}
     same = list(issue12.get("same_scenario_ids") or [])
     unsupported = list(issue12.get("unsupported_ids") or [])

@@ -1981,6 +1981,39 @@ impl UiWorld {
         counters
     }
 
+    pub fn record_presentation_gpu_work(&mut self, work: Option<nana_ui_core::GpuWorkObservation>) {
+        let mut observed = WorkCounters::default();
+        if let Some(work) = work {
+            observed.record_gpu_work(work);
+        }
+        self.last_counters.batch_rebuilds = observed.batch_rebuilds;
+        self.last_counters.draw_batches = observed.draw_batches;
+        self.last_counters.draw_calls = observed.draw_calls;
+        self.last_counters.gpu_upload_bytes = observed.gpu_upload_bytes;
+        self.last_counters.gpu_buffer_reallocations = observed.gpu_buffer_reallocations;
+    }
+
+    pub fn record_output_work(&mut self, work: nana_ui_core::OutputWorkObservation) {
+        let mut observed = WorkCounters::default();
+        observed.record_output_work(work);
+        macro_rules! replace { ($($field:ident),* $(,)?) => { $(self.last_counters.$field = observed.$field;)* }; }
+        replace!(
+            output_extra_passes,
+            output_gpu_copies,
+            output_target_recreates,
+            output_content_revisions,
+            output_idle_reuse_frames,
+            output_resolve_count,
+            output_gpu_copy_bytes,
+            output_gpu_convert_passes,
+            output_plan_rebuilds,
+            output_ui_renders,
+            output_submissions,
+            output_cpu_readbacks,
+            output_deferred
+        );
+    }
+
     /// Start a multi-pass frame accumulator. Idle drains still leave the
     /// previous snapshot in place until a non-empty pass runs.
     pub fn begin_frame_counters(&mut self) {

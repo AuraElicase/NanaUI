@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "id": "transport-web-native",
+  "kind": "OutputTransport",
+  "params": {
+    "workload": "web-native",
+    "frames": 240
+  },
+  "record": [
+    "producer_work",
+    "consumer_work",
+    "proof",
+    "evidence"
+  ],
+  "invariants": [
+    {
+      "name": "web_native_frames",
+      "path": "frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_output_work_ui_renders",
+      "path": "output_work.ui_renders",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_output_work_gpu_copies",
+      "path": "output_work.gpu_copies",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_output_work_gpu_copy_bytes",
+      "path": "output_work.gpu_copy_bytes",
+      "op": "eq",
+      "value": 221184000,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_output_work_cpu_readbacks",
+      "path": "output_work.cpu_readbacks",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_output_work_submissions",
+      "path": "output_work.submissions",
+      "op": "gte",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_proof_native_handle_imports",
+      "path": "proof.native_handle_imports",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_proof_ready_observations",
+      "path": "proof.ready_observations",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_proof_foreign_releases",
+      "path": "proof.foreign_releases",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_proof_displayed_frames",
+      "path": "proof.displayed_frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_consumer_work_displayed_frames",
+      "path": "consumer_work.displayed_frames",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_consumer_work_submissions",
+      "path": "consumer_work.submissions",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_consumer_work_draw_calls",
+      "path": "consumer_work.draw_calls",
+      "op": "eq",
+      "value": 240,
+      "status": "required",
+      "note": "Actual owner-attributed transport work; missing/unavailable metrics never establish zero or platform conformance."
+    },
+    {
+      "name": "web_native_fixture_version",
+      "path": "fixture_version",
+      "op": "eq",
+      "value": 1,
+      "status": "required",
+      "note": "Pin actual fixture, physical extent and disjoint warmup/measurement scope; missing is not success."
+    },
+    {
+      "name": "web_native_warmup_frames",
+      "path": "warmup_frames",
+      "op": "eq",
+      "value": 30,
+      "status": "required",
+      "note": "Pin actual fixture, physical extent and disjoint warmup/measurement scope; missing is not success."
+    },
+    {
+      "name": "web_native_device_generation",
+      "path": "device_generation",
+      "op": "gte",
+      "value": 1,
+      "status": "required",
+      "note": "Pin actual fixture, physical extent and disjoint warmup/measurement scope; missing is not success."
+    },
+    {
+      "name": "web_native_output_work_extra_passes",
+      "path": "output_work.extra_passes",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual disjoint steady workload; missing evidence fails closed."
+    },
+    {
+      "name": "web_native_output_work_target_recreates",
+      "path": "output_work.target_recreates",
+      "op": "eq",
+      "value": 0,
+      "status": "required",
+      "note": "Actual disjoint steady workload; missing evidence fails closed."
+    },
+    {
+      "name": "web_native_total_frames",
+      "path": "total_frames",
+      "op": "eq",
+      "value": 270,
+      "status": "required",
+      "note": "Actual disjoint steady workload; missing evidence fails closed."
+    },
+    {
+      "name": "web_native_setup_work_target_recreates",
+      "path": "setup_work.target_recreates",
+      "op": "eq",
+      "value": 6,
+      "status": "required",
+      "note": "Actual disjoint steady workload; missing evidence fails closed."
+    }
+  ],
+  "notes": "Portable transfer fixtures explicitly mock only foreign retirement; native-host/OpenVR/Electron scenarios require their actual platform reference reports and remain unavailable where not executed."
+}

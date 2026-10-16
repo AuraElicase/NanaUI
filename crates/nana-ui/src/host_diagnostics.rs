@@ -12,6 +12,24 @@ use crate::ResolvedSurfaceProfile;
 
 use crate::GpuWorkObservation;
 
+/// Latest-stage gauges permit an opt-in host probe to distinguish surface
+/// waits from UI work. Disabled clocks never read time or allocate.
+pub(crate) struct PresentationClock(Option<Instant>);
+
+impl PresentationClock {
+    pub(crate) fn start() -> Self {
+        Self(nana_diagnostics::metrics_enabled().then(Instant::now))
+    }
+
+    pub(crate) fn mark(&mut self, metric: &'static nana_diagnostics::Metric) {
+        if let Some(previous) = &mut self.0 {
+            let now = Instant::now();
+            metric!(metric, now.duration_since(*previous));
+            *previous = now;
+        }
+    }
+}
+
 /// Describe the adapter the host is rendering with. Called at startup and
 /// after every device switch, so the log always names the live GPU.
 pub(crate) fn record_adapter(info: &wgpu::AdapterInfo) {

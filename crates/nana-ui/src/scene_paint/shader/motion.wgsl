@@ -332,11 +332,17 @@ fn motion_interpolate_keyframes(desc: MotionGpuDescriptor, linear: f32) -> Motio
         return desc.from_value;
     }
     let p = clamp(linear, 0.0, 1.0);
+    // Same lower bound as CPU `partition_point`; dense compositor tracks
+    // must not scan every stop for every vertex on every presented frame.
     var idx = 0u;
-    for (var i = 0u; i < count; i = i + 1u) {
+    var end = count;
+    while (idx < end) {
+        let i = idx + (end - idx) / 2u;
         let stop = motion_keyframe(desc.keyframe_start + i);
         if (stop.offset < p) {
             idx = i + 1u;
+        } else {
+            end = i;
         }
     }
     if (idx < count) {

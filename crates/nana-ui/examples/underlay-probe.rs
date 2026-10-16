@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use nana_ui::runtime::view::widget;
 use nana_ui::runtime::{Activate, Button, DocumentId, FrameworkError, List, RuntimeDocument, Text};
@@ -23,7 +24,7 @@ use nana_ui::{
     ThemeAppearance, WindowDescriptor, run_runtime,
 };
 use nana_ui_platform::host::WindowCommand;
-use nana_ui_platform::{WindowEvent, WindowId, WindowRole};
+use nana_ui_platform::{WindowEvent, WindowGeometry, WindowId, WindowRole};
 
 const UNDERLAY: WindowId = WindowId(2);
 
@@ -35,6 +36,9 @@ enum Message {
 struct Probe {
     documents: BTreeMap<WindowId, RuntimeDocument>,
     toggle: Arc<AtomicBool>,
+    last_underlay_geometry: Option<WindowGeometry>,
+    unchanged_underlay_events: usize,
+    underlay_event_window: Instant,
 }
 
 fn controls(toggle: &Arc<AtomicBool>) -> Result<RuntimeDocument, FrameworkError> {
@@ -77,6 +81,9 @@ fn underlay_settings() -> WindowDescriptor {
 
 impl Probe {
     fn open_underlay(&mut self) -> RuntimeProgramUpdate {
+        self.last_underlay_geometry = None;
+        self.unchanged_underlay_events = 0;
+        self.underlay_event_window = Instant::now();
         self.documents
             .insert(UNDERLAY, picture().expect("picture document"));
         RuntimeProgramUpdate {
@@ -103,7 +110,16 @@ impl RuntimeProgram for Probe {
             WindowId::PRIMARY,
             controls(&toggle).expect("controls document"),
         );
-        Ok((Self { documents, toggle }, vec![Message::OpenUnderlay]))
+        Ok((
+            Self {
+                documents,
+                toggle,
+                last_underlay_geometry: None,
+                unchanged_underlay_events: 0,
+                underlay_event_window: Instant::now(),
+            },
+            vec![Message::OpenUnderlay],
+        ))
     }
 
     fn with_document<R>(
@@ -142,6 +158,29 @@ impl RuntimeProgram for Probe {
         context: &RuntimeProgramContext<Self::Message>,
     ) -> RuntimeProgramUpdate {
         match event {
+            WindowEvent::Moved {
+                id: UNDERLAY,
+                geometry,
+            }
+            | WindowEvent::Resized {
+                id: UNDERLAY,
+                geometry,
+            } => {
+                if self.last_underlay_geometry == Some(geometry)
+                    && self.underlay_event_window.elapsed() < Duration::from_secs(1)
+                {
+                    self.unchanged_underlay_events += 1;
+                } else {
+                    self.last_underlay_geometry = Some(geometry);
+                    self.unchanged_underlay_events = 0;
+                    self.underlay_event_window = Instant::now();
+                }
+                assert!(
+                    self.unchanged_underlay_events < 64,
+                    "underlay geometry event loop without a frame change: {geometry:?}"
+                );
+                RuntimeProgramUpdate::default()
+            }
             WindowEvent::Ready { id, geometry } => {
                 eprintln!(
                     "underlay-probe ready id={} size={:?} alpha={:?}",

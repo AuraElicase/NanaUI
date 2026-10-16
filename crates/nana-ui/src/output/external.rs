@@ -8,8 +8,8 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 
 use nana_gpu::{
     DeviceGeneration, FrameContext, FrameId, GpuContext, GpuError, GpuSubmission, GpuTexture,
@@ -18,6 +18,7 @@ use nana_gpu::{
 use nana_ui_platform::SharedFetchHost;
 use nana_ui_scene::UiScene;
 
+use super::provenance::{OutputProvenance, OutputSurfaceId};
 use crate::{
     AlphaEncoding, HostTextureRegistry, SceneGpuRendererRegistry, ScenePaintError,
     ScenePaintViewport, ScenePresentationProfile, SceneWgpuPainter,
@@ -95,6 +96,10 @@ pub enum ExternalSurfaceError {
         found: DeviceGeneration,
     },
     DeviceLost,
+    /// A sampled completed revision already contains this producer.
+    CompositionCycle {
+        surface: OutputSurfaceId,
+    },
     Gpu(GpuError),
     Paint(ScenePaintError),
 }
@@ -128,6 +133,11 @@ impl std::fmt::Display for ExternalSurfaceError {
                 "external surface resource belongs to device {found}, expected {expected}"
             ),
             Self::DeviceLost => formatter.write_str("external surface device is lost"),
+            Self::CompositionCycle { surface } => write!(
+                formatter,
+                "output composition feeds surface {} back into itself",
+                surface.get()
+            ),
             Self::Gpu(error) => error.fmt(formatter),
             Self::Paint(error) => error.fmt(formatter),
         }
@@ -184,24 +194,15 @@ struct LeaseQueue {
 struct ExternalFrameLease {
     key: LeaseKey,
     queue: Arc<Mutex<LeaseQueue>>,
-    retired: bool,
-}
-
-impl ExternalFrameLease {
-    fn retire(&mut self) {
-        if self.retired {
-            return;
-        }
-        self.retired = true;
-        if let Ok(mut queue) = self.queue.lock() {
-            queue.released.push(self.key);
-        }
-    }
 }
 
 impl Drop for ExternalFrameLease {
     fn drop(&mut self) {
-        self.retire();
+        self.queue
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .released
+            .push(self.key);
     }
 }
 
@@ -212,13 +213,16 @@ impl Drop for ExternalFrameLease {
 /// next producer operation; no CPU/GPU wait is performed. Keep this value
 /// alive while using [`Self::texture`], and call [`Self::validate`] after a
 /// possible resize or device replacement.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExternalFrame {
     texture: GpuTexture,
     resource_generation: u64,
     content_revision: u64,
+    presentation: ScenePresentationProfile,
+    alpha_encoding: AlphaEncoding,
+    provenance: OutputProvenance,
     current_generation: Arc<AtomicU64>,
-    lease: ExternalFrameLease,
+    _lease: Arc<ExternalFrameLease>,
 }
 
 impl ExternalFrame {
@@ -254,8 +258,53 @@ impl ExternalFrame {
         self.texture.generation()
     }
 
-    pub fn retire(mut self) {
-        self.lease.retire();
+    pub const fn presentation(&self) -> ScenePresentationProfile {
+        self.presentation
+    }
+
+    pub const fn alpha_encoding(&self) -> AlphaEncoding {
+        self.alpha_encoding
+    }
+
+    pub fn provenance(&self) -> &OutputProvenance {
+        &self.provenance
+    }
+
+    pub fn retire(self) {
+        drop(self);
+    }
+
+    /// Release this consumer's reference only after its submitted GPU work
+    /// completes. Other clones can continue displaying or sampling the same
+    /// revision; the producer reuses the slot after the last reference ends.
+    /// This remains valid after resize, so old-generation work can retire.
+    pub fn retire_after(
+        self,
+        gpu: &GpuContext,
+        submission: &GpuSubmission,
+    ) -> Result<(), ExternalSurfaceError> {
+        let expected = self.device_generation();
+        for found in [gpu.generation(), submission.generation()] {
+            if expected != found {
+                return Err(ExternalSurfaceError::DeviceMismatch { expected, found });
+            }
+        }
+        gpu.on_submission_complete(submission, move || drop(self))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct Reservation {
+    key: u64,
+    frame: Mutex<Option<FrameId>>,
+    discarded: AtomicBool,
+    provenance: Mutex<Option<OutputProvenance>>,
+}
+
+impl Reservation {
+    fn is_live(&self) -> bool {
+        !self.discarded.load(Ordering::Acquire)
     }
 }
 
@@ -264,6 +313,10 @@ struct TargetSlot {
     texture: GpuTexture,
     state: SlotState,
     leases: usize,
+    reservation: Weak<Reservation>,
+    alpha_encoding: AlphaEncoding,
+    frame: Option<FrameId>,
+    provenance: Option<OutputProvenance>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -292,16 +345,24 @@ struct Completion {
 /// [`ExternalSurface::record`], then hand the frame's submission to
 /// [`ExternalSurface::bind_submission`]; a plan whose frame is dropped is
 /// simply forgotten.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 #[must_use = "a plan does nothing until it is recorded and bound"]
 pub struct ExternalFramePlan {
     resource_generation: u64,
     slot: usize,
     revision: u64,
     key: u64,
+    reservation: Arc<Reservation>,
+    alpha_encoding: AlphaEncoding,
+    host_revision: u64,
 }
 
 impl ExternalFramePlan {
+    #[cfg(feature = "hosted")]
+    pub(crate) const fn slot_index(&self) -> usize {
+        self.slot
+    }
+
     pub const fn content_revision(&self) -> u64 {
         self.revision
     }
@@ -312,7 +373,7 @@ impl ExternalFramePlan {
 }
 
 /// What [`ExternalSurface::prepare`] found.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum ExternalPrepare {
     /// Nothing changed since the published revision: record nothing.
     Reused {
@@ -327,6 +388,7 @@ pub enum ExternalPrepare {
 
 /// A retained presentation producer independent of a native Window.
 pub struct ExternalSurface {
+    id: OutputSurfaceId,
     gpu: GpuContext,
     config: ExternalSurfaceConfig,
     /// `None` for a surface that records with its host's painter.
@@ -338,12 +400,22 @@ pub struct ExternalSurface {
     published: Option<Published>,
     resource_generation: u64,
     next_content_revision: u64,
+    next_plan_revision: u64,
+    renderer_tick: u64,
     last_key: Option<u64>,
     completions: Arc<Mutex<Vec<Completion>>>,
     leases: Arc<Mutex<LeaseQueue>>,
     current_generation: Arc<AtomicU64>,
     alpha_encoding: AlphaEncoding,
     last_work: OutputWorkObservation,
+}
+
+impl Drop for ExternalSurface {
+    fn drop(&mut self) {
+        // Teardown invalidates new imports, while leases already captured by
+        // submitted GPU work continue owning their allocation until retirement.
+        self.current_generation.store(0, Ordering::Release);
+    }
 }
 
 impl std::fmt::Debug for ExternalSurface {
@@ -396,6 +468,7 @@ impl ExternalSurface {
         }
         let slots = create_slots(gpu, config)?;
         Ok(Self {
+            id: OutputSurfaceId::next(),
             gpu: gpu.clone(),
             config,
             painter,
@@ -404,6 +477,8 @@ impl ExternalSurface {
             published: None,
             resource_generation: 1,
             next_content_revision: 0,
+            next_plan_revision: 0,
+            renderer_tick: 0,
             last_key: None,
             completions: Arc::new(Mutex::new(Vec::new())),
             leases: Arc::new(Mutex::new(LeaseQueue::default())),
@@ -415,6 +490,17 @@ impl ExternalSurface {
 
     pub fn gpu(&self) -> &GpuContext {
         &self.gpu
+    }
+
+    pub const fn id(&self) -> OutputSurfaceId {
+        self.id
+    }
+
+    pub(crate) fn owns_target(&self, target: &nana_gpu::GpuRenderTarget) -> bool {
+        self.slots.iter().any(|slot| {
+            nana_gpu::__framework::texture(&slot.texture)
+                == nana_gpu::__framework::target_view(target).texture()
+        })
     }
 
     pub const fn config(&self) -> ExternalSurfaceConfig {
@@ -583,6 +669,18 @@ impl ExternalSurface {
         host_textures: Option<&HostTextureRegistry>,
         gpu_renderers: Option<&SceneGpuRendererRegistry>,
     ) -> Result<ExternalRenderOutcome, ExternalSurfaceError> {
+        let host_revision = if let Some(renderers) = gpu_renderers {
+            let renderer_revision = renderers.retained_revision(scene).unwrap_or_else(|| {
+                self.renderer_tick = self.renderer_tick.wrapping_add(1);
+                self.renderer_tick
+            });
+            let mut revision = DefaultHasher::new();
+            host_revision.hash(&mut revision);
+            renderer_revision.hash(&mut revision);
+            revision.finish()
+        } else {
+            host_revision
+        };
         let plan = match self.prepare(scene, host_revision, viewport, host_textures)? {
             ExternalPrepare::Reused {
                 resource_generation,
@@ -597,6 +695,7 @@ impl ExternalSurface {
             ExternalPrepare::Record(plan) => plan,
         };
         let Some(mut frame) = self.gpu.try_begin_frame("NanaUI external surface") else {
+            self.record_deferred();
             return Ok(ExternalRenderOutcome::Deferred);
         };
         if let Err(error) = self.record(
@@ -612,7 +711,22 @@ impl ExternalSurface {
             return Err(error);
         }
         let submitted = frame.submit();
+        self.last_work.submissions += 1;
+        nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_SUBMISSIONS);
         self.bind_submission(plan, &submitted)
+    }
+
+    /// Poll for a safely writable slot before scheduling graph preparations.
+    /// This does not reserve a slot, record commands or wait for the GPU.
+    pub(crate) fn has_record_capacity(&mut self) -> Result<bool, ExternalSurfaceError> {
+        if self.gpu.is_lost() {
+            return Err(ExternalSurfaceError::DeviceLost);
+        }
+        self.poll();
+        if self.gpu.is_lost() {
+            return Err(ExternalSurfaceError::DeviceLost);
+        }
+        Ok(self.available_slot().is_some())
     }
 
     /// Decide whether this presentation needs a new revision, and where it
@@ -635,12 +749,16 @@ impl ExternalSurface {
         if viewport.physical_size != self.config.extent {
             return Err(ExternalSurfaceError::InvalidViewport);
         }
+        if let Some(painter) = self.painter.as_mut() {
+            painter.refresh_image_resources();
+        }
         let key = render_key(
             scene,
             host_revision,
-            host_textures.map(HostTextureRegistry::revision),
+            referenced_texture_revision(scene, host_textures)?,
             viewport,
             self.config.presentation,
+            self.alpha_encoding,
             self.resource_generation,
             self.painter
                 .as_ref()
@@ -669,16 +787,37 @@ impl ExternalSurface {
                 .iter()
                 .any(|slot| matches!(slot.state, SlotState::InFlight { .. }))
         {
+            self.record_deferred();
+            return Ok(ExternalPrepare::Deferred);
+        }
+        if self.slots.iter().any(|slot| {
+            slot.reservation
+                .upgrade()
+                .is_some_and(|reservation| reservation.key == key && reservation.is_live())
+        }) {
+            self.record_deferred();
             return Ok(ExternalPrepare::Deferred);
         }
         let Some(slot) = self.available_slot() else {
+            self.record_deferred();
             return Ok(ExternalPrepare::Deferred);
         };
+        self.next_plan_revision = self.next_plan_revision.saturating_add(1);
+        let reservation = Arc::new(Reservation {
+            key,
+            frame: Mutex::new(None),
+            discarded: AtomicBool::new(false),
+            provenance: Mutex::new(None),
+        });
+        self.slots[slot].reservation = Arc::downgrade(&reservation);
         Ok(ExternalPrepare::Record(ExternalFramePlan {
             resource_generation: self.resource_generation,
             slot,
-            revision: self.next_content_revision.saturating_add(1),
+            revision: self.next_plan_revision,
             key,
+            reservation,
+            alpha_encoding: self.alpha_encoding,
+            host_revision,
         }))
     }
 
@@ -688,7 +827,14 @@ impl ExternalSurface {
         &self,
         plan: &ExternalFramePlan,
     ) -> Result<&GpuTexture, ExternalSurfaceError> {
-        if plan.resource_generation != self.resource_generation {
+        if plan.resource_generation != self.resource_generation
+            || !plan.reservation.is_live()
+            || !self.slots.get(plan.slot).is_some_and(|slot| {
+                slot.reservation
+                    .upgrade()
+                    .is_some_and(|owner| Arc::ptr_eq(&owner, &plan.reservation))
+            })
+        {
             return Err(ExternalSurfaceError::StalePlan);
         }
         self.slots
@@ -712,8 +858,64 @@ impl ExternalSurface {
         host_textures: Option<&HostTextureRegistry>,
         gpu_renderers: Option<&SceneGpuRendererRegistry>,
     ) -> Result<(), ExternalSurfaceError> {
+        if plan.alpha_encoding != self.alpha_encoding {
+            return Err(ExternalSurfaceError::StalePlan);
+        }
+        if frame.generation() != self.gpu.generation() {
+            return Err(ExternalSurfaceError::DeviceMismatch {
+                expected: self.gpu.generation(),
+                found: frame.generation(),
+            });
+        }
+        if plan
+            .reservation
+            .frame
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .is_some()
+        {
+            return Err(ExternalSurfaceError::StalePlan);
+        }
         if viewport.physical_size != self.config.extent {
             return Err(ExternalSurfaceError::InvalidViewport);
+        }
+        let (frozen_textures, sampled) = match host_textures {
+            Some(registry) => {
+                let plan = scene
+                    .frame_plan()
+                    .map_err(|error| ScenePaintError::InvalidRenderGraph(error.to_string()))?;
+                let slots = plan.custom_nodes.iter().filter_map(|id| {
+                    let primitive = scene.primitive(*id)?;
+                    match &primitive.kind {
+                        nana_ui_scene::ScenePrimitiveKind::Custom { node, .. }
+                            if node.renderer.as_ref() == "nana.host-texture" =>
+                        {
+                            Some(node.resource.as_ref())
+                        }
+                        _ => None,
+                    }
+                });
+                let (frozen, sampled) = registry.snapshot_output_bindings(slots);
+                (Some(frozen), sampled)
+            }
+            None => (None, Vec::new()),
+        };
+        let provenance = OutputProvenance::composed(self.id, &sampled)
+            .map_err(|surface| ExternalSurfaceError::CompositionCycle { surface })?;
+        if render_key(
+            scene,
+            plan.host_revision,
+            referenced_texture_revision(scene, frozen_textures.as_ref())?,
+            viewport,
+            self.config.presentation,
+            self.alpha_encoding,
+            self.resource_generation,
+            self.painter
+                .as_ref()
+                .map_or(0, SceneWgpuPainter::image_revision),
+        ) != plan.key
+        {
+            return Err(ExternalSurfaceError::StalePlan);
         }
         let target = self.plan_texture(plan)?.render_target()?;
         let id = self.target_id(plan.resource_generation, plan.slot);
@@ -732,9 +934,25 @@ impl ExternalSurface {
             frame,
             &target,
             viewport,
-            host_textures,
+            frozen_textures.as_ref(),
             gpu_renderers,
         )?;
+        *plan
+            .reservation
+            .provenance
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(provenance);
+        *plan
+            .reservation
+            .frame
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(frame.id());
+        let reservation = Arc::clone(&plan.reservation);
+        frame.on_discard(move || reservation.discarded.store(true, Ordering::Release));
+        frame.keep_alive_until_complete(Arc::clone(&plan.reservation));
+        self.slots[plan.slot].alpha_encoding = encoding;
+        self.last_work.ui_renders += 1;
+        nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_UI_RENDERS);
         Ok(())
     }
 
@@ -745,9 +963,16 @@ impl ExternalSurface {
         plan: ExternalFramePlan,
         submission: &GpuSubmission,
     ) -> Result<ExternalRenderOutcome, ExternalSurfaceError> {
+        self.plan_texture(&plan)?;
         if plan.resource_generation != self.resource_generation
             || plan.slot >= self.slots.len()
             || !matches!(self.slots[plan.slot].state, SlotState::Available)
+            || *plan
+                .reservation
+                .frame
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                != Some(submission.frame())
         {
             return Err(ExternalSurfaceError::StalePlan);
         }
@@ -769,8 +994,17 @@ impl ExternalSurface {
             frame: submission.frame(),
             revision: plan.revision,
         };
-        self.next_content_revision = plan.revision;
-        self.last_key = Some(plan.key);
+        self.slots[plan.slot].frame = Some(submission.frame());
+        self.slots[plan.slot].provenance = plan
+            .reservation
+            .provenance
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
+        if plan.revision >= self.next_content_revision {
+            self.next_content_revision = plan.revision;
+            self.last_key = Some(plan.key);
+        }
         self.last_work.content_revisions = 1;
         nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_CONTENT_REVISIONS);
         Ok(ExternalRenderOutcome::Submitted {
@@ -793,30 +1027,83 @@ impl ExternalSurface {
         let Some(published) = self.published else {
             return Err(ExternalSurfaceError::NoCompletedFrame);
         };
+        self.lease_slot(published.slot, published.revision)
+    }
+
+    /// Host-only lease on the exact output its submitted frame produced.
+    /// Submission ordering lets a host append GPU work without waiting for
+    /// publication; ordinary external sampling stays completion-only.
+    pub(crate) fn lease_submitted(
+        &mut self,
+        submission: &GpuSubmission,
+    ) -> Result<ExternalFrame, ExternalSurfaceError> {
+        if submission.generation() != self.gpu.generation() {
+            return Err(ExternalSurfaceError::DeviceMismatch {
+                expected: self.gpu.generation(),
+                found: submission.generation(),
+            });
+        }
+        let (index, revision) =
+            self.slots
+                .iter()
+                .enumerate()
+                .find_map(|(index, slot)| {
+                    if slot.frame != Some(submission.frame()) {
+                        return None;
+                    }
+                    match slot.state {
+                        SlotState::InFlight { revision, .. }
+                        | SlotState::Published { revision } => Some((index, revision)),
+                        SlotState::Available => None,
+                    }
+                })
+                .ok_or(ExternalSurfaceError::StaleFrame)?;
+        self.lease_slot(index, revision)
+    }
+
+    fn lease_slot(
+        &mut self,
+        index: usize,
+        revision: u64,
+    ) -> Result<ExternalFrame, ExternalSurfaceError> {
         let slot = self
             .slots
-            .get_mut(published.slot)
+            .get_mut(index)
             .ok_or(ExternalSurfaceError::StaleFrame)?;
         slot.leases = slot.leases.saturating_add(1);
         Ok(ExternalFrame {
             texture: slot.texture.clone(),
             resource_generation: self.resource_generation,
-            content_revision: published.revision,
+            content_revision: revision,
+            presentation: self.config.presentation,
+            alpha_encoding: slot.alpha_encoding,
+            provenance: slot
+                .provenance
+                .clone()
+                .expect("published output has recorded provenance"),
             current_generation: Arc::clone(&self.current_generation),
-            lease: ExternalFrameLease {
+            _lease: Arc::new(ExternalFrameLease {
                 key: LeaseKey {
                     resource_generation: self.resource_generation,
-                    slot: published.slot,
+                    slot: index,
                 },
                 queue: Arc::clone(&self.leases),
-                retired: false,
-            },
+            }),
         })
+    }
+
+    fn record_deferred(&mut self) {
+        self.last_work.deferred += 1;
+        nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_DEFERRED);
     }
 
     fn available_slot(&self) -> Option<usize> {
         self.slots.iter().enumerate().find_map(|(index, slot)| {
             (slot.leases == 0
+                && !slot
+                    .reservation
+                    .upgrade()
+                    .is_some_and(|reservation| reservation.is_live())
                 && !matches!(slot.state, SlotState::InFlight { .. })
                 && self.published.map(|published| published.slot) != Some(index))
             .then_some(index)
@@ -838,6 +1125,13 @@ impl ExternalSurface {
                         if frame == event.frame && revision == event.revision
                 )
             {
+                continue;
+            }
+            if self
+                .published
+                .is_some_and(|published| published.revision > event.revision)
+            {
+                self.slots[event.slot].state = SlotState::Available;
                 continue;
             }
             if let Some(previous) = self.published
@@ -912,6 +1206,10 @@ fn create_slots(
             texture,
             state: SlotState::Available,
             leases: 0,
+            reservation: Weak::new(),
+            alpha_encoding: AlphaEncoding::Linear,
+            frame: None,
+            provenance: None,
         });
     }
     Ok(slots)
@@ -923,22 +1221,57 @@ fn external_target_id(generation: u64, slot: usize) -> u64 {
         .wrapping_add(slot as u64 + 1)
 }
 
+fn referenced_texture_revision(
+    scene: &UiScene,
+    registry: Option<&HostTextureRegistry>,
+) -> Result<Option<u64>, ExternalSurfaceError> {
+    let Some(registry) = registry else {
+        return Ok(None);
+    };
+    let plan = scene
+        .frame_plan()
+        .map_err(|error| ScenePaintError::InvalidRenderGraph(error.to_string()))?;
+    Ok(Some(registry.output_revision(
+        plan.custom_nodes.iter().filter_map(|id| {
+            let primitive = scene.primitive(*id)?;
+            match &primitive.kind {
+                nana_ui_scene::ScenePrimitiveKind::Custom { node, .. }
+                    if node.renderer.as_ref() == "nana.host-texture" =>
+                {
+                    Some(node.resource.as_ref())
+                }
+                _ => None,
+            }
+        }),
+    )))
+}
+
+// Every independent retained input must participate in the cache identity.
+#[allow(clippy::too_many_arguments)]
 fn render_key(
     scene: &UiScene,
     host_revision: u64,
     texture_revision: Option<u64>,
     viewport: ScenePaintViewport,
     presentation: ScenePresentationProfile,
+    alpha_encoding: AlphaEncoding,
     resource_generation: u64,
     image_revision: u64,
 ) -> u64 {
     let mut hasher = DefaultHasher::new();
     scene.projection_revision().hash(&mut hasher);
+    scene.presentation_epoch().hash(&mut hasher);
+    scene.motion_gpu_source().hash(&mut hasher);
+    scene.motion_gpu_structure_epoch().hash(&mut hasher);
+    if scene.compositor_needs_tick() {
+        scene.motion_gpu_now().hash(&mut hasher);
+    }
     host_revision.hash(&mut hasher);
     texture_revision.hash(&mut hasher);
     resource_generation.hash(&mut hasher);
     image_revision.hash(&mut hasher);
     presentation.hash(&mut hasher);
+    alpha_encoding.hash(&mut hasher);
     viewport.logical_size[0].to_bits().hash(&mut hasher);
     viewport.logical_size[1].to_bits().hash(&mut hasher);
     viewport.physical_size.hash(&mut hasher);
@@ -955,6 +1288,264 @@ fn render_key(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn retained_surface() -> ExternalSurface {
+        ExternalSurface::new(
+            &crate::test_gpu::context(),
+            ExternalSurfaceConfig::new([32, 24], GpuTextureFormat::RGBA8_UNORM).with_slots(2),
+        )
+        .unwrap()
+    }
+
+    fn viewport() -> ScenePaintViewport {
+        ScenePaintViewport {
+            logical_size: [32.0, 24.0],
+            physical_size: [32, 24],
+            scale_factor: 1.0,
+            scene_origin: [0.0, 0.0],
+            target_origin: [0.0, 0.0],
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            clear: true,
+        }
+    }
+
+    fn prepare(surface: &mut ExternalSurface, scene: &UiScene, revision: u64) -> ExternalFramePlan {
+        match surface.prepare(scene, revision, viewport(), None).unwrap() {
+            ExternalPrepare::Record(plan) => plan,
+            other => panic!("expected reserved target, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prepared_targets_are_exclusive_and_abandoned_plans_release_them() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let first = prepare(&mut surface, &scene, 0);
+        let second = prepare(&mut surface, &scene, 1);
+        assert_ne!(first.slot, second.slot);
+        assert!(matches!(
+            surface.prepare(&scene, 2, viewport(), None),
+            Ok(ExternalPrepare::Deferred)
+        ));
+        let slot = first.slot;
+        drop(first);
+        assert_eq!(prepare(&mut surface, &scene, 2).slot, slot);
+    }
+
+    #[test]
+    fn an_unsubmitted_reservation_does_not_duplicate_the_same_content() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let plan = surface.prepare(&scene, 0, viewport(), None).unwrap();
+        assert!(matches!(plan, ExternalPrepare::Record(_)));
+        assert!(matches!(
+            surface.prepare(&scene, 0, viewport(), None),
+            Ok(ExternalPrepare::Deferred)
+        ));
+        assert_eq!(surface.last_work().ui_renders, 0);
+        assert_eq!(surface.last_work().submissions, 0);
+        drop(plan);
+        assert!(matches!(
+            surface.prepare(&scene, 0, viewport(), None),
+            Ok(ExternalPrepare::Record(_))
+        ));
+    }
+
+    #[test]
+    fn a_plan_cannot_be_used_by_another_surface_or_an_unrelated_submission() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let other = retained_surface();
+        let plan = prepare(&mut surface, &scene, 0);
+        assert!(matches!(
+            other.plan_texture(&plan),
+            Err(ExternalSurfaceError::StalePlan)
+        ));
+        let unrelated = surface.gpu.begin_frame("unrelated output frame").submit();
+        assert_eq!(
+            surface.bind_submission(plan, &unrelated),
+            Err(ExternalSurfaceError::StalePlan)
+        );
+        assert_eq!(surface.published_revision(), None);
+    }
+
+    #[test]
+    fn discarding_recorded_output_invalidates_the_plan_and_releases_its_slot() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let plan = prepare(&mut surface, &scene, 0);
+        let mut frame = surface.gpu.begin_frame("discard retained output");
+        surface
+            .record(&plan, &mut frame, None, &scene, viewport(), None, None)
+            .unwrap();
+        let held = prepare(&mut surface, &scene, 1);
+        assert_ne!(held.slot, plan.slot);
+        frame.discard();
+        assert!(matches!(
+            surface.plan_texture(&plan),
+            Err(ExternalSurfaceError::StalePlan)
+        ));
+        assert_eq!(prepare(&mut surface, &scene, 2).slot, plan.slot);
+        assert_eq!(surface.published_revision(), None);
+    }
+
+    #[test]
+    fn dropping_a_recorded_plan_keeps_the_target_reserved_until_frame_discard() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let plan = prepare(&mut surface, &scene, 0);
+        let slot = plan.slot;
+        let mut frame = surface.gpu.begin_frame("orphan retained output");
+        surface
+            .record(&plan, &mut frame, None, &scene, viewport(), None, None)
+            .unwrap();
+        drop(plan);
+        let held = prepare(&mut surface, &scene, 1);
+        assert_ne!(held.slot, slot);
+        assert!(matches!(
+            surface.prepare(&scene, 2, viewport(), None),
+            Ok(ExternalPrepare::Deferred)
+        ));
+        frame.discard();
+        assert_eq!(prepare(&mut surface, &scene, 2).slot, slot);
+    }
+
+    #[test]
+    fn output_requires_the_submission_of_the_frame_that_recorded_it() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let plan = prepare(&mut surface, &scene, 0);
+        let mut recorded = surface.gpu.begin_frame("recorded output");
+        surface
+            .record(&plan, &mut recorded, None, &scene, viewport(), None, None)
+            .unwrap();
+        let unrelated = surface.gpu.begin_frame("wrong output submission").submit();
+        assert_eq!(
+            surface.bind_submission(plan, &unrelated),
+            Err(ExternalSurfaceError::StalePlan)
+        );
+        recorded.discard();
+        assert_eq!(surface.published_revision(), None);
+    }
+
+    #[test]
+    fn cloned_frames_share_the_lease_until_the_last_consumer_retires() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let plan = prepare(&mut surface, &scene, 0);
+        let mut frame = surface.gpu.begin_frame("shared output lease");
+        surface
+            .record(&plan, &mut frame, None, &scene, viewport(), None, None)
+            .unwrap();
+        let submission = frame.submit();
+        surface.bind_submission(plan, &submission).unwrap();
+        let sample = surface.lease_submitted(&submission).unwrap();
+        let slot = sample._lease.key.slot;
+        let copy = sample.clone();
+        sample.retire();
+        surface.drain_leases();
+        assert_eq!(surface.slots[slot].leases, 1);
+        let pending = Arc::downgrade(&copy._lease);
+        copy.retire_after(&surface.gpu, &submission).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while pending.upgrade().is_some() {
+            surface.poll();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "consumer did not retire"
+            );
+            std::thread::yield_now();
+        }
+        surface.drain_leases();
+        assert_eq!(surface.slots[slot].leases, 0);
+    }
+
+    #[test]
+    fn dropping_the_producer_invalidates_imports_without_breaking_gpu_retirement() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let plan = prepare(&mut surface, &scene, 0);
+        let gpu = surface.gpu.clone();
+        let mut frame = gpu.begin_frame("retired producer output");
+        surface
+            .record(&plan, &mut frame, None, &scene, viewport(), None, None)
+            .unwrap();
+        let submission = frame.submit();
+        surface.bind_submission(plan, &submission).unwrap();
+        let lease = surface.lease_submitted(&submission).unwrap();
+        let resource = lease.texture().unwrap().clone();
+        drop(surface);
+        assert_eq!(lease.validate(), Err(ExternalSurfaceError::StaleFrame));
+        assert_eq!(resource.generation(), gpu.generation());
+        lease.retire_after(&gpu, &submission).unwrap();
+        gpu.poll();
+    }
+
+    #[test]
+    fn changing_alpha_while_a_recording_is_pending_does_not_reuse_old_encoding() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let ExternalPrepare::Record(plan) = surface.prepare(&scene, 0, viewport(), None).unwrap()
+        else {
+            panic!("target must be available");
+        };
+        let mut frame = surface.gpu.begin_frame("pending alpha encoding");
+        surface
+            .record(&plan, &mut frame, None, &scene, viewport(), None, None)
+            .unwrap();
+        surface.set_alpha_encoding(AlphaEncoding::Gamma);
+        let submitted = frame.submit();
+        surface.bind_submission(plan, &submitted).unwrap();
+        let old = surface.lease_submitted(&submitted).unwrap();
+        assert_eq!(old.alpha_encoding(), AlphaEncoding::Linear);
+        assert!(!matches!(
+            surface.prepare(&scene, 0, viewport(), None),
+            Ok(ExternalPrepare::Reused { .. })
+        ));
+    }
+
+    #[test]
+    fn reverse_submission_of_reserved_plans_cannot_relabel_newer_content() {
+        let mut surface = retained_surface();
+        let scene = UiScene::new();
+        let ExternalPrepare::Record(older) = surface.prepare(&scene, 10, viewport(), None).unwrap()
+        else {
+            panic!("first target must be available");
+        };
+        let ExternalPrepare::Record(newer) = surface.prepare(&scene, 20, viewport(), None).unwrap()
+        else {
+            panic!("second target must be available");
+        };
+        let latest_revision = newer.content_revision();
+        let mut first = surface.gpu.begin_frame("newer reserved output");
+        surface
+            .record(&newer, &mut first, None, &scene, viewport(), None, None)
+            .unwrap();
+        surface.bind_submission(newer, &first.submit()).unwrap();
+        let mut second = surface.gpu.begin_frame("older reserved output");
+        surface
+            .record(&older, &mut second, None, &scene, viewport(), None, None)
+            .unwrap();
+        surface.bind_submission(older, &second.submit()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while surface.published_revision() != Some(latest_revision) {
+            surface.poll();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "output did not publish"
+            );
+            std::thread::yield_now();
+        }
+        assert!(matches!(
+            surface.prepare(&scene, 20, viewport(), None),
+            Ok(ExternalPrepare::Reused { content_revision, .. })
+                if content_revision == latest_revision
+        ));
+        assert!(!matches!(
+            surface.prepare(&scene, 10, viewport(), None),
+            Ok(ExternalPrepare::Reused { .. })
+        ));
+    }
 
     #[test]
     fn config_rejects_zero_extent_and_unbounded_slot_counts() {

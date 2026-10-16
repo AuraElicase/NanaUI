@@ -50,6 +50,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             return self.tick_hidden_output(event_loop, id, producers);
         }
         let Some(producers) = self.program.scene_resource_producers(id) else {
+            self.producer_frames.remove(id);
             return true;
         };
         let Some(scene) = self
@@ -58,10 +59,26 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         else {
             return false;
         };
-        let mut frame = self.graphics.gpu().begin_frame("NanaUI hidden gpu tick");
+        let Some(producer_frame) = self.producer_frames.prepare(
+            id,
+            self.graphics.gpu().generation().get(),
+            producers.retained_revision(scene.as_ref()),
+        ) else {
+            return true;
+        };
+        let Some(mut frame) = self
+            .graphics
+            .gpu()
+            .try_begin_frame("NanaUI hidden gpu tick")
+        else {
+            self.retry_frame_soon(id);
+            return false;
+        };
         match producers.encode_scene(scene.as_ref(), &mut frame) {
             Ok(prepared) => {
-                prepared.submitted(&frame.submit());
+                let submission = frame.submit();
+                self.producer_frames.submitted(producer_frame);
+                prepared.submitted(&submission);
                 true
             }
             Err(error) => {
@@ -82,7 +99,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
 
     /// Every frame slot is in flight: try again shortly, whatever the window
     /// asked for, since the slots free without anything asking for a frame.
-    fn retry_frame_soon(&mut self, id: WindowId) {
+    pub(super) fn retry_frame_soon(&mut self, id: WindowId) {
         self.update_frame_schedule(id, crate::runtime_host::FrameSchedule::retry);
     }
 
@@ -112,6 +129,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     }
 
     pub(super) fn redraw(&mut self, event_loop: &dyn ActiveEventLoop, id: WindowId) {
+        use nana_diagnostics::framework::host as stage;
         if self.render_suspended || !self.can_present(id) {
             self.rearm_frame_demand(id);
             return;
@@ -132,6 +150,12 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.rearm_frame_demand(id);
             return;
         }
+        // AppKit calls this synchronously from its live-resize tracking loop.
+        // A step inside the commit interval returns before surface configure
+        // and document layout; the drawable already on screen stays up.
+        if self.defer_native_live_resize(id) {
+            return;
+        }
         let queued = self.drain_program_messages(id);
         self.apply_update(event_loop, queued, Some(id));
         if event_loop.exiting() || self.render_suspended || !self.can_present(id) {
@@ -139,25 +163,28 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             return;
         }
         self.resize_window(id);
+        let mut stage_clock = crate::host_diagnostics::PresentationClock::start();
         self.program.prepare_window_frame(id, &self.context_for(id));
+        stage_clock.mark(&stage::PRESENTATION_PREPARE_NS);
         self.sync_window_output(id);
         self.sync_compositor_clock(id);
         self.reconcile_browser_lifetimes();
         let geometry = self.geometry_of(id);
         let material = self.material_of(id);
         let viewport = LayoutViewport::new(geometry.logical_size.0, geometry.logical_size.1);
-        let Some(flush) = self
-            .program
-            .write_document(id, |document| document.flush(viewport, &mut self.text))
-        else {
+        let Some(flush) = self.program.write_document(id, |document| {
+            crate::output::driver::flush_presentation(document, viewport, &mut self.text)
+        }) else {
             self.program
                 .report_host_failure(HostFailure::MissingDocument { window: id });
+            self.fail_output_trace(id);
             self.rearm_frame_demand(id);
             return;
         };
         let update = match flush {
             Ok(update) => update,
             Err(error) => {
+                self.fail_output_trace(id);
                 // The frame did not settle; Runtime restored its dirty work,
                 // so the next redraw retries. Skipping keeps the process alive.
                 self.program
@@ -186,6 +213,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         else {
             self.program
                 .report_host_failure(HostFailure::MissingDocument { window: id });
+            self.fail_output_trace(id);
             self.rearm_frame_demand(id);
             return;
         };
@@ -215,31 +243,39 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         // nothing else to composite once its drawable is taken, so waiting
         // for a slot after acquiring it blanks the window; with every slot in
         // flight the presented frame stays on screen and this one is skipped.
+        let trace_enabled = self.program.output_trace_enabled(id);
+        stage_clock.mark(&stage::PRESENTATION_SETTLE_NS);
         let Some(mut recording) = reserve_scene_host_frame(self.graphics.gpu()) else {
             nana_diagnostics::metric!(nana_diagnostics::framework::gpu::FRAMES_SKIPPED);
+            self.defer_output_trace(id, crate::output::OutputTraceDeferral::FrameSlots);
             self.retry_frame_soon(id);
             return;
         };
+        stage_clock.mark(&stage::PRESENTATION_RESERVE_NS);
         let frame = match self.acquire_frame(id) {
             Ok(SurfaceFrame::Ready(frame)) => frame,
             Ok(SurfaceFrame::Retry) => {
                 drop(recording);
+                self.defer_output_trace(id, crate::output::OutputTraceDeferral::SurfaceAcquire);
                 self.request_redraw(id);
                 return;
             }
             Ok(SurfaceFrame::Skipped) => {
                 drop(recording);
+                self.defer_output_trace(id, crate::output::OutputTraceDeferral::SurfaceAcquire);
                 nana_diagnostics::metric!(nana_diagnostics::framework::gpu::FRAMES_SKIPPED);
                 self.rearm_frame_demand(id);
                 return;
             }
             Err(error) => {
                 drop(recording);
+                self.fail_output_trace(id);
                 self.rearm_frame_demand(id);
                 self.suspend_surface(id, error);
                 return;
             }
         };
+        stage_clock.mark(&stage::PRESENTATION_ACQUIRE_NS);
         let target = nana_gpu::__framework::render_target(
             self.graphics.gpu(),
             frame
@@ -253,25 +289,36 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         // nothing may still reference the texture the surface is asked to
         // abandon (DX12), and dropping it rolls the painter's retained writes
         // back.
-        let prepared = if let Some(producers) = self.program.scene_resource_producers(id) {
-            match producers.encode_scene(scene.as_ref(), &mut recording) {
-                Ok(prepared) => Some(prepared),
-                Err(error) => {
-                    drop(recording);
-                    drop(target);
-                    self.discard_frame(id, frame);
-                    self.program
-                        .report_host_failure(HostFailure::ResourceProduction {
-                            window: id,
-                            error: error.to_string(),
-                        });
-                    self.rearm_frame_demand(id);
-                    return;
+        let producers = self.program.scene_resource_producers(id);
+        let producer_frame = self.producer_frames.prepare(
+            id,
+            self.graphics.gpu().generation().get(),
+            producers.as_ref().map_or((false, Some(0)), |producers| {
+                producers.retained_revision(scene.as_ref())
+            }),
+        );
+        let prepared =
+            if let Some(producers) = producers.as_ref().filter(|_| producer_frame.is_some()) {
+                match producers.encode_scene(scene.as_ref(), &mut recording) {
+                    Ok(prepared) => Some(prepared),
+                    Err(error) => {
+                        drop(recording);
+                        drop(target);
+                        self.discard_frame(id, frame);
+                        self.fail_output_trace(id);
+                        self.program
+                            .report_host_failure(HostFailure::ResourceProduction {
+                                window: id,
+                                error: error.to_string(),
+                            });
+                        self.rearm_frame_demand(id);
+                        return;
+                    }
                 }
-            }
-        } else {
-            None
-        };
+            } else {
+                None
+            };
+        stage_clock.mark(&stage::PRESENTATION_RESOURCES_NS);
         let host_textures = self.program.host_textures(id);
         if let Some(registry) = host_textures.as_ref() {
             if let Ok(plan) = scene.frame_plan() {
@@ -342,6 +389,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                     drop(recording);
                     drop(target);
                     self.discard_frame(id, frame);
+                    self.fail_output_trace(id);
                     self.program
                         .report_host_failure(HostFailure::ResourceProduction { window: id, error });
                     self.rearm_frame_demand(id);
@@ -352,7 +400,6 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let theme = self.program.theme();
         let window_background = self.program.window_background();
         let fetch_host = self.program.resource_fetch_host(id);
-        let output_fetch_host = fetch_host.clone();
         let viewport = scene_paint_viewport(&geometry, material, theme.as_ref(), window_background);
         // Subpixel text only onto a surface the compositor shows opaque: over
         // a transparent material the per-channel coverage would be composited
@@ -365,64 +412,85 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 profile.color_space,
                 crate::ScenePresentationColorSpace::Srgb
             );
-        let painter = self.painter_mut(profile);
-        painter.set_presentation_parameters(presentation_parameters);
-        // Painters are shared per resolved presentation profile, so every window supplies its own
-        // egress, including none, and its own surface's text mode.
-        painter.set_resource_fetch_host(fetch_host);
-        painter.set_subpixel_text(
-            opaque
-                .then(crate::scene_paint::SubpixelOrder::system)
-                .flatten(),
-        );
-        // Compositors blend a surface as premultiplied in its encoded space,
-        // Metal's `PostMultiplied` included.
-        painter.set_alpha_encoding(if opaque {
-            crate::scene_paint::AlphaEncoding::Linear
-        } else {
-            crate::scene_paint::AlphaEncoding::Gamma
-        });
-        let paint = painter.paint_target(
-            crate::RenderTargetId(id.0),
-            scene.as_ref(),
-            &mut recording,
-            &target,
-            viewport,
-            host_textures.as_ref(),
-            gpu_renderers.as_ref(),
-        );
-        if let Err(error) = paint {
-            drop(recording);
-            drop(target);
-            self.discard_frame(id, frame);
-            self.program
-                .report_host_failure(HostFailure::UnpaintableScene {
-                    window: id,
-                    error: error.to_string(),
-                });
-            self.rearm_frame_demand(id);
-            return;
-        }
-        // The window's output paints the same scene into its own target in
-        // this frame, after the window and before the submit.
         let output_step = self.plan_window_output(
             id,
             scene.as_ref(),
             host_textures.as_ref(),
             gpu_renderers.as_ref(),
+            producers.as_ref(),
             viewport.clear_color,
         );
-        let output = self.record_window_output(
+        if let Some(state) = self.window_outputs.get_mut(&id) {
+            state.can_share_window(self.graphics.gpu(), &geometry, profile, viewport, opaque);
+        }
+        let direct = crate::output::driver::frame_driver::DirectPresentation {
+            id: crate::RenderTargetId(id.0),
+            profile,
+            viewport,
+            alpha: if opaque {
+                crate::AlphaEncoding::Linear
+            } else {
+                crate::AlphaEncoding::Gamma
+            },
+            text_aa: opaque
+                .then(crate::scene_paint::SubpixelOrder::system)
+                .flatten(),
+            parameters: presentation_parameters,
+        };
+        stage_clock.mark(&stage::PRESENTATION_PLAN_NS);
+        let (output, encoded_presentation) = match self.encode_presentation(
             id,
             output_step,
+            Some(direct),
             scene.as_ref(),
             &mut recording,
+            Some(&target),
             host_textures.as_ref(),
             gpu_renderers.as_ref(),
-            output_fetch_host,
-        );
+            fetch_host,
+        ) {
+            Ok(encoded) => encoded,
+            Err(error) => {
+                drop(recording);
+                drop(target);
+                self.discard_frame(id, frame);
+                self.fail_output_trace(id);
+                self.program
+                    .report_host_failure(HostFailure::UnpaintableScene {
+                        window: id,
+                        error: error.to_string(),
+                    });
+                self.rearm_frame_demand(id);
+                return;
+            }
+        };
+        let shared_paint = encoded_presentation.shared;
+        let direct_ui = encoded_presentation.direct_ui;
+        stage_clock.mark(&stage::PRESENTATION_ENCODE_NS);
         let submission = recording.submit();
+        stage_clock.mark(&stage::PRESENTATION_SUBMIT_NS);
+        if let Some(producer_frame) = producer_frame {
+            self.producer_frames.submitted(producer_frame);
+        }
+        let trace_waits =
+            trace_enabled.then(|| crate::output::OutputTraceWait::from_submission(&submission));
+        if let Some(state) = self.window_outputs.get_mut(&id) {
+            state.trace_host_submission(direct_ui, trace_waits);
+        }
         let output = self.complete_window_output(id, output, &submission);
+        let mut output_work = self
+            .window_outputs
+            .get(&id)
+            .map(|state| state.last_work())
+            .unwrap_or_default();
+        output_work.ui_renders += usize::from(direct_ui);
+        output_work.submissions = 1;
+        let gpu_work = encoded_presentation.gpu_work;
+        self.program.write_document(id, |document| {
+            let context = document.context_mut();
+            context.record_output_work(output_work);
+            context.record_presentation_gpu_work(gpu_work);
+        });
         if frame_started.is_some() {
             crate::host_diagnostics::watch_submission(self.graphics.gpu().raw_queue());
         }
@@ -430,10 +498,16 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             prepared.submitted(&submission);
         }
         let submit = submission.cpu_duration();
-        let painter = self.painter_mut(profile);
+        let painter = self.painter_mut(if shared_paint {
+            crate::output::window_output::output_profile()
+        } else {
+            profile
+        });
         painter.record_submit(&submission);
-        let gpu_work = painter.last_gpu_work();
+        stage_clock.mark(&stage::PRESENTATION_POST_SUBMIT_NS);
         self.graphics.present_frame(frame);
+        stage_clock.mark(&stage::PRESENTATION_PRESENT_NS);
+        self.note_native_live_resize_presented(id);
         crate::host_diagnostics::frame_presented(frame_started, submit, gpu_work);
         if let Some(host) = self.window_contexts.get_mut(&id) {
             self.graphics.apply_pending_reconfigure(&mut host.surface);
@@ -441,7 +515,21 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         self.serve_frame_demand(id);
         // Before any program callback can move the document away from the
         // scene just painted.
-        self.commit_image_sizes(id, profile, [crate::RenderTargetId(id.0)]);
+        if shared_paint {
+            let targets = self
+                .window_outputs
+                .get(&id)
+                .map(|state| state.target_ids())
+                .unwrap_or_default();
+            self.commit_image_sizes(id, crate::output::window_output::output_profile(), targets);
+        } else {
+            self.commit_image_sizes(id, profile, [crate::RenderTargetId(id.0)]);
+        }
+        if direct_ui {
+            self.observe_direct_output_trace(id, profile, viewport.physical_size, trace_waits);
+        } else {
+            self.direct_output_traces.remove(&id);
+        }
         // The one transaction boundary for this window's composition tree.
         // Backends stage; the host publishes, and only when something was
         // staged — a retained compositor does not follow the GPU's frame rate.
@@ -449,6 +537,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         if let Some(composition) = composition
             && let Err(error) = composition.commit()
         {
+            self.fail_output_trace(id);
             self.program
                 .report_host_failure(HostFailure::ResourceProduction {
                     window: id,
@@ -471,6 +560,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         }
         // Layout moved the caret, or the field under it: the IME follows.
         self.refresh_window_input(id);
+        stage_clock.mark(&stage::PRESENTATION_FINISH_NS);
         let mut update = self
             .program
             .window_frame_presented(id, &self.context_for(id));
