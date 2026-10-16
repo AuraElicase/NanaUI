@@ -2315,6 +2315,117 @@ mod tests {
         );
     }
 
+    /// A shorter fade must keep its zero endpoint while movement continues;
+    /// reopening in that interval reverses from zero without the old exit
+    /// completion releasing the host. A completed exit can also be parked and
+    /// remounted without inheriting the logical opacity of one.
+    #[test]
+    fn a_dialog_holds_finished_exit_tracks_until_reopening() {
+        use crate::{AnimatableProperty, MotionValue};
+        use std::time::Duration;
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        cx.set_theme_definition(
+            &nana_ui_core::ThemeDefinition::NANA_DARK.with_dialog(moving_recipe()),
+        )
+        .unwrap();
+        let (host, dialog, _) = hosted_dialog(&mut cx, document);
+        let id = dialog.stable_id();
+        cx.activate_overlay(host, dialog).unwrap();
+        cx.advance_animations(Duration::from_millis(200));
+        cx.dismiss_overlay(host).unwrap();
+        cx.advance_animations(Duration::from_millis(320));
+        assert!(cx.world().surface_closing(id));
+        assert_eq!(
+            presented(&cx, id, AnimatableProperty::Opacity),
+            Some(MotionValue::Scalar(0.0))
+        );
+        assert_eq!(
+            cx.world().overlay_host(host.stable_id()).unwrap().active,
+            Some(id)
+        );
+        assert!(cx.activate_overlay(host, dialog).unwrap());
+        assert_eq!(
+            presented(&cx, id, AnimatableProperty::Opacity),
+            Some(MotionValue::Scalar(0.0))
+        );
+        cx.advance_animations(Duration::from_millis(400));
+        assert_eq!(
+            cx.world().overlay_host(host.stable_id()).unwrap().active,
+            Some(id)
+        );
+        cx.advance_animations(Duration::from_millis(520));
+        cx.dismiss_overlay(host).unwrap();
+        cx.advance_animations(Duration::from_millis(720));
+        assert_eq!(
+            cx.world().overlay_host(host.stable_id()).unwrap().active,
+            None
+        );
+        assert_eq!(
+            cx.next_animation_deadline(),
+            None,
+            "holds do not keep ticking"
+        );
+        let mut mutations = crate::MutationQueue::new();
+        mutations.park_subtree(id);
+        cx.commit_mutations(mutations).unwrap();
+        cx.append_child(host, dialog).unwrap();
+        cx.activate_overlay(host, dialog).unwrap();
+        assert_eq!(
+            presented(&cx, id, AnimatableProperty::Opacity),
+            Some(MotionValue::Scalar(0.0))
+        );
+        assert_eq!(cx.world().node_style(id).unwrap().layout.opacity, None);
+        cx.advance_animations(Duration::from_millis(780));
+        let Some(MotionValue::Scalar(alpha)) = presented(&cx, id, AnimatableProperty::Opacity)
+        else {
+            panic!("reopening fades in")
+        };
+        assert!((alpha - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_dialog_holds_its_exit_transform_while_the_scrim_finishes() {
+        use crate::{AnimatableProperty, MotionValue};
+        use std::time::Duration;
+        let mut cx = AppContext::new();
+        let mut recipe = moving_recipe();
+        recipe.motion.card_move = nana_ui_core::DialogTransition::new(80, crate::Easing::Linear);
+        cx.set_theme_definition(&nana_ui_core::ThemeDefinition::NANA_DARK.with_dialog(recipe))
+            .unwrap();
+        let (host, dialog, _) = hosted_dialog(&mut cx, DocumentId::new(1).unwrap());
+        let id = dialog.stable_id();
+        cx.activate_overlay(host, dialog).unwrap();
+        cx.advance_animations(Duration::from_millis(200));
+        cx.dismiss_overlay(host).unwrap();
+        cx.advance_animations(Duration::from_millis(280));
+        let Some(MotionValue::Transform(transform)) =
+            presented(&cx, id, AnimatableProperty::Transform)
+        else {
+            panic!("finished movement holds its endpoint")
+        };
+        assert_eq!((transform.a, transform.f), (0.98, -8.0));
+        assert_eq!(
+            cx.world().overlay_host(host.stable_id()).unwrap().active,
+            Some(id)
+        );
+        cx.advance_animations(Duration::from_millis(320));
+        assert_eq!(
+            presented(&cx, id, AnimatableProperty::Opacity),
+            Some(MotionValue::Scalar(0.0))
+        );
+        assert_eq!(
+            cx.world().overlay_host(host.stable_id()).unwrap().active,
+            Some(id)
+        );
+        cx.advance_animations(Duration::from_millis(360));
+        assert_eq!(
+            cx.world().overlay_host(host.stable_id()).unwrap().active,
+            None
+        );
+        assert_eq!(cx.next_animation_deadline(), None);
+    }
+
     /// With reduced motion a dialog is simply there, and simply gone: every
     /// track ends on the next advance, at the same time it began.
     #[test]
