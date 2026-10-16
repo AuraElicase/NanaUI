@@ -636,6 +636,7 @@ impl AppContext {
                     .clone()
                     .kind(recipe.action_kind)
                     .size(recipe.control_size);
+                next.style.radius = Some(recipe.control_radius);
                 if let Some(label) = &action
                     && next.label != **label
                 {
@@ -657,6 +658,7 @@ impl AppContext {
                     .clone()
                     .kind(ButtonKind::Text)
                     .size(recipe.control_size);
+                next.style.radius = Some(recipe.control_radius);
                 if next.label != close_label {
                     next.label = Arc::clone(&close_label);
                 }
@@ -1257,6 +1259,69 @@ mod tests {
                 text.value.clone()
             })
             .unwrap()
+    }
+
+    /// A theme can round just the controls without rebuilding them or
+    /// changing their size, action kind, or toast surface radius.
+    #[test]
+    fn control_radius_follows_theme_changes_on_the_existing_buttons() {
+        use nana_ui_core::{RadiusTier, ThemeDefinition, ToastRecipe};
+
+        let mut context = AppContext::new();
+        let toast = assembled(
+            &mut context,
+            Toast::new("Saved", ToastTone::Success)
+                .action("View")
+                .dismissible(true),
+        );
+        let parts = parts_of(&context, toast);
+        for (theme, tier) in [
+            (ThemeDefinition::NANA_LIGHT, RadiusTier::Sm),
+            (ThemeDefinition::NANA_DARK, RadiusTier::Xl),
+            (ThemeDefinition::NANA_LIGHT, RadiusTier::Lg),
+            (ThemeDefinition::NANA_DARK, RadiusTier::Sm),
+        ] {
+            let recipe = ToastRecipe {
+                control_radius: tier,
+                ..ToastRecipe::DEFAULT
+            };
+            context
+                .set_theme_definition(&theme.with_toast(recipe))
+                .unwrap();
+            lay_out(&mut context, 360.0);
+            let metrics = context.world().theme_metrics();
+            for id in [parts.action, parts.close] {
+                let style = context.world().node_style(id).unwrap();
+                assert_eq!(style.radius, Some(tier));
+                assert_eq!(
+                    context.world().layout_box(id).unwrap().height,
+                    recipe.control_size.height_in(metrics)
+                );
+            }
+            assert_eq!(parts_of(&context, toast), parts);
+            assert_eq!(
+                context
+                    .read(Entity::<Button>::from_stable_id(parts.action), |b| b.kind)
+                    .unwrap(),
+                recipe.action_kind
+            );
+            assert_eq!(
+                context
+                    .read(Entity::<IconButton>::from_stable_id(parts.close), |b| b
+                        .kind)
+                    .unwrap(),
+                ButtonKind::Text
+            );
+            assert_eq!(
+                context
+                    .world()
+                    .node_style(toast.stable_id())
+                    .unwrap()
+                    .layout
+                    .border_radius,
+                Some(recipe.radius.resolve(metrics))
+            );
+        }
     }
 
     /// Assembly turns the painted leaf into a row of parts: the copy column

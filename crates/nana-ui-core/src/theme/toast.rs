@@ -194,6 +194,9 @@ pub struct ToastRecipe {
     pub action_kind: ButtonKind,
     /// The size of its actions and of its dismiss button.
     pub control_size: ControlSize,
+    /// The radius step of its action and dismiss buttons, independent of
+    /// the toast surface. Resolves against the installed theme's metrics.
+    pub control_radius: RadiusTier,
     /// How it comes, goes and moves in a stack.
     pub motion: ToastMotion,
     /// Space between the toasts of a stack.
@@ -222,6 +225,7 @@ impl ToastRecipe {
         progress: ToastProgressRecipe::DEFAULT,
         action_kind: ButtonKind::Text,
         control_size: ControlSize::Small,
+        control_radius: RadiusTier::Sm,
         motion: ToastMotion::DEFAULT,
         stack_gap: space::MD,
     };
@@ -292,6 +296,7 @@ mod tests {
         assert_eq!(recipe.copy_gap, space::XXS);
         assert_eq!(recipe.action_kind, ButtonKind::Text);
         assert_eq!(recipe.control_size, ControlSize::Small);
+        assert_eq!(recipe.control_radius, RadiusTier::Sm);
         assert_eq!(recipe.stack_gap, space::MD);
 
         let progress = recipe.progress;

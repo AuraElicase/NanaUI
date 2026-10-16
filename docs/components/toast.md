@@ -60,10 +60,10 @@ cx.on(toast, |_, _: &ToastDismissed, _| { /* 拿掉这条 */ })?;
 - **文案列**：标题按配方的 `title_max_lines` 折行截断，说明按 `description_max_lines`，`0` 不截断。
 - **百分比**：`ToastProgress::Determinate` 且配方的 `progress.show_percent` 为真时，标题旁按框架文案 `toast.percent`（`{percent}%`）写出来，等宽数字，宽度按 `100%` 量好，数字变长时标题不跳。
 - **进度条**：在文案列底部，粗细、轨道、填充色和上外边距（`progress.top_gap`）读配方。`ToastProgress::Indeterminate` 时扫动，减弱动态效果时不扫。确定值夹在 `0.0..=1.0`。
-- **动作按钮**：`Toast::action(label)` 给一个，种类和档位读配方的 `action_kind`、`control_size`。按整条提示的内容高度垂直居中，说明换行和进度条都计入高度；单行提示不因按钮而增高。按下在提示上发 `ToastAction`。
-- **关闭按钮**：`dismissible` 时出现，与动作按钮同样垂直居中，`control_size` 档、文本种类，按下发 `ToastDismissed`。可访问名是 `close_label`，不给时是框架文案 `toast.close`（「关闭通知」）。
+- **动作按钮**：`Toast::action(label)` 给一个，种类和档位读配方的 `action_kind`、`control_size`，圆角读 `control_radius`（默认 `RadiusTier::Sm`）。按整条提示的内容高度垂直居中，说明换行和进度条都计入高度；单行提示不因按钮而增高。按下在提示上发 `ToastAction`。
+- **关闭按钮**：`dismissible` 时出现，与动作按钮同样垂直居中，`control_size` 档、文本种类，圆角同样读 `control_radius`，按下发 `ToastDismissed`。可访问名是 `close_label`，不给时是框架文案 `toast.close`（「关闭通知」）。
 
-两个按钮竖直居中在标题的第一行上，不把一行的提示撑高。提示的宽度随内容（CSS `width: fit-content`），放不下时文案折行；显示进度时至少为配方的 `progress.min_width`（默认 240），进度条不跟着文案伸缩。放置过的提示保留 `place_in` 给的宽度。
+两个按钮按完整内容高度垂直居中，不把一行的提示撑高。主题可将 `control_radius` 设为 `RadiusTier::Xl` 等档位，让文字操作呈胶囊、方形关闭按钮的反馈呈圆形；圆角随当前主题度量解析，切换主题时原地更新。提示的宽度随内容（CSS `width: fit-content`），放不下时文案折行；显示进度时至少为配方的 `progress.min_width`（默认 240），进度条不跟着文案伸缩。放置过的提示保留 `place_in` 给的宽度。
 
 装配后的提示在指针悬停或焦点在里面时暂停计时，离开后从下一帧起按剩余时间继续。放在 [ToastStack](toast-stack.md) 里时，由栈决定什么时候计时。
 
