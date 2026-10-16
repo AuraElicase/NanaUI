@@ -74,6 +74,10 @@ impl Painter for BandedCard {
 const MODAL_SURFACE_PAINT: u64 = 0xFFFF_FFD0;
 
 fn open(themed: bool) -> (RuntimeDocument, StableNodeId) {
+    open_with_motion(themed, true)
+}
+
+fn open_with_motion(themed: bool, reduced: bool) -> (RuntimeDocument, StableNodeId) {
     let document = DocumentId::new(1).unwrap();
     let mut runtime = RuntimeDocument::new(document);
     let cx = runtime.context_mut();
@@ -86,7 +90,7 @@ fn open(themed: bool) -> (RuntimeDocument, StableNodeId) {
         .unwrap();
     cx.assemble_confirm_dialog(dialog).unwrap();
     cx.append_child(host, dialog).unwrap();
-    cx.set_reduced_motion(true);
+    cx.set_reduced_motion(reduced);
     runtime
         .flush(LayoutViewport::new(800.0, 600.0), &mut NoText)
         .unwrap();
@@ -96,13 +100,36 @@ fn open(themed: bool) -> (RuntimeDocument, StableNodeId) {
             .activate_overlay(host, dialog)
             .unwrap()
     );
-    runtime
-        .context_mut()
-        .advance_animations(Duration::from_millis(1000));
+    runtime.context_mut().advance_animations(Duration::ZERO);
     runtime
         .flush(LayoutViewport::new(800.0, 600.0), &mut NoText)
         .unwrap();
     (runtime, dialog.stable_id())
+}
+
+#[test]
+fn a_custom_card_is_transparent_before_its_layer_is_promoted() {
+    let (runtime, id) = open_with_motion(false, false);
+    assert!(runtime.scene().compositor_layer(id).is_none());
+    let mut painted = 0;
+    for primitive in runtime.scene().primitives().filter(|p| p.node == id) {
+        if primitive.id.slot >> 32 == MODAL_SURFACE_PAINT {
+            painted += 1;
+            let draw = runtime.scene().draw_primitive(primitive.id).unwrap();
+            assert_eq!(
+                draw.paint_opacity, 0.0,
+                "custom card flashed at animation start"
+            );
+            let encoded = runtime.scene().compositor_primitive_encode(
+                primitive,
+                draw.transform,
+                draw.paint_opacity,
+            );
+            assert_eq!(encoded.opacity, 0.0);
+            assert_eq!(encoded.motion_ids, (0, 0));
+        }
+    }
+    assert!(painted > 0);
 }
 
 /// The frame's own primitives, in paint order.

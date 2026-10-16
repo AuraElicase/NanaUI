@@ -1874,7 +1874,7 @@ impl UiScene {
         let mut rebuilt_primitives = 0;
         if updated_nodes != 0 || removed_nodes != 0 {
             self.compositor_projection_dirty =
-                self.compositor_layer_count() != 0 && scroll_translations.is_empty();
+                self.compositor.has_presentation() && scroll_translations.is_empty();
             if order_rebuilt {
                 self.rebuild_document_order();
                 for held in self.primitives.values_mut() {
