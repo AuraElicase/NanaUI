@@ -1,0 +1,909 @@
+{
+  "schema_version": 1,
+  "scope": "Completed fixed-five diagnostic descriptive evidence; no product source root-cause repair, TG-only mechanism or platform acceptance",
+  "target_binary_sha256": "5461e57010c936e16575ce20c3a72ed70fd6c7913359e21f1e1d57352fd791a9",
+  "worker_binary_sha256": "36de1e08015a90c5a461f9d02cd8fceb484fcefa27ff0237f4a42a5c3a7cb1f4",
+  "populations": [
+    {
+      "prefix": "r6-worker-formal-20261016-1",
+      "status": "failed-unsupported-CLI-before-load",
+      "measured_requested": 3000,
+      "supported_measured_max": 2400,
+      "load_admitted": false
+    },
+    {
+      "prefix": "r6-worker-formal-20261016-2",
+      "status": "incomplete-stopped-on-run2-worker-deadline",
+      "requested_runs": 5,
+      "collected_runs": 2,
+      "remaining_runs_not_started": 3,
+      "period_ns": 20000000,
+      "full_target_frames": 5280,
+      "measured_target_frames": 4800,
+      "functional_target_reports_passed": 2,
+      "run1": "exploratory-actual-trace-reviewed",
+      "run2": "failed-not-accepted",
+      "failed_worker_period": {
+        "slot": "I",
+        "ordinal": 0,
+        "requested_units": 65536,
+        "completed_units": 63919,
+        "deadline_overrun_ns": 1750,
+        "period_start_lateness_ms": "10.057833333333333",
+        "measurement_scope": "period.start minus scheduled; includes phase boundary wait/POI overhead; not independently resolved kernel wake time"
+      }
+    },
+    {
+      "prefix": "r6-worker-formal-20261016-3",
+      "status": "preflight-loginwindow-warning-no-processes-or-samples",
+      "period_ns": 50000000,
+      "trace_worker_target_plan_samples": 0
+    },
+    {
+      "prefix": "r6-worker-formal-20261016-4",
+      "status": "incomplete-stopped-on-run2-inactive-from-first-warm-frame",
+      "requested_runs": 5,
+      "collected_runs": 2,
+      "period_ns": 50000000,
+      "run1": "exploratory-actual-trace-reviewed",
+      "run2": "failed-context-not-accepted",
+      "remaining_runs_not_started": 3
+    },
+    {
+      "prefix": "r6-worker-formal-20261016-5",
+      "status": "failed-run1-inactive-from-first-warm-frame",
+      "requested_runs": 5,
+      "collected_runs": 1,
+      "remaining_runs_not_started": 4,
+      "period_ns": 50000000
+    },
+    {
+      "prefix": "r6-worker-coldfront-pilot-20261016-1",
+      "status": "failed-trace-finalization",
+      "pilot_excluded_from_five": true,
+      "target_full_frames": 2640,
+      "target_measured_frames": 2400,
+      "worker_rows_checked": 640,
+      "trace_exit_zero": false,
+      "formal_acceptance": false
+    },
+    {
+      "prefix": "r6-worker-coldfront-pilot-20261016-2",
+      "status": "independently-reviewed-startup-and-full-trace-pilot",
+      "pilot_excluded_from_five": true,
+      "target_full_frames": 2640,
+      "target_measured_frames": 2400,
+      "worker_rows_checked": 640,
+      "target_poi": 23,
+      "worker_poi": 20,
+      "gaps": 2399,
+      "trace_exit_zero": true,
+      "formal_acceptance": false,
+      "ready_to_trace_exit_s": "152.522804",
+      "sample_scope": "one owned tracer sample after target/work completed, not product frame hot path"
+    },
+    {
+      "prefix": "r6-worker-coldfront-formal-20261016-1",
+      "status": "independently-reviewed-complete-fixed-five-descriptive-evidence",
+      "orders": [
+        "ABBA",
+        "BAAB",
+        "ABBA",
+        "BAAB",
+        "ABBA"
+      ],
+      "requested_runs": 5,
+      "collected_runs": 5,
+      "replaced_runs": 0,
+      "trace_natural_exit_zero_count": 5,
+      "pilot_excluded_from_five": false,
+      "target_full_frames": 13200,
+      "target_measured_frames": 12000,
+      "strict_measured_context_endpoints": 24000,
+      "worker_rows_checked": 3200,
+      "max_recorded_total_bytes": 11474976384,
+      "unchanged_total_limit_bytes": 12884901888,
+      "perrun_work": {
+        "render": 2400,
+        "submit": 2400,
+        "draw": 7200,
+        "upload_bytes": 3226617,
+        "observed_heap_fields": 7
+      },
+      "descriptive_evidence_independently_accepted": true,
+      "target_poi": 115,
+      "worker_poi": 100,
+      "gaps": 11995,
+      "unique_selected_incarnations": 15,
+      "excluded_measured_frames": 0
+    }
+  ],
+  "exploratory_run1": {
+    "formal_population_completed": false,
+    "full_frames": 2640,
+    "measured_frames": 2400,
+    "excluded_frame_ordinals": [],
+    "phase_p50_definition": "lower-order statistic, same as benchmark; phases/runs are units, never frames",
+    "phases": [
+      {
+        "phase": 0,
+        "state": "A",
+        "frame_count": 421,
+        "wall_ms_p50": {
+          "numerator": 12237,
+          "denominator": 62500
+        },
+        "attribution": {
+          "P95": 406,
+          "E95": 13,
+          "mixed": 2
+        }
+      },
+      {
+        "phase": 1,
+        "state": "B",
+        "frame_count": 420,
+        "wall_ms_p50": {
+          "numerator": 172083,
+          "denominator": 500000
+        },
+        "attribution": {
+          "P95": 220,
+          "E95": 197,
+          "mixed": 3
+        }
+      },
+      {
+        "phase": 2,
+        "state": "B",
+        "frame_count": 420,
+        "wall_ms_p50": {
+          "numerator": 3271,
+          "denominator": 4000
+        },
+        "attribution": {
+          "E95": 218,
+          "P95": 202
+        }
+      },
+      {
+        "phase": 3,
+        "state": "A",
+        "frame_count": 420,
+        "wall_ms_p50": {
+          "numerator": 201417,
+          "denominator": 1000000
+        },
+        "attribution": {
+          "P95": 419,
+          "E95": 1
+        }
+      }
+    ],
+    "worker_roles": {
+      "D": 0,
+      "I": 6
+    },
+    "interpretation": "Single exploratory workload-slot reversal. Includes fixed launch/role/environment interactions; cannot identify TG-only mechanism or historical source regression.",
+    "assignment": {
+      "A": "D busy / I idle",
+      "B": "I busy / D idle"
+    }
+  },
+  "prospective50ms": {
+    "freeze_sha256": "0648b106d50dade78d76ac3909346f92275410885325a346f44903dcf7de002b",
+    "max_observed_busy_wall_ms": "13.032708333333333",
+    "period_selection": "minimum supported divisor of4s and500ms >=2*(observed max period-start lateness + max busy wall); observed-only margin, no future guarantee",
+    "period_ns": 50000000,
+    "phase_ns": 4000000000,
+    "settling_ns": 500000000,
+    "units": 65536,
+    "worker_period_rows": 320,
+    "units_per_second": 1310720,
+    "work_rate_relative_to20ms": {
+      "numerator": 2,
+      "denominator": 5
+    },
+    "chronology": "Automatic run1 analysis existed; selectors did not inspect target effect until choosing50ms. Prospective follow-up, not fully blinded preregistration.",
+    "max_observed_period_start_lateness_ms": "10.096",
+    "cold_front_v7_freeze_sha256": "bbd48ba099434e255f560d2dd59c436a542be44791cdcdd0df67789c9277d6c9",
+    "startup_contract": "one-shot-own-target-activation-then-front-gate",
+    "old_v5_five_run_acceptance": false,
+    "coldfront_v7_five_captures_completed": true,
+    "coldfront_v7_descriptive_evidence_accepted": true
+  },
+  "code_gaps_fixed": [
+    "unsupported3000 CLI request",
+    "missing exact root ACK-observation clock evidence and future-ACK rejection",
+    "formal analysis metadata/freeze aliases and explicit exact-SHA historical snapshot resolution",
+    "passive startup required foreground without establishing it; new separately frozen cold-front population validates public incarnation and actual activation before plan/T0",
+    "worker-only clock brackets may touch endpoints; continue rejecting overlap/nonmonotonic POI/duplicate IDs",
+    "trace finalization timeout included recording remainder; explicit45s record+180s postprocessing deadline and owned postmeasurement diagnostic"
+  ],
+  "evidence_gaps": [
+    "new V7 cold-front50ms fixed five fully captured and independently reviewed including raw function, XML/Fraction/identity and descriptive statistics; role/launch context mechanism remains unidentified",
+    "original R1/R2 product source cause unconfirmed",
+    "worker per-thread instructions not instrumented",
+    "frozen target continuous extent/present-mode not instrumented",
+    "running XNU13432 matching source/packed ABI unavailable",
+    "Windows/native/SteamVR/Electron/device-loss actual platform validation not performed",
+    "atomic plan publication MAT not directly persisted; cold helper completion-before-publication relies on frozen source order and measured reap-before-ACK chronology",
+    "LaunchServices worker is not collector child; launcher exit0 and self done report/pathgone are distinct from OS wait worker exit status"
+  ],
+  "issue354": "open; not accepted or closed",
+  "evidence": [
+    {
+      "path": "worker-load/formal-freeze-v3.json",
+      "bytes": 4864,
+      "sha256": "bb0bb61fce2ac1a0c12fe259f0f02e23edffdbf4955d537913955fc5071b14d5"
+    },
+    {
+      "path": "worker-load/formal-freeze-v4.json",
+      "bytes": 7457,
+      "sha256": "f26fe74a7107aec6c6868deb38233095a8974366ec24fa8f474a285b39eda0d0"
+    },
+    {
+      "path": "worker-load/formal-freeze-v5.json",
+      "bytes": 9121,
+      "sha256": "0648b106d50dade78d76ac3909346f92275410885325a346f44903dcf7de002b"
+    },
+    {
+      "path": "review/formal-v3-failed-cli-review.json",
+      "bytes": 991,
+      "sha256": "0439b4aeb639d4630325179554d2cab73f869a1b15717ea7d0480930169dfe41"
+    },
+    {
+      "path": "review/formal-v4-definition-review.json",
+      "bytes": 2066,
+      "sha256": "5d1227b6a85049f028fbdec8bc148e358795cf867e6ce535a9e109e4d1d66fac"
+    },
+    {
+      "path": "review/formal-v5-definition-review.json",
+      "bytes": 1894,
+      "sha256": "09380820fdbe8d2b65f01490982481d25015b51cdda172e935d4ab6ed4fadfcd"
+    },
+    {
+      "path": "review/formal-population2-worker-deadline-audit.json",
+      "bytes": 11281,
+      "sha256": "667ad5ead8d31ce50249997f7c18efee5023bece253c7f3a4360e3e7d6532b89"
+    },
+    {
+      "path": "review/review_formal20_raw_functional.json",
+      "bytes": 2596,
+      "sha256": "8f86d8c280a44ea02cc6eaa513f3c69b694accc2f7d23dcdf142aafe79ade3af"
+    },
+    {
+      "path": "review/formal-population2-run1-actual-trace-review.json",
+      "bytes": 5634,
+      "sha256": "1a03b5041672d4bea6dd98598e03ea50465d01e51b9b2ccb8c269efa579b01f5"
+    },
+    {
+      "path": "review/formal-period-capacity-prospective-review.json",
+      "bytes": 1171,
+      "sha256": "5f260820a2601223529a10aa6e80ed4cce2034784803420a95adc87f99df010e"
+    },
+    {
+      "path": "review/formal-worker-role-context-limits.json",
+      "bytes": 3649,
+      "sha256": "15519f08a6e8ddd9aaac6b3e5e276f18374fff3ff73bbf548f967b828f8938ba"
+    },
+    {
+      "path": "review/formal-population3-preflight-review.json",
+      "bytes": 1438,
+      "sha256": "a8cfd357956da9430f28109b0653f6d51c86286f2d57bc2049244abcb3300fb4"
+    },
+    {
+      "path": "review/formal-adapter-v3-definition-review.json",
+      "bytes": 1438,
+      "sha256": "b2600cecb9835b425cb7cd5a07b9e81c038d394fdcb45e8bea7faf66f96ec77a"
+    },
+    {
+      "path": "control/power-guard-formal-20261016.json",
+      "bytes": 503,
+      "sha256": "27f35b32b47b7dd28ac61fa447d8b26c1704c08e4246aeb423cf10e0b71086ce"
+    },
+    {
+      "path": "control/power-guard-formal-20261016-stop.json",
+      "bytes": 285,
+      "sha256": "1dc90b5b2ffccc519a8b1803bd967e5c2f55fe68a6ffc6c48f0895894a8cb108"
+    },
+    {
+      "path": "control/power-guard-formal50-20261016.json",
+      "bytes": 356,
+      "sha256": "88c68eb35b6b0730f83be8916bc7dadbbc6aa4035ec159286da5b121ea8763b1"
+    },
+    {
+      "path": "control/formal-current-evidence-manifest-v1.json",
+      "bytes": 103988,
+      "sha256": "24c2925dfe1e65060c20a7f47db89a91d40ce9d88befdc591e949ba47dcab3ec"
+    },
+    {
+      "path": "validation/worker-report-checks.json",
+      "bytes": 1577,
+      "sha256": "38ed8d15d2802bb2780f2aac428063eef295e8c02c9e2907ac411a2ba9c1af60"
+    },
+    {
+      "path": "worker-load/formal-freeze-v6.json",
+      "bytes": 11140,
+      "sha256": "6797c713234e46c1b94c7d5b29b87bf5bb1d45f647c21b061acd73366599b3aa"
+    },
+    {
+      "path": "worker-load/formal-freeze-v7.json",
+      "bytes": 12550,
+      "sha256": "bbd48ba099434e255f560d2dd59c436a542be44791cdcdd0df67789c9277d6c9"
+    },
+    {
+      "path": "review/formal-population4-run1-actual-trace-review.json",
+      "bytes": 5637,
+      "sha256": "d6fb7d09220a160d5d12f8dedb3d9c00de4fdff19a3ab31bd83401106053d8bc"
+    },
+    {
+      "path": "review/formal-population5-context-review.json",
+      "bytes": 1146,
+      "sha256": "3b17999d34c45a87ede5ccaee2dd50bdf2347efcd98a8d709cef4477619c2558"
+    },
+    {
+      "path": "review/formal-adapter-v4-definition-review.json",
+      "bytes": 1431,
+      "sha256": "a3d9adffb6f2fd54133b132f200e090a193a28bf5f8066c3da40b36c2b215f7a"
+    },
+    {
+      "path": "review/formal-adapter-v7-definition-review.json",
+      "bytes": 1823,
+      "sha256": "827752c170e39eabb95446197ea664baa18e620c0b4ccee63a74f368ccb635cd"
+    },
+    {
+      "path": "review/formal-v7-definition-review.json",
+      "bytes": 2181,
+      "sha256": "bf4ed0346f867b185b7b748ce9044c24d1deb3df400cb4a8b41be2e623ee01f5"
+    },
+    {
+      "path": "review/coldfront-v7-pilot-complete-independent-review.json",
+      "bytes": 3726,
+      "sha256": "9f4ed7b29baeb33c2bc0debb0bd8fab6c194275640db564e34d3c91a170f6cc8"
+    },
+    {
+      "path": "review/coldfront-v7-pilot-feasibility-receipt.json",
+      "bytes": 2005,
+      "sha256": "74d00fe6b24b4c322f94c50b8f00d4f4ad4713cd0f96027edd9888725712331c"
+    },
+    {
+      "path": "analysis/coldfront-v7-pilot-artifact-manifest.json",
+      "bytes": 8656,
+      "sha256": "b9a47bff1ca91ab85f107fe05b0da63ca51d22ddf9259a30b59b970e8000b2cd"
+    },
+    {
+      "path": "worker-load/formal-five-capacity-after-retention-v1.json",
+      "bytes": 7164,
+      "sha256": "f7c1268ec116e10d95e794ab4027e14dbb74ee779444d1da3b4fb5b833224b58"
+    },
+    {
+      "path": "review/formal-five-capacity-independent-review.json",
+      "bytes": 1331,
+      "sha256": "1cdc5e4ce5e5c10364bbedfea83a5c237017e1db45140b501241f3258113a2c6"
+    },
+    {
+      "path": "review/retained-launch-control-independent-restore.json",
+      "bytes": 593137,
+      "sha256": "4a0814db45cc2fec010f9e35f8078acf98a2f7c5a6a8b27d0ec6548e8f41f368"
+    },
+    {
+      "path": "review/retained-failed-v6-pilot-independent-restore.json",
+      "bytes": 2827,
+      "sha256": "1966ffeefec30ded08401dc1abdb1349fcbb0ea9cb6df1cdec24f953b6d619a8"
+    },
+    {
+      "path": "review/retained-launch-analysis-independent-restore.json",
+      "bytes": 29497,
+      "sha256": "0e1a54216fdf457ebc3c77c7ad50efc5d05c21ade051d022b50f516d7fa7902d"
+    },
+    {
+      "path": "review/formal-series-summary-v2-definition-review.json",
+      "bytes": 1267,
+      "sha256": "957be868b9f7aecae62124dc821cbb68e9ee62ac709953a269703100571f1e4f"
+    },
+    {
+      "path": "analysis/review-freeze-formal-series-v2.json",
+      "bytes": 735,
+      "sha256": "1d8b828fbed625006b1734328c50be82f8daf4452eb8121e269e74fd3f1114a3"
+    },
+    {
+      "path": "review/review_formal_v7_wire_public_v2.json",
+      "bytes": 5875,
+      "sha256": "04fdcfb8f95adc048e3a4fa7f989cdb33382948f922b20dd85cd23bacf5266d6"
+    },
+    {
+      "path": "validation/worker-final-checks.json",
+      "bytes": 985,
+      "sha256": "6233bd3f9f0b62489510275ddbb751a97a255c983b4d84a991ccca289dcc2f15"
+    },
+    {
+      "path": "control/power-guard-coldfront-v7-20261016-stop.json",
+      "bytes": 347,
+      "sha256": "ba4d06b0bd7a75af1079a9b6440b945c6595f2767fdad2108bf76d912e4e3aa5"
+    },
+    {
+      "path": "review/review_formal_v7_run1_raw-local.json",
+      "bytes": 1731,
+      "sha256": "3830d539fead5814638960bf0d9d8818104adf30bcc7cf401235a1162b55ebc7"
+    },
+    {
+      "path": "review/review_formal_v7_run1_raw-target.json",
+      "bytes": 1546,
+      "sha256": "f45b8ec1af0850ede83780c7bac33372be4b15ec6ccee8d5b8e2f7cd13ce0dcc"
+    },
+    {
+      "path": "review/review_formal_v7_run1_finalizer.json",
+      "bytes": 1856,
+      "sha256": "09dca0ba9b5571d0d9f4c4659412cee7c2a9621bb425b84b0513d2a8a482ba2e"
+    },
+    {
+      "path": "review/review_formal_v7_run2_raw-local.json",
+      "bytes": 1714,
+      "sha256": "d9637c3f107079b86338b0062c8a627ae9fe435b1ad6680b3bf83c1fcee007cb"
+    },
+    {
+      "path": "review/review_formal_v7_run2_raw-target.json",
+      "bytes": 1546,
+      "sha256": "80d3bff8c30b51c237f85d1f4fa8cfb0f065a2c6360fa42ee8288671d4b0a25e"
+    },
+    {
+      "path": "review/review_formal_v7_run2_finalizer.json",
+      "bytes": 1865,
+      "sha256": "7f47153cffd9db1d5de87842c0c562ca60758f410c66ffeb31763b0031d844d3"
+    },
+    {
+      "path": "review/review_formal_v7_run3_raw-local.json",
+      "bytes": 1713,
+      "sha256": "09baf74cdd667e9db49efbf9e667a66431a9f01fecfcabe33345b93d6556cf1f"
+    },
+    {
+      "path": "review/review_formal_v7_run3_raw-target.json",
+      "bytes": 1546,
+      "sha256": "abefa0cb235f9b04a8c85b22a40b98cd0000c6e30e068fff4138c42b43856d67"
+    },
+    {
+      "path": "review/review_formal_v7_run3_finalizer.json",
+      "bytes": 1864,
+      "sha256": "7a59adda295c622a01c94001006262105b57961e37f3700ae673cd3fedbd3256"
+    },
+    {
+      "path": "review/review_formal_v7_run4_raw-local.json",
+      "bytes": 1589,
+      "sha256": "41b58dcc75b1e5ffc2a6a72517791969a2cd5160624c06167c3610090426fa21"
+    },
+    {
+      "path": "review/review_formal_v7_run4_raw-target.json",
+      "bytes": 1546,
+      "sha256": "3b0fcac5e390e36a50052df523bb1984fb59a91f5d0b36bf194fd27d45743d65"
+    },
+    {
+      "path": "review/review_formal_v7_run4_finalizer.json",
+      "bytes": 1865,
+      "sha256": "790df65fe73ad1e9ae55f9bda28b565c7413a0109c352a8ab73f078f4c14d560"
+    },
+    {
+      "path": "review/review_formal_v7_run5_raw-local.json",
+      "bytes": 1580,
+      "sha256": "e84c897a4c731e62af219a0149e43483e34cf1b57f45f882b3abec1cfe31ae4b"
+    },
+    {
+      "path": "review/review_formal_v7_run5_raw-target.json",
+      "bytes": 1546,
+      "sha256": "4ce92642216ed30d21ad44d3e1edce1c9addc89b356f6d06f589375ada06bf52"
+    },
+    {
+      "path": "review/review_formal_v7_run5_finalizer.json",
+      "bytes": 1864,
+      "sha256": "c90dca60770283318c82e2b5f0c01bc35c7531c57ef29027ea062b071aeab921"
+    },
+    {
+      "path": "worker-load/fixed-five-lifecycle-audit-v1.json",
+      "bytes": 10688,
+      "sha256": "72ffc93f662195dfe64e521892dbca1a46fc1c470b14417bffeebcd6fb754c29"
+    },
+    {
+      "path": "review/formal-v7-five-raw-independent-review-manifest-v2.json",
+      "bytes": 2105,
+      "sha256": "cf602e6af15b7e2f53812039e7b0e5b92f3fcc84708d4a1a73a2ec62c04c6d4c"
+    },
+    {
+      "path": "analysis/formal-five-actual-artifact-manifest-v1.json",
+      "bytes": 26935,
+      "sha256": "319126b5b5bd1e7751f8612e54b7d80ee95bf5639dcd94a95759ec536bedd8d8"
+    },
+    {
+      "path": "analysis/formal-five-actual-export-state-v1.json",
+      "bytes": 12764,
+      "sha256": "44664c355e0210b36d5179ba9d0f99ef30480e673384440657417ff4120e4680"
+    },
+    {
+      "path": "review/formal-v7-five-actual-acceptance-manifest.json",
+      "bytes": 2519,
+      "sha256": "b3e802967c7bc3c0b1d9241909bcf9012589a7112b51583514ca42e90dd712ca"
+    },
+    {
+      "path": "review/formal-v7-five-actual-independent-overview.json",
+      "bytes": 5009,
+      "sha256": "3b65c064c12e505bad03f530d2e96030df650b828c2172fb6b91dc9a49e9ef20"
+    },
+    {
+      "path": "analysis/formal-v7-five-descriptive-summary-v2.json",
+      "bytes": 14301583,
+      "sha256": "b0621dd369e1f37804ce668facc6c9924697ab2c0badb4a9b6648a953b6f774d"
+    },
+    {
+      "path": "review/review_formal_v7_five_statistics.json",
+      "bytes": 19603,
+      "sha256": "92766b9ae07d8e02a0c8ead040aef395f01845826bc016e11ed2c57b4cb14a30"
+    },
+    {
+      "path": "control/retained-launch-control-originals-v1-locator.json",
+      "bytes": 2365,
+      "sha256": "918697101fa1ffbefe2da54529c0961d5e1efd1177c0259c1b9d2508cc444575"
+    },
+    {
+      "path": "analysis/retained-launch-analysis-originals-v1-locator.json",
+      "bytes": 2378,
+      "sha256": "2b624bd0d168e447c719ef63d2c96599e2e17e02974fdd4ba4e1f3c9b4545a77"
+    },
+    {
+      "path": "worker-load/formal-runs/r6-worker-coldfront-pilot-20261016-1-run1-ABBA-original-locator.json",
+      "bytes": 2671,
+      "sha256": "daeba8f707662b3bc9953918782155574ab0b6010186ab79ce683c5ab0d7ab5b"
+    }
+  ],
+  "fixed_five_results": {
+    "replication_unit": "five capture/run effects; phase p50 averaged within run; frames are not independent repetitions",
+    "metrics": {
+      "wall_ms": {
+        "per_run_B_minus_A": [
+          {
+            "numerator": 37516800000000003,
+            "denominator": 200000000000000000
+          },
+          {
+            "numerator": 379167,
+            "denominator": 2000000
+          },
+          {
+            "numerator": 7704687499999999,
+            "denominator": 25000000000000000
+          },
+          {
+            "numerator": 12292699999999999,
+            "denominator": 50000000000000000
+          },
+          {
+            "numerator": 29129099999999997,
+            "denominator": 200000000000000000
+          }
+        ],
+        "mean_B_minus_A": {
+          "numerator": 53842724999999997,
+          "denominator": 250000000000000000
+        },
+        "same_arm_successive_run_drift": {
+          "A": [
+            {
+              "numerator": -17899899999999997,
+              "denominator": 200000000000000000
+            },
+            {
+              "numerator": -3866674999999999,
+              "denominator": 25000000000000000
+            },
+            {
+              "numerator": 4950024999999999,
+              "denominator": 50000000000000000
+            },
+            {
+              "numerator": -8732275000000001,
+              "denominator": 50000000000000000
+            }
+          ],
+          "B": [
+            {
+              "numerator": -7,
+              "denominator": 80
+            },
+            {
+              "numerator": -36063,
+              "denominator": 1000000
+            },
+            {
+              "numerator": 36667,
+              "denominator": 1000000
+            },
+            {
+              "numerator": -54970800000000003,
+              "denominator": 200000000000000000
+            }
+          ]
+        }
+      },
+      "execution_thread_cpu_ns": {
+        "per_run_B_minus_A": [
+          {
+            "numerator": 181750,
+            "denominator": 1
+          },
+          {
+            "numerator": 186333,
+            "denominator": 1
+          },
+          {
+            "numerator": 595333,
+            "denominator": 2
+          },
+          {
+            "numerator": 495209,
+            "denominator": 2
+          },
+          {
+            "numerator": 248335,
+            "denominator": 2
+          }
+        ],
+        "mean_B_minus_A": {
+          "numerator": 2075043,
+          "denominator": 10
+        },
+        "same_arm_successive_run_drift": {
+          "A": [
+            {
+              "numerator": -200291,
+              "denominator": 2
+            },
+            {
+              "numerator": -141688,
+              "denominator": 1
+            },
+            {
+              "numerator": 184249,
+              "denominator": 2
+            },
+            {
+              "numerator": -170833,
+              "denominator": 1
+            }
+          ],
+          "B": [
+            {
+              "numerator": -191125,
+              "denominator": 2
+            },
+            {
+              "numerator": -60709,
+              "denominator": 2
+            },
+            {
+              "numerator": 84125,
+              "denominator": 2
+            },
+            {
+              "numerator": -294270,
+              "denominator": 1
+            }
+          ]
+        }
+      },
+      "benchmark_thread_cpu_ms": {
+        "per_run_B_minus_A": [
+          {
+            "numerator": 91271,
+            "denominator": 500000
+          },
+          {
+            "numerator": 1853115000000001,
+            "denominator": 10000000000000000
+          },
+          {
+            "numerator": 74599,
+            "denominator": 250000
+          },
+          {
+            "numerator": 24710450000000003,
+            "denominator": 100000000000000000
+          },
+          {
+            "numerator": 24904199999999999,
+            "denominator": 200000000000000000
+          }
+        ],
+        "mean_B_minus_A": {
+          "numerator": 8303000000000001,
+          "denominator": 40000000000000000
+        },
+        "same_arm_successive_run_drift": {
+          "A": [
+            {
+              "numerator": -992495000000001,
+              "denominator": 10000000000000000
+            },
+            {
+              "numerator": -1418129999999999,
+              "denominator": 10000000000000000
+            },
+            {
+              "numerator": 9212449999999997,
+              "denominator": 100000000000000000
+            },
+            {
+              "numerator": -17097899999999997,
+              "denominator": 100000000000000000
+            }
+          ],
+          "B": [
+            {
+              "numerator": -603,
+              "denominator": 6250
+            },
+            {
+              "numerator": -57457,
+              "denominator": 2000000
+            },
+            {
+              "numerator": 40833,
+              "denominator": 1000000
+            },
+            {
+              "numerator": -58712500000000001,
+              "denominator": 200000000000000000
+            }
+          ]
+        }
+      },
+      "instructions": {
+        "per_run_B_minus_A": [
+          {
+            "numerator": -853,
+            "denominator": 2
+          },
+          {
+            "numerator": 2667,
+            "denominator": 2
+          },
+          {
+            "numerator": 1350,
+            "denominator": 1
+          },
+          {
+            "numerator": 8797,
+            "denominator": 2
+          },
+          {
+            "numerator": 6572,
+            "denominator": 1
+          }
+        ],
+        "mean_B_minus_A": {
+          "numerator": 5291,
+          "denominator": 2
+        },
+        "same_arm_successive_run_drift": {
+          "A": [
+            {
+              "numerator": -13537,
+              "denominator": 2
+            },
+            {
+              "numerator": -1995,
+              "denominator": 1
+            },
+            {
+              "numerator": -6180,
+              "denominator": 1
+            },
+            {
+              "numerator": -2656,
+              "denominator": 1
+            }
+          ],
+          "B": [
+            {
+              "numerator": -10017,
+              "denominator": 2
+            },
+            {
+              "numerator": -3957,
+              "denominator": 2
+            },
+            {
+              "numerator": -6263,
+              "denominator": 2
+            },
+            {
+              "numerator": -965,
+              "denominator": 2
+            }
+          ]
+        }
+      },
+      "total_level_ticks": {
+        "per_run_B_minus_A": [
+          {
+            "numerator": 8729,
+            "denominator": 2
+          },
+          {
+            "numerator": 8921,
+            "denominator": 2
+          },
+          {
+            "numerator": 14293,
+            "denominator": 2
+          },
+          {
+            "numerator": 5923,
+            "denominator": 1
+          },
+          {
+            "numerator": 2980,
+            "denominator": 1
+          }
+        ],
+        "mean_B_minus_A": {
+          "numerator": 49749,
+          "denominator": 10
+        },
+        "same_arm_successive_run_drift": {
+          "A": [
+            {
+              "numerator": -4795,
+              "denominator": 2
+            },
+            {
+              "numerator": -3399,
+              "denominator": 1
+            },
+            {
+              "numerator": 4425,
+              "denominator": 2
+            },
+            {
+              "numerator": -4099,
+              "denominator": 1
+            }
+          ],
+          "B": [
+            {
+              "numerator": -4603,
+              "denominator": 2
+            },
+            {
+              "numerator": -713,
+              "denominator": 1
+            },
+            {
+              "numerator": 989,
+              "denominator": 1
+            },
+            {
+              "numerator": -7042,
+              "denominator": 1
+            }
+          ]
+        }
+      }
+    },
+    "measured_attribution": {
+      "P95": 6554,
+      "E95": 5370,
+      "mixed": 76
+    },
+    "frozen_slow_run_counts": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "slow_definition": ">=60 consecutive measured E95 frames with execution CPU >=900000ns",
+    "assignment": {
+      "A": "D busy / I idle",
+      "B": "I busy / D idle"
+    },
+    "interpretation": "Repeatable fixed-resident work assignment effect; role0/6 and launch/environment interactions remain; not TG-only or historical/current-main source root cause"
+  }
+}
