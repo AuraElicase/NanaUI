@@ -82,7 +82,54 @@ fn a_dialogs_card_moves_on_its_layer_and_its_scrim_fades_on_its_own() {
             .unwrap()
     );
     flush(&mut runtime);
-    advance(&mut runtime, 1016);
+    // Allocating a compositor layer may wait 16ms; applying the entrance
+    // cannot. The first painted frame must already agree with Runtime.
+    for millis in [1000, 1008, 1016] {
+        advance(&mut runtime, millis);
+        let id = dialog.stable_id();
+        let scrim_opacity = runtime.context().world().scrim_presence(id);
+        let scene = runtime.scene();
+        let card = scene
+            .draw_primitive(PrimitiveId { node: id, slot: 11 })
+            .unwrap();
+        let scrim = scene
+            .draw_primitive(PrimitiveId { node: id, slot: 10 })
+            .unwrap();
+        let opacity = (millis - 1000) as f32 / 160.0;
+        assert!(
+            (card.paint_opacity - opacity).abs() < 1e-3,
+            "{millis}: {}",
+            card.paint_opacity
+        );
+        assert!(
+            (scrim.paint_opacity - scrim_opacity).abs() < 1e-3,
+            "scrim must follow its independently sampled clock, not multiply the card fade"
+        );
+        let encode =
+            scene.compositor_primitive_encode(card.primitive, card.transform, card.paint_opacity);
+        if millis < 1016 {
+            assert!(scene.compositor_layer(id).is_none());
+            assert_eq!(
+                encode.motion_ids,
+                (0, 0),
+                "CPU presentation before promotion"
+            );
+            assert!((encode.opacity - opacity).abs() < 1e-3);
+        } else {
+            assert_ne!(encode.motion_ids.1, 0, "GPU fade after promotion");
+            assert!((encode.opacity * opacity - card.paint_opacity).abs() < 1e-3);
+        }
+        let expected = runtime
+            .context()
+            .world()
+            .presentation_input_bounds(body.stable_id())
+            .unwrap();
+        let shown = scene.draw_node_bounds(body.stable_id()).unwrap();
+        assert!(
+            (shown.x - expected.x).abs() < 1e-3 && (shown.y - expected.y).abs() < 1e-3,
+            "paint and input share the card pivot before and after promotion"
+        );
+    }
     advance(&mut runtime, 1080);
 
     let id = dialog.stable_id();
@@ -135,4 +182,37 @@ fn a_dialogs_card_moves_on_its_layer_and_its_scrim_fades_on_its_own() {
         "the card's fade does not reach the scrim"
     );
     assert!((scrim_encode.opacity - scrim_opacity).abs() < 1e-3);
+}
+
+#[test]
+fn reduced_motion_has_no_first_frame_gap() {
+    let document = DocumentId::new(1).unwrap();
+    let mut runtime = RuntimeDocument::new(document);
+    let cx = runtime.context_mut();
+    cx.set_reduced_motion(true);
+    let host = cx.create_component(document, OverlayHost::new()).unwrap();
+    let dialog = cx
+        .create_detached_component(document, Dialog::new("Export"))
+        .unwrap();
+    cx.append_child(host, dialog).unwrap();
+    advance(&mut runtime, 1000);
+    runtime
+        .context_mut()
+        .activate_overlay(host, dialog)
+        .unwrap();
+    advance(&mut runtime, 1000);
+    let scene = runtime.scene();
+    for slot in [10, 11] {
+        let draw = scene
+            .draw_primitive(PrimitiveId {
+                node: dialog.stable_id(),
+                slot,
+            })
+            .unwrap();
+        assert_eq!(draw.paint_opacity, 1.0);
+        let encode =
+            scene.compositor_primitive_encode(draw.primitive, draw.transform, draw.paint_opacity);
+        assert_eq!(encode.opacity, 1.0);
+    }
+    assert_eq!(scene.compositor_layer_count(), 0);
 }

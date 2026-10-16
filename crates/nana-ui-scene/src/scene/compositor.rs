@@ -130,6 +130,9 @@ enum LayerPhase {
 #[derive(Debug, Clone, Default)]
 pub(super) struct CompositorRegistry {
     layers: NodeMap<CompositorLayer>,
+    // Promotion delays allocating a layer, never applying presentation. Keep
+    // the same sampled projection on the CPU until the layer takes over.
+    pending: NodeMap<LayerSnapshot>,
     phases: NodeMap<LayerPhase>,
     requested: NodeSet,
     presentation_epoch: u64,
@@ -167,11 +170,20 @@ impl CompositorRegistry {
         self.layers.get(&node)
     }
 
-    fn is_active(&self, node: StableNodeId) -> bool {
-        matches!(
-            self.phases.get(&node),
-            Some(LayerPhase::Active | LayerPhase::PendingDemote { .. })
-        ) && self.layers.contains_key(&node)
+    fn opacity(&self, node: StableNodeId) -> Option<f32> {
+        self.layer(node)
+            .map(|layer| layer.opacity)
+            .or_else(|| self.pending.get(&node).map(|pending| pending.opacity))
+    }
+
+    fn transform(&self, node: StableNodeId) -> Option<AffineTransform> {
+        self.layer(node)
+            .map(|layer| layer.transform)
+            .or_else(|| self.pending.get(&node).map(|pending| pending.transform))
+    }
+
+    pub(super) fn has_presentation(&self) -> bool {
+        !self.layers.is_empty() || !self.pending.is_empty()
     }
 
     fn sync_gpu_pack(&mut self, store: &MotionDescriptorStore, now: Duration) {
@@ -369,6 +381,10 @@ impl UiScene {
         for node in candidates {
             let Some(extracted) = self.nodes.get(&node) else {
                 self.compositor.phases.remove(&node);
+                if self.compositor.pending.remove(&node).is_some() {
+                    changed = true;
+                    needs_bounds_refresh = true;
+                }
                 if self.compositor.layers.remove(&node).is_some() {
                     self.compositor.last_demoted = self.compositor.last_demoted.saturating_add(1);
                     changed = true;
@@ -378,6 +394,27 @@ impl UiScene {
             let snapshot = layer_snapshot(extracted, store, now, descriptors);
             let eligible = snapshot.eligible || self.compositor.requested.contains(&node);
             let previous = self.compositor.phases.get(&node).cloned();
+            let waiting = eligible
+                && match previous {
+                    None => !hold_elapsed(
+                        now,
+                        snapshot.eligible_since.unwrap_or(now),
+                        LAYER_PROMOTE_HOLD,
+                    ),
+                    Some(LayerPhase::PendingPromote { since }) => {
+                        !hold_elapsed(now, since, LAYER_PROMOTE_HOLD)
+                    }
+                    _ => false,
+                };
+            if waiting {
+                let old = self.compositor.pending.get(&node);
+                changed |= old != Some(&snapshot);
+                needs_bounds_refresh |= old.is_none_or(|old| old.transform != snapshot.transform);
+                self.compositor.pending.insert(node, snapshot.clone());
+            } else if self.compositor.pending.remove(&node).is_some() {
+                changed = true;
+                needs_bounds_refresh = true;
+            }
             match (eligible, previous) {
                 (true, None) => {
                     let since = snapshot.eligible_since.unwrap_or(now);
@@ -491,7 +528,7 @@ impl UiScene {
         // Opacity-only compositor frames keep the visibility index hot;
         // projection or topology changes re-derive its retained bounds.
         if (needs_bounds_refresh
-            || (self.compositor_projection_dirty && self.compositor_layer_count() != 0))
+            || (self.compositor_projection_dirty && self.compositor.has_presentation()))
             && let Some(mut visibility) = self.visibility.take()
         {
             visibility.refresh_bounds(self);
@@ -504,6 +541,7 @@ impl UiScene {
 
     pub(super) fn forget_compositor_node(&mut self, id: StableNodeId) {
         self.compositor.layers.remove(&id);
+        self.compositor.pending.remove(&id);
         self.compositor.phases.remove(&id);
         self.compositor.requested.remove(&id);
     }
@@ -540,29 +578,15 @@ impl UiScene {
         if block_3d && node.source_style.layout.transform_3d.is_some() {
             return AffineTransform::IDENTITY;
         }
-        if self.compositor.is_active(node.id) {
-            return self
-                .compositor
-                .layers
-                .get(&node.id)
-                .map(|layer| layer.transform)
-                .unwrap_or_else(|| {
-                    node_scene_transform(node.source_style.layout.as_ref(), node.layout, block_3d)
-                });
-        }
-        node_scene_transform(node.source_style.layout.as_ref(), node.layout, block_3d)
+        self.compositor.transform(node.id).unwrap_or_else(|| {
+            node_scene_transform(node.source_style.layout.as_ref(), node.layout, block_3d)
+        })
     }
 
     pub(super) fn resolved_local_opacity(&self, node: &ExtractedNode) -> f32 {
-        if self.compositor.is_active(node.id) {
-            return self
-                .compositor
-                .layers
-                .get(&node.id)
-                .map(|layer| layer.opacity)
-                .unwrap_or_else(|| local_opacity(node));
-        }
-        local_opacity(node)
+        self.compositor
+            .opacity(node.id)
+            .unwrap_or_else(|| local_opacity(node))
     }
 
     /// Logical primitive opacity multiplied by compositor layer factors.
@@ -593,7 +617,7 @@ impl UiScene {
     }
 
     fn layered_paint_opacity(&self, node: StableNodeId, logical_opacity: f32, own: bool) -> f32 {
-        if self.compositor.layers.is_empty() {
+        if !self.compositor.has_presentation() {
             return logical_opacity.clamp(0.0, 1.0);
         }
         // `draw_primitive` asks this for every primitive, so the ancestor half
@@ -621,7 +645,7 @@ impl UiScene {
     /// What this node's own layer does to the opacity below it: the presented
     /// opacity divided by the logical one it was derived from.
     fn layer_opacity_factor(&self, id: StableNodeId) -> f32 {
-        let Some(layer) = self.compositor.layers.get(&id) else {
+        let Some(opacity) = self.compositor.opacity(id) else {
             return 1.0;
         };
         let Some(extracted) = self.nodes.get(&id) else {
@@ -629,9 +653,9 @@ impl UiScene {
         };
         let logical = local_opacity(extracted);
         if logical.abs() < 1e-8 {
-            layer.opacity
+            opacity
         } else {
-            layer.opacity / logical
+            opacity / logical
         }
     }
 
@@ -664,13 +688,13 @@ impl UiScene {
 
     /// Nested compositor opacity: product of ancestor (and self) layer opacities.
     pub fn composed_layer_opacity(&self, node: StableNodeId) -> f32 {
-        if self.compositor.layers.is_empty() {
+        if !self.compositor.has_presentation() {
             return 1.0;
         }
         let mut opacity = 1.0;
         for id in super::ancestor_ids(&self.nodes, node) {
-            if let Some(layer) = self.compositor.layers.get(&id) {
-                opacity *= layer.opacity;
+            if let Some(presented) = self.compositor.opacity(id) {
+                opacity *= presented;
             }
         }
         opacity.clamp(0.0, 1.0)
@@ -678,13 +702,13 @@ impl UiScene {
 
     /// Nested compositor transform: outer layers then inner.
     pub fn composed_layer_transform(&self, node: StableNodeId) -> AffineTransform {
-        if self.compositor.layers.is_empty() {
+        if !self.compositor.has_presentation() {
             return AffineTransform::IDENTITY;
         }
         let mut chain = Vec::new();
         for id in super::ancestor_ids(&self.nodes, node) {
-            if let Some(layer) = self.compositor.layers.get(&id) {
-                chain.push(layer.transform);
+            if let Some(transform) = self.compositor.transform(id) {
+                chain.push(transform);
             }
         }
         chain
@@ -906,7 +930,7 @@ fn nearest_layer_parent(
         .map(CompositorLayerId::from_node)
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct LayerSnapshot {
     eligible: bool,
     eligible_since: Option<Duration>,
@@ -1152,6 +1176,109 @@ mod tests {
 
     fn cache_gen(scene: &UiScene, node: StableNodeId) -> u64 {
         scene.compositor_layer(node).unwrap().cache_generation
+    }
+
+    #[test]
+    fn presentation_applies_before_promotion_and_survives_the_handoff() {
+        let mut scene = UiScene::new();
+        scene.apply_delta([node(1, None, &[])], []);
+        let mut store = PresentationStore::new();
+        store.insert(
+            opacity_track(1, 1, 0, 100, 0.0, 1.0),
+            MotionValue::Scalar(1.0),
+        );
+        store.insert(
+            transform_track(
+                2,
+                1,
+                0,
+                100,
+                PaintTransform {
+                    e: 20.0,
+                    ..Default::default()
+                },
+                PaintTransform::default(),
+            ),
+            MotionValue::Transform(PaintTransform::default()),
+        );
+        let primitive_count = scene.primitive_count();
+        for ms in [0, 8, 16] {
+            let previous_epoch = scene.presentation_epoch();
+            scene.apply_presentation(&store, Duration::from_millis(ms), None);
+            assert_eq!(scene.compositor_layer_count(), usize::from(ms >= 16));
+            assert!((scene.compositor_paint_opacity(id(1), 1.0) - ms as f32 / 100.0).abs() < 1e-5);
+            assert!(
+                (scene.composed_layer_transform(id(1)).0[4] - 20.0 * (1.0 - ms as f32 / 100.0))
+                    .abs()
+                    < 1e-5
+            );
+            assert!(scene.presentation_epoch() > previous_epoch);
+            assert_eq!(scene.primitive_count(), primitive_count);
+            assert_eq!(scene.nodes[&id(1)].source_style.layout.opacity, None);
+        }
+    }
+
+    #[test]
+    fn pending_parent_and_child_opacity_compose_and_clear_without_a_layer() {
+        let mut scene = UiScene::new();
+        scene.apply_delta([node(1, None, &[2]), node(2, Some(1), &[])], []);
+        let mut store = PresentationStore::new();
+        store.insert(
+            opacity_track(1, 1, 0, 100, 0.2, 0.8),
+            MotionValue::Scalar(1.0),
+        );
+        store.insert(
+            opacity_track(2, 2, 0, 100, 0.0, 1.0),
+            MotionValue::Scalar(1.0),
+        );
+        for ms in [0, 8] {
+            scene.apply_presentation(&store, Duration::from_millis(ms), None);
+            let progress = ms as f32 / 100.0;
+            let expected = (0.2 + 0.6 * progress) * progress;
+            assert!((scene.compositor_paint_opacity(id(2), 1.0) - expected).abs() < 1e-5);
+            assert!((scene.composed_layer_opacity(id(2)) - expected).abs() < 1e-5);
+            assert_eq!(scene.compositor_layer_count(), 0);
+        }
+        let epoch = scene.presentation_epoch();
+        scene.apply_presentation(&PresentationStore::new(), Duration::from_millis(9), None);
+        assert_eq!(scene.compositor_paint_opacity(id(2), 1.0), 1.0);
+        assert_eq!(scene.compositor_layer_count(), 0);
+        assert!(!scene.compositor_needs_tick());
+        assert!(scene.presentation_epoch() > epoch);
+    }
+
+    #[test]
+    fn pending_transform_updates_visibility_and_is_forgotten_on_removal() {
+        let mut scene = UiScene::new();
+        scene.apply_delta([node(1, None, &[])], []);
+        let viewport = crate::SceneRect {
+            x: 0.0,
+            y: 0.0,
+            width: 150.0,
+            height: 100.0,
+        };
+        assert!(!scene.visible_operations(viewport).unwrap().is_empty());
+        let mut store = PresentationStore::new();
+        store.insert(
+            transform_track(
+                1,
+                1,
+                0,
+                100,
+                PaintTransform {
+                    e: 200.0,
+                    ..Default::default()
+                },
+                PaintTransform::default(),
+            ),
+            MotionValue::Transform(PaintTransform::default()),
+        );
+        scene.apply_presentation(&store, Duration::ZERO, None);
+        assert!(scene.visible_operations(viewport).unwrap().is_empty());
+        assert_eq!(scene.compositor_layer_count(), 0);
+        scene.apply_delta([], [id(1)]);
+        scene.apply_presentation(&PresentationStore::new(), Duration::from_millis(8), None);
+        assert!(!scene.compositor_needs_tick());
     }
 
     #[test]
