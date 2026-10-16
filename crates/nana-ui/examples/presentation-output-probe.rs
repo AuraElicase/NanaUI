@@ -365,6 +365,13 @@ impl Probe {
                     "scene_primitives": self.document.scene().primitives().count(),
                     "backend": self.backend, "window_cases": checks, "phase_work": self.observations,
                     "resize_extent": self.resized_extent, "original_extent": self.original_extent,
+                    "original_extent_scope": if self.phase >= 4 {
+                        "cached WindowGeometry immediately before requested resize"
+                    } else if self.phase > 0 || self.phase_frames > 0 {
+                        "cached WindowGeometry at first direct presented frame"
+                    } else {
+                        "not observed: no direct frame presented"
+                    },
                     "timing_scope": "prepare_window_frame through window_frame_presented"}
             }},
             "passed": passed, "failure": failure,
@@ -694,6 +701,11 @@ impl RuntimeProgram for Probe {
             None
         };
         self.phase_frames += 1;
+        if self.phase == 0 && self.phase_frames == 1 {
+            // Direct-only exits before the resize phase refreshes this baseline.
+            let size = context.geometry().physical_size;
+            self.original_extent = [size.0, size.1];
+        }
         let count = if self.phase == 0 {
             self.timing_options.measured
         } else {
