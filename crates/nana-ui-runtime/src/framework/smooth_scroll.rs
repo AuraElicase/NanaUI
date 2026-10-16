@@ -209,13 +209,7 @@ impl AppContext {
             .min(scroll.started.saturating_add(DURATION));
         scroll.last = offset;
         self.component_lifecycle.wheel_scrolls.insert(id, scroll);
-        let changed = self.apply_scroll_node_by(
-            id,
-            ScrollOffset {
-                x: offset.x - current.x,
-                y: offset.y - current.y,
-            },
-        )?;
+        let changed = self.apply_scroll_node_to(id, offset)?;
         // An event observer may have requested an immediate position or removed
         // the node. Never resurrect the gesture after that callback.
         if self.component_lifecycle.wheel_scrolls.get(&id) == Some(&scroll) {
@@ -255,15 +249,7 @@ impl AppContext {
             if !self.wheel_scroll_live(id) {
                 continue;
             }
-            let current = self.world.scroll_offset(id).unwrap_or_default();
-            let to = self.world.clamp_scroll_offset(id, scroll.to);
-            let _ = self.apply_scroll_node_by(
-                id,
-                ScrollOffset {
-                    x: to.x - current.x,
-                    y: to.y - current.y,
-                },
-            );
+            let _ = self.apply_scroll_node_to(id, scroll.to);
         }
     }
 }
