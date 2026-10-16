@@ -123,18 +123,25 @@ impl AppContext {
     }
 
     fn emit_user_scroll(&mut self, scroll: Entity<ScrollView>) -> Result<(), FrameworkError> {
+        // A user scroll reveals auto-hiding bars even without subscribers.
+        self.hold_scrollbars(scroll.id)?;
+        if !self.has_scroll_listener::<crate::UserScroll>(scroll.id) {
+            return Ok(());
+        }
         let offset = self.world.scroll_offset(scroll.id).unwrap_or_default();
         let at_end = self
             .world
             .scroll_metrics(scroll.id)
             .is_some_and(|metrics| offset.y >= metrics.max_offset().y - 2.0);
-        // A scroll the user made shows where it went, pointer or not: touch,
-        // keyboard and an accessibility action reveal the bars as a wheel
-        // over the view does.
-        self.hold_scrollbars(scroll.id)?;
         self.update(scroll, |_, cx| {
             cx.emit(crate::UserScroll { offset, at_end })
         })
+    }
+
+    fn has_scroll_listener<E: 'static>(&self, id: StableNodeId) -> bool {
+        self.event_handlers
+            .get(&(id, TypeId::of::<E>()))
+            .is_some_and(|handlers| !handlers.is_empty())
     }
 
     // Hover/drag/retention own scrollbar state, not the style of a scrollport
@@ -194,9 +201,15 @@ impl AppContext {
         let mut mutations = MutationQueue::new();
         mutations.set_scroll_offset(entity.id, offset);
         self.world.commit(mutations)?;
-        self.update(entity, |_scroll, cx| {
-            cx.emit(ScrollChanged { offset });
-        })?;
+        // No subscriber means no callback or observer work. The offset commit
+        // already invalidates paint, hit testing and accessibility; skip the
+        // empty event transaction. Subscribed callbacks still commit before
+        // UserScroll reads the effective offset.
+        if self.has_scroll_listener::<ScrollChanged>(entity.id) {
+            self.update(entity, |_scroll, cx| {
+                cx.emit(ScrollChanged { offset });
+            })?;
+        }
         Ok(true)
     }
 

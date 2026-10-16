@@ -608,3 +608,49 @@ fn non_finite_wheel_offsets_never_start_a_gesture() {
         assert_eq!(cx.next_animation_deadline(), None);
     }
 }
+
+#[test]
+fn user_scroll_observes_the_position_committed_by_scroll_changed() {
+    use std::sync::Mutex;
+    let (mut cx, scroll, mut input) = fixture();
+    cx.on(scroll, move |_, _: &ScrollChanged, cx| {
+        cx.mutations()
+            .set_scroll_offset(scroll.id, ScrollOffset { x: 0.0, y: 15.0 });
+    })
+    .unwrap();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let users = seen.clone();
+    cx.on(scroll, move |_, event: &crate::UserScroll, _| {
+        users.lock().unwrap().push(event.offset);
+    })
+    .unwrap();
+    wheel(&mut cx, &mut input, WheelUnit::Lines, -1.0, -1.0);
+    advance(&mut cx, 30);
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        &[ScrollOffset { x: 0.0, y: 15.0 }]
+    );
+    assert_eq!(cx.next_animation_deadline(), None);
+}
+
+#[test]
+fn listeners_registered_after_unobserved_samples_receive_future_offsets() {
+    use std::sync::Mutex;
+    let (mut cx, scroll, mut input) = fixture();
+    wheel(&mut cx, &mut input, WheelUnit::Lines, 0.0, -1.0);
+    advance(&mut cx, 30);
+    let work = cx.take_system_work();
+    assert!(work.style.is_empty() && work.text.is_empty() && work.layout_frontier_seeds.is_empty());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let changes = seen.clone();
+    cx.on(scroll, move |_, event: &ScrollChanged, _| {
+        changes.lock().unwrap().push(event.offset);
+    })
+    .unwrap();
+    advance(&mut cx, 90);
+    advance(&mut cx, 180);
+    assert_eq!(seen.lock().unwrap().len(), 2);
+    assert_eq!(seen.lock().unwrap().last(), Some(&offset(&cx, scroll)));
+    assert_eq!(offset(&cx, scroll).y, 60.0);
+    assert_eq!(cx.next_animation_deadline(), None);
+}
