@@ -1519,6 +1519,7 @@ impl UiWorld {
             }
             UiMutation::SetRichEditorMarks { id, marks } => {
                 if self.nodes.rich_editor_marks(*id) != marks.as_ref() {
+                    self.nodes.set_text_viewport_pin(*id, None);
                     self.nodes.set_rich_editor_marks(*id, marks.clone());
                     self.mark(*id, DirtyMask::RENDER);
                 }

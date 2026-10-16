@@ -2106,6 +2106,11 @@ impl AppContext {
             let anchor = if extend { selection.anchor } else { offset };
             self.text_edit.text_pointer_drag = Some((pointer_id, node, anchor));
         }
+        if self.text_edit.text_pointer_drag.is_some() {
+            let mut mutations = MutationQueue::new();
+            mutations.capture_pointer(pointer_id, node);
+            self.commit_mutations(mutations)?;
+        }
         self.write_editor_selections(node, selection, additional)
     }
 
@@ -2197,6 +2202,7 @@ impl AppContext {
         let Some((drag_id, node, anchor)) = self.text_edit.text_pointer_drag else {
             return Ok(false);
         };
+        let window_point = (x, y);
         let (x, y) = self.editor_point(node, x, y);
         if drag_id != pointer_id {
             return Ok(false);
@@ -2208,6 +2214,38 @@ impl AppContext {
             return Ok(false);
         }
         let state = self.editor_state(node)?;
+        if let Some(content) = self.world.component_content_box(node) {
+            let delta = |p: f32, start: f32, extent: f32| {
+                if p < start {
+                    (p - start).max(-32.0)
+                } else if p > start + extent {
+                    (p - start - extent).min(32.0)
+                } else {
+                    0.0
+                }
+            };
+            let offset = crate::ScrollOffset {
+                x: delta(x, content.x, content.width),
+                y: delta(y, content.y, content.height),
+            };
+            if (offset.x != 0.0 || offset.y != 0.0) && self.scroll_node_by(node, offset)? {
+                // Keep the host's text engine: timer ticks use the very same
+                // shaping authority as the pointer that started the drag.
+                self.input.plain_drag_scroll = shaper.text_engine().map(|engine| {
+                    (
+                        document,
+                        node,
+                        pointer_id,
+                        window_point.0,
+                        window_point.1,
+                        self.component_lifecycle.now + std::time::Duration::from_millis(16),
+                        crate::NanaTextEngineShaper::new(engine),
+                    )
+                });
+            } else {
+                self.input.plain_drag_scroll = None;
+            }
+        }
         // 命中换算与点击共用同一条 offset 路径。
         let Some(hit) = self.text_editor_hit_offset(node, focused.kind, x, y, shaper)? else {
             return Ok(false);
@@ -2223,6 +2261,20 @@ impl AppContext {
 
     /// End any drag selection started by this pointer.
     pub fn text_editor_pointer_release(&mut self, pointer_id: u64) {
+        if self
+            .input
+            .plain_drag_scroll
+            .as_ref()
+            .is_some_and(|state| state.2 == pointer_id)
+        {
+            self.input.plain_drag_scroll = None;
+        }
+        if let Some((drag_id, node, _)) = self.text_edit.text_pointer_drag
+            && drag_id == pointer_id
+            && let Some(document) = self.world.document_of(node)
+        {
+            self.release_pointer_capture(document, pointer_id);
+        }
         if self
             .text_edit
             .text_pointer_drag
@@ -2246,6 +2298,32 @@ impl AppContext {
         {
             self.clear_text_selection_drag();
         }
+    }
+
+    pub(crate) fn plain_drag_deadline(&self) -> Option<std::time::Duration> {
+        let (doc, node, pointer, _, _, deadline, _) = self.input.plain_drag_scroll.as_ref()?;
+        (self.world.focused(*doc) == Some(*node)
+            && self.world.is_mounted(*node)
+            && self
+                .text_edit
+                .text_pointer_drag
+                .is_some_and(|(p, n, _)| p == *pointer && n == *node))
+        .then_some(*deadline)
+    }
+
+    pub(crate) fn advance_plain_drag(&mut self, now: std::time::Duration) -> Option<StableNodeId> {
+        let deadline = self.plain_drag_deadline()?;
+        if deadline > now {
+            return None;
+        }
+        let (doc, node, pointer, x, y, _, mut shaper) = self.input.plain_drag_scroll.take()?;
+        let changed = self
+            .text_editor_pointer_drag(doc, pointer, x, y, &mut shaper)
+            .ok()?;
+        if let Some(state) = &mut self.input.plain_drag_scroll {
+            state.6 = shaper;
+        }
+        changed.then_some(node)
     }
 
     /// 进入拖拽移动选中的待定态。要求：多行、单选区、非 IME 组合期，

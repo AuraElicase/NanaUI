@@ -462,7 +462,7 @@ impl AppContext {
         if self
             .views
             .get(&id)
-            .is_some_and(|view| view.is::<TextArea>())
+            .is_some_and(|view| view.is::<TextArea>() || view.is::<crate::RichTextEditor>())
         {
             // An editor scrolls once it has shaped a value to scroll over.
             if self.world.text_scroll_metrics(id).is_none() {
@@ -485,9 +485,18 @@ impl AppContext {
             // Pinned to the request, which the caret reveal then yields to.
             let applied = self.world.scroll_request(id).unwrap_or(next);
             self.world.set_text_viewport_pin(id, Some(applied));
-            self.update_component(Entity::<TextArea>::from_stable_id(id), |area, _| {
-                area.scroll_offset = applied;
-            })?;
+            if self.view_entity::<TextArea>(id).is_some() {
+                self.update_component(Entity::<TextArea>::from_stable_id(id), |area, _| {
+                    area.scroll_offset = applied;
+                })?;
+            } else {
+                self.update_component(
+                    Entity::<crate::RichTextEditor>::from_stable_id(id),
+                    |area, _| {
+                        area.scroll_offset = applied;
+                    },
+                )?;
+            }
             return Ok(true);
         }
         if self.is_scroll_view(id) {

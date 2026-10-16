@@ -238,6 +238,16 @@ Rust `TextArea::read_only(true)` 保留焦点、光标/选区、查找和复制�
 
 ### 统一编辑入口与撤销
 
+`RichTextEditor` 的 `scroll_offset` 是视口请求；`UiWorld::scroll_offset` 返回实际绘制的位置。
+滚轮可在未聚焦时滚动，保留选区，直到文字或光标改变才恢复光标跟随。绘制、命中与 IME 候选框读取同一个视口。
+它支持按字素/词导航与删除、保留列位置的上下及 PageUp/PageDown 导航、Shift 扩选、双击选词、三击选段和越界拖选滚动。
+富文本与普通输入框在 IME 组合期间都先保留按键给输入法，再恢复应用快捷键。
+
+应用编辑菜单可用 `TextEditAction` 和 `AppContext::text_edit_action_enabled` 查询状态，
+通过 `edit_text_action(document, node, action, services)` 执行撤销、重做、剪切、复制、粘贴与全选。
+剪贴板仍由宿主的 `HostServices` 提供；富文本编辑器的复制粘贴保留进程内的格式和对象。
+源码工具栏改写使用 `edit_text_area_value` 记为一个可撤销步骤；重新绑定业务文档仍使用普通程序设值并清空撤销会话。
+
 编辑器的文本**只有一条写路径**：`AppContext::commit_editor_edit(entity, origin, apply)`。键入、删除、粘贴、IME 提交、行变换、代码片段、应用设值，全部汇入这里。凡是「每次编辑都要做」的事只在这一处做：发变更事件、记撤销。新增一种编辑操作时，不要自己 `update_component` 写 `state.value`。走这个入口。否则它不会进撤销。
 
 `TextEditOrigin` 说明这次编辑是什么。它决定这次是否与上一步合并：

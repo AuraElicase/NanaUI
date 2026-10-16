@@ -11,6 +11,7 @@ mod input;
 pub(crate) use input::LINE_SCROLL_EXTENT;
 pub use input::{
     HeadlessInput, InputBindError, InputCounters, InputRouteError, InputRouteOutcome, RoutedEvent,
+    TextEditAction,
 };
 mod hooks;
 mod keyboard;

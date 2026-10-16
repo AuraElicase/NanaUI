@@ -12,6 +12,8 @@
 
 mod blink;
 mod dispatch;
+mod edit_actions;
+pub use edit_actions::TextEditAction;
 mod effects;
 mod headless;
 
@@ -245,6 +247,16 @@ fn shortcut_key(key: &nana_ui_input::KeyInput) -> &str {
 /// Input routing state of one context.
 #[derive(Debug)]
 pub(crate) struct InputState {
+    pub(super) plain_drag_scroll: Option<(
+        DocumentId,
+        StableNodeId,
+        u64,
+        f32,
+        f32,
+        Duration,
+        crate::NanaTextEngineShaper,
+    )>,
+    pub(crate) rich_drag_scroll: Option<(DocumentId, StableNodeId, u64, f32, f32, Duration)>,
     sources: HashMap<InputSourceId, SourceState>,
     next_pointer: u64,
     counters: InputCounters,
@@ -268,6 +280,8 @@ pub(crate) struct InputState {
 impl Default for InputState {
     fn default() -> Self {
         Self {
+            rich_drag_scroll: None,
+            plain_drag_scroll: None,
             sources: HashMap::new(),
             next_pointer: 1,
             counters: InputCounters::default(),

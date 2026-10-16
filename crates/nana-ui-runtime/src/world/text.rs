@@ -3379,7 +3379,7 @@ impl UiWorld {
     pub(crate) fn text_preserves_lines(&self, id: StableNodeId) -> bool {
         Self::preserves_lines(
             &self.record(id).style,
-            self.text_input_kind(id).unwrap_or(false),
+            self.text_input_kind(id).unwrap_or(false) || self.nodes.rich_editor_marks(id).is_some(),
         )
     }
 
@@ -3429,8 +3429,10 @@ impl UiWorld {
         let layout = self
             .component_layout_box(id)
             .expect("text node layout is available");
-        let text_input_multiline = editor_multiline.unwrap_or(false);
-        let is_text_input = editor_multiline.is_some();
+        let text_input_multiline =
+            editor_multiline.unwrap_or(false) || self.nodes.rich_editor_marks(id).is_some();
+        let is_text_input =
+            editor_multiline.is_some() || self.nodes.rich_editor_marks(id).is_some();
         let wrap = if is_text_input {
             text_input_multiline && source.layout.text_wraps()
         } else {
@@ -5189,7 +5191,7 @@ impl UiWorld {
     ) -> Option<(LayoutBox, ScrollOffset)> {
         Some((
             self.component_content_box(id)?,
-            self.record(id).scroll_offset,
+            self.scroll_offset(id).unwrap_or_default(),
         ))
     }
 
@@ -5724,6 +5726,35 @@ impl UiWorld {
 }
 
 impl UiWorld {
+    /// Rich editors share the retained text layout for painting, hit testing
+    /// and caret reveal. A wheel request pins the viewport until editing moves it.
+    pub(crate) fn rich_editor_scroll_offset(&self, id: StableNodeId) -> Option<ScrollOffset> {
+        let marks = self.nodes.rich_editor_marks(id)?;
+        let content = self.component_content_box(id)?;
+        let (_, layout) = self.text_layout(id)?;
+        let requested = self.record(id).scroll_offset;
+        let mut offset = self.clamp_scroll_offset(id, requested);
+        if self.text_viewport_pin(id) != Some(requested)
+            && let Some(byte) = marks.caret
+            && let Some((x, y, height)) = crate::rich_text_editor::caret_box(layout, byte)
+        {
+            if x < offset.x {
+                offset.x = x;
+            }
+            if x + 1.0 > offset.x + content.width {
+                offset.x = x + 1.0 - content.width;
+            }
+            if y < offset.y {
+                offset.y = y;
+            }
+            if y + height > offset.y + content.height {
+                offset.y = y + height - content.height;
+            }
+            offset = self.clamp_scroll_offset(id, offset);
+        }
+        Some(offset)
+    }
+
     /// A multiline editor's scrolling area: its text box over the value it
     /// shaped. The value runs from the block-start edge, which `vertical-rl`
     /// puts on the right, so there the later columns overflow to the left and
@@ -5731,6 +5762,20 @@ impl UiWorld {
     pub(crate) fn text_scroll_metrics(&self, id: StableNodeId) -> Option<ScrollMetrics> {
         if !self.nodes.get(id)?.accessibility.multiline {
             return None;
+        }
+        if self.nodes.rich_editor_marks(id).is_some() {
+            let content = self.component_content_box(id)?;
+            let (_, layout) = self.text_layout(id)?;
+            return Some(ScrollMetrics::scrolling_area(
+                content,
+                [
+                    content.x,
+                    content.y,
+                    content.x + layout.bounds.width,
+                    content.y + layout.bounds.height,
+                ],
+                [false, false],
+            ));
         }
         let presentation = self.nodes.text_input_presentation(id)?;
         let text_box = self.text_input_text_box(id)?;
