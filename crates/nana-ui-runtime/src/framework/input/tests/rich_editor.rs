@@ -522,3 +522,30 @@ fn rich_editor_paragraph_selection_and_grapheme_deletion_use_text_boundaries() {
         "abc\n甲乙"
     );
 }
+
+#[test]
+fn ctrl_backspace_deletes_one_word_in_both_editor_types() {
+    let (mut cx, doc, rich, _) = fixture("one two three");
+    let source = cx
+        .create_component(doc, crate::TextArea::new("one two three"))
+        .unwrap();
+    for node in [rich.stable_id(), source.stable_id()] {
+        cx.focus_node(doc, node).unwrap();
+        let mut input = TestInput::default();
+        let ctrl = InputModifiers {
+            control: true,
+            ..Default::default()
+        };
+        for name in ["End", "Backspace"] {
+            input.dispatch(&mut cx, doc, &key(name, ctrl)).unwrap();
+        }
+    }
+    assert_eq!(
+        cx.read(rich, |e| e.value.text().to_owned()).unwrap(),
+        "one two "
+    );
+    assert_eq!(
+        cx.read(source, |e| e.state.value.to_string()).unwrap(),
+        "one two "
+    );
+}
