@@ -1,0 +1,14 @@
+crates/nana-ui-runtime/src/framework/rich_text_input.rs
+  h_8e6780fc7b4bb1 13-21,44-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0f137b958a198a4cf711af5cdda622b5b9ba62c5",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
