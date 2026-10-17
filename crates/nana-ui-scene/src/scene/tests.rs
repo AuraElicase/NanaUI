@@ -5401,12 +5401,19 @@ fn a_modal_frames_layer_fades_and_turns_its_card_not_its_scrim() {
     };
     let faded = 16.0 / 100.0;
     assert!(
-        (draw(11).paint_opacity - faded).abs() < 1e-3,
-        "the card fades"
+        (draw(11).paint_opacity - 1.0).abs() < 1e-3,
+        "the card paints inside its opacity group"
     );
     assert!(
-        (draw(12).paint_opacity - faded).abs() < 1e-3,
-        "its title too"
+        (draw(12).paint_opacity - 1.0).abs() < 1e-3,
+        "its title shares the group"
+    );
+    assert!((scene.primitive_opacity_groups(draw(11).primitive)[0].opacity - faded).abs() < 1e-3);
+    assert!(
+        scene
+            .primitive_opacity_groups(draw(10).primitive)
+            .is_empty(),
+        "the scrim is outside the card group"
     );
     assert!(
         (draw(10).paint_opacity - 0.4).abs() < 1e-6,
