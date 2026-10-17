@@ -121,8 +121,8 @@ pub struct OutputConsumerBinding {
     pub path: OutputPath,
     pub target_profile: ScenePresentationProfile,
     /// The canonical target and consumer use equivalent sRGB signals but
-    /// different typed/untyped formats. The host must use its transfer shader,
-    /// never a byte copy between those targets.
+    /// different channel order or typed/untyped formats. The host must use its
+    /// transfer shader, never a byte copy between those targets.
     pub requires_format_conversion: bool,
 }
 
@@ -440,17 +440,19 @@ fn compatible_profiles(first: ScenePresentationProfile, second: ScenePresentatio
     if first == second {
         return true;
     }
-    let bgra_srgb_pair = matches!(
-        (first.target_format, second.target_format),
-        (
-            GpuTextureFormat::BGRA8_UNORM,
-            GpuTextureFormat::BGRA8_UNORM_SRGB
-        ) | (
-            GpuTextureFormat::BGRA8_UNORM_SRGB,
+    // The final transfer samples logical RGBA channels, so the texture view
+    // handles BGRA/RGBA channel order as well as typed sRGB conversion.
+    let sdr_format = |format| {
+        matches!(
+            format,
             GpuTextureFormat::BGRA8_UNORM
+                | GpuTextureFormat::BGRA8_UNORM_SRGB
+                | GpuTextureFormat::RGBA8_UNORM
+                | GpuTextureFormat::RGBA8_UNORM_SRGB
         )
-    );
-    bgra_srgb_pair
+    };
+    sdr_format(first.target_format)
+        && sdr_format(second.target_format)
         && first.color_space == crate::ScenePresentationColorSpace::Srgb
         && second.color_space == crate::ScenePresentationColorSpace::Srgb
         && first.force_float_working == second.force_float_working
@@ -539,7 +541,8 @@ mod tests {
         second.requirements.viewport_revision = 2;
         second.requirements.alpha = OutputAlpha::GammaPremultiplied;
         second.requirements.text_aa = OutputTextAa::SubpixelRgb;
-        second.requirements.profile = ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM);
+        second.requirements.profile =
+            ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM).with_force_float_working();
         let mut planner = RenderTargetPlanner::new();
         planner.update(&[first, second]);
         assert_eq!(planner.plan().render_count(), 2);
@@ -594,6 +597,43 @@ mod tests {
             planner.plan().incompatibilities[0].reasons,
             vec![OutputIncompatibilityReason::Profile]
         );
+    }
+
+    #[test]
+    fn sdr_channel_order_and_srgb_view_pairs_share_but_linear_profiles_do_not() {
+        let formats = [
+            GpuTextureFormat::BGRA8_UNORM,
+            GpuTextureFormat::BGRA8_UNORM_SRGB,
+            GpuTextureFormat::RGBA8_UNORM,
+            GpuTextureFormat::RGBA8_UNORM_SRGB,
+        ];
+        let mut planner = RenderTargetPlanner::new();
+        for first in formats {
+            for second in formats {
+                let mut window = consumer(1);
+                window.kind = OutputConsumerKind::Window;
+                window.requirements.profile = ScenePresentationProfile::sdr(first);
+                let mut external = consumer(2);
+                external.requirements.profile = ScenePresentationProfile::sdr(second);
+                for consumers in [[window, external], [external, window]] {
+                    planner.update(&consumers);
+                    assert_eq!(planner.plan().render_count(), 1);
+                    assert!(planner.plan().incompatibilities.is_empty());
+                    assert_eq!(
+                        planner.plan().binding(window.id).unwrap().path,
+                        OutputPath::GpuTransfer
+                    );
+                }
+                external.requirements.profile =
+                    ScenePresentationProfile::legacy_linear(GpuTextureFormat::RGBA8_UNORM);
+                planner.update(&[window, external]);
+                assert_eq!(planner.plan().render_count(), 2);
+                assert_eq!(
+                    planner.plan().incompatibilities[0].reasons,
+                    vec![OutputIncompatibilityReason::Profile]
+                );
+            }
+        }
     }
 
     #[test]

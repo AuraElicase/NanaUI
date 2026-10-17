@@ -42,7 +42,7 @@ let completed = driver.sample(consumer_id)?;
 
 兼容性比较 presentation、viewport mapping identity、物理尺寸、profile、alpha、text AA、sample count、device generation 与 canonical ownership。`viewport_revision` 由宿主依据逻辑视口、DPR、fit 和原点的完整映射产生，不能拿内容 revision 代替。持久要求可向同组提升；native-copy transport 可消费同一个同设备 canonical，不额外渲染 UI。`OutputPlan::incompatibilities` 返回独立分组的具体原因。
 
-当前只合并已实现的 SDR sRGB `BGRA8_UNORM` / `BGRA8_UNORM_SRGB` 最终格式差异：保留 encoded UNORM canonical，再通过已计数的最终 transfer 写入 sRGB Surface。subpixel 与 grayscale、不同 alpha、HDR/P3 或不同像素密度不会被悄悄降级以取得共享。多采样目标目前明确不支持，未承诺未实现的 MSAA resolve 路径。
+SDR sRGB 的 `BGRA8_UNORM`、`BGRA8_UNORM_SRGB`、`RGBA8_UNORM`、`RGBA8_UNORM_SRGB` 可以共享绘制：最终 transfer 通过纹理视图处理通道顺序与 sRGB 编解码，保留 encoded 预乘通道值；存在 `BGRA8_UNORM` 消费方时优先以它作为 canonical。线性直写兼容 profile 仍独立分组。subpixel 与 grayscale、不同 alpha、HDR/P3 或不同像素密度不会被悄悄降级以取得共享。多采样目标目前明确不支持，未承诺未实现的 MSAA resolve 路径。
 
 原 `ApplicationState` / `RuntimeApplication` / `RuntimeProgramContext` 仍是窗口应用的兼容入口。无窗口应用通过 `RuntimeDocument` + `PresentationDriver` 驱动；不应把仍依赖 winit Window 的 `EmbeddedRuntime` 当作此入口。
 
