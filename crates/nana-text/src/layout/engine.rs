@@ -212,6 +212,7 @@ impl Layouter {
             &run_line_heights,
             base_line_height,
             request.source.objects(),
+            request.source.paragraph_alignments(),
             request
                 .source
                 .rubies()
@@ -708,6 +709,7 @@ fn line_input<'r>(
 ) -> LineInput<'r> {
     LineInput {
         text: request.source.text(),
+        paragraph_alignments: request.source.paragraph_alignments(),
         runs: sized.unwrap_or(&request.shaped.runs),
         rubies: ruby_boxes(request),
         paragraphs: &request.shaped.paragraphs,
