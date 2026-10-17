@@ -1,0 +1,14 @@
+crates/nana-ui-runtime/src/framework.rs
+  h_8e6780fc7b4bb1 8-15,1096-1103,1499-1502,3651,3982-3988
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9088b8af5755706e7441186e1bb2e3c8bd32a239",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
