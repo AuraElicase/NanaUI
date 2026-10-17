@@ -41,7 +41,7 @@ syntax-highlighting = ["dep:two-face"]
 
 [dependencies]
 fancy-regex = "0.16.2"
-hashbrown = "0.16.1"
+hashbrown = "0.17.1"
 nana-ui-view-schema = { path = "../nana-ui-view-schema" }
 futures-core.workspace = true
 nana-ui-core.workspace = true
