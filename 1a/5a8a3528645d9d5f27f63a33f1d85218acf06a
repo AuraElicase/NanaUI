@@ -1,0 +1,16 @@
+crates/nana-ui-runtime/src/framework/context_menu_tests.rs
+  h_8e6780fc7b4bb1 50
+crates/nana-ui-runtime/src/menus.rs
+  h_8e6780fc7b4bb1 563,710,832-864,1831-1872
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1a5a8a3528645d9d5f27f63a33f1d85218acf06a",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
