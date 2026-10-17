@@ -1,0 +1,30 @@
+crates/nana-ui-runtime/src/framework/input.rs
+  h_8e6780fc7b4bb1 558,560-562,755
+crates/nana-ui-runtime/src/framework/input/tests/menu_motion.rs
+  h_8e6780fc7b4bb1 1-195
+crates/nana-ui-runtime/src/framework/input/tests/mod.rs
+  h_8e6780fc7b4bb1 42
+crates/nana-ui-runtime/src/framework/modal_exit.rs
+  h_8e6780fc7b4bb1 278,280-281,286-299
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 1734
+crates/nana-ui-scene/src/scene/attributes.rs
+  h_8e6780fc7b4bb1 106
+crates/nana-ui-scene/src/scene/compositor.rs
+  h_8e6780fc7b4bb1 133-134,172-176,209-213,379-382,390,393-411,451,483-499,524,537,574-575,581-582,615,643,651,653,686,691-692,700,705-706,2183,2241,2243,2324-2325
+crates/nana-ui-scene/src/scene/compositor_delta_tests.rs
+  h_8e6780fc7b4bb1 97-231
+docs/reference/runtime-scene.md
+  h_8e6780fc7b4bb1 35-36,97-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fe870bd09945a767d2f2d72f58f4724a8798e226",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
