@@ -225,3 +225,58 @@ fn a_content_trigger_opens_by_keyboard_dismisses_and_returns_focus() {
     assert!(f.shown(f.count));
     assert_eq!(*f.toggles.lock().unwrap(), [true, false, true, false]);
 }
+
+#[test]
+fn escape_closes_the_action_menu_before_its_panel_and_leaves_background_menus_alone() {
+    use crate::{ActionMenu, ActionMenuItem, Dialog, OverlayHost, Panel};
+    let mut cx = AppContext::new();
+    let doc = DocumentId::new(1).unwrap();
+    let host = cx.create_component(doc, OverlayHost::new()).unwrap();
+    let panel = cx
+        .create_detached_component(doc, Panel::new("Settings"))
+        .unwrap();
+    let menu = cx
+        .create_detached_component(doc, ActionMenu::new().trigger("More"))
+        .unwrap();
+    let item = cx
+        .create_detached_component(doc, ActionMenuItem::new("Command"))
+        .unwrap();
+    cx.append_child(host, panel).unwrap();
+    cx.append_child(panel, menu).unwrap();
+    cx.append_child(menu, item).unwrap();
+    cx.activate_overlay(host, panel).unwrap();
+    cx.toggle_action_menu(menu).unwrap();
+    cx.layout_document(doc, LayoutViewport::new(800.0, 600.0))
+        .unwrap();
+    let mut input = TestInput::default();
+    let escape = key_fixture! {
+        pressed: true, key: "Escape".into(), code: "Escape".into(),
+        text: None, repeat: false, modifiers: InputModifiers::default(),
+    };
+    input.dispatch(&mut cx, doc, &escape).unwrap();
+    assert!(!cx.read(menu, |menu| menu.popover.open).unwrap());
+    assert!(!cx.world().surface_closed(panel.stable_id()));
+    assert_eq!(
+        cx.world().overlay_host(host.stable_id()).unwrap().active,
+        Some(panel.stable_id())
+    );
+    cx.layout_document(doc, LayoutViewport::new(800.0, 600.0))
+        .unwrap();
+    input.dispatch(&mut cx, doc, &escape).unwrap();
+    assert!(cx.world().surface_closed(panel.stable_id()));
+
+    // A separate foreground modal takes Escape before a menu behind it.
+    cx.activate_overlay(host, panel).unwrap();
+    cx.toggle_action_menu(menu).unwrap();
+    let modal_host = cx.create_component(doc, OverlayHost::new()).unwrap();
+    let dialog = cx
+        .create_detached_component(doc, Dialog::new("Confirm"))
+        .unwrap();
+    cx.append_child(modal_host, dialog).unwrap();
+    cx.activate_overlay(modal_host, dialog).unwrap();
+    cx.layout_document(doc, LayoutViewport::new(800.0, 600.0))
+        .unwrap();
+    input.dispatch(&mut cx, doc, &escape).unwrap();
+    assert!(cx.read(menu, |menu| menu.popover.open).unwrap());
+    assert!(cx.world().surface_closed(dialog.stable_id()));
+}

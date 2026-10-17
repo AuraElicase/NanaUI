@@ -669,9 +669,21 @@ impl AppContext {
         inside: Option<StableNodeId>,
         allows: fn(&Popover) -> bool,
     ) -> Result<bool, FrameworkError> {
+        self.close_open_popovers_within(None, inside, allows)
+    }
+
+    pub(super) fn close_open_popovers_within(
+        &mut self,
+        root: Option<StableNodeId>,
+        inside: Option<StableNodeId>,
+        allows: fn(&Popover) -> bool,
+    ) -> Result<bool, FrameworkError> {
         let ids = self.views.keys().copied().collect::<Vec<_>>();
         let mut dismissed = false;
         for id in ids {
+            if root.is_some_and(|root| !self.overlay_descendant(root, id)) {
+                continue;
+            }
             if inside.is_some_and(|node| self.world.is_descendant_or_self(node, id)) {
                 continue;
             }

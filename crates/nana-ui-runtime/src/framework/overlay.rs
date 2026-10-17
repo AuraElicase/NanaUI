@@ -311,6 +311,15 @@ impl AppContext {
                 let Some(overlay) = self.active_runtime_overlay(document) else {
                     return Ok(false);
                 };
+                // A triggered menu is painted above its containing card but
+                // is not another OverlayHost entry. Escape must dismiss that
+                // inner surface before closing the card and parking its tree.
+                // Popovers behind a different active modal do not take its key.
+                if self.close_open_popovers_within(Some(overlay.root), None, |popover| {
+                    popover.close_on_escape
+                })? {
+                    return Ok(true);
+                }
                 match overlay.kind {
                     RuntimeOverlayKind::Dialog => {
                         self.close_gesture(overlay.root, DialogCloseTrigger::Escape)?;
