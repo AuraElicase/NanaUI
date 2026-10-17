@@ -2368,3 +2368,55 @@ fn horizontally_shaped_runs_asked_to_stand_in_columns_fall_back_and_say_so() {
     assert!(editor.is_vertical());
     assert_eq!(counters.vertical_writing_fallbacks, 0, "{counters:?}");
 }
+
+#[test]
+fn authored_paragraph_alignment_changes_shared_geometry_and_cache() {
+    let mut engine = text_engine(UI);
+    let style = style(UI, 20.0);
+    let constraints = TextConstraints {
+        max_width_px: Some(300.0),
+        preserve_lines: true,
+        ..Default::default()
+    };
+    let mut source = TextSource::new("one\ntwo\n");
+    source.set_paragraph_alignments(vec![
+        (0, Some(TextAlignSpec::Start)),
+        (4, Some(TextAlignSpec::Center)),
+        (8, Some(TextAlignSpec::End)),
+    ]);
+    let layout = engine.layout(
+        TextKind::Editable,
+        &source,
+        &style,
+        &constraints,
+        &mut TextWorkCounters::default(),
+    );
+    assert_eq!(layout.lines.len(), 3);
+    assert_eq!(layout.lines[0].bounds.x, 0.0);
+    assert!(layout.lines[1].bounds.x > 100.0);
+    assert_eq!(layout.lines[2].bounds.x, 300.0);
+    let second = &layout.lines[1];
+    let hit = layout.hit_test(
+        second.bounds.x + 1.0,
+        second.metrics.top_y_px + second.metrics.height_px / 2.0,
+    );
+    assert_eq!(hit.caret.line, 1);
+    let caret = layout.caret_geometry(hit.caret).unwrap();
+    assert!(caret.x_px >= second.bounds.x);
+    assert!(
+        layout
+            .selection_rects(4..7)
+            .iter()
+            .all(|rect| rect.x >= second.bounds.x)
+    );
+    source.set_paragraph_alignments(vec![(0, Some(TextAlignSpec::End))]);
+    let next = engine.layout(
+        TextKind::Editable,
+        &source,
+        &style,
+        &constraints,
+        &mut TextWorkCounters::default(),
+    );
+    assert!(next.lines[0].bounds.x > 200.0);
+    assert_eq!(next.lines[1].bounds.x, 0.0);
+}

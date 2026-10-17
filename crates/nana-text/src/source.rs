@@ -255,6 +255,8 @@ impl<'a> SnappedSpans<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextSource {
     text: Arc<str>,
+    #[serde(default)]
+    paragraph_alignments: Vec<(usize, Option<nana_ui_core::TextAlignSpec>)>,
     spans: Vec<TextSpan>,
     /// Sorted by offset; each names a U+FFFC of `text`.
     #[serde(default)]
@@ -284,6 +286,7 @@ pub struct TextSource {
 impl PartialEq for TextSource {
     fn eq(&self, other: &Self) -> bool {
         self.text == other.text
+            && self.paragraph_alignments == other.paragraph_alignments
             && self.spans == other.spans
             && self.objects == other.objects
             && self.rubies == other.rubies
@@ -302,6 +305,7 @@ impl TextSource {
     pub fn new(text: impl Into<Arc<str>>) -> Self {
         Self {
             text: text.into(),
+            paragraph_alignments: Vec::new(),
             spans: Vec::new(),
             objects: Vec::new(),
             rubies: Vec::new(),
@@ -310,6 +314,37 @@ impl TextSource {
             content_hash: OnceLock::new(),
             folded: OnceLock::new(),
         }
+    }
+
+    /// Paragraph-start offsets and their optional authored alignment.
+    pub fn paragraph_alignments(&self) -> &[(usize, Option<nana_ui_core::TextAlignSpec>)] {
+        &self.paragraph_alignments
+    }
+
+    pub fn set_paragraph_alignments(
+        &mut self,
+        mut values: Vec<(usize, Option<nana_ui_core::TextAlignSpec>)>,
+    ) {
+        values.retain(|(at, _)| {
+            *at <= self.text.len() && (*at == 0 || self.text.as_bytes()[at - 1] == b'\n')
+        });
+        values.sort_by_key(|(at, _)| *at);
+        values.dedup_by_key(|(at, _)| *at);
+        let mut offset = 0;
+        self.paragraph_alignments = self
+            .text
+            .split('\n')
+            .map(|text| {
+                let start = offset;
+                offset += text.len() + 1;
+                let align = values
+                    .binary_search_by_key(&start, |(at, _)| *at)
+                    .ok()
+                    .and_then(|i| values[i].1);
+                (start, align)
+            })
+            .collect();
+        self.bump();
     }
 
     pub fn text(&self) -> &str {
@@ -437,6 +472,33 @@ impl TextSource {
     /// Spans overlapping the edit are dropped rather than guessed at: a wrong
     /// surviving span is harder to notice than a missing one.
     pub fn replace_range(&mut self, range: Range<usize>, replacement: &str) {
+        let alignments = (!self.paragraph_alignments.is_empty()).then(|| {
+            let first = self.text[..range.start]
+                .bytes()
+                .filter(|b| *b == b'\n')
+                .count();
+            let last = self.text[..range.end]
+                .bytes()
+                .filter(|b| *b == b'\n')
+                .count();
+            let mut starts = vec![0];
+            starts.extend(self.text.match_indices('\n').map(|(at, _)| at + 1));
+            let mut values = starts
+                .iter()
+                .map(|at| {
+                    self.paragraph_alignments
+                        .binary_search_by_key(at, |(offset, _)| *offset)
+                        .ok()
+                        .and_then(|i| self.paragraph_alignments[i].1)
+                })
+                .collect::<Vec<_>>();
+            let align = values[first];
+            values.splice(
+                first + 1..last + 1,
+                std::iter::repeat_n(align, replacement.bytes().filter(|b| *b == b'\n').count()),
+            );
+            values
+        });
         let removed = range.end - range.start;
         let added = replacement.len();
         let mut text = String::with_capacity(self.text.len() - removed + added);
@@ -444,6 +506,19 @@ impl TextSource {
         text.push_str(replacement);
         text.push_str(&self.text[range.end..]);
         self.text = text.into();
+        if let Some(values) = alignments {
+            let mut offset = 0;
+            self.paragraph_alignments = self
+                .text
+                .split('\n')
+                .zip(values)
+                .map(|(text, align)| {
+                    let entry = (offset, align);
+                    offset += text.len() + 1;
+                    entry
+                })
+                .collect();
+        }
         self.spans
             .retain(|span| span.range.end <= range.start || span.range.start >= range.end);
         for span in &mut self.spans {
@@ -479,6 +554,7 @@ impl TextSource {
 
     pub fn set_text(&mut self, text: impl Into<Arc<str>>) {
         self.text = text.into();
+        self.paragraph_alignments.clear();
         self.spans.clear();
         self.objects.clear();
         self.rubies.clear();
@@ -530,6 +606,7 @@ impl TextSource {
             .get_or_init(|| {
                 self.text.contains(FOLDED_SEPARATORS).then(|| {
                     Box::new(Self {
+                        paragraph_alignments: Vec::new(),
                         text: self.text.replace(FOLDED_SEPARATORS, " ").into(),
                         spans: self.spans.clone(),
                         objects: self.objects.clone(),

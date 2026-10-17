@@ -402,6 +402,7 @@ impl TextNodeState {
     ) -> (&TextSource, bool) {
         let shaped = rich.filter(|rich| rich.text() == text).filter(|rich| {
             !rich.objects().is_empty()
+                || !rich.paragraph_alignments().is_empty()
                 || !rich.rubies().is_empty()
                 || rich
                     .spans()
@@ -412,7 +413,7 @@ impl TextNodeState {
         let shape = match shaped {
             // An object's box is a layout input, so a source holding objects
             // is rebuilt when the constraint revision moves too.
-            Some(rich) if !rich.objects().is_empty() => {
+            Some(rich) if !rich.objects().is_empty() || !rich.paragraph_alignments().is_empty() => {
                 (self.revisions.shape ^ self.revisions.constraint.rotate_left(16)) | 1 << 31
             }
             // Never zero, so a rich source is never mistaken for a plain one.
@@ -426,6 +427,20 @@ impl TextNodeState {
         if stale {
             let mut source = TextSource::new(text);
             if let Some(rich) = shaped {
+                if !rich.paragraph_alignments().is_empty() {
+                    let mut offset = 0;
+                    let aligns = rich
+                        .text()
+                        .split('\n')
+                        .enumerate()
+                        .map(|(i, text)| {
+                            let entry = (offset, rich.paragraph_alignment(i));
+                            offset += text.len() + 1;
+                            entry
+                        })
+                        .collect();
+                    source.set_paragraph_alignments(aligns);
+                }
                 source.set_spans(rich_text_spans(
                     rich,
                     &nana_text_style(base),
@@ -519,7 +534,12 @@ fn shape_over(base: &NanaTextStyle, base_size: f32, shape: &RichShapeStyle) -> N
     if let Some(family) = &shape.family {
         style.font_family = Some(nana_font_family(family));
     }
-    if let Some(size) = shape.size_px.filter(|size| size.is_finite() && *size > 0.0) {
+    if let Some(size) = shape
+        .size_em
+        .map(|em| em * base_size)
+        .or(shape.size_px)
+        .filter(|size| size.is_finite() && *size > 0.0)
+    {
         style.font_size_px = size;
         if let Some(LineHeightSpec::Absolute(height)) = style.line_height
             && base_size > 0.0
@@ -574,6 +594,11 @@ pub(crate) fn classify_rich_change(
     {
         // An annotation is shaped, and holds its base together on a line.
         dirty |= TextDirty::SHAPE_STYLE;
+    }
+    if previous.map_or(&[][..], RichText::paragraph_alignments)
+        != next.map_or(&[][..], RichText::paragraph_alignments)
+    {
+        dirty |= TextDirty::CONSTRAINT;
     }
     let paint = |style: &RichSpanStyle| (!style.paint.is_empty()).then(|| style.paint.clone());
     if before.map(paint) != after.map(paint) {
@@ -931,6 +956,32 @@ mod tests {
             !copied,
             "plain text does not resolve its style into the source"
         );
+    }
+
+    #[test]
+    fn paragraph_alignment_invalidates_layout_and_refreshes_source_without_reshaping() {
+        let mut before = RichText::new("a\nb");
+        before.set_paragraph_alignment(0, Some(TextAlignSpec::Center));
+        let mut after = before.clone();
+        after.set_paragraph_alignment(0, Some(TextAlignSpec::End));
+        let dirty = classify_rich_change(Some(&before), Some(&after));
+        assert_eq!(dirty, TextDirty::CONSTRAINT);
+        let mut node = TextNodeState::default();
+        let base = ComputedStyle::default();
+        node.source_for(before.text(), Some(&before), &base);
+        node.invalidate(dirty);
+        let (source, refreshed) = node.source_for(after.text(), Some(&after), &base);
+        assert!(refreshed);
+        assert_eq!(
+            source.paragraph_alignments()[0],
+            (0, Some(TextAlignSpec::End))
+        );
+        let style = shape_over(
+            &nana_text_style(&base),
+            20.0,
+            &RichSpanStyle::new().size_em(1.5).shape,
+        );
+        assert_eq!(style.font_size_px, 30.0);
     }
 
     #[test]
