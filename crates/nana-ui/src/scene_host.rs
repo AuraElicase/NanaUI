@@ -1474,6 +1474,12 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         }
         self.reconcile_browser_lifetimes();
         self.sync_web_surfaces();
+        // Output configuration has a lifetime independent of native paints.
+        // In particular a hidden, suspended output must release on withdrawal
+        // even when neither its scene nor a visible window requests a frame.
+        for id in self.known_window_ids() {
+            self.sync_window_output(id);
+        }
         for id in windows_to_redraw(update.redraw, &self.known_window_ids()) {
             if painting == Some(id) {
                 continue;

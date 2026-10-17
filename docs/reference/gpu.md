@@ -30,6 +30,8 @@ Surface 的 HDR 能力由 `SurfaceCapabilities::format_capabilities` 决定，�
 - **批量合并上传（`UploadRing`）**：渲染器不散乱调用 `queue.write_buffer` / `write_texture`，而是通过 `GpuWorkSink` 将写入追加到当前 `FrameContext` 的上传批。调用 `FrameContext::submit` 时，设备待落地批（含帧外写入与此前被丢弃帧的写入）与本帧上传批通过一次 `memcpy` 拷入 `UploadRing`（上限 `32 MiB`）的一个映射块，合并为单个上传命令缓冲并在同一次 `queue.submit` 中排在渲染命令之前落地，从而消除每次小写入在 WGPU 内部的 staging 分配（仅文本字形块仍走 encoder 内按录制位置的 `copy_buffer_to_buffer`，以保证单次提交前同一目标多次绘制各自看到正确的字形，见 #224）。
 - **有界帧槽（Frame Slots）**：每个 `FrameContext` 在录制期占用一个帧槽（discard 立即归还，submit 在 GPU 完成回调中归还）。槽满时 `begin_frame()` 对最早已提交的帧做一次有界等待；`try_begin_frame()` 则在槽满时立即返回 `None`。窗口呈现路径使用 `try_begin_frame()`，且**必须在拿到帧槽之后才调用 `get_current_texture`**（拿不到槽时先非阻塞 `poll` 一次，仍满则直接跳过本帧，让已上屏的缓冲继续留在屏幕上，避免透明交换链取走缓冲后等待导致整窗空白）。
 - **代际化缓存与 URL 纹理共享**：管线与资源布局注册表采用按 `DeviceGeneration` 隔离的 `StampedCache`（满时线性淘汰最久未用的 1/8，并在锁外并行编译管线）。`SceneWgpuPainter` 持有唯一的 `UrlTextureCache`，供 Quad 背景、`border-image` 与 HostTexture 遮罩共享（最多并发拉取 4 个 HTTP 资源，闲置上限 256 项 / `64 MiB`，连续 120 个绘制帧未引用后自动释放；栅格图解码上限 `4096 px` / `64 MiB`，SVG 上限 `2048 px`）。
+- **目标附件与管线复用**：UI-only 与 GPU 节点混排之间切换时，只增加或释放 4x MSAA 附件，保留同尺寸、同格式及同 presentation profile 的线性颜色目标、绑定和组缓存。缩放必须重建尺寸相关纹理，但设备管线缓存命中时不再创建着色器模块或管线布局，避免多目标首帧重复解析 WGSL。改变尺寸、输出格式或 presentation profile 仍按原合同重建目标。
+
 
 ## 挂载宿主纹理（`HostTexture` + `GpuTextureView`）
 
@@ -200,3 +202,9 @@ let mut binding = FrameBinding::new(
 - **可见帧合批提交**：`encode_scene(scene, &mut frame)` 直接录制进宿主获取 Surface 后开启的同一个 `FrameContext`，与 UI 绘制在同一次 `queue.submit` 中提交（编码或绘制任一失败则整帧丢弃，生产者严禁自行提交编码器或提前谎报完成）。
 - **隐藏窗口节拍（Hidden Tick）**：当窗口被遮挡、最小化时，`FrameDemand` 到期仍会调用 `prepare_window_frame` 并在无 Surface 的独立 `FrameContext` 上执行 `scene_resource_producers` 后立即提交（尺寸为 0 时仅 prepare 而不执行 producer 编码）。
 - **单帧单目标铁律**：`FrameContext` 独占管理帧的提交与丢弃回滚。若前一帧绘制过某个 `RenderTargetId` 但尚未提交也未丢弃，再次绘制该目标会返回 `ScenePaintError::TargetInFlight`。设备丢失记在粘性的 `GpuContext::is_lost()` 上；外部通过 `EmbeddedRuntime` 注入设备时，宿主应在收到设备丢失通知后调用 `EmbeddedRuntime::notify_device_lost()`，并在新设备就绪后调用 `replace_gpu()`。
+
+### GPU 节点的准备缓存与画面修订
+
+`SceneGpuRenderer::preparation_version` 只控制 UI 命令准备的复用。按时间或外部状态绘制的节点即使资源和几何不变，像素也可能每帧变化；这类渲染器应让 `content_version` 返回 `None`。窗口保留输出、窗口外 PresentationDriver 与 Spout 共享输出据此按宿主请求重新绘制，同时仍复用稳定的准备命令。
+
+静态或显式修订的渲染器可返回 `Some(revision)`，并在像素发生变化时递增。为保持已有消费者行为，`content_version` 默认沿用 `preparation_version`；动态渲染器需要显式区分二者。安装了动态渲染器但当前场景未引用它，不会使静态输出持续绘制。

@@ -1,6 +1,6 @@
 //! Dest-local color target; MSAA is only for frames without GPU nodes.
 
-use std::num::NonZeroU64;
+use std::{cell::OnceCell, num::NonZeroU64};
 
 use nana_gpu::{LogicalBinding, LogicalBindingType, ResourceTable, ShaderStage};
 
@@ -496,6 +496,30 @@ pub(super) struct DestTarget {
     policy: nana_gpu::GpuDeviceState,
 }
 
+fn msaa_view(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+) -> wgpu::TextureView {
+    device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some("nana-ui.scene.dest.msaa"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .create_view(&wgpu::TextureViewDescriptor::default())
+}
+
 impl DestTarget {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn ensure(
@@ -510,14 +534,19 @@ impl DestTarget {
         want_msaa: bool,
         policy: &nana_gpu::GpuDeviceState,
     ) {
-        if current.as_ref().is_some_and(|target| {
-            target.width == width
-                && target.height == height
-                && target.msaa_allocated == want_msaa
-                && target.format == format
-                && target.target_format == target_format
-                && target.presentation == presentation
-        }) {
+        if let Some(target) = current.as_mut()
+            && target.width == width
+            && target.height == height
+            && target.format == format
+            && target.target_format == target_format
+            && target.presentation == presentation
+        {
+            // Switching between UI-only and ordered GPU composition changes
+            // the attachment, not the color target, bindings or pipelines.
+            if target.msaa_allocated != want_msaa {
+                target.msaa = want_msaa.then(|| msaa_view(device, format, width, height));
+                target.msaa_allocated = want_msaa;
+            }
             return;
         }
         *current = Some(Self::new(
@@ -547,24 +576,7 @@ impl DestTarget {
     ) -> Self {
         let width = width.max(1);
         let height = height.max(1);
-        let msaa = want_msaa.then(|| {
-            device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: Some("nana-ui.scene.dest.msaa"),
-                    size: wgpu::Extent3d {
-                        width,
-                        height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 4,
-                    dimension: wgpu::TextureDimension::D2,
-                    format,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[],
-                })
-                .create_view(&wgpu::TextureViewDescriptor::default())
-        });
+        let msaa = want_msaa.then(|| msaa_view(device, format, width, height));
         let color = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("nana-ui.scene.dest.color"),
             size: wgpu::Extent3d {
@@ -660,29 +672,34 @@ impl DestTarget {
                 },
             ],
         });
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("nana-ui.scene.dest.blit.shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader/blit.wgsl"
-            ))),
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("nana-ui.scene.dest.blit.pipeline"),
-            bind_group_layouts: &[Some(&bind_layout)],
-            immediate_size: 0,
-        });
+        let blit_program = OnceCell::new();
         let make_blit = |entry_point: &str, label: &str, blend: Option<wgpu::BlendState>| {
+            let (shader, pipeline_layout) = blit_program.get_or_init(|| {
+                let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("nana-ui.scene.dest.blit.shader"),
+                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                        "shader/blit.wgsl"
+                    ))),
+                });
+                let pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("nana-ui.scene.dest.blit.pipeline"),
+                        bind_group_layouts: &[Some(&bind_layout)],
+                        immediate_size: 0,
+                    });
+                (shader, pipeline_layout)
+            });
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
-                layout: Some(&pipeline_layout),
+                layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &shader,
+                    module: shader,
                     entry_point: Some("vs_main"),
                     buffers: &[],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &shader,
+                    module: shader,
                     entry_point: Some(entry_point),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: target_format,
@@ -799,55 +816,41 @@ impl DestTarget {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         }));
-        let group_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("nana-ui.scene.group.shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(concat!(
-                include_str!("shader/color.wgsl"),
-                "\n",
-                include_str!("shader/layer.wgsl"),
-            ))),
-        });
-        let group_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("nana-ui.scene.group.pipeline"),
-                bind_group_layouts: &[Some(&group_bind_layout)],
-                immediate_size: 0,
+        let group_program = OnceCell::new();
+        let make_group = |blend, label| {
+            let (shader, layout) = group_program.get_or_init(|| {
+                let group_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("nana-ui.scene.group.shader"),
+                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(concat!(
+                        include_str!("shader/color.wgsl"),
+                        "\n",
+                        include_str!("shader/layer.wgsl"),
+                    ))),
+                });
+                let group_pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("nana-ui.scene.group.pipeline"),
+                        bind_group_layouts: &[Some(&group_bind_layout)],
+                        immediate_size: 0,
+                    });
+                (group_shader, group_pipeline_layout)
             });
+            make_group_pipeline(device, pipeline_cache, layout, shader, format, blend, label)
+        };
         let group_pipeline =
             cached_dest_pipeline(policy, format, 3, dest_group_layout_key(), || {
-                make_group_pipeline(
-                    device,
-                    pipeline_cache,
-                    &group_pipeline_layout,
-                    &group_shader,
-                    format,
+                make_group(
                     wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING,
                     "nana-ui.scene.group.pipeline",
                 )
             });
         let group_pipeline_multiply =
             cached_dest_pipeline(policy, format, 4, dest_group_layout_key(), || {
-                make_group_pipeline(
-                    device,
-                    pipeline_cache,
-                    &group_pipeline_layout,
-                    &group_shader,
-                    format,
-                    blend_multiply(),
-                    "nana-ui.scene.group.pipeline.multiply",
-                )
+                make_group(blend_multiply(), "nana-ui.scene.group.pipeline.multiply")
             });
         let group_pipeline_screen =
             cached_dest_pipeline(policy, format, 5, dest_group_layout_key(), || {
-                make_group_pipeline(
-                    device,
-                    pipeline_cache,
-                    &group_pipeline_layout,
-                    &group_shader,
-                    format,
-                    blend_screen(),
-                    "nana-ui.scene.group.pipeline.screen",
-                )
+                make_group(blend_screen(), "nana-ui.scene.group.pipeline.screen")
             });
         Self {
             width,
@@ -1305,5 +1308,65 @@ impl DestTarget {
             work.record_draw_batch();
             work.record_draw_call();
         }
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use nana_gpu::{__framework, GpuTextureFormat};
+
+    #[test]
+    fn dest_reuses_color_and_bindings_when_composition_mode_changes() {
+        let gpu = crate::test_gpu::context();
+        let device = __framework::device(&gpu);
+        let profile = ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM_SRGB);
+        let format = __framework::format_to_wgpu(profile.working_format());
+        let output = wgpu::TextureFormat::Bgra8UnormSrgb;
+        let mut current = None;
+        let ensure = |current: &mut Option<DestTarget>, width, msaa| {
+            DestTarget::ensure(
+                current,
+                device,
+                None,
+                format,
+                output,
+                profile,
+                width,
+                48,
+                msaa,
+                gpu.policy(),
+            );
+        };
+        ensure(&mut current, 64, false);
+        let target = current.as_ref().unwrap();
+        let color = target.color.clone();
+        let binding = target.blit_bind_group.clone();
+        let pipeline = target.blit_pipeline.clone();
+        let group = target.group_pipeline.clone();
+        for msaa in [true, false, true, false] {
+            ensure(&mut current, 64, msaa);
+            let target = current.as_ref().unwrap();
+            assert_eq!(
+                target.color, color,
+                "mode change must preserve the color attachment"
+            );
+            assert_eq!(target.blit_bind_group, binding);
+            assert_eq!(target.blit_pipeline, pipeline);
+            assert_eq!(target.msaa.is_some(), msaa);
+            assert_eq!(target.msaa_allocated, msaa);
+        }
+        ensure(&mut current, 96, false);
+        let resized = current.as_ref().unwrap();
+        assert_ne!(
+            resized.color, color,
+            "size change needs a new color attachment"
+        );
+        assert_eq!(
+            resized.blit_pipeline, pipeline,
+            "resize reuses device pipelines"
+        );
+        assert_eq!(resized.group_pipeline, group);
+        assert_eq!(resized.width, 96);
     }
 }

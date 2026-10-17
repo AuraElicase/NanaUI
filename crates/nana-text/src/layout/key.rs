@@ -179,6 +179,7 @@ pub(crate) struct LayoutKey {
     /// shaping input — objects shape as placeholders — so it cannot come in
     /// through the shaped identity either.
     objects: Vec<(usize, [u32; 7])>,
+    paragraph_alignments: Vec<(usize, Option<TextAlignSpec>)>,
     /// Each ruby's base range and its shaped annotation, held so the pointer
     /// it is compared by stays valid.
     rubies: Vec<(std::ops::Range<usize>, Arc<ShapedText>)>,
@@ -203,11 +204,13 @@ impl LayoutKey {
         run_line_heights: &[f32],
         empty_line_height: f32,
         objects: &[crate::source::InlineObject],
+        paragraph_alignments: &[(usize, Option<TextAlignSpec>)],
         rubies: Vec<(std::ops::Range<usize>, Arc<ShapedText>)>,
         labels: Vec<(usize, [u32; 5], Arc<ShapedText>)>,
     ) -> Self {
         Self {
             shaped: Arc::clone(shaped),
+            paragraph_alignments: paragraph_alignments.to_vec(),
             revision,
             ellipsis: ellipsis.map(Arc::clone),
             kind,
@@ -263,6 +266,8 @@ impl LayoutKey {
     pub fn retained_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
             + self.run_line_heights.capacity() * std::mem::size_of::<u32>()
+            + self.paragraph_alignments.capacity()
+                * std::mem::size_of::<(usize, Option<TextAlignSpec>)>()
             + self.objects.capacity() * std::mem::size_of::<(usize, [u32; 7])>()
     }
 }
@@ -288,6 +293,7 @@ impl PartialEq for LayoutKey {
                 .iter()
                 .zip(&other.rubies)
                 .all(|((left, a), (right, b))| left == right && Arc::ptr_eq(a, b))
+            && self.paragraph_alignments == other.paragraph_alignments
             && self.labels.len() == other.labels.len()
             && self
                 .labels
@@ -313,6 +319,10 @@ impl Hash for LayoutKey {
         self.run_line_heights.hash(state);
         self.empty_line_height.hash(state);
         self.objects.hash(state);
+        for (at, align) in &self.paragraph_alignments {
+            at.hash(state);
+            align.map(|a| a as u8).hash(state);
+        }
         for (range, shaped) in &self.rubies {
             range.hash(state);
             (Arc::as_ptr(shaped) as *const u8 as usize).hash(state);

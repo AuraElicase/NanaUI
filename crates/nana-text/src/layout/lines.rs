@@ -138,6 +138,7 @@ struct Cell {
 /// What the layout engine hands the line builder.
 pub(super) struct LineInput<'a> {
     pub text: &'a str,
+    pub paragraph_alignments: &'a [(usize, Option<TextAlignSpec>)],
     pub runs: &'a [ShapedRun],
     pub paragraphs: &'a [ShapedParagraph],
     /// Resolved line box height per entry of `runs`, physical px.
@@ -1102,7 +1103,7 @@ impl<'a> Builder<'a> {
         if let Some(ellipsis) = ellipsis {
             width_px += ellipsis.advance_px;
         }
-        let origin_x_px = self.align_offset(width_px);
+        let origin_x_px = self.align_offset(width_px, source.start);
         let top_y_px = self.next_top_px;
         let (strut_ascent, strut_descent) = match self.input.strut {
             Some(strut) => (strut.metrics.ascent_px, strut.metrics.descent_px),
@@ -1373,7 +1374,7 @@ impl<'a> Builder<'a> {
     /// line overflows past the start edge, so what a clipped container shows is
     /// the end of the string — the end the caller aligned to. Clamping would
     /// show the other end.
-    fn align_offset(&self, width_px: f32) -> f32 {
+    fn align_offset(&self, width_px: f32, at: usize) -> f32 {
         let Some(max_width) = self.max_width_px else {
             return 0.0;
         };
@@ -1384,7 +1385,15 @@ impl<'a> Builder<'a> {
         // vertical line (CSS Writing Modes §2.1), as the box layout's inline
         // axis does.
         let rtl = self.input.constraints.base_direction == DirSpec::Rtl;
-        match self.input.constraints.align {
+        let index = self
+            .input
+            .paragraph_alignments
+            .partition_point(|(offset, _)| *offset <= at);
+        let align = index
+            .checked_sub(1)
+            .and_then(|i| self.input.paragraph_alignments[i].1)
+            .unwrap_or(self.input.constraints.align);
+        match align {
             TextAlignSpec::Start => {
                 if rtl {
                     slack

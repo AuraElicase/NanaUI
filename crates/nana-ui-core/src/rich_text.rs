@@ -347,6 +347,10 @@ pub struct RichShapeStyle {
     /// CSS `font-family` list.
     pub family: Option<Arc<str>>,
     pub size_px: Option<f32>,
+    /// Size relative to the inherited font size; mutually exclusive with size_px.
+    pub size_em: Option<f32>,
+    /// Opaque authored font alias retained for consumer round trips.
+    pub family_alias: Option<Arc<str>>,
     pub weight: Option<u16>,
     pub italic: Option<bool>,
     pub letter_spacing_px: Option<f32>,
@@ -402,11 +406,24 @@ impl RichSpanStyle {
 
     pub fn family(mut self, family: impl Into<Arc<str>>) -> Self {
         self.shape.family = Some(family.into());
+        self.shape.family_alias = None;
         self
     }
 
     pub fn size(mut self, size_px: f32) -> Self {
         self.shape.size_px = Some(size_px);
+        self.shape.size_em = None;
+        self
+    }
+
+    pub fn size_em(mut self, em: f32) -> Self {
+        self.shape.size_em = Some(em);
+        self.shape.size_px = None;
+        self
+    }
+
+    pub fn family_alias(mut self, alias: impl Into<Arc<str>>) -> Self {
+        self.shape.family_alias = Some(alias.into());
         self
     }
 
@@ -488,7 +505,21 @@ impl RichSpanStyle {
         Self {
             shape: RichShapeStyle {
                 family: pick(&self.shape.family, &over.shape.family),
-                size_px: pick(&self.shape.size_px, &over.shape.size_px),
+                family_alias: if over.shape.family.is_some() {
+                    over.shape.family_alias.clone()
+                } else {
+                    pick(&self.shape.family_alias, &over.shape.family_alias)
+                },
+                size_px: if over.shape.size_em.is_some() {
+                    None
+                } else {
+                    pick(&self.shape.size_px, &over.shape.size_px)
+                },
+                size_em: if over.shape.size_px.is_some() {
+                    None
+                } else {
+                    pick(&self.shape.size_em, &over.shape.size_em)
+                },
                 weight: pick(&self.shape.weight, &over.shape.weight),
                 italic: pick(&self.shape.italic, &over.shape.italic),
                 letter_spacing_px: pick(
@@ -725,6 +756,8 @@ impl RichObject {
 #[derive(Debug, Clone, Default)]
 pub struct RichText {
     text: Arc<str>,
+    /// One optional alignment per LF-delimited paragraph, including a trailing empty one.
+    paragraph_alignments: Arc<Vec<Option<crate::TextAlignSpec>>>,
     spans: Arc<AttributedRanges<RichSpanStyle>>,
     /// Sorted by offset; each names an [`OBJECT_REPLACEMENT`] of `text`.
     objects: Arc<Vec<(usize, RichObject)>>,
@@ -734,7 +767,8 @@ pub struct RichText {
 
 impl PartialEq for RichText {
     fn eq(&self, other: &Self) -> bool {
-        (Arc::ptr_eq(&self.text, &other.text) || self.text == other.text)
+        self.paragraph_alignments == other.paragraph_alignments
+            && (Arc::ptr_eq(&self.text, &other.text) || self.text == other.text)
             && (Arc::ptr_eq(&self.spans, &other.spans) || self.spans == other.spans)
             && (Arc::ptr_eq(&self.objects, &other.objects) || self.objects == other.objects)
             && (Arc::ptr_eq(&self.rubies, &other.rubies) || self.rubies == other.rubies)
@@ -746,9 +780,66 @@ impl RichText {
     pub fn new(text: impl Into<Arc<str>>) -> Self {
         Self {
             text: text.into(),
+            paragraph_alignments: Arc::default(),
             spans: Arc::default(),
             objects: Arc::default(),
             rubies: Arc::default(),
+        }
+    }
+
+    pub fn paragraph_alignments(&self) -> &[Option<crate::TextAlignSpec>] {
+        &self.paragraph_alignments
+    }
+
+    pub fn paragraph_alignment(&self, index: usize) -> Option<crate::TextAlignSpec> {
+        self.paragraph_alignments.get(index).copied().flatten()
+    }
+
+    pub fn set_paragraph_alignment(&mut self, index: usize, align: Option<crate::TextAlignSpec>) {
+        let count = self.text.bytes().filter(|b| *b == b'\n').count() + 1;
+        if index >= count {
+            return;
+        }
+        let values = Arc::make_mut(&mut self.paragraph_alignments);
+        values.resize(count, None);
+        values[index] = align;
+        while values.last() == Some(&None) {
+            values.pop();
+        }
+    }
+
+    /// Paragraph indices touched by a byte selection; the end is exclusive.
+    pub fn selected_paragraphs(&self, range: Range<usize>) -> Range<usize> {
+        let range = self.snap(range);
+        let start = self.text[..range.start]
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count();
+        let last = if range.end > range.start {
+            range.end - 1
+        } else {
+            range.end
+        };
+        let end = self.text.as_bytes()[..last]
+            .iter()
+            .filter(|b| **b == b'\n')
+            .count()
+            + 1;
+        start..end
+    }
+
+    pub fn set_paragraph_alignments(
+        &mut self,
+        range: Range<usize>,
+        align: Option<crate::TextAlignSpec>,
+    ) {
+        let paragraphs = self.selected_paragraphs(range);
+        let count = self.text.bytes().filter(|b| *b == b'\n').count() + 1;
+        let values = Arc::make_mut(&mut self.paragraph_alignments);
+        values.resize(count, None);
+        values[paragraphs].fill(align);
+        while values.last() == Some(&None) {
+            values.pop();
         }
     }
 
@@ -887,6 +978,24 @@ impl RichText {
     /// objects inside `range` go with their characters.
     pub fn replace_range(&mut self, range: Range<usize>, replacement: &str) {
         let range = self.snap(range);
+        let first = self.text[..range.start]
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count();
+        let last = self.text[..range.end]
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count();
+        let inserted = replacement.bytes().filter(|b| *b == b'\n').count();
+        let align = self.paragraph_alignment(first);
+        let mut values = (0..self.text.bytes().filter(|b| *b == b'\n').count() + 1)
+            .map(|i| self.paragraph_alignment(i))
+            .collect::<Vec<_>>();
+        values.splice(first + 1..last + 1, std::iter::repeat_n(align, inserted));
+        while values.last() == Some(&None) {
+            values.pop();
+        }
+        self.paragraph_alignments = Arc::new(values);
         let mut text = String::with_capacity(self.text.len() - range.len() + replacement.len());
         text.push_str(&self.text[..range.start]);
         text.push_str(replacement);
@@ -923,6 +1032,24 @@ impl RichText {
         let range = self.snap(range);
         RichText {
             text: Arc::from(&self.text[range.clone()]),
+            paragraph_alignments: Arc::new({
+                let first = self.text[..range.start]
+                    .bytes()
+                    .filter(|b| *b == b'\n')
+                    .count();
+                let count = self.text[range.clone()]
+                    .bytes()
+                    .filter(|b| *b == b'\n')
+                    .count()
+                    + 1;
+                let mut values = (first..first + count)
+                    .map(|i| self.paragraph_alignment(i))
+                    .collect::<Vec<_>>();
+                while values.last() == Some(&None) {
+                    values.pop();
+                }
+                values
+            }),
             spans: Arc::new(self.spans.slice(range.clone())),
             objects: Arc::new(
                 self.objects
@@ -951,7 +1078,14 @@ impl RichText {
     pub fn replace_with(&mut self, range: Range<usize>, piece: &RichText) {
         let range = self.snap(range);
         let at = range.start;
+        let paragraph = self.text[..at].bytes().filter(|b| *b == b'\n').count();
+        let at_start = at == 0 || self.text.as_bytes()[at - 1] == b'\n';
         self.replace_range(range, piece.text());
+        for i in 0..piece.text.bytes().filter(|b| *b == b'\n').count() + 1 {
+            if !piece.paragraph_alignments.is_empty() && (i > 0 || at_start) {
+                self.set_paragraph_alignment(paragraph + i, piece.paragraph_alignment(i));
+            }
+        }
         if !piece.spans.is_empty() || !self.spans.is_empty() {
             let inserted = at..at + piece.text.len();
             let spans = Arc::make_mut(&mut self.spans);
@@ -1076,6 +1210,7 @@ impl RichTextBuilder {
     pub fn build(&mut self) -> RichText {
         RichText {
             text: std::mem::take(&mut self.text).into(),
+            paragraph_alignments: Arc::default(),
             spans: Arc::new(std::mem::take(&mut self.spans)),
             objects: Arc::new(std::mem::take(&mut self.objects)),
             rubies: Arc::new(std::mem::take(&mut self.rubies)),
