@@ -683,6 +683,7 @@ impl PresentationDriver {
                 let encoded = frame_driver::PresentationFrameDriver::encode(
                     prepared,
                     scene,
+                    None,
                     frame,
                     &self.gpu,
                     &mut self.painters,
