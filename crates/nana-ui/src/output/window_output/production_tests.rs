@@ -120,6 +120,100 @@ fn initial(
 }
 
 #[test]
+fn suspension_clears_only_consumer_then_resumes_same_resources_and_releases() {
+    let gpu = test_gpu::context();
+    let config = WindowOutputConfig::default().with_extent(WindowOutputExtent::MatchWindow);
+    let mut state = WindowOutputState::new(WindowId(242));
+    let mut painters = HashMap::new();
+    let content = scene_with_color(false, [0.5, 0.2, 0.1, 1.0]);
+    state.set_config(Some(config));
+    let first = initial(&mut state, &mut painters, &content);
+    let generation = first.resource_generation();
+    let reference = crate::output::driver_tests::read_pixels(first.texture());
+    drop(first);
+    let destination = target();
+    let viewport = config.viewport(&geometry(), [64, 48], [0.; 4]).unwrap();
+    for _ in 0..12 {
+        state.set_config(Some(config.with_suspended(true)));
+        assert!(matches!(
+            state.frame_demand(false),
+            crate::FrameDemand::At(_)
+        ));
+        assert!(!state.can_share_window(&gpu, &geometry(), output_profile(), viewport, false));
+        let step = state.begin(
+            &gpu,
+            &geometry(),
+            &content,
+            10,
+            true,
+            None,
+            [1.; 4],
+            Instant::now(),
+        );
+        assert!(matches!(step, OutputStep::Record { .. }));
+        let mut frame = gpu.begin_frame("suspend consumer without blanking window");
+        let (recorded, encoded) = state
+            .encode_presentation(
+                Some(step),
+                Some(direct(viewport)),
+                &content,
+                &mut frame,
+                &gpu,
+                &mut painters,
+                Some(&destination.render_target().unwrap()),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        assert!(encoded.direct_ui && !encoded.shared);
+        let submission = frame.submit();
+        let blank = state
+            .complete(recorded.unwrap(), &submission, Instant::now())
+            .unwrap();
+        assert_eq!(blank.resource_generation(), generation);
+        assert!(
+            crate::output::driver_tests::read_pixels(blank.texture())
+                .iter()
+                .all(|v| *v == 0)
+        );
+        assert_eq!(
+            crate::output::driver_tests::read_pixels(&destination),
+            reference
+        );
+        drop(blank);
+        assert_eq!(state.frame_demand(false), crate::FrameDemand::OnDemand);
+        assert!(matches!(
+            state.begin(
+                &gpu,
+                &geometry(),
+                &content,
+                99,
+                true,
+                None,
+                [1.; 4],
+                Instant::now()
+            ),
+            OutputStep::Idle
+        ));
+        state.set_config(Some(config));
+        let resumed = initial(&mut state, &mut painters, &content);
+        assert_eq!(resumed.resource_generation(), generation);
+        assert_eq!(
+            crate::output::driver_tests::read_pixels(resumed.texture()),
+            reference
+        );
+        assert_eq!(state.last_work().target_recreates, 0);
+        drop(resumed);
+    }
+    state.set_config(None);
+    assert!(state.surface.is_none());
+    assert!(state.transfer.is_none());
+    assert!(state.straight.is_empty());
+    assert_eq!(state.frame_demand(false), crate::FrameDemand::OnDemand);
+}
+
+#[test]
 fn cyclic_retained_output_preserves_real_direct_pixels_for_shared_and_separate_routes() {
     let gpu = test_gpu::context();
     for extent in [

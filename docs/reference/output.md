@@ -126,6 +126,8 @@ Electron 参考在生产端非阻塞观察 ready 后发送 handle。成功 impor
 
 ## DX12 共享纹理（`native-export`）
 
+窗口输出支持 `WindowOutputConfig::with_suspended(true)`：在同一保留目标和原生共享池中提交一帧透明内容，随后不再请求隐藏输出的循环帧。窗口本身继续显示原场景，不能与透明输出共享这次栅格化。恢复为 `false` 强制提交当前场景，复用尺寸、设备和像素合同兼容的资源；撤销整个配置仍立即退役资源。配置撤销在程序更新时同步，不依赖隐藏窗口收到绘制事件。宿主负责为暂停设置有限保留期，以及按消费方协议发送透明帧；此接口不提供无限期缓存或完成超时即可复用的捷径。
+
 `nana_gpu::NativeExportPool`（需启用 `native-export` feature，仅限 Windows + DX12 设备；对应能力位 `GpuCapability::NativeTextureExport`）持有三张带 `D3D12_HEAP_FLAG_SHARED` 和渲染目标标志创建的 `DXGI_FORMAT_B8G8R8A8_UNORM` 提交纹理（缺少渲染目标标志时 D3D11 拒绝打开共享 D3D12 纹理），每张纹理导出为一个 NT 句柄，并配一把共享围栏（shared fence）。它们在宿主自己的设备上包装为仅 `COPY_DST` 的纹理，不存在第二个设备或队列：
 
 - `stage`：在调用方当帧中录制一次从已渲染纹理到下一个槽位的拷贝；

@@ -40,11 +40,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let configured = self.program.window_output(id);
         let state = self.window_outputs.get(&id);
         match (configured, state) {
-            (Some(config), _) if !can_present && config.while_hidden => FrameDemand::Continuous(
-                config
-                    .max_fps
-                    .unwrap_or(crate::output::window_output::WINDOW_OUTPUT_HIDDEN_FPS),
-            ),
+            (Some(config), _) if !can_present && config.while_hidden && !config.suspended => {
+                FrameDemand::Continuous(
+                    config
+                        .max_fps
+                        .unwrap_or(crate::output::window_output::WINDOW_OUTPUT_HIDDEN_FPS),
+                )
+            }
             (Some(_), Some(state)) => state.frame_demand(can_present),
             _ => FrameDemand::OnDemand,
         }
@@ -151,6 +153,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             let encoded = PresentationFrameDriver::encode(
                 prepared,
                 scene,
+                None,
                 frame,
                 gpu,
                 &mut self.painters,

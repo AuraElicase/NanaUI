@@ -179,6 +179,7 @@ impl PresentationFrameDriver {
     pub fn encode(
         prepared: PreparedPresentation,
         scene: &UiScene,
+        retained_scene: Option<&UiScene>,
         frame: &mut FrameContext,
         gpu: &GpuContext,
         painters: &mut HashMap<ScenePresentationProfile, SceneWgpuPainter>,
@@ -222,7 +223,22 @@ impl PresentationFrameDriver {
                 .or_insert_with(|| SceneWgpuPainter::new_with_presentation(gpu, profile));
             painter.set_resource_fetch_host(fetch_host.clone());
             let result = Self::encode_retained(
-                surface, plan, request, painter, scene, frame, textures, renderers,
+                surface,
+                plan,
+                request,
+                painter,
+                retained_scene.unwrap_or(scene),
+                frame,
+                if retained_scene.is_some() {
+                    None
+                } else {
+                    textures
+                },
+                if retained_scene.is_some() {
+                    None
+                } else {
+                    renderers
+                },
             );
             match result {
                 Ok(retained) => {
