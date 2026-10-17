@@ -46,6 +46,10 @@ pub enum RichEditCommand {
     SetAttrs(RichSpanStyle),
     /// Drop every span over the selection (or the typing attributes).
     ClearFormatting,
+    /// Clear only the named character attributes.
+    ClearAttrs(RichAttrMask),
+    /// Apply to the current or selected LF paragraphs. None inherits the node.
+    SetParagraphAlignment(Option<nana_ui_core::TextAlignSpec>),
     /// Replace the selection with `text`, styled as typing would style it.
     InsertText(String),
     /// Replace the selection with an inline object.
@@ -91,6 +95,48 @@ impl RichAttrMask {
     pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
+    /// Drop the selected fields, preserving every other attribute.
+    fn cleared(self, mut style: RichSpanStyle) -> RichSpanStyle {
+        if self.contains(Self::SIZE) {
+            style.shape.size_px = None;
+            style.shape.size_em = None;
+        }
+        if self.contains(Self::FAMILY) {
+            style.shape.family = None;
+            style.shape.family_alias = None;
+        }
+        if self.contains(Self::WEIGHT) {
+            style.shape.weight = None;
+        }
+        if self.contains(Self::ITALIC) {
+            style.shape.italic = None;
+        }
+        if self.contains(Self::LETTER_SPACING) {
+            style.shape.letter_spacing_px = None;
+        }
+        if self.contains(Self::FEATURES) {
+            style.shape.features = None;
+        }
+        if self.contains(Self::COLOR) {
+            style.paint.color = None;
+        }
+        if self.contains(Self::DECORATION) {
+            style.paint.decoration = None;
+        }
+        if self.contains(Self::DECORATION_COLOR) {
+            style.paint.decoration_color = None;
+        }
+        if self.contains(Self::STROKE) {
+            style.paint.stroke = None;
+        }
+        if self.contains(Self::SHADOWS) {
+            style.paint.shadows = None;
+        }
+        if self.contains(Self::EFFECT) {
+            style.effect = None;
+        }
+        style
+    }
 }
 
 /// The attributes across a selection, tri-state per field: a field set in
@@ -101,6 +147,8 @@ impl RichAttrMask {
 pub struct RichSelectionAttrs {
     pub style: RichSpanStyle,
     pub mixed: RichAttrMask,
+    pub paragraph_alignment: Option<nana_ui_core::TextAlignSpec>,
+    pub paragraph_alignment_mixed: bool,
 }
 
 /// What a [`RichTextEditor`] reports.
@@ -390,16 +438,49 @@ impl RichTextEditor {
                 self.value.apply_span(range, &style);
                 true
             }
-            RichEditCommand::ClearFormatting => {
+            RichEditCommand::SetParagraphAlignment(align) => {
+                if !self.editable()
+                    || self
+                        .value
+                        .selected_paragraphs(self.range())
+                        .all(|i| self.value.paragraph_alignment(i) == align)
+                {
+                    return false;
+                }
+                self.remember(false);
+                self.value.set_paragraph_alignments(self.range(), align);
+                true
+            }
+            RichEditCommand::ClearAttrs(mask) => {
+                if !self.editable() {
+                    return false;
+                }
                 let range = self.range();
                 if range.is_empty() {
-                    self.state.typing = Some(RichSpanStyle::default());
-                    return true;
+                    self.state.typing = Some(mask.cleared(self.typing_style()));
+                } else {
+                    self.remember(false);
+                    let piece = self.value.slice(range.clone());
+                    for (span, style) in piece.spans().iter() {
+                        self.value.set_span(
+                            span.start + range.start..span.end + range.start,
+                            mask.cleared(style.clone()),
+                        );
+                    }
                 }
+                true
+            }
+            RichEditCommand::ClearFormatting => {
+                let range = self.range();
                 if !self.editable() {
                     return false;
                 }
                 self.remember(false);
+                self.value.set_paragraph_alignments(range.clone(), None);
+                if range.is_empty() {
+                    self.state.typing = Some(RichSpanStyle::default());
+                    return true;
+                }
                 self.value.set_span(range, RichSpanStyle::default());
                 true
             }
@@ -493,14 +574,24 @@ impl RichTextEditor {
     /// The attributes across the selection, or what typing at the caret
     /// would use.
     pub fn selection_attrs(&self) -> RichSelectionAttrs {
+        let paragraphs = self.value.selected_paragraphs(self.range());
+        let alignment = self.value.paragraph_alignment(paragraphs.start);
+        let mixed = paragraphs
+            .clone()
+            .any(|i| self.value.paragraph_alignment(i) != alignment);
         let range = self.range();
         if range.is_empty() {
             return RichSelectionAttrs {
                 style: self.typing_style(),
                 mixed: RichAttrMask::default(),
+                paragraph_alignment: alignment,
+                paragraph_alignment_mixed: mixed,
             };
         }
-        summarize(&self.value, range)
+        let mut attrs = summarize(&self.value, range);
+        attrs.paragraph_alignment = alignment;
+        attrs.paragraph_alignment_mixed = mixed;
+        attrs
     }
 
     /// Emit what changed between `before` and now.
@@ -561,11 +652,18 @@ fn summarize(value: &RichText, range: Range<usize>) -> RichSelectionAttrs {
     for piece in &pieces[1..] {
         let checks = [
             (
-                piece.shape.family != first.shape.family,
+                (
+                    piece.shape.family_alias.as_ref(),
+                    piece.shape.family.as_ref(),
+                ) != (
+                    first.shape.family_alias.as_ref(),
+                    first.shape.family.as_ref(),
+                ),
                 RichAttrMask::FAMILY,
             ),
             (
-                piece.shape.size_px != first.shape.size_px,
+                (piece.shape.size_px, piece.shape.size_em)
+                    != (first.shape.size_px, first.shape.size_em),
                 RichAttrMask::SIZE,
             ),
             (
@@ -609,45 +707,12 @@ fn summarize(value: &RichText, range: Range<usize>) -> RichSelectionAttrs {
             }
         }
     }
-    let mut style = first;
     let mask = RichAttrMask(mixed);
-    if mask.contains(RichAttrMask::FAMILY) {
-        style.shape.family = None;
+    RichSelectionAttrs {
+        style: mask.cleared(first),
+        mixed: mask,
+        ..Default::default()
     }
-    if mask.contains(RichAttrMask::SIZE) {
-        style.shape.size_px = None;
-    }
-    if mask.contains(RichAttrMask::WEIGHT) {
-        style.shape.weight = None;
-    }
-    if mask.contains(RichAttrMask::ITALIC) {
-        style.shape.italic = None;
-    }
-    if mask.contains(RichAttrMask::LETTER_SPACING) {
-        style.shape.letter_spacing_px = None;
-    }
-    if mask.contains(RichAttrMask::FEATURES) {
-        style.shape.features = None;
-    }
-    if mask.contains(RichAttrMask::COLOR) {
-        style.paint.color = None;
-    }
-    if mask.contains(RichAttrMask::DECORATION) {
-        style.paint.decoration = None;
-    }
-    if mask.contains(RichAttrMask::DECORATION_COLOR) {
-        style.paint.decoration_color = None;
-    }
-    if mask.contains(RichAttrMask::STROKE) {
-        style.paint.stroke = None;
-    }
-    if mask.contains(RichAttrMask::SHADOWS) {
-        style.paint.shadows = None;
-    }
-    if mask.contains(RichAttrMask::EFFECT) {
-        style.effect = None;
-    }
-    RichSelectionAttrs { style, mixed: mask }
 }
 
 fn floor_char(text: &str, mut offset: usize) -> usize {
@@ -1515,5 +1580,96 @@ mod tests {
             "a read-only selection cannot be restyled"
         );
         assert_eq!(view.value.text(), "ab");
+    }
+}
+
+#[cfg(test)]
+mod typography_tests {
+    use super::*;
+    use nana_ui_core::TextAlignSpec;
+
+    #[test]
+    fn paragraph_selection_split_merge_and_undo() {
+        let mut editor = RichTextEditor::new(RichText::new("one\ntwo\n"));
+        editor.apply_command(RichEditCommand::Select(0..4));
+        editor.apply_command(RichEditCommand::SetParagraphAlignment(Some(
+            TextAlignSpec::Center,
+        )));
+        assert_eq!(
+            editor.value.paragraph_alignment(0),
+            Some(TextAlignSpec::Center)
+        );
+        assert_eq!(editor.value.paragraph_alignment(1), None);
+        editor.apply_command(RichEditCommand::SelectAll);
+        assert!(editor.selection_attrs().paragraph_alignment_mixed);
+        editor.apply_command(RichEditCommand::Undo);
+        assert_eq!(editor.value.paragraph_alignment(0), None);
+        editor.apply_command(RichEditCommand::Redo);
+        editor.apply_command(RichEditCommand::Select(2..2));
+        editor.apply_command(RichEditCommand::InsertText("\n".into()));
+        assert_eq!(
+            editor.value.paragraph_alignment(1),
+            Some(TextAlignSpec::Center)
+        );
+        editor.apply_command(RichEditCommand::Select(2..3));
+        editor.delete(2..3);
+        assert_eq!(
+            editor.value.paragraph_alignment(0),
+            Some(TextAlignSpec::Center)
+        );
+        editor.apply_command(RichEditCommand::Select(
+            editor.value.text().len()..editor.value.text().len(),
+        ));
+        editor.apply_command(RichEditCommand::SetParagraphAlignment(Some(
+            TextAlignSpec::End,
+        )));
+        assert_eq!(
+            editor.value.paragraph_alignment(2),
+            Some(TextAlignSpec::End)
+        );
+    }
+
+    #[test]
+    fn clearing_one_attribute_preserves_others_and_undo() {
+        let rich = RichText::new("abc").with_span(
+            0..3,
+            RichSpanStyle::new()
+                .bold()
+                .size_em(1.5)
+                .family("Body")
+                .family_alias("body"),
+        );
+        let mut editor = RichTextEditor::new(rich.clone());
+        editor.apply_command(RichEditCommand::SelectAll);
+        editor.apply_command(RichEditCommand::ClearAttrs(RichAttrMask::SIZE));
+        let style = editor.value.style_at(1).unwrap();
+        assert_eq!(style.shape.size_em, None);
+        assert_eq!(style.shape.weight, Some(700));
+        assert_eq!(style.shape.family_alias.as_deref(), Some("body"));
+        editor.apply_command(RichEditCommand::Undo);
+        assert_eq!(editor.value, rich);
+        editor.apply_command(RichEditCommand::SetAttrs(RichSpanStyle::new().size(32.0)));
+        assert_eq!(editor.value.style_at(0).unwrap().shape.size_em, None);
+        editor.apply_command(RichEditCommand::ClearFormatting);
+        editor.apply_command(RichEditCommand::Undo);
+        assert_eq!(editor.value.style_at(0).unwrap().shape.size_px, Some(32.0));
+    }
+
+    #[test]
+    fn identical_resolved_fonts_and_sizes_keep_distinct_authored_values() {
+        let rich = RichText::new("ab")
+            .with_span(
+                0..1,
+                RichSpanStyle::new()
+                    .family("Same")
+                    .family_alias("name")
+                    .size_em(1.0),
+            )
+            .with_span(1..2, RichSpanStyle::new().family("Same").size(28.0));
+        let mut editor = RichTextEditor::new(rich);
+        editor.apply_command(RichEditCommand::SelectAll);
+        let attrs = editor.selection_attrs();
+        assert!(attrs.mixed.contains(RichAttrMask::SIZE));
+        assert!(attrs.mixed.contains(RichAttrMask::FAMILY));
     }
 }

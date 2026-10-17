@@ -252,6 +252,14 @@ pub trait SceneGpuRenderer: fmt::Debug + Send + Sync + 'static {
         None
     }
 
+    /// Version of rendered pixels for retained output reuse, independently of
+    /// prepared command reuse. Animated renderers return `None` even when
+    /// `preparation_version` is stable. The default preserves the legacy
+    /// preparation-version contract for existing retained renderers.
+    fn content_version(&self, node: &CustomRenderNode) -> Option<u64> {
+        self.preparation_version(node)
+    }
+
     fn prepare(&self, node: &SceneGpuNode, context: SceneGpuPrepareContext<'_>);
 
     fn render(&self, node: &SceneGpuNode, context: SceneGpuRenderContext<'_>);
@@ -493,7 +501,7 @@ impl SceneGpuRendererRegistry {
                 node.renderer.hash(&mut revision);
                 node.revision.hash(&mut revision);
                 (Arc::as_ptr(renderer) as *const () as usize).hash(&mut revision);
-                renderer.preparation_version(node)?.hash(&mut revision);
+                renderer.content_version(node)?.hash(&mut revision);
             }
         }
         Some(revision.finish())
@@ -623,6 +631,24 @@ mod tests {
         assert_eq!(registry.retained_revision(document.scene()), Some(first));
         version.store(2, Ordering::Relaxed);
         assert_ne!(registry.retained_revision(document.scene()), Some(first));
+        #[derive(Debug)]
+        struct Animated;
+        impl SceneGpuRenderer for Animated {
+            fn preparation_version(&self, _: &CustomRenderNode) -> Option<u64> {
+                Some(1)
+            }
+            fn content_version(&self, _: &CustomRenderNode) -> Option<u64> {
+                None
+            }
+            fn prepare(&self, _: &SceneGpuNode, _: SceneGpuPrepareContext<'_>) {}
+            fn render(&self, _: &SceneGpuNode, _: SceneGpuRenderContext<'_>) {}
+        }
+        registry.insert("gpu-view", Arc::new(Animated));
+        assert_eq!(
+            registry.retained_revision(document.scene()),
+            None,
+            "reusable preparation does not freeze animated retained output"
+        );
         registry.insert("gpu-view", Arc::new(NoopRenderer));
         assert_eq!(registry.retained_revision(document.scene()), None);
     }

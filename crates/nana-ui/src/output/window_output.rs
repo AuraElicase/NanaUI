@@ -119,6 +119,10 @@ pub struct WindowOutputConfig {
     /// (and [`WINDOW_OUTPUT_HIDDEN_FPS`] while it is hidden).
     pub max_fps: Option<NonZeroU32>,
     pub export: WindowOutputExport,
+    /// Publish transparent content once, then stop producing frames while
+    /// retaining this output's resources. Resume with `false`; withdraw the
+    /// config to release resources. Hosts must bound the suspension lifetime.
+    pub suspended: bool,
 }
 
 impl Default for WindowOutputConfig {
@@ -135,11 +139,16 @@ impl Default for WindowOutputConfig {
             while_hidden: true,
             max_fps: None,
             export: WindowOutputExport::SameDevice,
+            suspended: false,
         }
     }
 }
 
 impl WindowOutputConfig {
+    pub const fn with_suspended(mut self, suspended: bool) -> Self {
+        self.suspended = suspended;
+        self
+    }
     pub const fn with_extent(mut self, extent: WindowOutputExtent) -> Self {
         self.extent = extent;
         self
@@ -417,6 +426,9 @@ enum Reported {
 pub(crate) struct WindowOutputState {
     window: WindowId,
     config: Option<WindowOutputConfig>,
+    blank_scene: UiScene,
+    suspend_pending: bool,
+    suspend_at: Instant,
     surface: Option<ExternalSurface>,
     straight: Vec<StraightAlpha>,
     planner: super::RenderTargetPlanner,
@@ -529,10 +541,18 @@ impl WindowOutputState {
             ),
             _ => PresentationFrameDriver::prepare(scene, None, None, None, textures)?,
         }
-        .with_direct(direct, Some(self.planner.plan()));
+        .with_direct(
+            direct,
+            (!self.config.is_some_and(|c| c.suspended)).then(|| self.planner.plan()),
+        );
+        let retained_scene = self
+            .config
+            .is_some_and(|c| c.suspended)
+            .then_some(&self.blank_scene);
         let mut encoded = PresentationFrameDriver::encode(
             prepared,
             scene,
+            retained_scene,
             frame,
             gpu,
             painters,
@@ -595,6 +615,9 @@ impl WindowOutputState {
         Self {
             window,
             config: None,
+            blank_scene: UiScene::new(),
+            suspend_pending: false,
+            suspend_at: Instant::now(),
             surface: None,
             straight: Vec::new(),
             planner: super::RenderTargetPlanner::new(),
@@ -621,6 +644,13 @@ impl WindowOutputState {
         let Some(config) = self.config else {
             return crate::FrameDemand::OnDemand;
         };
+        if config.suspended {
+            return if self.suspend_pending {
+                crate::FrameDemand::At(self.throttled_until.unwrap_or(self.suspend_at))
+            } else {
+                crate::FrameDemand::OnDemand
+            };
+        }
         if !can_present && config.while_hidden {
             return crate::FrameDemand::Continuous(
                 config.max_fps.unwrap_or(WINDOW_OUTPUT_HIDDEN_FPS),
@@ -651,6 +681,16 @@ impl WindowOutputState {
     /// Apply the program's answer for this frame. Withdrawing the output
     /// releases everything and reports `Stopped`.
     pub(crate) fn set_config(&mut self, config: Option<WindowOutputConfig>) {
+        if self.config != config {
+            self.suspend_pending = config.is_some_and(|c| c.suspended);
+            self.suspend_at = Instant::now();
+            if self.config.map(|c| c.suspended) != config.map(|c| c.suspended) {
+                self.volatile = self.volatile.wrapping_add(1);
+                self.throttled_until = None;
+                self.last_frame = None;
+                self.reported = None;
+            }
+        }
         if config.is_none() && self.config.is_some() {
             self.release();
             self.statuses.push(WindowOutputStatus::Stopped);
@@ -688,6 +728,8 @@ impl WindowOutputState {
         self.transfer = None;
         self.retire_native();
         self.throttled_until = None;
+        self.suspend_pending = self.config.is_some_and(|c| c.suspended);
+        self.suspend_at = Instant::now();
     }
 
     fn retire_native(&mut self) {
@@ -787,6 +829,19 @@ impl WindowOutputState {
         let Some(config) = self.config else {
             return OutputStep::Idle;
         };
+        if config.suspended && !self.suspend_pending {
+            return OutputStep::Idle;
+        }
+        let host_textures = if config.suspended {
+            None
+        } else {
+            host_textures
+        };
+        let clear_color = if config.suspended {
+            [0.; 4]
+        } else {
+            clear_color
+        };
         let Some(extent) = config.resolve_extent(geometry) else {
             return OutputStep::Idle;
         };
@@ -798,10 +853,16 @@ impl WindowOutputState {
             return OutputStep::Idle;
         }
         let recreates = self.work.target_recreates;
-        if volatile {
+        if (volatile && !config.suspended) || self.suspend_pending {
             self.volatile = self.volatile.wrapping_add(1);
         }
-        let revision = host_revision ^ self.volatile.wrapping_mul(0x2545_F491_4F6C_DD1D);
+        let revision = (if config.suspended { 0 } else { host_revision })
+            ^ self.volatile.wrapping_mul(0x2545_F491_4F6C_DD1D);
+        let scene = if config.suspended {
+            &self.blank_scene
+        } else {
+            scene
+        };
         let surface = self.surface.as_mut().expect("surface was just ensured");
         let prepared = PresentationFrameDriver::prepare(
             scene,
@@ -938,6 +999,11 @@ impl WindowOutputState {
             return None;
         };
         let surface = self.surface.as_mut()?;
+        let scene = if self.config.is_some_and(|c| c.suspended) {
+            &self.blank_scene
+        } else {
+            scene
+        };
         let recorded = match PresentationFrameDriver::encode_retained(
             surface,
             plan,
@@ -1070,6 +1136,9 @@ impl WindowOutputState {
         let Some(config) = self.config else {
             return false;
         };
+        if config.suspended {
+            return false;
+        }
         let Some(extent) = config.resolve_extent(geometry) else {
             return false;
         };
@@ -1348,6 +1417,16 @@ impl WindowOutputState {
         let has_native = native.is_some();
         #[cfg(not(all(windows, feature = "native-export")))]
         let has_native = false;
+        if self.config.is_some_and(|c| c.suspended)
+            && (has_native
+                || self.native_unavailable.is_some()
+                || self
+                    .config
+                    .is_some_and(|c| c.export != WindowOutputExport::Native))
+        {
+            self.suspend_pending = false;
+            self.throttled_until = None;
+        }
         let (width, height) = recorded.texture.size();
         let extent = [width, height];
         self.report(

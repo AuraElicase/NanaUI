@@ -74,6 +74,12 @@ fn document(value: RichText) -> (RuntimeDocument, StableNodeId, Entity<RichTextE
         .create_component(
             document,
             RichTextView::new(value.clone())
+                .style({
+                    let mut style = NodeStyle::default();
+                    Arc::make_mut(&mut style.layout).white_space =
+                        nana_ui_core::WhiteSpaceSpec::PreWrap;
+                    style
+                })
                 .font_size(18.0)
                 .width(LengthSpec::Px(WIDTH)),
         )
@@ -570,4 +576,36 @@ fn a_ruby_set_from_the_editor_lays_out_as_the_display_lays_it_out() {
         1,
         "undo brings it back"
     );
+}
+
+#[test]
+fn paragraph_typography_uses_identical_display_editor_and_hit_geometry() {
+    use nana_ui_core::TextAlignSpec;
+    let mut rich =
+        RichText::new("left\ncenter\nright\n").with_span(5..11, RichSpanStyle::new().size_em(1.5));
+    rich.set_paragraph_alignment(1, Some(TextAlignSpec::Center));
+    rich.set_paragraph_alignment(2, Some(TextAlignSpec::End));
+    rich.set_paragraph_alignment(3, Some(TextAlignSpec::Center));
+    let (mut runtime, view, editor) = document(rich);
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let (_, display) = runtime.context().world().text_layout(view).unwrap();
+    let (_, edited) = runtime
+        .context()
+        .world()
+        .text_layout(editor.stable_id())
+        .unwrap();
+    assert_eq!(display.lines, edited.lines);
+    assert_eq!(display.lines.len(), 4);
+    assert_eq!(display.lines[0].bounds.x, 0.0);
+    assert!(display.lines[1].bounds.x > 0.0);
+    assert!(display.lines[2].bounds.x > display.lines[1].bounds.x);
+    assert_eq!(display.lines[3].bounds.x, WIDTH / 2.0);
+    let second = &edited.lines[1];
+    let hit = edited.hit_test(
+        second.bounds.x + 1.0,
+        second.metrics.top_y_px + second.metrics.height_px / 2.0,
+    );
+    assert_eq!(hit.caret.line, 1);
+    assert!(edited.caret_geometry(hit.caret).unwrap().x_px >= second.bounds.x);
 }

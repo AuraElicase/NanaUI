@@ -2968,3 +2968,9 @@ Phase 4 起 `nana-ui-runtime` 依赖 `nana-text`（保留文本节点与句柄�
 ```bash
 cargo tree --workspace --locked --edges normal | grep -ci cosmic   # 0
 ```
+
+### Authored rich paragraph typography
+
+`RichText` retains optional alignment per LF paragraph, including empty and trailing paragraphs. `SetParagraphAlignment` affects the current paragraph or all paragraphs touched by an exclusive byte selection. Splitting inherits the original paragraph, and merging retains the first. `ClearFormatting` clears selected paragraph alignment; `ClearAttrs` clears only named character attributes. All changes use the editor snapshot undo history.
+
+`RichShapeStyle::size_em` resolves against the node's inherited size and is mutually exclusive with `size_px`. `family_alias` is an opaque authored alias retained alongside the resolved `family`; the consumer resolves and refreshes it. Paragraph alignment reaches `TextSource`, the layout cache key and the shared line origins, so drawing, caret, hit testing and selection use the same geometry.
