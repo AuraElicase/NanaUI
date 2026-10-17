@@ -1,0 +1,44 @@
+crates/nana-ui-runtime/src/components.rs
+  h_8e6780fc7b4bb1 1026-1029,1645-1649
+crates/nana-ui-runtime/src/framework/input/dispatch.rs
+  h_8e6780fc7b4bb1 195
+crates/nana-ui-runtime/src/framework/lifecycle.rs
+  h_8e6780fc7b4bb1 823-829
+crates/nana-ui-runtime/src/framework/rich_text_input.rs
+  h_8e6780fc7b4bb1 2,121-124,181-204
+crates/nana-ui-runtime/src/framework/tests.rs
+  h_8e6780fc7b4bb1 2161-2166,2169,2172,2258-2278
+crates/nana-ui-runtime/src/framework/text_input.rs
+  h_8e6780fc7b4bb1 303-310
+crates/nana-ui-runtime/src/rich_text.rs
+  h_8e6780fc7b4bb1 1228,1241,1260,1508,1538,1850-1861
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 157-165,182,1138-1140,1151,1175-1192,1195-1198,1210-1223,1225-1229
+crates/nana-ui-runtime/src/rich_text_view.rs
+  h_8e6780fc7b4bb1 18-19,25-26,29,32-33,45-46,132-200,245-247,271-282,289-290
+crates/nana-ui-runtime/src/world/extraction.rs
+  h_8e6780fc7b4bb1 697
+crates/nana-ui-runtime/src/world/geometry.rs
+  h_8e6780fc7b4bb1 2621-2631
+crates/nana-ui-runtime/src/world/geometry/rich_text.rs
+  h_8e6780fc7b4bb1 67-79,108-117
+crates/nana-ui-runtime/src/world/presentation.rs
+  h_8e6780fc7b4bb1 362
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 3389-3391
+crates/nana-ui-scene/src/scene/primitives.rs
+  h_8e6780fc7b4bb1 703-704,736-737,2090
+crates/nana-ui-scene/src/scene/primitives/rich_text.rs
+  h_8e6780fc7b4bb1 82-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f165ea49f8f4bde1f5c7d7dc4a3eeb042ed606f1",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
