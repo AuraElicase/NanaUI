@@ -6,6 +6,9 @@
 
 ## 1. `UiWorld` 的单一权威边界
 
+Escape 先关闭当前活动 Panel／Dialog 内允许关闭的 Popover／ActionMenu，再关闭外层卡片。
+背景卡片里的菜单不能抢走前景模态框的 Escape；一次按键只结束当前这一层交互。
+
 `UiWorld` 是以下全部状态的唯一权威：节点身份（`StableNodeId`）、文档归属（`DocumentId`）、父子层级、节点种类、计算样式、文本与已提交选区、未滚动的布局盒（`LayoutResult` / `LayoutBox`）、滚动偏移（`scroll_offset`）、指针 hover / press / capture 状态、事件路由表、焦点链与 IME、无障碍投影、文本呈现器（text presenter）以及自定义渲染槽声明。
 
 - **外部身份隔离**：对外只暴露 `StableNodeId` 与类型化的 `Entity<V>`；内部节点表存储结构的演进不得使 JS 句柄、诊断记录或持久化数据失效。
