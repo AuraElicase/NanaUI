@@ -1696,7 +1696,7 @@ mod tests {
         let config = WindowOutputConfig::default().with_extent(WindowOutputExtent::MatchWindow);
         state.set_config(Some(config));
         let viewport = config.viewport(&window, [64, 48], [0.0; 4]).unwrap();
-        let profile = ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM_SRGB);
+        let profile = ScenePresentationProfile::sdr(GpuTextureFormat::RGBA8_UNORM_SRGB);
         assert!(state.can_share_window(&gpu, &window, profile, viewport, false));
         let rebuilds = state.planner.rebuild_count();
         for _ in 0..240 {

@@ -293,48 +293,76 @@ fn document_produces_a_complete_presentation_without_a_window() {
 }
 
 #[test]
-fn final_transfer_preserves_encoded_premultiplied_bgra_pixels() {
-    let gpu = test_gpu::context();
-    let external = consumer(1);
-    let mut window = consumer(2);
-    window.kind = OutputConsumerKind::Window;
-    window.requirements.profile = ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM_SRGB);
-    let mut driver = PresentationDriver::new(&gpu);
-    driver.configure(&[window, external]).unwrap();
-    assert_eq!(render(&mut driver, &UiScene::new()).len(), 1);
-    let source = completed(&mut driver, external.id);
-    let destination = gpu
-        .create_texture(&GpuTextureDescriptor {
-            label: Some("presentation transfer acceptance"),
-            width: EXTENT[0],
-            height: EXTENT[1],
-            format: GpuTextureFormat::BGRA8_UNORM_SRGB,
-            usage: GpuTextureUsages::RENDER_TARGET | GpuTextureUsages::COPY_SRC,
-        })
-        .unwrap();
-    let mut frame = gpu.begin_frame("presentation transfer test");
-    driver
-        .present_to(window.id, &mut frame, &destination.render_target().unwrap())
-        .unwrap();
-    frame.submit();
-    let expected = read_pixels(source.texture().unwrap());
-    let actual = read_pixels(&destination);
-    assert!(
-        expected
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|pixel| pixel[3] > 0 && pixel[3] < 255)
-    );
-    assert!(
-        expected
-            .iter()
-            .zip(&actual)
-            .all(|(a, b)| a.abs_diff(*b) <= 1),
-        "typed/untyped sRGB transfer changed encoded pixels"
-    );
-    assert_eq!(driver.work().output_extra_passes, Some(1));
-    assert_eq!(driver.work().output_gpu_convert_passes, Some(1));
+fn final_transfer_preserves_encoded_premultiplied_channels_across_sdr_formats() {
+    let formats = [
+        GpuTextureFormat::BGRA8_UNORM,
+        GpuTextureFormat::BGRA8_UNORM_SRGB,
+        GpuTextureFormat::RGBA8_UNORM,
+        GpuTextureFormat::RGBA8_UNORM_SRGB,
+    ];
+    for source_format in formats {
+        for format in formats {
+            let gpu = test_gpu::context();
+            let mut external = consumer(1);
+            external.requirements.profile = ScenePresentationProfile::sdr(source_format);
+            let mut window = consumer(2);
+            window.kind = OutputConsumerKind::Window;
+            window.requirements.profile = ScenePresentationProfile::sdr(format);
+            let mut driver = PresentationDriver::new(&gpu);
+            driver.configure(&[window, external]).unwrap();
+            assert_eq!(render(&mut driver, &UiScene::new()).len(), 1);
+            let source = completed(&mut driver, external.id);
+            let destination = gpu
+                .create_texture(&GpuTextureDescriptor {
+                    label: Some("presentation transfer acceptance"),
+                    width: EXTENT[0],
+                    height: EXTENT[1],
+                    format,
+                    usage: GpuTextureUsages::RENDER_TARGET | GpuTextureUsages::COPY_SRC,
+                })
+                .unwrap();
+            let mut frame = gpu.begin_frame("presentation transfer test");
+            driver
+                .present_to(window.id, &mut frame, &destination.render_target().unwrap())
+                .unwrap();
+            frame.submit();
+            let source = source.texture().unwrap();
+            let mut expected = read_pixels(source);
+            if matches!(
+                source.format(),
+                GpuTextureFormat::RGBA8_UNORM | GpuTextureFormat::RGBA8_UNORM_SRGB
+            ) {
+                for pixel in expected.as_chunks_mut::<4>().0 {
+                    pixel.swap(0, 2);
+                }
+            }
+            let mut actual = read_pixels(&destination);
+            if matches!(
+                format,
+                GpuTextureFormat::RGBA8_UNORM | GpuTextureFormat::RGBA8_UNORM_SRGB
+            ) {
+                for pixel in actual.as_chunks_mut::<4>().0 {
+                    pixel.swap(0, 2);
+                }
+            }
+            assert!(
+                expected
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pixel| pixel[3] > 0 && pixel[3] < 255)
+            );
+            assert!(
+                expected
+                    .iter()
+                    .zip(&actual)
+                    .all(|(a, b)| a.abs_diff(*b) <= 1),
+                "SDR transfer changed encoded premultiplied channels for {source_format:?} -> {format:?}"
+            );
+            assert_eq!(driver.work().output_extra_passes, Some(1));
+            assert_eq!(driver.work().output_gpu_convert_passes, Some(1));
+        }
+    }
 }
 
 /// Timing evidence is opt-in and run in release mode; structural invariants
