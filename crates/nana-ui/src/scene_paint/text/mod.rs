@@ -5127,20 +5127,27 @@ mod tests {
         );
         assert_eq!(moved.0, still.0, "a wave only moves it up and down");
 
+        // Ink bounds use an RGB threshold, and coverage correction also
+        // depends on the foreground. Compare equal colours so a change in
+        // brightness cannot masquerade as a change in geometry.
+        let rainbow = nana_ui_core::GlyphEffect::rainbow();
+        let [r, g, b] = nana_ui_core::evaluate_glyph(Some(&rainbow), None, 0, crest)
+            .color
+            .expect("rainbow supplies a fill");
+        let ([r, g, b], alpha) = nana_ui_core::PaintColor::srgb([r, g, b, 1.0]).to_linear_sc_rgb();
+        pipeline.set_linear_color_override(Some([r, g, b, alpha]));
+        let coloured_wave = paint_presented(&device, &queue, &mut pipeline, Some(&waved), crest)
+            .expect("the reference wave draws in the evaluated rainbow colour");
         let chain = Arc::new(SceneGlyphPresentation {
             effects: Arc::from([]),
-            effect_chains: vec![nana_ui_core::GlyphEffectChain::new(vec![
-                wave,
-                nana_ui_core::GlyphEffect::rainbow(),
-            ])]
-            .into(),
+            effect_chains: vec![nana_ui_core::GlyphEffectChain::new(vec![wave, rainbow])].into(),
             cluster_effects: vec![0].into(),
             reveal: None,
         });
         let composed = paint_presented(&device, &queue, &mut pipeline, Some(&chain), crest)
             .expect("combined effects draw");
         assert_eq!(
-            composed, moved,
+            composed, coloured_wave,
             "rainbow preserves the wave geometry on the GPU"
         );
 
