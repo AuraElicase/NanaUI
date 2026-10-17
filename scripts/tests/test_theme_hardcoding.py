@@ -172,12 +172,13 @@ impl Default for Helper {
     def test_the_committed_baseline_is_current(self):
         """`--check` is only useful if the recorded numbers are the real ones.
 
-        Pinned to the Phase 1 archive, not Phase 0's: a gate set to numbers the
-        tree has already beaten is a gate with slack in it.
+        Historical phase reports keep their original component population.
+        The maintained gate baseline is reviewed separately when that
+        population changes; its limits still reject new local design values.
         """
         baseline_path = (
             audit.REPO_ROOT
-            / "archive/docs-notes/performance-data/theme-phase1-2026-09-20/theme-hardcoding.json"
+            / "scripts/baselines/theme-hardcoding.json"
         )
         baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
         report = audit.scan()
