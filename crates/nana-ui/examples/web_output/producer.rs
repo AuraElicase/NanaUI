@@ -399,36 +399,35 @@ pub fn run() -> Result<()> {
             // Do not cross the phase boundary until warmup release is really
             // visible on the producer fence. Source UI ticks remain independent.
             if pending.is_none() && (emitted < WARMUP_FRAMES || measurement_started) {
-                if let Ok(source) = surface.sample() {
-                    if source_revision != Some(source.content_revision()) {
-                        if let Some(mut frame) = gpu.try_begin_frame("NanaUI Electron export") {
-                            match pool.stage(&mut frame, source.texture()?)? {
-                                NativeExportOutcome::Staged(staged) => {
-                                    let content = source.content_revision();
-                                    frame.keep_alive_until_complete(source);
-                                    let _submission = frame.submit();
-                                    let token = pool.finish(staged)?;
-                                    emitted += 1;
-                                    source_revision = Some(content);
-                                    pending = Some(Pending {
-                                        token: Some(token),
-                                        id: emitted,
-                                        remote: None,
-                                        sent: false,
-                                        copied: Instant::now(),
-                                    });
-                                    work.gpu_copies += 1;
-                                    work.gpu_copy_bytes +=
-                                        EXTENT[0] as usize * EXTENT[1] as usize * 4;
-                                    work.submissions += 1;
-                                }
-                                NativeExportOutcome::Deferred(_) => {
-                                    work.deferred += 1;
-                                }
+                if let Ok(source) = surface.sample()
+                    && source_revision != Some(source.content_revision())
+                {
+                    if let Some(mut frame) = gpu.try_begin_frame("NanaUI Electron export") {
+                        match pool.stage(&mut frame, source.texture()?)? {
+                            NativeExportOutcome::Staged(staged) => {
+                                let content = source.content_revision();
+                                frame.keep_alive_until_complete(source);
+                                let _submission = frame.submit();
+                                let token = pool.finish(staged)?;
+                                emitted += 1;
+                                source_revision = Some(content);
+                                pending = Some(Pending {
+                                    token: Some(token),
+                                    id: emitted,
+                                    remote: None,
+                                    sent: false,
+                                    copied: Instant::now(),
+                                });
+                                work.gpu_copies += 1;
+                                work.gpu_copy_bytes += EXTENT[0] as usize * EXTENT[1] as usize * 4;
+                                work.submissions += 1;
                             }
-                        } else {
-                            work.deferred += 1;
+                            NativeExportOutcome::Deferred(_) => {
+                                work.deferred += 1;
+                            }
                         }
+                    } else {
+                        work.deferred += 1;
                     }
                 }
             } else {

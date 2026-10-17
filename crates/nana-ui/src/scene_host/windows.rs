@@ -18,10 +18,12 @@ pub(super) fn content_aspect_ratio(settings: &WindowDescriptor) -> Option<f64> {
 /// Gap between full surface commits while a live-resize gesture is moving
 /// the frame. One display frame: intermediate steps keep the last drawable
 /// (AppKit may scale it) instead of reconfiguring and laying out every pixel.
+#[cfg(any(target_os = "macos", test))]
 pub(super) const LIVE_RESIZE_COMMIT_INTERVAL: Duration = Duration::from_millis(16);
 
 /// What one live-resize step should do with the surface and the document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(any(target_os = "macos", test))]
 pub(super) enum LiveResizeStep {
     /// Forward the resize and present at the current size.
     Commit,
@@ -36,11 +38,13 @@ pub(super) enum LiveResizeStep {
 /// stamping the decision would make the next step look overdue the moment
 /// that commit returned.
 #[derive(Debug, Clone, Copy)]
+#[cfg(any(target_os = "macos", test))]
 pub(super) struct LiveResizeCoalescer {
     presented_at: Option<Instant>,
     deferred: bool,
 }
 
+#[cfg(any(target_os = "macos", test))]
 impl LiveResizeCoalescer {
     pub(super) const fn new() -> Self {
         Self {
@@ -77,6 +81,7 @@ impl LiveResizeCoalescer {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 pub(super) fn live_resize_commit_due(presented_at: Option<Instant>, now: Instant) -> bool {
     presented_at.is_none_or(|at| now.saturating_duration_since(at) >= LIVE_RESIZE_COMMIT_INTERVAL)
 }
@@ -1448,7 +1453,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = id;
-            return false;
+            false
         }
         #[cfg(target_os = "macos")]
         {
