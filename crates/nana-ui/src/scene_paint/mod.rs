@@ -1332,7 +1332,7 @@ impl SceneWgpuPainter {
                     &mut group_slots,
                     &mut max_group_depth,
                     &mut group_slots_uniforms,
-                    &scene.opacity_groups(primitive.node),
+                    &scene.primitive_opacity_groups(primitive.primitive),
                     scene,
                     origin,
                     scale,
@@ -2517,16 +2517,24 @@ fn sync_opacity_groups(
     origin: PaintOrigin,
     scale: f32,
 ) -> bool {
+    // Retain the scene's stacking/culling boundary for terminal holds without
+    // keeping an identity composition pass alive once the card is opaque.
+    let needed = needed.iter().filter(|group| {
+        group.opacity != 1.0
+            || !group.filter.is_identity()
+            || !group.mix_blend.is_normal()
+            || group.inset_shadow.is_some()
+    });
     let common = stack
         .iter()
-        .zip(needed.iter())
+        .zip(needed.clone())
         .take_while(|(open, want)| open.node == want.node)
         .count();
     let mut emitted = false;
     while stack.len() > common {
         emitted |= pop_opacity_group(commands, stack, depth, slots, uniforms);
     }
-    for group in needed.iter().skip(common) {
+    for group in needed.skip(common) {
         let layer = *depth;
         let slot = *slots;
         *slots = slots.saturating_add(1);

@@ -10986,8 +10986,9 @@ fn text_follows_ancestor_compositor_opacity_overlay() {
         "Text encode must keep CPU overlay"
     );
     assert!(
-        (draw.paint_opacity - layer.opacity).abs() < 0.05,
-        "drawn text opacity {} must track presentation {}",
+        (draw.paint_opacity * scene.opacity_groups(draw.node)[0].opacity - layer.opacity).abs()
+            < 0.05,
+        "text opacity {} times its group must track presentation {}",
         draw.paint_opacity,
         layer.opacity
     );
@@ -11033,6 +11034,9 @@ mod corner_shape_tests;
 
 #[path = "natural_size_tests.rs"]
 mod natural_size_tests;
+
+#[path = "opacity_motion_tests.rs"]
+mod opacity_motion_tests;
 
 /// Issue #217: one `Painter` on one node draws a non-rectangular outline —
 /// a raised step on the left, a slope down to the lower edge with its

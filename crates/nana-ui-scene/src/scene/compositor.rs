@@ -370,13 +370,14 @@ impl UiScene {
             candidates.insert(node);
         }
 
-        if candidates.is_empty() {
+        if candidates.is_empty() && self.nodes.opacity_motion.is_empty() {
             return;
         }
 
         let surface_generation = self.compositor.surface_generation;
         let mut changed = false;
         let mut needs_bounds_refresh = false;
+        let mut opacity_groups = NodeSet::default();
 
         for node in candidates {
             let Some(extracted) = self.nodes.get(&node) else {
@@ -392,6 +393,14 @@ impl UiScene {
                 continue;
             };
             let snapshot = layer_snapshot(extracted, store, now, descriptors);
+            if snapshot.has_opacity
+                && (super::has_extracted_child(&self.nodes, extracted)
+                    || extracted.custom_paint.is_some()
+                    || extracted.standard_visual.is_some()
+                    || self.node_primitive_count(node) > 1)
+            {
+                opacity_groups.insert(node);
+            }
             let eligible = snapshot.eligible || self.compositor.requested.contains(&node);
             let previous = self.compositor.phases.get(&node).cloned();
             let waiting = eligible
@@ -414,6 +423,27 @@ impl UiScene {
             } else if self.compositor.pending.remove(&node).is_some() {
                 changed = true;
                 needs_bounds_refresh = true;
+            }
+            // Demotion retains allocation, not a removed track's last sample.
+            // Cancelling an opacity track must immediately restore base paint,
+            // including while another property keeps this layer alive.
+            if let Some(layer) = self.compositor.layers.get_mut(&node) {
+                let projection_changed = layer.transform != snapshot.transform
+                    || layer.kind != snapshot.kind
+                    || layer.clip != snapshot.clip
+                    || layer.effect != snapshot.effect
+                    || layer.z_index != extracted.z_index;
+                changed |= projection_changed
+                    || layer.opacity != snapshot.opacity
+                    || layer.bindings != snapshot.bindings;
+                needs_bounds_refresh |= projection_changed;
+                layer.transform = snapshot.transform;
+                layer.opacity = snapshot.opacity;
+                layer.kind = snapshot.kind;
+                layer.bindings.clone_from(&snapshot.bindings);
+                layer.clip.clone_from(&snapshot.clip);
+                layer.effect = snapshot.effect;
+                layer.z_index = extracted.z_index;
             }
             match (eligible, previous) {
                 (true, None) => {
@@ -454,30 +484,16 @@ impl UiScene {
                     }
                 }
                 (true, Some(LayerPhase::Active) | Some(LayerPhase::PendingDemote { .. })) => {
-                    if let Some(layer) = self.compositor.layers.get_mut(&node) {
-                        let projection_changed = layer.transform != snapshot.transform
-                            || layer.kind != snapshot.kind
-                            || layer.clip != snapshot.clip
-                            || layer.effect != snapshot.effect
-                            || layer.z_index != extracted.z_index;
-                        let visual_changed = projection_changed
-                            || layer.opacity != snapshot.opacity
-                            || layer.bindings != snapshot.bindings;
-                        layer.transform = snapshot.transform;
-                        layer.opacity = snapshot.opacity;
-                        layer.kind = snapshot.kind;
-                        layer.bindings = snapshot.bindings;
-                        layer.clip = snapshot.clip;
-                        layer.effect = snapshot.effect;
-                        layer.z_index = extracted.z_index;
-                        changed |= visual_changed;
-                        needs_bounds_refresh |= projection_changed;
-                    } else {
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        self.compositor.layers.entry(node)
+                    {
                         let z_index = extracted.z_index;
-                        self.compositor.layers.insert(
-                            node,
-                            make_layer(extracted.id, z_index, snapshot, surface_generation),
-                        );
+                        entry.insert(make_layer(
+                            extracted.id,
+                            z_index,
+                            snapshot,
+                            surface_generation,
+                        ));
                         self.compositor.last_promoted =
                             self.compositor.last_promoted.saturating_add(1);
                         changed = true;
@@ -504,6 +520,45 @@ impl UiScene {
                     self.compositor.phases.remove(&node);
                 }
             }
+        }
+
+        // Only a change of isolation membership rebuilds retained projection.
+        // Sampling opacity (including pending promotion and terminal holds)
+        // changes group uniforms, not geometry, layout, or Runtime extraction.
+        let changed_groups: Vec<_> = self
+            .nodes
+            .opacity_motion
+            .symmetric_difference(&opacity_groups)
+            .copied()
+            .collect();
+        if !changed_groups.is_empty() {
+            self.nodes.opacity_motion = opacity_groups;
+            self.attribute_epoch = self.attribute_epoch.wrapping_add(1);
+            let mut rebuild = NodeSet::default();
+            let mut pending = changed_groups;
+            while let Some(id) = pending.pop() {
+                if rebuild.insert(id)
+                    && let Some(node) = self.nodes.get(&id)
+                {
+                    pending.extend(node.children.iter().copied());
+                }
+            }
+            self.rebuild_scratch
+                .lock()
+                .expect("scene projection")
+                .begin();
+            for id in rebuild {
+                self.rebuild_node_primitives(id);
+            }
+            self.rebuild_scratch.lock().expect("scene projection").end();
+            self.sort_primitives();
+            self.frame_plan.take();
+            if self.visibility.take().is_some()
+                && let Ok(plan) = self.frame_plan()
+            {
+                let _ = self.visibility.set(super::VisibilityIndex::new(self, plan));
+            }
+            changed = true;
         }
 
         let active_nodes: NodeSet = self.compositor.layers.keys().copied().collect();
@@ -540,6 +595,7 @@ impl UiScene {
     }
 
     pub(super) fn forget_compositor_node(&mut self, id: StableNodeId) {
+        self.nodes.opacity_motion.remove(&id);
         self.compositor.layers.remove(&id);
         self.compositor.pending.remove(&id);
         self.compositor.phases.remove(&id);
@@ -606,7 +662,7 @@ impl UiScene {
     }
 
     /// Whether `primitive` is a modal frame's scrim.
-    fn is_modal_scrim(&self, primitive: &super::ScenePrimitive) -> bool {
+    pub(super) fn is_modal_scrim(&self, primitive: &super::ScenePrimitive) -> bool {
         primitive.id.slot == super::MODAL_SCRIM_SLOT
             && self.nodes.get(&primitive.node).is_some_and(|node| {
                 matches!(
@@ -645,6 +701,13 @@ impl UiScene {
     /// What this node's own layer does to the opacity below it: the presented
     /// opacity divided by the logical one it was derived from.
     fn layer_opacity_factor(&self, id: StableNodeId) -> f32 {
+        if self
+            .nodes
+            .get(&id)
+            .is_some_and(|node| super::is_opacity_group(&self.nodes, node))
+        {
+            return 1.0;
+        }
         let Some(opacity) = self.compositor.opacity(id) else {
             return 1.0;
         };
@@ -741,15 +804,24 @@ impl UiScene {
         {
             transform = 0;
         }
-        let mut opacity = if own_opacity {
+        let isolates = |id| {
+            self.nodes
+                .get(&id)
+                .is_some_and(|node| super::is_opacity_group(&self.nodes, node))
+        };
+        let mut opacity = if own_opacity && !isolates(node) {
             self.gpu_motion_id_for(node, 1)
         } else {
             0
         };
         if opacity == 0
+            && !isolates(node)
             && let Some(parent) = self.nodes.get(&node).and_then(|node| node.parent)
         {
             for id in super::ancestor_ids(&self.nodes, parent) {
+                if isolates(id) {
+                    break;
+                }
                 opacity = self.gpu_motion_id_for(id, 1);
                 if opacity != 0 {
                     break;
@@ -937,6 +1009,7 @@ struct LayerSnapshot {
     kind: CompositorLayerKind,
     transform: AffineTransform,
     opacity: f32,
+    has_opacity: bool,
     clip: Option<ClipRegion>,
     effect: Option<ColorFilter>,
     bindings: Vec<CompositorMotionBinding>,
@@ -1026,6 +1099,7 @@ fn layer_snapshot(
         kind,
         transform,
         opacity,
+        has_opacity: presentation_opacity.is_some(),
         clip: None,
         effect: None,
         bindings,
@@ -1219,6 +1293,63 @@ mod tests {
     }
 
     #[test]
+    fn subtree_opacity_isolates_before_promotion_without_rebuilding_each_sample() {
+        let mut scene = UiScene::new();
+        scene.apply_delta([node(1, None, &[2]), node(2, Some(1), &[])], []);
+        let mut store = PresentationStore::new();
+        let mut track = opacity_track(1, 1, 0, 100, 0.0, 1.0);
+        track.playback.fill_mode = nana_ui_core::motion::AnimationFillMode::Forwards;
+        store.insert(track, MotionValue::Scalar(1.0));
+        scene.apply_presentation(&store, Duration::ZERO, None);
+        let revisions: Vec<_> = scene
+            .primitives()
+            .map(|p| (p.id, scene.draw_primitive(p.id).unwrap().revision))
+            .collect();
+        assert_eq!(scene.compositor_layer_count(), 0);
+        for ms in [0, 8, 16, 25, 50, 75, 100, 125] {
+            scene.apply_presentation(&store, Duration::from_millis(ms), None);
+            let groups = scene.opacity_groups(id(2));
+            assert_eq!(groups.len(), 1);
+            assert_eq!(groups[0].node, id(1));
+            assert!((groups[0].opacity - (ms as f32 / 100.0).min(1.0)).abs() < 1e-5);
+            assert_eq!(
+                scene.compositor_paint_opacity(id(2), 1.0),
+                1.0,
+                "group alpha must not reach primitives"
+            );
+            assert_eq!(
+                revisions,
+                scene
+                    .primitives()
+                    .map(|p| (p.id, scene.draw_primitive(p.id).unwrap().revision))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(scene.nodes[&id(1)].source_style.layout.opacity, None);
+        }
+        scene.apply_presentation(&PresentationStore::new(), Duration::from_millis(130), None);
+        assert!(scene.opacity_groups(id(2)).is_empty());
+        assert_eq!(scene.compositor_paint_opacity(id(2), 1.0), 1.0);
+    }
+
+    #[test]
+    fn cancelling_a_pending_subtree_fade_removes_its_isolation() {
+        let mut scene = UiScene::new();
+        scene.apply_delta([node(1, None, &[2]), node(2, Some(1), &[])], []);
+        let mut store = PresentationStore::new();
+        store.insert(
+            opacity_track(1, 1, 0, 100, 0.0, 1.0),
+            MotionValue::Scalar(1.0),
+        );
+        scene.apply_presentation(&store, Duration::from_millis(8), None);
+        assert_eq!(scene.compositor_layer_count(), 0);
+        assert!((scene.opacity_groups(id(2))[0].opacity - 0.08).abs() < 1e-5);
+        scene.apply_presentation(&PresentationStore::new(), Duration::from_millis(9), None);
+        assert!(scene.opacity_groups(id(2)).is_empty());
+        assert_eq!(scene.compositor_paint_opacity(id(2), 1.0), 1.0);
+        assert!(!scene.compositor_needs_tick());
+    }
+
+    #[test]
     fn pending_parent_and_child_opacity_compose_and_clear_without_a_layer() {
         let mut scene = UiScene::new();
         scene.apply_delta([node(1, None, &[2]), node(2, Some(1), &[])], []);
@@ -1235,7 +1366,12 @@ mod tests {
             scene.apply_presentation(&store, Duration::from_millis(ms), None);
             let progress = ms as f32 / 100.0;
             let expected = (0.2 + 0.6 * progress) * progress;
-            assert!((scene.compositor_paint_opacity(id(2), 1.0) - expected).abs() < 1e-5);
+            let groups = scene.opacity_groups(id(2));
+            assert_eq!(groups.len(), 1);
+            assert!(
+                (scene.compositor_paint_opacity(id(2), 1.0) * groups[0].opacity - expected).abs()
+                    < 1e-5
+            );
             assert!((scene.composed_layer_opacity(id(2)) - expected).abs() < 1e-5);
             assert_eq!(scene.compositor_layer_count(), 0);
         }
@@ -1924,7 +2060,7 @@ mod tests {
     }
 
     #[test]
-    fn non_quad_keeps_cpu_overlay_under_ancestor_opacity() {
+    fn text_and_quad_share_ancestor_opacity_isolation() {
         use nana_ui_runtime::{
             AnimationId, AnimationSpec, DocumentId, MutationQueue, TextContent, UiWorld,
         };
@@ -2024,22 +2160,22 @@ mod tests {
                     );
                     assert_eq!(encode.motion_ids, (0, 0));
                     assert!(
-                        (draw.paint_opacity - layer.opacity).abs() < 0.05,
-                        "drawn text opacity {} must follow presentation {}",
+                        (draw.paint_opacity - 1.0).abs() < 1e-5,
+                        "text paints fully inside its ancestor's group: {} (group {})",
                         draw.paint_opacity,
                         layer.opacity
                     );
                     assert!(
-                        (encode.opacity - 1.0).abs() > 0.2,
-                        "stripping overlay for Text would pin encode at logical 1.0"
+                        (scene.opacity_groups(draw.node)[0].opacity - layer.opacity).abs() < 1e-5,
+                        "the group owns the text fade"
                     );
                 }
                 crate::ScenePrimitiveKind::Quad { .. } => {
                     saw_quad = true;
-                    assert_ne!(encode.motion_ids.1, 0, "Quad must receive GPU opacity id");
+                    assert_eq!(encode.motion_ids.1, 0, "grouped Quad must not fade twice");
                     assert!(
-                        (encode.opacity - draw.paint_opacity).abs() > 0.05,
-                        "Quad must strip CPU overlay for shader evaluate"
+                        (encode.opacity - 1.0).abs() < 1e-5,
+                        "Quad paints fully inside the opacity group"
                     );
                 }
                 _ => {}
@@ -2124,8 +2260,9 @@ mod tests {
                 saw_path = true;
                 assert_eq!(encode.motion_ids, (0, 0), "a mesh keeps CPU presentation");
                 assert!(
-                    (encode.opacity - layer.opacity).abs() < 0.05,
-                    "painted {} must follow the animation at {}",
+                    (encode.opacity * scene.opacity_groups(node)[0].opacity - layer.opacity).abs()
+                        < 1e-5,
+                    "painted {} must follow its group animation at {}",
                     encode.opacity,
                     layer.opacity
                 );
@@ -2454,8 +2591,8 @@ mod tests {
         let gone = Duration::from_millis(500);
         scene.apply_presentation(&store, gone, None);
         assert!(
-            translated(&scene),
-            "an ineligible frame is not yet a demote"
+            !translated(&scene),
+            "removing an opacity group refreshes its culling boundary immediately"
         );
         scene.apply_presentation(&store, gone + LAYER_DEMOTE_HOLD, None);
         assert!(

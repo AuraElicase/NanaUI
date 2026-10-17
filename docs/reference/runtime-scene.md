@@ -30,6 +30,8 @@ Runtime 按节点的脏标记（`DirtyMask`）确定性地生成各阶段工作�
 
 逻辑值存放在 `UiWorld`，瞬态呈现值存放在 `PresentationStore`（通过 `UiWorld::presentation_pair` 或 `applied_value()` 查询，严禁每帧把 `transform` 或 `opacity` 写回 `UiWorld`）：
 
+透明度动画作用于完整节点的合成结果。有子节点、自定义 painter 或复合控件绘制的节点，先将自身与子内容画进同一个 dest 隔离组，再应用一次当前呈现透明度；不能分别淡化卡面、文字与控件，否则重叠区域会叠加 alpha。分组从首帧开始生效，不等待 compositor layer 提升，覆盖退场、反向与终点 hold；组内仍保留子节点自己的透明度。组承担的透明度不再传入 CPU 图元或 Quad 的 GPU motion id，模态 scrim 仍在卡片自身分组之外独立淡化。只有分组成员变化时更新保留绘制顺序和图元；时间采样不触发 Runtime 抽取、布局或几何重建。纯透明度为 1 的组可省略离屏合成。
+
 | 属性 | 默认分类 | 执行路径 | 回退与性能边界 |
 | --- | --- | --- | --- |
 | `transform` / `opacity` | `Compositor` | 呈现 overlay；Quad（含 `QuadBatch` / `QuadColorBatch`）剥离 overlay 走 GPU `evaluate()`；Text / Icon / Mesh / HostTexture 走 CPU overlay | 稳态不写 `UiWorld`；仅 Quad 走 GPU 求值，避免剥离了 overlay 却无法在着色器还原 |

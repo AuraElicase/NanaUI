@@ -1652,10 +1652,10 @@ impl UiScene {
     /// copying it, so a shell whose containers are all opaque allocates
     /// nothing here at all.
     ///
-    /// The stamp is the scene instance, which `apply_delta` moves whenever a
-    /// node, a style or a parent changed — the only three things this reads.
+    /// The stamp covers scene changes and presentation samples: groups retain
+    /// their membership across a track while their compositing alpha changes.
     pub fn opacity_groups(&self, node: StableNodeId) -> Arc<[OpacityGroup]> {
-        if self.dest_group_candidates == 0 {
+        if self.dest_group_candidates == 0 && self.nodes.opacity_motion.is_empty() {
             return empty_opacity_groups();
         }
         let Some(candidate) = self.nodes.get(&node) else {
@@ -1673,7 +1673,7 @@ impl UiScene {
         };
         if is_dest_group(&self.nodes, candidate) {
             let mut groups = base.to_vec();
-            groups.push(dest_group(&self.nodes, node, candidate));
+            groups.push(self.presented_dest_group(node, candidate));
             return Arc::from(groups);
         }
         base
@@ -1689,7 +1689,7 @@ impl UiScene {
             return empty_opacity_groups();
         }
         if let Some((stamp, groups)) = cache.get(&id)
-            && *stamp == self.instance
+            && *stamp == self.draw_stamp()
         {
             return Arc::clone(groups);
         }
@@ -1702,13 +1702,32 @@ impl UiScene {
         };
         let groups = if is_dest_group(&self.nodes, candidate) {
             let mut groups = base.to_vec();
-            groups.push(dest_group(&self.nodes, id, candidate));
+            groups.push(self.presented_dest_group(id, candidate));
             Arc::from(groups)
         } else {
             base
         };
-        cache.insert(id, (self.instance, Arc::clone(&groups)));
+        cache.insert(id, (self.draw_stamp(), Arc::clone(&groups)));
         groups
+    }
+
+    /// Destination groups for this draw. A modal scrim inherits outer groups,
+    /// but never the card's own opacity: it has an independent presence track.
+    pub fn primitive_opacity_groups(&self, primitive: &ScenePrimitive) -> Arc<[OpacityGroup]> {
+        if self.is_modal_scrim(primitive) {
+            return self
+                .nodes
+                .get(&primitive.node)
+                .and_then(|node| node.parent)
+                .map_or_else(empty_opacity_groups, |parent| self.opacity_groups(parent));
+        }
+        self.opacity_groups(primitive.node)
+    }
+
+    fn presented_dest_group(&self, id: StableNodeId, node: &ExtractedNode) -> OpacityGroup {
+        let mut group = dest_group(&self.nodes, id, node);
+        group.opacity = self.resolved_local_opacity(node);
+        group
     }
 
     /// Isolating filter groups from outermost to innermost that contain `node`.
@@ -2916,7 +2935,8 @@ fn may_be_dest_group(node: &ExtractedNode) -> bool {
 
 fn is_opacity_group(nodes: &SceneNodes, node: &ExtractedNode) -> bool {
     let translucent = is_translucent(node) && has_extracted_child(nodes, node);
-    translucent
+    nodes.opacity_motion.contains(&node.id)
+        || translucent
         || dest_filter_applies(nodes, node)
         || !node.source_style.layout.paint.mix_blend.is_normal()
 }
@@ -3056,8 +3076,8 @@ fn ancestor_nodes(
     })
 }
 
-/// Dest groups per node, stamped with the scene instance they were read at.
-type OpacityGroupCache = NodeMap<(u64, Arc<[OpacityGroup]>)>;
+/// Dest groups per node, stamped with scene and presentation projection.
+type OpacityGroupCache = NodeMap<(DrawStamp, Arc<[OpacityGroup]>)>;
 
 /// Ancestor layer factors, stamped with the scene instance and the attribute
 /// epoch.
@@ -3069,7 +3089,37 @@ pub(super) type LayerFactorCache = NodeMap<((u64, u64), f32)>;
 /// owned handle while `&mut self` inserts them, and an `ExtractedNode` is 784
 /// bytes. A container style change rebuilds every descendant, so that clone
 /// used to be most of a megabyte of memmove per frame.
-pub(super) type SceneNodes = NodeMap<Arc<ExtractedNode>>;
+#[derive(Debug, Clone, Default)]
+pub(super) struct SceneNodes {
+    retained: NodeMap<Arc<ExtractedNode>>,
+    /// Presentation isolation is scene metadata, never a logical style write.
+    /// Keeping it beside the retained nodes lets ordering, projection and paint
+    /// agree on the same boundaries, including before a layer is promoted.
+    opacity_motion: NodeSet,
+}
+
+impl std::ops::Deref for SceneNodes {
+    type Target = NodeMap<Arc<ExtractedNode>>;
+    fn deref(&self) -> &Self::Target {
+        &self.retained
+    }
+}
+
+impl std::ops::DerefMut for SceneNodes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.retained
+    }
+}
+
+#[cfg(test)]
+impl FromIterator<(StableNodeId, Arc<ExtractedNode>)> for SceneNodes {
+    fn from_iter<T: IntoIterator<Item = (StableNodeId, Arc<ExtractedNode>)>>(iter: T) -> Self {
+        Self {
+            retained: iter.into_iter().collect(),
+            ..Self::default()
+        }
+    }
+}
 
 /// Which chain an [`AncestorState`] was read for: the parent it starts at,
 /// whether the node breaks out of it, and whether the caller wanted the

@@ -45,6 +45,7 @@ Read the focused contract document named by the selected skill before editing. R
 - Preserve one authoritative \`UiWorld\` → \`UiScene\` path. \`PendingHostOps\` commit at the frame boundary; \`LayoutBoxStore\` is a projection and scrolling does not write Runtime layout boxes.
 - Use the shared \`ComponentRegistry\` for built-in and extension components. Keep \`event_flags\` in Runtime event listeners and GPU slots in Runtime \`CustomRenderNode\`.
 - Keep logical state separate from presentation overlays. Compositor animation must not write transient samples back into base style state.
+- Fade a subtree or compound painter as one isolated composition, including the frames before compositor-layer promotion; keep a modal scrim outside its own card's opacity group.
 - Keep raw window handles out of ordinary controls. Native material failure returns the actual applied outcome or an explicit fallback.
 - Keep one WGPU major version across manifests, lockfile, and the resolved dependency graph. Never add a second Device/Queue or a product CPU readback path.
 - Public GPU extension contracts use \`nana-gpu\` types. \`wgpu::*\` may appear in a public signature of nana-gpu, nana-frame-exchange, nana-ui, nana-ui-vue or nana-ui-devtools only behind \`wgpu-interop\`; \`nana_gpu::__framework\` is for those crates' own sources, which therefore never turn \`wgpu-interop\` on for consumers. \`scripts/check-engine-boundary.py\` enforces both.
