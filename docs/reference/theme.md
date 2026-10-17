@@ -897,7 +897,7 @@ cargo test -p nana-ui-runtime --all-features --lib a_theme_that_fails_validation
 
 # 硬编码清单与扫描规则
 python3 scripts/audit-theme-hardcoding.py --check \
-  archive/docs-notes/performance-data/theme-phase1-2026-09-20/theme-hardcoding.json
+  scripts/baselines/theme-hardcoding.json
 python3 -m unittest discover -s scripts/tests
 
 # work counters（应与 Phase 0 存档逐字段相同）
