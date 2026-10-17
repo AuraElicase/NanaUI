@@ -139,6 +139,11 @@ fn suspension_clears_only_consumer_then_resumes_same_resources_and_releases() {
             state.frame_demand(false),
             crate::FrameDemand::At(_)
         ));
+        let wake = state.frame_demand(false);
+        // A freshly computed `Instant::now()` would move this deadline on
+        // every schedule pass and starve a hidden static output forever.
+        assert_eq!(state.frame_demand(false), wake);
+        assert_eq!(wake, crate::FrameDemand::At(state.suspend_at));
         assert!(!state.can_share_window(&gpu, &geometry(), output_profile(), viewport, false));
         let step = state.begin(
             &gpu,

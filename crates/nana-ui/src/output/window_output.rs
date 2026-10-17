@@ -428,6 +428,7 @@ pub(crate) struct WindowOutputState {
     config: Option<WindowOutputConfig>,
     blank_scene: UiScene,
     suspend_pending: bool,
+    suspend_at: Instant,
     surface: Option<ExternalSurface>,
     straight: Vec<StraightAlpha>,
     planner: super::RenderTargetPlanner,
@@ -616,6 +617,7 @@ impl WindowOutputState {
             config: None,
             blank_scene: UiScene::new(),
             suspend_pending: false,
+            suspend_at: Instant::now(),
             surface: None,
             straight: Vec::new(),
             planner: super::RenderTargetPlanner::new(),
@@ -644,7 +646,7 @@ impl WindowOutputState {
         };
         if config.suspended {
             return if self.suspend_pending {
-                crate::FrameDemand::At(self.throttled_until.unwrap_or_else(Instant::now))
+                crate::FrameDemand::At(self.throttled_until.unwrap_or(self.suspend_at))
             } else {
                 crate::FrameDemand::OnDemand
             };
@@ -681,6 +683,7 @@ impl WindowOutputState {
     pub(crate) fn set_config(&mut self, config: Option<WindowOutputConfig>) {
         if self.config != config {
             self.suspend_pending = config.is_some_and(|c| c.suspended);
+            self.suspend_at = Instant::now();
             if self.config.map(|c| c.suspended) != config.map(|c| c.suspended) {
                 self.volatile = self.volatile.wrapping_add(1);
                 self.throttled_until = None;
@@ -726,6 +729,7 @@ impl WindowOutputState {
         self.retire_native();
         self.throttled_until = None;
         self.suspend_pending = self.config.is_some_and(|c| c.suspended);
+        self.suspend_at = Instant::now();
     }
 
     fn retire_native(&mut self) {
