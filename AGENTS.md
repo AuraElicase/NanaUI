@@ -1,6 +1,6 @@
 # NanaUI Agent Guide
 
-This repository is the NanaUI framework. Keep framework contracts here and keep application business state, persistence, navigation, and region content in consumers.
+This repository is the NanaUI framework. Keep framework contracts here and keep application business state, persistence, navigation, and region content in consumers. Facades forward optional ICU locale formatting explicitly; internal runtime/scene dependencies disable defaults so consumers can opt out without a transitive feature re-enabling it.
 
 ## Architecture
 

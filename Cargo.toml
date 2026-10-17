@@ -44,8 +44,10 @@ exclude = ["tools/css-parity-webview", "crates/nana-icons-tabler"]
 [workspace.dependencies]
 nana-ui-core = { path = "crates/nana-ui-core" }
 nana-icons-tabler = { path = "crates/nana-icons-tabler" }
-nana-ui-runtime = { path = "crates/nana-ui-runtime" }
-nana-ui-scene = { path = "crates/nana-ui-scene" }
+# Facades forward optional runtime capabilities explicitly. Inheriting these
+# defaults would otherwise defeat an application's `default-features = false`.
+nana-ui-runtime = { path = "crates/nana-ui-runtime", default-features = false }
+nana-ui-scene = { path = "crates/nana-ui-scene", default-features = false }
 nana-ui-charts = { path = "crates/nana-ui-charts" }
 nana-js-engine = { path = "crates/nana-js-engine" }
 nana-js-v8 = { path = "crates/nana-js-v8" }

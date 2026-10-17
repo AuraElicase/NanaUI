@@ -1155,6 +1155,7 @@ locale 作用域有三层：
 格式化走 `LocaleFormatter` 这个后端无关的接口：
 - 运行时默认装的是 `IcuFormatter`（`icu` 特性，默认开启），用 ICU4X 和它编译进来的 CLDR 数据：复数规则、数字、日期和时间；
 - 关掉这个特性时用 `PlainFormatter`：英语复数规则、`.` 作小数点的数字、ISO 日期；
+- `nana-ui`、`nana-ui-scene` 和 `nana-ui-vue` 显式转发 `icu`，并在默认 feature 中保留它；`nana-ui` / `nana-ui-vue` 的 `full` 也包含它。应用可以使用 `default-features = false` 并只启用实际组件，以省去 ICU 格式化和 CLDR 数据。工作区内部的 runtime/scene 依赖不继承默认 feature，避免重新开启它；`nana-text` 的 Unicode 属性和 URL 处理所需的 ICU 不受此开关影响。
 - 应用也可以装自己的实现：`UiWorld::set_locale_formatter`。ICU 的类型不出这个接口。
 - 货币目前写成「代码 + 按 locale 分组的两位小数」（`USD 1,234.50`）。ICU4X 的货币格式化还在 experimental 里，没有用。
 
