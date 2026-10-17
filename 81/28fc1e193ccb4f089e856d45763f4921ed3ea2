@@ -1,0 +1,16 @@
+crates/nana-ui-runtime/src/framework/tests.rs
+  h_8e6780fc7b4bb1 2151-2252
+crates/nana-ui-runtime/src/framework/text_edit.rs
+  h_8e6780fc7b4bb1 1938-1940,2084-2090,2094-2100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8128fc1e193ccb4f089e856d45763f4921ed3ea2",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
