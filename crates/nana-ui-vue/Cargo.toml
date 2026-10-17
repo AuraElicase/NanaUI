@@ -11,7 +11,8 @@ name = "nana_ui_vue"
 path = "src/lib.rs"
 
 [features]
-default = ["wgpu-backends"]
+default = ["wgpu-backends", "icu"]
+icu = ["nana-ui-runtime/icu", "nana-ui-scene/icu", "nana-ui/icu"]
 native-audio = ["nana-ui-web-api/native-audio"]
 # See nana-ui's `wgpu-backends`.
 wgpu-backends = ["nana-ui/wgpu-backends"]
@@ -22,7 +23,7 @@ graph-canvas = ["nana-ui-runtime/graph-canvas", "nana-ui-scene/graph-canvas", "n
 image-viewer = ["nana-ui-runtime/image-viewer", "nana-ui-scene/image-viewer", "nana-ui/image-viewer"]
 rich-text = ["nana-ui-runtime/rich-text", "nana-ui-scene/rich-text", "nana-ui/rich-text"]
 components = ["calendar", "charts", "controls", "graph-canvas", "image-viewer", "rich-text"]
-full = ["components", "hosted", "syntax-highlighting"]
+full = ["components", "hosted", "syntax-highlighting", "icu"]
 syntax-highlighting = ["nana-ui-runtime/syntax-highlighting", "nana-ui/syntax-highlighting"]
 benchmark = ["dep:serde", "dep:serde_json", "nana-ui-runtime/benchmark"]
 # Development-only reload. Off by default and never enabled by `full`: a product
