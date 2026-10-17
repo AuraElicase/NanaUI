@@ -95,6 +95,48 @@ impl RichAttrMask {
     pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
+    /// Drop the selected fields, preserving every other attribute.
+    fn cleared(self, mut style: RichSpanStyle) -> RichSpanStyle {
+        if self.contains(Self::SIZE) {
+            style.shape.size_px = None;
+            style.shape.size_em = None;
+        }
+        if self.contains(Self::FAMILY) {
+            style.shape.family = None;
+            style.shape.family_alias = None;
+        }
+        if self.contains(Self::WEIGHT) {
+            style.shape.weight = None;
+        }
+        if self.contains(Self::ITALIC) {
+            style.shape.italic = None;
+        }
+        if self.contains(Self::LETTER_SPACING) {
+            style.shape.letter_spacing_px = None;
+        }
+        if self.contains(Self::FEATURES) {
+            style.shape.features = None;
+        }
+        if self.contains(Self::COLOR) {
+            style.paint.color = None;
+        }
+        if self.contains(Self::DECORATION) {
+            style.paint.decoration = None;
+        }
+        if self.contains(Self::DECORATION_COLOR) {
+            style.paint.decoration_color = None;
+        }
+        if self.contains(Self::STROKE) {
+            style.paint.stroke = None;
+        }
+        if self.contains(Self::SHADOWS) {
+            style.paint.shadows = None;
+        }
+        if self.contains(Self::EFFECT) {
+            style.effect = None;
+        }
+        style
+    }
 }
 
 /// The attributes across a selection, tri-state per field: a field set in
@@ -413,57 +455,16 @@ impl RichTextEditor {
                 if !self.editable() {
                     return false;
                 }
-                let clear = |mut style: RichSpanStyle| {
-                    if mask.contains(RichAttrMask::SIZE) {
-                        style.shape.size_px = None;
-                        style.shape.size_em = None;
-                    }
-                    if mask.contains(RichAttrMask::FAMILY) {
-                        style.shape.family = None;
-                        style.shape.family_alias = None;
-                    }
-                    if mask.contains(RichAttrMask::WEIGHT) {
-                        style.shape.weight = None;
-                    }
-                    if mask.contains(RichAttrMask::ITALIC) {
-                        style.shape.italic = None;
-                    }
-                    if mask.contains(RichAttrMask::LETTER_SPACING) {
-                        style.shape.letter_spacing_px = None;
-                    }
-                    if mask.contains(RichAttrMask::FEATURES) {
-                        style.shape.features = None;
-                    }
-                    if mask.contains(RichAttrMask::COLOR) {
-                        style.paint.color = None;
-                    }
-                    if mask.contains(RichAttrMask::DECORATION) {
-                        style.paint.decoration = None;
-                    }
-                    if mask.contains(RichAttrMask::DECORATION_COLOR) {
-                        style.paint.decoration_color = None;
-                    }
-                    if mask.contains(RichAttrMask::STROKE) {
-                        style.paint.stroke = None;
-                    }
-                    if mask.contains(RichAttrMask::SHADOWS) {
-                        style.paint.shadows = None;
-                    }
-                    if mask.contains(RichAttrMask::EFFECT) {
-                        style.effect = None;
-                    }
-                    style
-                };
                 let range = self.range();
                 if range.is_empty() {
-                    self.state.typing = Some(clear(self.typing_style()));
+                    self.state.typing = Some(mask.cleared(self.typing_style()));
                 } else {
                     self.remember(false);
                     let piece = self.value.slice(range.clone());
                     for (span, style) in piece.spans().iter() {
                         self.value.set_span(
                             span.start + range.start..span.end + range.start,
-                            clear(style.clone()),
+                            mask.cleared(style.clone()),
                         );
                     }
                 }
@@ -706,48 +707,9 @@ fn summarize(value: &RichText, range: Range<usize>) -> RichSelectionAttrs {
             }
         }
     }
-    let mut style = first;
     let mask = RichAttrMask(mixed);
-    if mask.contains(RichAttrMask::FAMILY) {
-        style.shape.family = None;
-        style.shape.family_alias = None;
-    }
-    if mask.contains(RichAttrMask::SIZE) {
-        style.shape.size_px = None;
-        style.shape.size_em = None;
-    }
-    if mask.contains(RichAttrMask::WEIGHT) {
-        style.shape.weight = None;
-    }
-    if mask.contains(RichAttrMask::ITALIC) {
-        style.shape.italic = None;
-    }
-    if mask.contains(RichAttrMask::LETTER_SPACING) {
-        style.shape.letter_spacing_px = None;
-    }
-    if mask.contains(RichAttrMask::FEATURES) {
-        style.shape.features = None;
-    }
-    if mask.contains(RichAttrMask::COLOR) {
-        style.paint.color = None;
-    }
-    if mask.contains(RichAttrMask::DECORATION) {
-        style.paint.decoration = None;
-    }
-    if mask.contains(RichAttrMask::DECORATION_COLOR) {
-        style.paint.decoration_color = None;
-    }
-    if mask.contains(RichAttrMask::STROKE) {
-        style.paint.stroke = None;
-    }
-    if mask.contains(RichAttrMask::SHADOWS) {
-        style.paint.shadows = None;
-    }
-    if mask.contains(RichAttrMask::EFFECT) {
-        style.effect = None;
-    }
     RichSelectionAttrs {
-        style,
+        style: mask.cleared(first),
         mixed: mask,
         ..Default::default()
     }
