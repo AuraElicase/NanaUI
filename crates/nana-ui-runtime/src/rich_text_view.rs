@@ -196,7 +196,21 @@ impl ComponentView for RichTextView {
         }
         if let Some(wanted) = &self.presentation {
             let running = world.glyph_presentation(id).is_some_and(|current| {
-                current.effects == wanted.effects
+                let mut normalized = current.transitions.clone();
+                for (a, b) in [
+                    (&mut normalized.entrance, &wanted.transitions.entrance),
+                    (&mut normalized.exit, &wanted.transitions.exit),
+                ] {
+                    if let (Some(a), Some(b)) = (a, b) {
+                        a.start = b.start;
+                    }
+                }
+                if normalized.freeze_reveal.is_some() && wanted.transitions.freeze_reveal.is_some()
+                {
+                    normalized.freeze_reveal = wanted.transitions.freeze_reveal;
+                }
+                normalized == wanted.transitions
+                    && current.effects == wanted.effects
                     && current.effect_chains == wanted.effect_chains
                     && match (&current.reveal, &wanted.reveal) {
                         (None, None) => true,
@@ -210,6 +224,18 @@ impl ComponentView for RichTextView {
                 let mut presentation = wanted.clone();
                 if let Some(reveal) = &mut presentation.reveal {
                     reveal.start = world.animation_now();
+                }
+                for mask in [
+                    &mut presentation.transitions.entrance,
+                    &mut presentation.transitions.exit,
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    mask.start = world.animation_now().saturating_add(mask.start);
+                }
+                if let Some(at) = &mut presentation.transitions.freeze_reveal {
+                    *at = world.animation_now().saturating_add(*at);
                 }
                 mutations.set_glyph_presentation(id, Some(presentation));
             }

@@ -60,6 +60,18 @@ fn retained_scene() -> UiScene {
             )),
         );
         let label = cx.create_component(doc, label).unwrap();
+        let mut presentation = nana_ui_core::GlyphPresentation::default();
+        presentation.transitions.exit = Some(nana_ui_core::PresentationMask {
+            material: nana_ui_core::MaterialRef::new(nana_ui_core::MaterialProgram::new(
+                "fn material(i:MaterialInput)->vec4<f32>{return vec4<f32>(i.color.rgb,select(1.,0.,i.uv.x<i.progress));}",
+            )),
+            space: nana_ui_core::PresentationMaskSpace::Target,
+            start: std::time::Duration::from_secs(1),
+            duration: std::time::Duration::from_secs(1),
+        });
+        let mut queue = MutationQueue::new();
+        queue.set_glyph_presentation(label.stable_id(), Some(presentation));
+        cx.commit_mutations(queue).unwrap();
         cx.append_child(root, label).unwrap();
         ids.push(label.stable_id());
     }

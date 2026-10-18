@@ -247,11 +247,53 @@ impl RevealSchedule {
     }
 }
 
+/// Fragment masks multiply the normal glyph/object paint, never recolor it.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TextTransitions {
+    pub entrance: Option<crate::PresentationMask>,
+    pub exit: Option<crate::PresentationMask>,
+    /// Freeze reveal at retirement while the independent exit clock runs.
+    pub freeze_reveal: Option<Duration>,
+    /// Text-local visible viewport, including its current scroll offset.
+    pub viewport: Option<crate::LogicalRect>,
+}
+impl TextTransitions {
+    pub fn reveal_end(&self, reveal: &RevealSchedule) -> Duration {
+        let mut end = reveal.end();
+        if let Some(mask) = &self.entrance {
+            let count = reveal.limit.map_or(reveal.at_s.len(), |n| n as usize);
+            let at = if mask.space == crate::PresentationMaskSpace::Target {
+                reveal.at_s.first().copied()
+            } else {
+                reveal
+                    .at_s
+                    .iter()
+                    .take(count)
+                    .copied()
+                    .filter(|t| t.is_finite())
+                    .reduce(f32::max)
+            };
+            if let Some(at) = at.filter(|at| at.is_finite()) {
+                end = end.max(reveal.start.max(mask.start).saturating_add(
+                    Duration::from_secs_f64((f64::from(at) + mask.duration.as_secs_f64()).max(0.)),
+                ));
+            }
+        }
+        end
+    }
+    pub fn end(&self) -> Duration {
+        self.exit
+            .as_ref()
+            .map_or(Duration::ZERO, |e| e.start.saturating_add(e.duration))
+    }
+}
+
 /// What a rich text node presents per glyph: the effect table its spans'
 /// `effect` indices name, and the reveal it plays. Set with
 /// `AppContext::set_rich_presentation`; changing it costs no text work.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct GlyphPresentation {
+    pub transitions: TextTransitions,
     pub effects: Arc<[GlyphEffect]>,
     /// Optional effect chains indexed by RichSpanStyle::effect. Empty keeps
     /// the legacy single-effect table. Empty chains are explicitly static.
@@ -262,6 +304,7 @@ pub struct GlyphPresentation {
 impl GlyphPresentation {
     pub fn new(effects: impl Into<Arc<[GlyphEffect]>>, reveal: Option<RevealSchedule>) -> Self {
         Self {
+            transitions: TextTransitions::default(),
             effects: effects.into(),
             effect_chains: Arc::from([]),
             reveal,
@@ -273,6 +316,7 @@ impl GlyphPresentation {
         reveal: Option<RevealSchedule>,
     ) -> Self {
         Self {
+            transitions: TextTransitions::default(),
             effects: Arc::from([]),
             effect_chains: chains.into(),
             reveal,
@@ -296,13 +340,18 @@ impl GlyphPresentation {
     /// Until when it changes what is drawn: `None` for a looping effect,
     /// which never stops.
     pub fn live_until(&self, uses_effects: bool) -> Option<Option<Duration>> {
+        if self.transitions.exit.is_some() {
+            return Some(Some(self.transitions.end()));
+        }
         if uses_effects
             && (self.effects.iter().any(GlyphEffect::is_animated)
                 || self.effect_chains.iter().any(GlyphEffectChain::is_animated))
         {
             return Some(None);
         }
-        self.reveal.as_ref().map(|reveal| Some(reveal.end()))
+        self.reveal
+            .as_ref()
+            .map(|reveal| Some(self.transitions.reveal_end(reveal)))
     }
 }
 

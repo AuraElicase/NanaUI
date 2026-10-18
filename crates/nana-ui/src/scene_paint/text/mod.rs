@@ -577,6 +577,7 @@ struct RunPresentation {
     /// Word offset of the paragraph's per-glyph presentation in this frame's
     /// fx table; zero for none.
     fx: u32,
+    transitions: [u64; 2],
 }
 
 /// One text draw command's head, or one run folded into an earlier one.
@@ -955,6 +956,14 @@ impl TextPipeline {
         &mut self,
         presentation: Option<&Arc<SceneGlyphPresentation>>,
     ) {
+        if let Some(p) = presentation {
+            for t in [&p.transitions.entrance, &p.transitions.exit]
+                .into_iter()
+                .flatten()
+            {
+                self.gpu.register_material(&t.material);
+            }
+        }
         self.glyph_presentation = presentation.cloned();
     }
 
@@ -1634,6 +1643,7 @@ impl TextPipeline {
                     presentation: 0,
                     raster: 1.0,
                     fx: 0,
+                    transitions: [0; 2],
                 },
                 next: NO_RUN,
                 last: index as u32,
@@ -1716,7 +1726,16 @@ impl TextPipeline {
         let run = &mut self.target.runs[index];
         run.entry = entry;
         let fx = glyph_presentation.as_deref().map_or(0, |presentation| {
-            pack_glyph_fx(&mut self.target.fx, presentation)
+            let mut presentation = presentation.clone();
+            if presentation.transitions.viewport.is_none() {
+                presentation.transitions.viewport = Some(nana_ui_core::LogicalRect::new(
+                    (clip.x - bounds.x).max(0.),
+                    (clip.y - bounds.y).max(0.),
+                    bounds.width.min(clip.width),
+                    bounds.height.min(clip.height),
+                ));
+            }
+            pack_glyph_fx(&mut self.target.fx, &presentation)
         });
         run.presentation = RunPresentation {
             origin: whole,
@@ -1726,6 +1745,15 @@ impl TextPipeline {
             presentation,
             raster,
             fx,
+            transitions: glyph_presentation.as_ref().map_or([0; 2], |p| {
+                [
+                    p.transitions
+                        .entrance
+                        .as_ref()
+                        .map_or(0, |t| t.material.key()),
+                    p.transitions.exit.as_ref().map_or(0, |t| t.material.key()),
+                ]
+            }),
         };
         run.next = NO_RUN;
         run.last = index as u32;
@@ -2563,7 +2591,10 @@ impl TextPipeline {
                     breaks += 1;
                 }
                 for segment in &entry.segments {
-                    builder.push(&mut target.segments, *segment, order, adjacent);
+                    let mut segment = *segment;
+                    let t = target.runs[member as usize].presentation.transitions;
+                    segment.material = self.gpu.combination([segment.material, t[0], t[1]]);
+                    builder.push(&mut target.segments, segment, order, adjacent);
                 }
                 previous_end = Some(order + span);
                 let next = target.runs[member as usize].next;
@@ -3496,7 +3527,7 @@ impl GraphemeOrdinals {
 /// `fx`, returning the header's word offset. The layout `glyph_look` in
 /// `text_atlas.wgsl` reads.
 fn pack_glyph_fx(fx: &mut Vec<u32>, presentation: &SceneGlyphPresentation) -> u32 {
-    const HEADER: usize = 12;
+    const HEADER: usize = 32;
     let at = fx.len();
     let reveal = presentation.reveal.as_ref();
     let clusters = presentation
@@ -3514,6 +3545,7 @@ fn pack_glyph_fx(fx: &mut Vec<u32>, presentation: &SceneGlyphPresentation) -> u3
         nana_ui_core::motion::glyph::split_seconds(reveal.start)
     });
     let intro = reveal.map(|reveal| reveal.intro).unwrap_or_default();
+    let transitions = &presentation.transitions;
     let easing = match intro.easing {
         nana_ui_core::GlyphEasing::Linear => 0u32,
         nana_ui_core::GlyphEasing::EaseOut => 1,
@@ -3544,6 +3576,48 @@ fn pack_glyph_fx(fx: &mut Vec<u32>, presentation: &SceneGlyphPresentation) -> u3
         effects_at as u32,
         clusters_at as u32,
         chain_count as u32,
+        0,
+    ]);
+    fx.resize(at + HEADER, 0);
+    let enter = transitions.entrance.as_ref();
+    let exit = transitions.exit.as_ref();
+    let (exit_secs, exit_fraction) = nana_ui_core::motion::glyph::split_seconds(
+        exit.map_or(std::time::Duration::ZERO, |e| e.start),
+    );
+    let enter_start = enter
+        .map_or(std::time::Duration::ZERO, |m| m.start)
+        .max(reveal.map_or(std::time::Duration::ZERO, |r| r.start));
+    let (enter_secs, enter_fraction) = nana_ui_core::motion::glyph::split_seconds(enter_start);
+    let freeze = transitions
+        .freeze_reveal
+        .map(nana_ui_core::motion::glyph::split_seconds);
+    let viewport = transitions
+        .viewport
+        .unwrap_or(nana_ui_core::LogicalRect::new(0., 0., 1., 1.));
+    fx[at + 12..at + 32].copy_from_slice(&[
+        u32::from(enter.is_some()),
+        u32::from(exit.is_some()),
+        enter.map_or(0, |t| {
+            u32::from(t.space == nana_ui_core::PresentationMaskSpace::Target)
+        }),
+        exit.map_or(0, |t| {
+            u32::from(t.space == nana_ui_core::PresentationMaskSpace::Target)
+        }),
+        enter.map_or(0., |t| t.duration.as_secs_f32()).to_bits(),
+        exit_secs,
+        exit_fraction.to_bits(),
+        exit.map_or(0., |t| t.duration.as_secs_f32()).to_bits(),
+        u32::from(freeze.is_some()),
+        freeze.map_or(0, |f| f.0),
+        freeze.map_or(0., |f| f.1).to_bits(),
+        viewport.x.to_bits(),
+        viewport.y.to_bits(),
+        viewport.width.to_bits(),
+        viewport.height.to_bits(),
+        enter_secs,
+        enter_fraction.to_bits(),
+        0,
+        0,
         0,
     ]);
     let mut next = effects_at + chain_count * 2;
@@ -4766,6 +4840,35 @@ mod tests {
         assert_eq!(steady.glyph_upload_bytes, changed.glyph_upload_bytes);
     }
 
+    #[test]
+    fn transition_updates_reuse_instances_layout_and_atlas() {
+        let (device, queue) = test_device();
+        let mut pipeline = TextPipeline::new(&device, &queue, wgpu::TextureFormat::Rgba8Unorm);
+        paint_rich(&device, &queue, &mut pipeline, &[]);
+        let warm = pipeline.glyph_counters();
+        let layouts = pipeline.shape_cache_stats();
+        let mask = nana_ui_core::MaterialRef::new(nana_ui_core::MaterialProgram::new(
+            "fn material(i:MaterialInput)->vec4<f32>{return vec4<f32>(i.color.rgb,1.-i.progress);}",
+        ));
+        let mut p = presentation(vec![], vec![], None);
+        Arc::make_mut(&mut p).transitions.exit = Some(nana_ui_core::PresentationMask {
+            material: mask,
+            space: nana_ui_core::PresentationMaskSpace::Target,
+            start: std::time::Duration::ZERO,
+            duration: std::time::Duration::from_secs(1),
+        });
+        for now in [0, 100, 300, 700, 1000] {
+            pipeline.set_glyph_presentation(Some(&p));
+            pipeline.write_motion(&queue, std::time::Duration::from_millis(now), None);
+            paint_rich(&device, &queue, &mut pipeline, &[]);
+        }
+        let after = pipeline.glyph_counters();
+        assert_eq!(pipeline.shape_cache_stats().1, layouts.1);
+        assert_eq!(after.glyph_rasterized, warm.glyph_rasterized);
+        assert_eq!(after.glyph_upload_bytes, warm.glyph_upload_bytes);
+        assert_eq!(after.text_instance_rebuilds, warm.text_instance_rebuilds);
+    }
+
     fn effects(base: SceneTextEffects) -> Option<Arc<SceneRichPaint>> {
         SceneRichPaint::new(base, Vec::new())
     }
@@ -5131,6 +5234,7 @@ mod tests {
         reveal: Option<nana_ui_core::RevealSchedule>,
     ) -> Arc<SceneGlyphPresentation> {
         Arc::new(SceneGlyphPresentation {
+            transitions: Default::default(),
             effects: effects.into(),
             effect_chains: Arc::from([]),
             cluster_effects: cluster_effects.into(),
@@ -5202,6 +5306,7 @@ mod tests {
         let coloured_wave = paint_presented(&device, &queue, &mut pipeline, Some(&waved), crest)
             .expect("the reference wave draws in the evaluated rainbow colour");
         let chain = Arc::new(SceneGlyphPresentation {
+            transitions: Default::default(),
             effects: Arc::from([]),
             effect_chains: vec![nana_ui_core::GlyphEffectChain::new(vec![wave, rainbow])].into(),
             cluster_effects: vec![0].into(),
@@ -5448,6 +5553,7 @@ mod tests {
                     presentation: 0,
                     raster: 1.0,
                     fx: 0,
+                    transitions: [0; 2],
                 },
                 next: NO_RUN,
                 last: index as u32,

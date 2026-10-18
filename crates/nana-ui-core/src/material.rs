@@ -17,6 +17,8 @@ pub const MATERIAL_ABI: &str = r#"
 struct MaterialInput {
     position: vec2<f32>, uv: vec2<f32>, size: vec2<f32>,
     glyph_uv: vec2<f32>, color: vec4<f32>,
+    progress: f32,
+    target_position: vec2<f32>, target_size: vec2<f32>,
 };
 @group(2) @binding(0) var<storage, read> nm_parameters: array<vec4<f32>>;
 @group(2) @binding(1) var nm_texture0: texture_2d<f32>;
@@ -138,5 +140,87 @@ mod tests {
         let c: MaterialRef = serde_json::from_str(&serde_json::to_string(&b).unwrap()).unwrap();
         assert_ne!(b.id(), c.id());
         assert_eq!(b.program(), c.program());
+    }
+}
+
+/// Which coordinates a mask's `position`, `uv` and `size` describe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PresentationMaskSpace {
+    #[default]
+    Local,
+    Target,
+}
+/// Content-independent fragment coverage applied to a single drawable.
+/// Coordinates are logical, before ancestor transforms. The renderer supplies
+/// the local geometry and target rectangle; the mask owns no clipping or color.
+/// A future composed container can itself be that single drawable.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresentationMask {
+    pub material: MaterialRef,
+    pub space: PresentationMaskSpace,
+    pub start: std::time::Duration,
+    pub duration: std::time::Duration,
+}
+impl PresentationMask {
+    pub fn progress(&self, now: std::time::Duration) -> f32 {
+        if now < self.start {
+            0.
+        } else if self.duration.is_zero() {
+            1.
+        } else {
+            (now.saturating_sub(self.start).as_secs_f64() / self.duration.as_secs_f64())
+                .clamp(0., 1.) as f32
+        }
+    }
+    pub fn end(&self) -> std::time::Duration {
+        self.start.saturating_add(self.duration)
+    }
+}
+
+/// One mask sampled for a drawable. `target` is in that drawable's local
+/// logical coordinates. This does not prescribe a text or subtree renderer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresentationMaskSample {
+    pub mask: PresentationMask,
+    pub progress: f32,
+    pub target: crate::LogicalRect,
+}
+
+#[cfg(test)]
+mod mask_tests {
+    use super::*;
+    #[test]
+    fn retired_content_has_a_finite_deadline_even_with_looping_effects() {
+        let mut p = crate::GlyphPresentation::new(
+            std::sync::Arc::from([crate::GlyphEffect::wave(2.)]),
+            None,
+        );
+        p.transitions.exit = Some(PresentationMask {
+            material: MaterialRef::new(MaterialProgram::new(
+                "fn material(i:MaterialInput)->vec4<f32>{return i.color;}",
+            )),
+            space: PresentationMaskSpace::Target,
+            start: std::time::Duration::from_secs(1),
+            duration: std::time::Duration::from_millis(320),
+        });
+        assert_eq!(
+            p.live_until(true),
+            Some(Some(std::time::Duration::from_millis(1320)))
+        );
+    }
+    #[test]
+    fn mask_progress_has_exact_endpoints_and_no_content_dependency() {
+        let mask = PresentationMask {
+            material: MaterialRef::new(MaterialProgram::new(
+                "fn material(i:MaterialInput)->vec4<f32>{return i.color;}",
+            )),
+            space: PresentationMaskSpace::Target,
+            start: std::time::Duration::from_secs(10),
+            duration: std::time::Duration::from_millis(320),
+        };
+        assert_eq!(mask.progress(std::time::Duration::ZERO), 0.);
+        assert_eq!(mask.progress(std::time::Duration::from_millis(10160)), 0.5);
+        assert_eq!(mask.progress(std::time::Duration::from_millis(10320)), 1.);
+        assert_eq!(mask.progress(std::time::Duration::from_secs(100)), 1.);
     }
 }

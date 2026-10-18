@@ -40,3 +40,15 @@ Rust 调用方使用 `MaterialProgram::new(wgsl)` 和 `MaterialRef::new(program)
 编译失败或资源不合法时使用原始样式。驱动编译错误通过 `gpu.material.rejected` 诊断事件报告。程序由宿主应用提供；加载第三方程序的应用仍负责源码、复杂度与资源预算校验，不能把驱动校验当作不可信代码沙箱。
 
 GPU 证据位于 `nana-ui-devtools/tests/materials.rs`，涵盖填色、独立边框、富文本覆盖、纹理替换、静态确定性、恒等材质及失败回退。文字参数复用测试位于 text 模块，设备恢复测试覆盖保留场景中的文字材质。
+
+## 通用呈现遮罩 PresentationMask
+
+`PresentationMask` 是内容无关的单个绘制对象覆盖率合同：材质引用、开始时间、有限时长以及局部／目标坐标空间。`progress(now)` 返回精确的 0–1 进度，`PresentationMaskSample` 携带采样进度及对象局部坐标中的目标矩形。它不拥有文字、字形图集、裁剪或颜色，也不规定播放业务。
+
+遮罩复用 `MaterialRef` 和 `fn material(i: MaterialInput) -> vec4<f32>`，只消费返回值的 alpha，钳到 0–1 后乘入原绘制覆盖率；RGB 保留原管线结果。`progress`、`target_position` 和 `target_size` 是新增公共输入。局部坐标为变换前的逻辑像素；目标坐标始终相对于目标矩形。普通颜色材质的进度为 1，旧 WGSL 无需修改。
+
+文字是该合同的一个适配层：`GlyphPresentation.transitions` 分别引用入场／退场遮罩，入场按 `RevealSchedule` 的逐字时刻采样进度，退场使用独立的有限时钟。`TextTransitions.freeze_reveal` 冻结旧文字的揭示时刻，`viewport` 可指定文字局部的可见视口，省略时由绘制器推导。`Local` 使用字形或行内对象坐标，`Target` 使用整个正文视口坐标；额外的 `glyph_uv` 为文字适配信息，不是通用遮罩的前提。
+
+字形填色、描边、阴影、装饰线、ruby 和彩色 emoji 应用相同遮罩。行内图片／标签的 Quad 通过 `QuadSurfacePaint.presentation_masks` 使用同一 `PresentationMaskSample` 合同，保留原始图像色彩；首轮支持两个遮罩叠加。动画只更新 presentation 或 paint 数据，复用文字布局、图集及材质资源；截止时间结束后停止连续帧。
+
+本轮只实现单个绘制对象，不对任意子树做后处理。未来容器可先合成子内容，将合成结果作为一个绘制对象，继续使用同一局部坐标、目标坐标和覆盖率语义；当前没有容器合成占位实现。NanaType 的逐字节奏、换句等待和蜡笔算法均不属于框架。
