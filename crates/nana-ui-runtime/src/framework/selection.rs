@@ -346,8 +346,8 @@ impl AppContext {
             }
         }
         let selected_id = selected.map(Entity::stable_id);
-        let (size, chrome, fill) = self.read(control, |control| {
-            (control.size, control.chrome, control.fill)
+        let (size, chrome, fill, wrap) = self.read(control, |control| {
+            (control.size, control.chrome, control.fill, control.wrap)
         })?;
         let current = self.read(control, |control| {
             (
@@ -377,6 +377,7 @@ impl AppContext {
                 option.size == size
                     && option.chrome == chrome
                     && option.fill == fill
+                    && option.wrap == (wrap && chrome == crate::SelectionChrome::Segmented)
                     && option.selected == (Some(entity.id) == selected_id)
             })? {
                 surface_stale = true;
@@ -408,6 +409,7 @@ impl AppContext {
             let mut next = self.read(option, Clone::clone)?;
             next.selected = Some(option.id) == selected_id;
             next.synchronize_surface(size, chrome, fill);
+            next.apply_wrap(wrap);
             next.project(option.id, &self.world, &mut mutations);
             staged_options.push((option.id, next));
         }

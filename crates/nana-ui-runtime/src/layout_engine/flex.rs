@@ -5,6 +5,156 @@ use nana_ui_core::dynamic_layout::{LayoutUnits, lower_box};
 use super::dynamic::{DynamicLine, LineChild};
 use super::*;
 
+/// Equal pickers admit a prefix only while its widest intrinsic item fits
+/// every equal share. The same partition is used by measure and placement.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn pack_equal_wrap_lines(
+    children: &[StableNodeId],
+    sizes: &[Size],
+    direction: FlexDirection,
+    available: f32,
+    edge_base: f32,
+    gap: f32,
+    parent_font_px: f32,
+    nodes: &LayoutInputMap<'_>,
+) -> Vec<Vec<usize>> {
+    let mut lines = Vec::new();
+    let mut line = Vec::new();
+    let mut widest = 0.0_f32;
+    let mut margins = 0.0;
+    for (index, child) in children.iter().enumerate() {
+        let margin = nodes.style(*child).map_or(0.0, |style| {
+            let margin = style
+                .resolved_margin_against_fonts(Some(edge_base), fonts_of(&style, parent_font_px));
+            main_start_margin(margin, direction) + main_end_margin(margin, direction)
+        });
+        let main = main_extent(sizes[index], direction);
+        let need =
+            widest.max(main) * (line.len() + 1) as f32 + margins + margin + gap * line.len() as f32;
+        if !line.is_empty() && need > available + 0.01 {
+            lines.push(std::mem::take(&mut line));
+            widest = 0.0;
+            margins = 0.0;
+        }
+        widest = widest.max(main);
+        margins += margin;
+        line.push(index);
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn equal_wrap_main_sizes(
+    children: &[StableNodeId],
+    sizes: &mut [Size],
+    direction: FlexDirection,
+    available: f32,
+    edge_base: f32,
+    gap: f32,
+    parent_font_px: f32,
+    nodes: &LayoutInputMap<'_>,
+) {
+    if children.is_empty() {
+        return;
+    }
+    let margins: f32 = children
+        .iter()
+        .map(|child| {
+            nodes.style(*child).map_or(0.0, |style| {
+                let margin = style.resolved_margin_against_fonts(
+                    Some(edge_base),
+                    fonts_of(&style, parent_font_px),
+                );
+                main_start_margin(margin, direction) + main_end_margin(margin, direction)
+            })
+        })
+        .sum();
+    let share = ((available - margins - gap * children.len().saturating_sub(1) as f32)
+        / children.len() as f32)
+        .max(0.0);
+    for size in sizes {
+        set_main_extent(size, direction, share);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn measure_equal_wrap(
+    children: &[StableNodeId],
+    sizes: &[Size],
+    direction: FlexDirection,
+    content: Size,
+    edge_base: f32,
+    gap: f32,
+    cross_gap: f32,
+    viewport: LayoutViewport,
+    parent_font_px: f32,
+    nodes: &mut LayoutInputMap<'_>,
+    cache: &mut PassIntrinsicCache,
+    scope: Option<&ScopeContext<'_>>,
+) -> Result<Size, UiWorldError> {
+    let available = main_extent(content, direction);
+    let lines = pack_equal_wrap_lines(
+        children,
+        sizes,
+        direction,
+        available,
+        edge_base,
+        gap,
+        parent_font_px,
+        nodes,
+    );
+    let mut cross = 0.0;
+    for (line_index, indices) in lines.iter().enumerate() {
+        let line: Vec<_> = indices.iter().map(|&i| children[i]).collect();
+        let mut used: Vec<_> = indices.iter().map(|&i| sizes[i]).collect();
+        equal_wrap_main_sizes(
+            &line,
+            &mut used,
+            direction,
+            available,
+            edge_base,
+            gap,
+            parent_font_px,
+            nodes,
+        );
+        let mut line_cross = 0.0_f32;
+        for (child, size) in line.iter().zip(used) {
+            let measured = intrinsic_size_at_main(
+                *child,
+                main_extent(size, direction),
+                direction,
+                content,
+                viewport,
+                parent_font_px,
+                nodes,
+                cache,
+                scope,
+            )?;
+            let margin = nodes.style(*child).map_or_default(|style| {
+                style.resolved_margin_against_fonts(
+                    Some(edge_base),
+                    fonts_of(&style, parent_font_px),
+                )
+            });
+            line_cross =
+                line_cross.max(cross_extent(measured, direction) + cross_margin(margin, direction));
+        }
+        cross += line_cross;
+        if line_index > 0 {
+            cross += cross_gap;
+        }
+    }
+    Ok(match direction {
+        FlexDirection::Row => Size::new(if children.is_empty() { 0.0 } else { available }, cross),
+        FlexDirection::Column => {
+            Size::new(cross, if children.is_empty() { 0.0 } else { available })
+        }
+    })
+}
+
 /// What a line's Dynamic Layout solve changed: the gap its items now sit
 /// apart at, and what each item gave up (empty when nothing was solved).
 pub(super) struct LineAdjust {

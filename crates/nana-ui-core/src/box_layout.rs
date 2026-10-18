@@ -3336,6 +3336,10 @@ pub struct LayoutStyle {
     #[serde(default)]
     pub order: i32,
     pub flex_wrap: FlexWrap,
+    /// Pack each wrap line by its largest item's intrinsic main size, then
+    /// divide the line equally. Opt-in retained layout intent for equal pickers.
+    #[serde(default)]
+    pub equal_wrap: bool,
     pub display: Option<DisplaySpec>,
     pub box_sizing: BoxSizing,
     pub position: PositionSpec,
@@ -3667,6 +3671,7 @@ impl Default for LayoutStyle {
             flex_reverse: false,
             order: 0,
             flex_wrap: FlexWrap::NoWrap,
+            equal_wrap: false,
             display: None,
             box_sizing: BoxSizing::BorderBox,
             position: PositionSpec::Static,

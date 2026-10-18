@@ -3578,6 +3578,11 @@ impl AppContext {
         // SAFETY: `TypeId` matched `SegmentedOption`.
         let option = unsafe { &mut *std::ptr::from_mut(staged).cast::<SegmentedOption>() };
         option.synchronize_surface(size, chrome, fill);
+        option.apply_wrap(
+            parent
+                .and_then(|view| view.downcast_ref::<SegmentedControl>())
+                .is_some_and(SegmentedControl::wrap_value),
+        );
     }
 
     /// Update a low-level [`View`], deliver closure events, then atomically

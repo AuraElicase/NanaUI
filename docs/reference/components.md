@@ -182,6 +182,8 @@ Compact + Overlay 适合分离窗底栏（单行加边距约 52px）。Compact +
 
 方向键在 `SegmentedControl` / `Tabs` 上只移焦点。不改选中（手动激活语义）。选中跟随 Enter / 空格 / 点击。这是读屏软件对 tablist / radiogroup 的预期。
 
+`SegmentedControl::fill(true).wrap(true)` 开启自适应均分：按照真实标签与图标尺寸换行，每行（含末行）均分可用宽度；单项超长标签折行增高。默认 `wrap(false)` 保持单行，Radio 与独立 Tabs 不变。布局意图进入统一的 retained measure / placement，不由应用读回布局再改宽度。
+
 右键（button 2）派发 `SecondaryPress`。从命中节点往上找到第一个注册了该事件的节点。事件里带命中节点与坐标。框架不开菜单。不塞默认项。要不要弹、弹什么，由应用在 handler 里决定（通常是 `ContextMenu`）。没人注册就什么都不发生。
 
 键盘也能要菜单。焦点节点收到 `ContextMenu` 键或 Shift+F10 时，派发同一个 `SecondaryPress`，`keyboard` 为 `true`。`target` 是焦点节点，坐标是它盒子的中心。往上找 handler 的规则和右键一样。焦点控件自己先拿这个键：应用的按键策略（`on_key`）、终端、编辑器消费了它，就不再派发。按住不放的重复按键不派发。宿主有自己的同类手势时，调用 `AppContext::secondary_press_focused(document)`。键盘要来的菜单，应用打开后把焦点移进去；右键打开的不动焦点。`SecondaryPress` 的 `focus` 说键要焦点落在哪一端：`Some(RovingEdge::Start)` 是第一项，`Some(RovingEdge::End)` 是最后一项，`None` 由应用挑（通常第一项）。`ContextMenu` 键、Shift+F10、`secondary_press_focused` 和右键都是 `None`。
