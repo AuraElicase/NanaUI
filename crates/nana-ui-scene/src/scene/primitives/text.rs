@@ -268,6 +268,20 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                 ));
             }
         }
+        Some(ComponentGeometry::PathText { text }) => {
+            emit(component_text_primitive(
+                id,
+                2,
+                text,
+                TextHorizontalAlignment::Start,
+                false,
+                node,
+                transform,
+                clips.clone(),
+                opacity,
+                node_order,
+            ));
+        }
         Some(ComponentGeometry::LabeledValue { label, value, .. }) => {
             emit(component_text_primitive(
                 id,

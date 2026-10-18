@@ -38,6 +38,7 @@ pub(crate) const ASSEMBLED_ROW_STACK_BELOW: f32 = 280.0;
 pub struct SettingsRow {
     pub label: Arc<str>,
     pub hint: Option<Arc<str>>,
+    pub hint_is_path: bool,
     pub stacked: bool,
     /// Stack below this row's laid-out width in logical pixels. `stacked`
     /// remains an unconditional override; `None` preserves inline layout.
@@ -58,6 +59,7 @@ impl SettingsRow {
         Self {
             label: label.into(),
             hint: None,
+            hint_is_path: false,
             stacked: false,
             stack_below: None,
             divided: false,
@@ -74,6 +76,12 @@ impl SettingsRow {
 
     pub fn hint(mut self, hint: impl Into<Arc<str>>) -> Self {
         self.hint = Some(hint.into());
+        self
+    }
+
+    pub fn path_hint(mut self, path: impl Into<Arc<str>>) -> Self {
+        self.hint = Some(path.into());
+        self.hint_is_path = true;
         self
     }
 
@@ -284,9 +292,17 @@ impl SettingsRow {
             text.project(label, world, mutations);
         }
         if let Some(hint) = self.hint_slot {
-            let mut text = Text::new(self.hint.as_deref().unwrap_or(""));
-            text.style = hint_slot_style(self.hint.is_none());
-            text.project(hint, world, mutations);
+            let value = self.hint.as_deref().unwrap_or("");
+            let style = hint_slot_style(self.hint.is_none());
+            if self.hint_is_path {
+                crate::PathText::new(value)
+                    .style(style)
+                    .project(hint, world, mutations);
+            } else {
+                Text::new(value)
+                    .style(style)
+                    .project(hint, world, mutations);
+            }
         }
     }
 }
@@ -1906,13 +1922,14 @@ impl AppContext {
             (
                 row.label.clone(),
                 row.hint.clone(),
+                row.hint_is_path,
                 row.control,
                 row.label_slot,
                 row.hint_slot,
                 row.copy_slot,
             )
         })?;
-        let (label, hint, control, label_slot, hint_slot, copy_slot) = snapshot;
+        let (label, hint, hint_is_path, control, label_slot, mut hint_slot, copy_slot) = snapshot;
         let live = |context: &Self, slot: Option<StableNodeId>| {
             slot.filter(|id| context.world().contains(*id))
         };
@@ -1925,15 +1942,37 @@ impl AppContext {
                     .stable_id()
             }
         };
+        if let Some(id) = live(self, hint_slot) {
+            let was_path = self
+                .read(Entity::<crate::PathText>::from_stable_id(id), |_| ())
+                .is_ok();
+            if was_path != hint_is_path {
+                if was_path {
+                    self.remove_view(Entity::<crate::PathText>::from_stable_id(id))?;
+                } else {
+                    self.remove_view(Entity::<Text>::from_stable_id(id))?;
+                }
+                hint_slot = None;
+            }
+        }
         let hint_slot = match live(self, hint_slot) {
             Some(id) => id,
             None => {
                 created = true;
-                self.create_detached_component(
-                    document,
-                    row_hint_text(hint.as_deref().unwrap_or(""), hint.is_none()),
-                )?
-                .stable_id()
+                if hint_is_path {
+                    self.create_detached_component(
+                        document,
+                        crate::PathText::new(hint.as_deref().unwrap_or(""))
+                            .style(hint_slot_style(hint.is_none())),
+                    )?
+                    .stable_id()
+                } else {
+                    self.create_detached_component(
+                        document,
+                        row_hint_text(hint.as_deref().unwrap_or(""), hint.is_none()),
+                    )?
+                    .stable_id()
+                }
             }
         };
         let copy_slot = match live(self, copy_slot) {
@@ -1950,6 +1989,15 @@ impl AppContext {
                 row.hint_slot = Some(hint_slot);
                 row.copy_slot = Some(copy_slot);
             })?;
+        }
+        if hint_is_path {
+            self.update_component(
+                Entity::<crate::PathText>::from_stable_id(hint_slot),
+                |text, _| {
+                    text.value = hint.clone().unwrap_or_default();
+                    text.style = hint_slot_style(hint.is_none());
+                },
+            )?;
         }
         let copy = Entity::<SettingsRowCopy>::from_stable_id(copy_slot);
         let mut changed = reconcile_children(self, copy, &[label_slot, hint_slot])?;
@@ -4208,5 +4256,46 @@ mod spacing_tests {
                 .top,
             UI_METRICS.panel_padding_y
         );
+    }
+}
+
+#[cfg(test)]
+mod path_hint_tests {
+    use super::*;
+    use crate::{DocumentId, LayoutViewport, PathText};
+
+    #[test]
+    fn path_hint_updates_full_tooltip_and_can_switch_back_to_prose() {
+        let mut cx = AppContext::new();
+        let doc = DocumentId::new(1).unwrap();
+        let row = cx
+            .create_component(doc, SettingsRow::new("文件夹").path_hint("/one/two/模型/"))
+            .unwrap();
+        cx.assemble_settings_row(row).unwrap();
+        cx.layout_document(doc, LayoutViewport::new(180.0, 100.0))
+            .unwrap();
+        let id = cx.read(row, |row| row.hint_slot.unwrap()).unwrap();
+        let hint = Entity::<PathText>::from_stable_id(id);
+        let tooltip = cx.component_tooltip(hint).unwrap().unwrap();
+        assert_eq!(
+            &*cx.read(tooltip, |tip| tip.label.clone()).unwrap(),
+            "/one/two/模型/"
+        );
+        cx.update_component(row, |row, _| row.hint = Some("/new/directory/".into()))
+            .unwrap();
+        cx.assemble_settings_row(row).unwrap();
+        assert_eq!(
+            &*cx.read(tooltip, |tip| tip.label.clone()).unwrap(),
+            "/new/directory/"
+        );
+        cx.update_component(row, |row, _| {
+            row.hint_is_path = false;
+            row.hint = Some("文件夹不可用".into());
+        })
+        .unwrap();
+        cx.assemble_settings_row(row).unwrap();
+        let id = cx.read(row, |row| row.hint_slot.unwrap()).unwrap();
+        assert!(cx.read(Entity::<Text>::from_stable_id(id), |_| ()).is_ok());
+        assert!(!cx.world().contains(tooltip.stable_id()));
     }
 }

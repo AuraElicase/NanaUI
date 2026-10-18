@@ -463,16 +463,16 @@ impl AppContext {
             if !lifecycle.open && lifecycle.show_at.is_none() {
                 continue;
             }
-            let Some(mut button) = self
+            let button = self
                 .views
                 .get(&target)
                 .and_then(|view| view.downcast_ref::<IconButton>())
-                .cloned()
-            else {
-                continue;
-            };
-            button.tooltip_open = false;
-            button.project(target, &self.world, &mut mutations);
+                .cloned();
+            let button = button.map(|mut button| {
+                button.tooltip_open = false;
+                button.project(target, &self.world, &mut mutations);
+                button
+            });
             mutations.set_overlay_host(target, crate::OverlayHostState::default());
             closed_tooltips.push((target, button));
         }
@@ -508,7 +508,9 @@ impl AppContext {
             return;
         }
         for (target, button) in closed_tooltips {
-            self.install_view(target, button);
+            if let Some(button) = button {
+                self.install_view(target, button);
+            }
             if let Some(lifecycle) = self.component_lifecycle.tooltips.get_mut(&target) {
                 lifecycle.show_at = None;
                 lifecycle.open = false;

@@ -47,6 +47,7 @@ impl StyledComponent for SettingsRow {
 pub mod settings_row {
     pub struct label;
     pub struct hint;
+    pub struct hint_is_path;
     pub struct divided;
     pub struct stacked;
     pub struct first_in_group;
@@ -83,6 +84,7 @@ macro_rules! row_fields {
 row_fields! {
     label: Arc<str>,
     hint: Option<Arc<str>>,
+    hint_is_path: bool,
     divided: bool,
     stacked: bool,
     first_in_group: bool,

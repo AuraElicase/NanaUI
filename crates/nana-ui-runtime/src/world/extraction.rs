@@ -753,6 +753,7 @@ impl UiWorld {
             StandardVisual::StatusBadge { .. }
             | StandardVisual::ValidationMessage { .. }
             | StandardVisual::EmptyState { .. }
+            | StandardVisual::PathText { .. }
             | StandardVisual::LabeledValue { .. }
             | StandardVisual::Spinner { .. }
             | StandardVisual::FormField { .. } => paint(role(ComponentRecipeId::Indicator, false)),
