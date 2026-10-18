@@ -210,3 +210,9 @@ let mut binding = FrameBinding::new(
 静态或显式修订的渲染器可返回 `Some(revision)`，并在像素发生变化时递增。为保持已有消费者行为，`content_version` 默认沿用 `preparation_version`；动态渲染器需要显式区分二者。安装了动态渲染器但当前场景未引用它，不会使静态输出持续绘制。
 
 通用文字与形状片元材质见 [通用材质](materials.md)。
+
+### 逐帧应用载荷
+
+`FrameExchange<E, M = ()>` 的 `M` 是随 GPU 拷贝一起发布的不可变应用载荷，与 epoch 和 `FrameToken<E>` 身份分离。通过 `new_with_payload` 构造，`copy_from_with_payload`（或 `wgpu-interop` 下的 `copy_from_wgpu_with_payload`）同时提交纹理、颜色元数据和载荷；`FrameLease::payload()` 与 `FrameBinding<E, M>::payload()` 只返回对应 lease / 当前绑定帧的数据。原有无载荷构造与复制接口保持兼容。
+
+载荷在 pending copy、完成发布、绑定和呈现后退役之间与纹理共同保留；丢帧、代际失效和槽回收遵循原规则。更新载荷不切换 epoch、不清空最新帧，也不新增历史索引或扩大纹理池。消费者不得将旧纹理配上另读的最新生产状态。载荷类型由应用定义，框架不依赖应用的坐标或模型类型。

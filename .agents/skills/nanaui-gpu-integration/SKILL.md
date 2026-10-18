@@ -15,7 +15,7 @@ Read [`docs/reference/gpu.md`](../../../docs/reference/gpu.md) and the crate bou
 - Device loss lives in `GpuContext::is_lost()`; a replaced device is a new `GpuContext` with a new `DeviceGeneration`. Key device-built caches on the generation; resources from another generation are refused, not sent to the backend.
 - `GpuTextureView` plus a string `HostTextureRegistry` slot is the default product path. Use `GpuView` only for an in-pass view with no intermediate texture. Preserve HostTexture identity/generation invalidation.
 - Paint HostTexture and Custom nodes in document order inside the current destination pass. Do not resolve around interleaved GPU nodes or move them to a frame-end overlay.
-- Frame exchange is GPU-side. Keep producer handoff, prepare, present, and sampled-lease lifetime ordered; CPU readback belongs only to explicit snapshot tooling.
+- Frame exchange is GPU-side. Keep producer handoff, prepare, present, and sampled-lease lifetime ordered; CPU readback belongs only to explicit snapshot tooling. Application frame data uses the exchange's typed payload, retained with its lease independently of epoch; a binding reads data from its currently sampled frame, never a separate latest-state snapshot.
 - Keep `CustomRenderNode` a layout and Scene node. Live2D or other producers supply ordinary HostTexture slots; framework crates do not gain product-specific renderer types.
 - Inspect `Cargo.toml`, `Cargo.lock`, and the dependency graph for dependency changes and keep one WGPU major version.
 
