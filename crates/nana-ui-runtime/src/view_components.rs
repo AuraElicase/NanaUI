@@ -24,6 +24,26 @@ fn control_layout() -> Arc<nana_ui_core::LayoutStyle> {
     })
 }
 
+/// Shared 24px target for heading icons and icon menu triggers at every density.
+pub(crate) fn compact_icon_style(mut style: NodeStyle) -> NodeStyle {
+    use nana_ui_core::LengthSpec::Px;
+    style.square = None;
+    style.control_height = None;
+    style.control_padding_x = None;
+    style.control_padding_y = None;
+    let layout = Arc::make_mut(&mut style.layout);
+    layout.width = Some(Px(24.0));
+    layout.height = Some(Px(24.0));
+    layout.min_width = Some(Px(24.0));
+    layout.min_height = Some(Px(24.0));
+    layout.padding_left = Some(Px(0.0));
+    layout.padding_right = Some(Px(0.0));
+    layout.padding_top = Some(Px(0.0));
+    layout.padding_bottom = Some(Px(0.0));
+    layout.flex_shrink = Some(0.0);
+    style
+}
+
 fn add_length_px(length: nana_ui_core::LengthSpec, offset: f32) -> nana_ui_core::LengthSpec {
     use nana_ui_core::LengthSpec;
     match length {
@@ -894,6 +914,8 @@ pub struct IconButton {
     pub label: Arc<str>,
     pub kind: nana_ui_core::ButtonKind,
     pub size: nana_ui_core::ControlSize,
+    /// Use the shared 24px square for inline heading tools.
+    pub compact: bool,
     pub selected: bool,
     pub disabled: bool,
     pub tooltip: Option<IconButtonTooltip>,
@@ -965,6 +987,7 @@ impl IconButton {
             label: label.into(),
             kind: nana_ui_core::ButtonKind::Ghost,
             size: nana_ui_core::ControlSize::Medium,
+            compact: false,
             selected: false,
             disabled: false,
             tooltip: None,
@@ -984,6 +1007,13 @@ impl IconButton {
         self.style.square = Some(nana_ui_core::SquareSize::Control(size));
         self
     }
+    /// A 24×24 logical-pixel heading tool with a standard glyph. Independent
+    /// of control density and `size`; disabling restores the declared size.
+    pub fn compact(mut self, compact: bool) -> Self {
+        self.compact = compact;
+        self
+    }
+
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
         self
@@ -1079,7 +1109,11 @@ impl ComponentView for IconButton {
         }
         let visual = StandardVisual::Icon {
             icon: self.icon,
-            size: self.size.icon_size(),
+            size: if self.compact {
+                nana_ui_core::ControlSize::Medium.icon_size()
+            } else {
+                self.size.icon_size()
+            },
             tooltip: self.tooltip.as_ref().map(|tooltip| crate::TooltipVisual {
                 label: Arc::clone(&tooltip.label),
                 config: tooltip.config,
@@ -1090,7 +1124,11 @@ impl ComponentView for IconButton {
             mutations.set_standard_visual(id, Some(visual));
         }
         let selected = self.selected || self.kind == nana_ui_core::ButtonKind::Selected;
-        let mut effective_style = self.style.clone();
+        let mut effective_style = if self.compact {
+            compact_icon_style(self.style.clone())
+        } else {
+            self.style.clone()
+        };
         if !self.colors_from_style {
             kind_colors(self.kind, selected, &mut effective_style);
             if self.disabled {

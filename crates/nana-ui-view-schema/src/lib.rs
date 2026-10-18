@@ -185,6 +185,7 @@ macro_rules! for_each_control {
             IconButton => icon_button(icon: expr, label: text) for IconButton {
                 icon: Icon = set,
                 label: Arc<str> = set,
+                compact: bool = set,
                 selected: bool = set,
                 disabled: bool = set,
                 has_popup: bool = set,

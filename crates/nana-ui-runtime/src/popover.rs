@@ -78,6 +78,8 @@ pub struct Popover {
     /// state still wash the trigger so the hit target stays visible. Off by
     /// default: a trigger keeps the raised menu-button chrome.
     pub bare_trigger: bool,
+    /// Use the shared 24px target when this popover has an icon trigger.
+    pub compact_trigger: bool,
 }
 
 impl Popover {
@@ -96,6 +98,7 @@ impl Popover {
             close_on_escape: true,
             close_on_outside: true,
             bare_trigger: false,
+            compact_trigger: false,
         }
     }
 
@@ -172,6 +175,13 @@ impl Popover {
         self.bare_trigger = bare;
         self
     }
+
+    /// Fit an icon trigger into a 24×24 logical-pixel heading tool. Text and
+    /// custom-content triggers retain their regular layout.
+    pub fn compact_trigger(mut self, compact: bool) -> Self {
+        self.compact_trigger = compact;
+        self
+    }
 }
 
 impl Default for Popover {
@@ -217,6 +227,7 @@ impl crate::ComponentView for Popover {
             self.alignment,
             "popover",
             self.bare_trigger,
+            self.compact_trigger,
             &self.accessible_name,
         );
     }
@@ -274,6 +285,12 @@ impl ActionMenu {
         self.popover = self.popover.bare_trigger(bare);
         self
     }
+
+    /// Use the same compact icon target as [`crate::IconButton::compact`].
+    pub fn compact_trigger(mut self, compact: bool) -> Self {
+        self.popover = self.popover.compact_trigger(compact);
+        self
+    }
 }
 
 impl Default for ActionMenu {
@@ -319,6 +336,7 @@ impl crate::ComponentView for ActionMenu {
             self.popover.alignment,
             "action-menu",
             self.popover.bare_trigger,
+            self.popover.compact_trigger,
             &self.popover.accessible_name,
         );
     }
@@ -340,6 +358,7 @@ pub(crate) fn project_menu_surface(
     alignment: PopoverAlignment,
     label: &str,
     bare_trigger: bool,
+    compact_trigger: bool,
     accessible_name: &Arc<str>,
 ) {
     let open = world.project_menu_presence(id, open, mutations);
@@ -401,6 +420,11 @@ pub(crate) fn project_menu_surface(
             width,
             padding,
         )
+    };
+    let style = if compact_trigger && trigger_icon.is_some() && trigger_content.is_none() {
+        crate::view_components::compact_icon_style(style)
+    } else {
+        style
     };
     let style = if bare_trigger && has_trigger {
         bare_trigger_style(style, open)
@@ -844,6 +868,90 @@ mod tests {
     use crate::LayoutViewport;
     use crate::framework::AppContext;
     use std::time::Duration;
+
+    #[test]
+    fn compact_heading_tools_keep_their_targets_and_menu_anchor() {
+        use crate::view::{entity_ref, widget, with_refs};
+        use crate::{IconButton, Stack};
+        use nana_ui_core::AlignSpec;
+
+        let mut context = AppContext::new();
+        let root = context
+            .create_component(document(), Stack::row(2.0).align(AlignSpec::Center))
+            .unwrap();
+        let (_, (button, popover, menu)) = context
+            .mount_view(root.stable_id(), || {
+                let button = entity_ref::<IconButton>();
+                let popover = entity_ref::<Popover>();
+                let menu = entity_ref::<ActionMenu>();
+                with_refs(
+                    (
+                        widget(IconButton::new(Icon::Add, "Add").compact(true)).entity_ref(button),
+                        widget(
+                            Popover::new()
+                                .trigger_icon(Icon::Add, "Options")
+                                .compact_trigger(true),
+                        )
+                        .entity_ref(popover),
+                        widget(
+                            ActionMenu::new()
+                                .trigger_icon(Icon::Add, "More")
+                                .compact_trigger(true)
+                                .bare_trigger(true),
+                        )
+                        .entity_ref(menu)
+                        .children(widget(crate::ActionMenuItem::new("Command"))),
+                    ),
+                    (button, popover, menu),
+                )
+            })
+            .unwrap();
+        context
+            .layout_document(document(), LayoutViewport::new(280.0, 200.0))
+            .unwrap();
+        let ids = [button.stable_id(), popover.stable_id(), menu.stable_id()];
+        let bounds: Vec<_> = ids
+            .iter()
+            .map(|id| context.world().layout_box(*id).unwrap())
+            .collect();
+        for bounds in &bounds {
+            assert_eq!((bounds.width, bounds.height), (24.0, 24.0));
+        }
+        assert_eq!(
+            context.world().layout_box(root.stable_id()).unwrap().height,
+            24.0
+        );
+        assert!(context.activate_node(menu.stable_id()).unwrap());
+        context
+            .layout_document(document(), LayoutViewport::new(280.0, 200.0))
+            .unwrap();
+        assert!(context.read(menu, |menu| menu.popover.open).unwrap());
+        assert_eq!(
+            context.world().layout_box(menu.stable_id()).unwrap(),
+            bounds[2]
+        );
+        context
+            .update_component(button, |button, _| button.disabled = true)
+            .unwrap();
+        assert!(!context.activate_icon_button(button).unwrap());
+        context
+            .update_component(button, |button, _| {
+                button.disabled = false;
+                button.compact = false;
+            })
+            .unwrap();
+        context
+            .layout_document(document(), LayoutViewport::new(280.0, 200.0))
+            .unwrap();
+        assert_eq!(
+            context
+                .world()
+                .layout_box(button.stable_id())
+                .unwrap()
+                .height,
+            UI_METRICS.icon_button_size
+        );
+    }
 
     #[test]
     fn triggers_follow_the_parent_rows_cross_axis_alignment() {
