@@ -178,6 +178,7 @@ pub struct SegmentedControl {
     pub orientation: SelectionOrientation,
     pub(crate) chrome: SelectionChrome,
     pub(crate) fill: bool,
+    pub(crate) wrap: bool,
     pub(crate) size: ControlSize,
     pub(crate) options: Vec<StableNodeId>,
     pub(crate) selected: Option<StableNodeId>,
@@ -198,6 +199,7 @@ impl SegmentedControl {
             orientation: SelectionOrientation::Horizontal,
             chrome: SelectionChrome::Segmented,
             fill: false,
+            wrap: false,
             size: ControlSize::Medium,
             options: Vec::new(),
             selected: None,
@@ -215,7 +217,7 @@ impl SegmentedControl {
     pub fn chrome(mut self, chrome: SelectionChrome) -> Self {
         self.chrome = chrome;
         self.orientation = chrome.orientation();
-        self.style = selection_chrome_style(chrome, self.size, self.fill);
+        self.refresh_style();
         self
     }
 
@@ -234,12 +236,34 @@ impl SegmentedControl {
 
     pub(crate) fn apply_size(&mut self, size: ControlSize) {
         self.size = size;
-        self.style = selection_chrome_style(self.chrome, size, self.fill);
+        self.refresh_style();
     }
     pub fn fill(mut self, fill: bool) -> Self {
         self.fill = fill;
-        self.style = selection_chrome_style(self.chrome, self.size, fill);
+        self.refresh_style();
         self
+    }
+    /// Wrap horizontal segmented options; with `fill(true)`, each line is
+    /// divided equally without shortening its labels. Off by default.
+    pub fn wrap(mut self, wrap: bool) -> Self {
+        self.wrap = wrap;
+        self.refresh_style();
+        self
+    }
+
+    pub const fn wrap_value(&self) -> bool {
+        self.wrap
+    }
+
+    fn refresh_style(&mut self) {
+        self.style = selection_chrome_style(self.chrome, self.size, self.fill);
+        if self.wrap && self.chrome == SelectionChrome::Segmented {
+            self.style.control_height = None;
+            let layout = Arc::make_mut(&mut self.style.layout);
+            layout.width = Some(LengthSpec::Fill);
+            layout.flex_wrap = nana_ui_core::FlexWrap::Wrap;
+            layout.equal_wrap = self.fill;
+        }
     }
     pub fn style(mut self, style: NodeStyle) -> Self {
         self.style = style;
@@ -320,6 +344,7 @@ pub struct SegmentedOption {
     pub(crate) size: ControlSize,
     pub(crate) chrome: SelectionChrome,
     pub(crate) fill: bool,
+    pub(crate) wrap: bool,
     pub style: NodeStyle,
 }
 
@@ -333,6 +358,7 @@ impl SegmentedOption {
             size: ControlSize::Medium,
             chrome: SelectionChrome::Segmented,
             fill: false,
+            wrap: false,
             style: segmented_option_style(ControlSize::Medium, SelectionChrome::Segmented, false),
         }
     }
@@ -379,10 +405,38 @@ impl SegmentedOption {
         chrome: SelectionChrome,
         fill: bool,
     ) {
+        if self.size == size && self.chrome == chrome && self.fill == fill {
+            return;
+        }
         self.size = size;
         self.chrome = chrome;
         self.fill = fill;
-        self.style = segmented_option_style(size, chrome, fill);
+        self.refresh_style();
+    }
+
+    pub(crate) fn apply_wrap(&mut self, wrap: bool) {
+        let wrap = wrap && self.chrome == SelectionChrome::Segmented;
+        if self.wrap == wrap {
+            return;
+        }
+        self.wrap = wrap;
+        self.refresh_style();
+    }
+
+    fn refresh_style(&mut self) {
+        let hidden = self.style.layout.hidden;
+        self.style = segmented_option_style(self.size, self.chrome, self.fill);
+        Arc::make_mut(&mut self.style.layout).hidden = hidden;
+        if self.wrap {
+            let layout = Arc::make_mut(&mut self.style.layout);
+            // Natural widths decide line membership. The equal-line solver,
+            // rather than individual flex growth, assigns the used widths.
+            layout.width = None;
+            layout.flex_grow = None;
+            layout.flex_shrink = None;
+            layout.white_space_nowrap = false;
+            layout.overflow_wrap = Some(nana_ui_core::OverflowWrapSpec::Anywhere);
+        }
     }
 }
 
@@ -399,6 +453,9 @@ const SEGMENTED_TRACK_BORDER: f32 = nana_ui_core::HAIRLINE;
 /// rounder than the corner it sits in. Deriving the inset from the two values
 /// that produce it is what stops that happening again.
 const SEGMENTED_PILL_INSET: f32 = SEGMENTED_TRACK_PADDING + SEGMENTED_TRACK_BORDER;
+
+#[cfg(test)]
+mod wrap_tests;
 
 pub(crate) fn selection_chrome_style(
     chrome: SelectionChrome,
@@ -619,9 +676,14 @@ impl ComponentView for SegmentedOption {
             let layout = Arc::make_mut(&mut effective_style.layout);
             layout.border_radius = Some(radius);
             if matches!(self.chrome, SelectionChrome::Segmented) {
-                layout.height = Some(LengthSpec::Px(
+                let height = Some(LengthSpec::Px(
                     (self.size.height_in(metrics) - nana_ui_core::space::SM).max(0.0),
                 ));
+                if self.wrap {
+                    layout.min_height = height;
+                } else {
+                    layout.height = height;
+                }
             }
         }
         {

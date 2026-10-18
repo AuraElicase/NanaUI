@@ -1789,6 +1789,7 @@ pub(super) fn place_node_scoped(
         && !descendant_dependent_flow
         && (grid_recordable || !grid_2d)
         && !ifc
+        && !style.equal_wrap
         && floated.is_empty()
         && triggered_menu_overlay(nodes.world, id).is_none()
         && nodes.world.children_layout_style_is_local(id);
@@ -1871,7 +1872,27 @@ pub(super) fn place_node_scoped(
         plan_sequential &= justify == JustifySpec::Start && grid_tracks.is_none();
         let full_main = main_extent(content, direction);
         let mut line_slots = if wrapping {
-            if ifc && !writing.is_vertical() {
+            if style.equal_wrap {
+                pack_equal_wrap_lines(
+                    &flow,
+                    &child_sizes,
+                    direction,
+                    full_main,
+                    child_edge_base,
+                    gap,
+                    child_font_px,
+                    nodes,
+                )
+                .into_iter()
+                .map(|indices| LineBoxSlot {
+                    indices,
+                    main_start: 0.0,
+                    main_available: full_main,
+                    cross_y: 0.0,
+                    pin_cross: false,
+                })
+                .collect()
+            } else if ifc && !writing.is_vertical() {
                 pack_ifc_line_boxes(
                     &flow,
                     &child_sizes,
@@ -1946,7 +1967,18 @@ pub(super) fn place_node_scoped(
                 &tracks[start..end]
             });
             let mut line_adjust = None;
-            if let Some(tracks) = line_tracks.filter(|tracks| !tracks.is_empty()) {
+            if style.equal_wrap && wrapping {
+                equal_wrap_main_sizes(
+                    &line_flow,
+                    &mut line_sizes,
+                    direction,
+                    slot.main_available,
+                    child_edge_base,
+                    gap,
+                    child_font_px,
+                    nodes,
+                );
+            } else if let Some(tracks) = line_tracks.filter(|tracks| !tracks.is_empty()) {
                 apply_grid_main_sizes(
                     &line_flow,
                     &mut line_sizes,

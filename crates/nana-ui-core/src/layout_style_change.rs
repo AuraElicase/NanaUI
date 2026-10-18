@@ -253,6 +253,7 @@ layout_style_fields! {
     flex_reverse: FLOW_STRUCTURE,
     order: FLOW_STRUCTURE,
     flex_wrap: FLOW_STRUCTURE,
+    equal_wrap: FLOW_STRUCTURE,
     display: FLOW_STRUCTURE,
     box_sizing: SIZING_BOTH,
     position: POSITION,

@@ -930,7 +930,10 @@ impl RegisterableComponent for SegmentedControl {
         } else {
             SegmentedControl::new()
         };
-        component = component.size(spec.size).fill(flag_attr(spec, &["fill"]));
+        component = component
+            .size(spec.size)
+            .fill(flag_attr(spec, &["fill"]))
+            .wrap(flag_attr(spec, &["wrap"]));
         if !spec.label.is_empty() {
             component = component.label(Arc::<str>::from(spec.label));
         }

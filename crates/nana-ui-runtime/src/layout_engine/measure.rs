@@ -1245,6 +1245,21 @@ fn measure_node(
             child_font_px,
             nodes,
         )
+    } else if wrapping && style.equal_wrap {
+        measure_equal_wrap(
+            &flow_children,
+            &child_sizes,
+            direction,
+            content_available,
+            child_edge_base,
+            gap,
+            cross_gap,
+            viewport,
+            child_font_px,
+            nodes,
+            cache,
+            scope,
+        )?
     } else if wrapping {
         wrap_intrinsic_size(
             direction,
@@ -1491,7 +1506,7 @@ fn measure_node(
             && text_metrics.is_none()
             && nodes.world.standard_visual_ref(id).is_none()
             && ifc_local_measure(style, writing, &flow_children, child_ids.as_slice(), nodes)?;
-        let cacheable = (!descendant_dependent_flow || ifc_local)
+        let cacheable = !style.equal_wrap && (!descendant_dependent_flow || ifc_local)
             && (!grid_measure || recorded_grid.is_some())
             && (!ifc || ifc_local)
             && grid_tracks.is_none_or(|tracks| tracks.is_empty())
