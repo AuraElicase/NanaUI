@@ -1,8 +1,9 @@
 //! A dialog's entrance as the scene hands it to a painter.
 //!
 //! The modal frame's node paints the scrim and the card, and its motion
-//! layers are the card's: the card fades and moves on them, on the GPU,
-//! about its own centre. The scrim takes none of that; it fades by its own
+//! layers are the card's: the card moves on them about its own centre,
+//! while its destination group fades the card and its content together.
+//! The scrim takes none of that; it fades by its own
 //! opacity, which carries its backdrop blur with it.
 
 use std::time::Duration;
@@ -96,10 +97,26 @@ fn a_dialogs_card_moves_on_its_layer_and_its_scrim_fades_on_its_own() {
             .draw_primitive(PrimitiveId { node: id, slot: 10 })
             .unwrap();
         let opacity = (millis - 1000) as f32 / 160.0;
+        let groups = scene.primitive_opacity_groups(card.primitive);
+        assert_eq!(groups.len(), 1, "the card and its content fade together");
+        assert_eq!(groups[0].node, id);
         assert!(
-            (card.paint_opacity - opacity).abs() < 1e-3,
+            (groups[0].opacity - opacity).abs() < 1e-3,
             "{millis}: {}",
-            card.paint_opacity
+            groups[0].opacity
+        );
+        assert_eq!(
+            scene.opacity_groups(body.stable_id()).as_ref(),
+            groups.as_ref(),
+            "the body shares the card's fade group"
+        );
+        assert!(
+            scene.primitive_opacity_groups(scrim.primitive).is_empty(),
+            "the scrim stays outside the card's fade group"
+        );
+        assert_eq!(
+            card.paint_opacity, 1.0,
+            "no per-primitive fade inside the group"
         );
         assert!(
             (scrim.paint_opacity - scrim_opacity).abs() < 1e-3,
@@ -114,11 +131,11 @@ fn a_dialogs_card_moves_on_its_layer_and_its_scrim_fades_on_its_own() {
                 (0, 0),
                 "CPU presentation before promotion"
             );
-            assert!((encode.opacity - opacity).abs() < 1e-3);
         } else {
-            assert_ne!(encode.motion_ids.1, 0, "GPU fade after promotion");
-            assert!((encode.opacity * opacity - card.paint_opacity).abs() < 1e-3);
+            assert_ne!(encode.motion_ids.0, 0, "GPU transform after promotion");
         }
+        assert_eq!(encode.motion_ids.1, 0, "the group owns the fade");
+        assert_eq!(encode.opacity, 1.0, "the card must not fade twice");
         let expected = runtime
             .context()
             .world()
@@ -153,11 +170,12 @@ fn a_dialogs_card_moves_on_its_layer_and_its_scrim_fades_on_its_own() {
     let card_encode =
         scene.compositor_primitive_encode(card.primitive, card.transform, card.paint_opacity);
     let (card_transform, card_fade) = card_encode.motion_ids;
-    assert!(
-        card_transform != 0 && card_fade != 0,
-        "the card fades and moves on the GPU: {:?}",
-        card_encode.motion_ids
-    );
+    assert_ne!(card_transform, 0, "the card moves on the GPU");
+    assert_eq!(card_fade, 0, "the card's destination group owns the fade");
+    let groups = scene.primitive_opacity_groups(card.primitive);
+    assert_eq!(groups.len(), 1);
+    assert!((groups[0].opacity - 0.5).abs() < 1e-3);
+    assert_eq!(card_encode.opacity, 1.0);
     let centre = [
         surface.x + surface.width / 2.0,
         surface.y + surface.height / 2.0,
