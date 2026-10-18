@@ -2903,6 +2903,7 @@ dependencies = [
  "raw-window-handle",
  "url",
  "wayland-backend",
+ "wayland-sys",
  "webview2-com",
  "window-vibrancy",
  "windows",
