@@ -76,7 +76,7 @@ mod platform {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongPtrW, HWND_NOTOPMOST, HWND_TOPMOST,
         SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WINDOWPOS,
-        WM_NCDESTROY, WM_STYLECHANGED, WM_WINDOWPOSCHANGED, WM_WINDOWPOSCHANGING, WS_EX_TOPMOST,
+        WM_NCDESTROY, WM_WINDOWPOSCHANGING, WS_EX_TOPMOST,
     };
 
     pub(super) struct Binding {
@@ -86,21 +86,8 @@ mod platform {
     }
 
     struct LevelGuard {
-        window: HWND,
-        child: HWND,
         expected: Cell<Option<bool>>,
         attached: Cell<bool>,
-        syncing: Cell<bool>,
-    }
-
-    impl LevelGuard {
-        fn conform(&self) {
-            if self.expected.get() != Some(true) || self.syncing.replace(true) {
-                return;
-            }
-            conform_band(self.window, true);
-            self.syncing.set(false);
-        }
     }
 
     unsafe extern "system" fn level_proc(
@@ -122,8 +109,7 @@ mod platform {
         if message == WM_NCDESTROY {
             guard.attached.set(false);
             unsafe {
-                RemoveWindowSubclass(guard.window, Some(level_proc), id);
-                RemoveWindowSubclass(guard.child, Some(level_proc), id);
+                RemoveWindowSubclass(window, Some(level_proc), id);
             }
         }
         let result = unsafe { DefSubclassProc(window, message, wparam, lparam) };
@@ -134,7 +120,6 @@ mod platform {
         // not alter matching bands, move-only work or fullscreen-owned policy.
         if message == WM_WINDOWPOSCHANGING
             && guard.attached.get()
-            && window == guard.window
             && guard.expected.get() == Some(true)
             && unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST == 0
         {
@@ -142,12 +127,6 @@ mod platform {
             if pos.flags & SWP_NOZORDER == 0 {
                 pos.hwndInsertAfter = HWND_TOPMOST;
             }
-        }
-        if guard.attached.get()
-            && (message == WM_WINDOWPOSCHANGED
-                || (message == WM_STYLECHANGED && wparam == GWL_EXSTYLE as usize))
-        {
-            guard.conform();
         }
         result
     }
@@ -180,11 +159,8 @@ mod platform {
             let actual =
                 unsafe { GetWindowLongPtrW(parent, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST != 0;
             let guard = Rc::new(LevelGuard {
-                window: parent,
-                child: window,
                 expected: Cell::new(Some(actual)),
                 attached: Cell::new(true),
-                syncing: Cell::new(false),
             });
             if unsafe {
                 SetWindowSubclass(
@@ -198,22 +174,6 @@ mod platform {
                 return Err(AuxiliaryWindowError(
                     std::io::Error::last_os_error().to_string(),
                 ));
-            }
-            // Implicit owner-band changes can be reported on the owned
-            // window alone, so observe both ends of the native association.
-            if unsafe {
-                SetWindowSubclass(
-                    window,
-                    Some(level_proc),
-                    window as usize,
-                    Rc::as_ptr(&guard) as usize,
-                )
-            } == 0
-            {
-                let error = std::io::Error::last_os_error();
-                guard.attached.set(false);
-                unsafe { RemoveWindowSubclass(parent, Some(level_proc), window as usize) };
-                return Err(AuxiliaryWindowError(error.to_string()));
             }
             Ok(Self {
                 parent,
@@ -244,9 +204,6 @@ mod platform {
             if self.guard.attached.replace(false) {
                 unsafe {
                     RemoveWindowSubclass(self.parent, Some(level_proc), self.window as usize)
-                };
-                unsafe {
-                    RemoveWindowSubclass(self.window, Some(level_proc), self.window as usize)
                 };
             }
         }
