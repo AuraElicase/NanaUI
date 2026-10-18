@@ -2363,8 +2363,13 @@ fn scene_aux_window_attributes(
     parent: Option<&dyn winit::window::Window>,
     desktop: &Desktop,
     target: WindowSurfaceTarget,
+    initial_level: WindowLevel,
 ) -> Result<winit::window::WindowAttributes, String> {
-    let attributes = scene_window_attributes(settings, desktop, target).with_visible(false);
+    // Win32 can demote an entire owner group when a normal-band owned popup
+    // is created. Inherit before creating the HWND, not just before showing it.
+    let attributes = scene_window_attributes(settings, desktop, target)
+        .with_visible(false)
+        .with_window_level(display::winit_level(initial_level));
     if settings.modal && parent.is_none() {
         return Err("modal window requires a parent".into());
     }

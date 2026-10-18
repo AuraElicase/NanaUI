@@ -775,6 +775,18 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let parent = settings
             .parent
             .and_then(|parent| self.window(parent).cloned());
+        let requested_level = if settings.always_on_top {
+            WindowLevel::AlwaysOnTop
+        } else {
+            WindowLevel::Normal
+        };
+        let initial_level = auxiliary_level(
+            requested_level,
+            settings
+                .parent
+                .filter(|_| settings.role != WindowRole::Underlay)
+                .and_then(|id| self.window_contexts.get(&id).map(|host| host.level)),
+        );
         // This window's own target, from its own descriptor. A Settings
         // window, a dialog or a popup stays on the platform's window surface
         // even in a process whose main window is composed; the shared GPU
@@ -815,6 +827,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 parent.as_deref(),
                 &desktop,
                 attempt.resolved,
+                initial_level,
             )?;
             let window: Arc<dyn winit::window::Window> = Arc::from(
                 event_loop
@@ -946,14 +959,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         self.sync_document_reduced_motion(id);
         self.window_ids.insert(window.id(), id);
         self.apply_high_contrast(id);
-        let level = if settings.always_on_top {
-            WindowLevel::AlwaysOnTop
-        } else {
-            WindowLevel::Normal
-        };
-        let requested_level = level;
         let level = auxiliary_level(
-            level,
+            requested_level,
             settings
                 .parent
                 .filter(|_| auxiliary.is_some())

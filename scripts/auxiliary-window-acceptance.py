@@ -32,6 +32,7 @@ def main():
         "IsWindowVisible": ([w.HWND], w.BOOL),
         "IsIconic": ([w.HWND], w.BOOL),
         "GetForegroundWindow": ([], w.HWND),
+        "SetForegroundWindow": ([w.HWND], w.BOOL),
         "CreateWindowExW": ([w.DWORD, w.LPCWSTR, w.LPCWSTR, w.DWORD,
                              c.c_int, c.c_int, c.c_int, c.c_int,
                              w.HWND, w.HMENU, w.HINSTANCE, w.LPVOID], w.HWND),
@@ -59,6 +60,7 @@ def main():
     names = {"owner": "NanaUI auxiliary owner", "guide": "NanaUI auxiliary guide",
              "card": "NanaUI auxiliary card"}
     records = []
+    blocked = []
     outsider = None
 
     def snapshot():
@@ -75,7 +77,7 @@ def main():
                             "owner": user.GetWindow(handle, 4) if handle else None,
                             "topmost": bool(user.GetWindowLongPtrW(handle, -20) & 8),
                             "rank": order.index(handle) if handle in order else len(order)}
-        return {"windows": windows, "foreground": user.GetForegroundWindow(),
+        return {"windows": windows, "foreground": user.GetForegroundWindow(), "outsider": outsider,
                 "outsider_rank": order.index(outsider) if outsider in order else len(order)}
 
     def wait(name, predicate):
@@ -115,8 +117,16 @@ def main():
                                        0x90000000, 160, 160, 380, 320, None, None, None, None)
         assert outsider, "failed to create independent normal window"
         assert user.SetWindowPos(outsider, None, 0, 0, 0, 0, 0x13)  # NOACTIVATE|NOMOVE|NOSIZE
-        wait("other-application-above-normal-windows", lambda s: all(
-            s["outsider_rank"] < v["rank"] for v in s["windows"].values()))
+        # A real application switch activates the other window. A background
+        # NOACTIVATE raise alone can be rejected by foreground restrictions.
+        user.SetForegroundWindow(outsider)
+        if user.GetForegroundWindow() != outsider:
+            blocked.append({"step": "other-application-above-normal-windows",
+                            "reason": "Windows rejected the external foreground request",
+                            **snapshot()})
+        else:
+            wait("other-application-above-normal-windows", lambda s: all(
+                s["outsider_rank"] < v["rank"] for v in s["windows"].values()))
         command("top")
         wait("owner-topmost-inherited", lambda s: above(s) and
              all(v["topmost"] for v in s["windows"].values()))
@@ -146,9 +156,9 @@ def main():
         wait_closed = snapshot()
         assert not any(v["handle"] for v in wait_closed["windows"].values())
         records.append({"step": "owner-close-releases-all-children", **wait_closed})
-        report = {"pass": True, "platform": "windows", "steps": records}
+        report = {"pass": not blocked, "platform": "windows", "steps": records, "blocked": blocked}
     except Exception as error:
-        report = {"pass": False, "error": str(error), "steps": records}
+        report = {"pass": False, "error": str(error), "steps": records, "blocked": blocked}
     finally:
         if process.poll() is None:
             command("quit")
@@ -161,7 +171,7 @@ def main():
             user.DestroyWindow(outsider)
     (args.out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps({"pass": report["pass"], "steps": len(records), "out": str(args.out)}))
-    return 0 if report["pass"] else 1
+    return 0 if report["pass"] else (2 if "error" not in report else 1)
 
 
 if __name__ == "__main__":
