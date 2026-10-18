@@ -193,8 +193,9 @@ fn glyph_look(fx: u32, ordinal: u32) -> GlyphLook {
         let limit = text_glyph_fx[fx + 4u];
         let start_secs = text_glyph_fx[fx + 2u];
         let start_fraction = bitcast<f32>(text_glyph_fx[fx + 3u]);
-        let since = f32(i32(globals.motion.x - start_secs))
-            + (bitcast<f32>(globals.motion.y) - start_fraction);
+        let clock_secs=select(globals.motion.x,text_glyph_fx[fx+21u],text_glyph_fx[fx+20u]!=0u);
+        let clock_fraction=select(bitcast<f32>(globals.motion.y),bitcast<f32>(text_glyph_fx[fx+22u]),text_glyph_fx[fx+20u]!=0u);
+        let since = f32(i32(clock_secs - start_secs)) + clock_fraction - start_fraction;
         let local = since - at;
         // Unscheduled (infinite) or held back by the limit, or not yet due.
         if ordinal >= limit || !(local >= 0.0) {
@@ -355,4 +356,27 @@ fn text_clip_w(run: TextRun, local: vec2<f32>) -> f32 {
     let p = (local + run.origin) / run.raster;
     let w = e.z * p.x + e.w * p.y + 1.0;
     return select(1.0, w, w > 1.0e-6);
+}
+
+// Entry samples the reveal clock; exit samples the independent retirement clock.
+fn text_transition_progress(fx:u32, ordinal_plus_one:u32)->vec2<f32> {
+    var enter=1.;
+    if text_glyph_fx[fx+12u]!=0u && (text_glyph_fx[fx]&1u)!=0u {
+        let secs=select(globals.motion.x,text_glyph_fx[fx+21u],text_glyph_fx[fx+20u]!=0u);
+        let fraction=select(bitcast<f32>(globals.motion.y),bitcast<f32>(text_glyph_fx[fx+22u]),text_glyph_fx[fx+20u]!=0u);
+        let since=f32(i32(secs-text_glyph_fx[fx+27u]))+fraction-bitcast<f32>(text_glyph_fx[fx+28u]);
+        let ordinal=select(ordinal_plus_one-1u,0u,text_glyph_fx[fx+14u]!=0u);
+        let base=text_glyph_fx[fx+9u];
+        let at=bitcast<f32>(text_glyph_fx[base+ordinal*2u+1u]);
+        enter=mask_progress(since-at,bitcast<f32>(text_glyph_fx[fx+16u]));
+    }
+    let since_exit=f32(i32(globals.motion.x-text_glyph_fx[fx+17u]))+bitcast<f32>(globals.motion.y)-bitcast<f32>(text_glyph_fx[fx+18u]);
+    let exit=mask_progress(since_exit,bitcast<f32>(text_glyph_fx[fx+19u]));
+    return vec2<f32>(enter,exit);
+}
+
+fn mask_progress(local:f32,duration:f32)->f32 {
+    if local<0. {return 0.;}
+    if duration<=0. {return 1.;}
+    return clamp(local/duration,0.,1.);
 }

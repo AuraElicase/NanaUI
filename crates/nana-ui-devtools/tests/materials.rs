@@ -188,3 +188,90 @@ fn material_texture_replacements_change_pixels_without_changing_the_contract() {
     assert!(at(&a, 70, 35)[0] > 240);
     assert!(at(&b, 70, 35)[2] > 240);
 }
+
+#[test]
+fn presentation_masks_preserve_color_and_erase_the_whole_text_target() {
+    use nana_ui::runtime::{MutationQueue, NodeStyle};
+    use nana_ui_core::{
+        GlyphPresentation, PresentationMask, PresentationMaskSpace, TextTransitions,
+    };
+    use std::time::Duration;
+    let id = DocumentId::new(1).unwrap();
+    let mask = MaterialRef::new(MaterialProgram::new(
+        "fn material(i:MaterialInput)->vec4<f32>{return vec4<f32>(1.,0.,0.,select(1.,0.,i.uv.x<i.progress));}",
+    ));
+    let mut builder = RichText::builder();
+    builder.push("彩铅 ABC 😀\n第二行 ABC", RichSpanStyle::new());
+    builder.ruby("文字", "もじ");
+    builder.object(nana_ui_core::RichObject::image(100,"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",24.,24.));
+    let value = builder.build();
+    let mut style = NodeStyle::default();
+    let layout = Arc::make_mut(&mut style.layout);
+    layout.font_size = Some(28.);
+    layout.color = Some([0., 0.1, 0.8, 1.]);
+    layout.paint.text_stroke = Some(nana_ui_core::TextStrokeSpec {
+        width: 1.,
+        color: Some([0., 0., 0., 1.]),
+        paint_color: None,
+    });
+    let mut doc = RuntimeDocument::new(id);
+    let mounted = doc
+        .context_mut()
+        .mount_view_root(id, move || {
+            widget(RichTextView::new(value.clone()).style(style.clone()))
+        })
+        .unwrap();
+    let node = mounted.roots()[0];
+    let mut session = RuntimeAgentSession::new(doc, 240, 130).unwrap();
+    session.set_clear(Some([0.; 4]));
+    let native = session.screenshot_rgba().unwrap().1;
+    let mut presentation = GlyphPresentation::default();
+    presentation.transitions = TextTransitions {
+        exit: Some(PresentationMask {
+            material: mask,
+            space: PresentationMaskSpace::Target,
+            start: Duration::ZERO,
+            duration: Duration::from_secs(1),
+        }),
+        viewport: Some(nana_ui_core::LogicalRect::new(0., 0., 240., 130.)),
+        ..Default::default()
+    };
+    let mut queue = MutationQueue::new();
+    queue.set_glyph_presentation(node, Some(presentation));
+    session
+        .document_mut()
+        .context_mut()
+        .commit_mutations(queue)
+        .unwrap();
+    let first = session.screenshot_rgba().unwrap().1;
+    assert_eq!(first, native, "neutral mask changed native RGB or coverage");
+    session
+        .document_mut()
+        .sync_presentation_clock(Duration::from_millis(500));
+    let halfway = session.screenshot_rgba().unwrap().1;
+    let mut visible = 0;
+    for y in 0..130 {
+        for x in 0..240 {
+            let p = (y * 240 + x) * 4;
+            if x < 119 {
+                assert_eq!(halfway[p + 3], 0, "left edge did not erase");
+            } else if x > 121 && native[p + 3] > 0 {
+                visible += 1;
+                assert_eq!(
+                    &halfway[p..p + 4],
+                    &native[p..p + 4],
+                    "mask recolored surviving text at {x},{y}"
+                );
+            }
+        }
+    }
+    assert!(visible > 30, "right side vanished prematurely");
+    session
+        .document_mut()
+        .sync_presentation_clock(Duration::from_secs(1));
+    let erased = session.screenshot_rgba().unwrap().1;
+    assert!(
+        erased.chunks_exact(4).all(|p| p[3] == 0),
+        "glyph, ruby, stroke or emoji survived final mask"
+    );
+}

@@ -122,6 +122,8 @@ struct VsOut {
     @location(7) material_position: vec2<f32>,
     @location(8) glyph_uv: vec2<f32>,
     @location(9) @interpolate(flat) glyph_size: vec2<f32>,
+    @location(10) @interpolate(flat) transition: vec2<u32>,
+    @location(11) text_position: vec2<f32>,
 }
 
 @vertex
@@ -195,6 +197,8 @@ fn vs_main(vertex: VsIn) -> VsOut {
     var out: VsOut;
     out.position = globals.transform * vec4<f32>(world * clip_w, 0.0, clip_w);
     out.color = color;
+    out.transition = vec2<u32>(run.fx, ordinal);
+    out.text_position = local / run.raster;
     out.material_position = vec2<f32>(offset) / run.raster;
     out.glyph_uv = vec2<f32>(corner);
     out.glyph_size = vec2<f32>(f32(width), f32(height)) / run.raster;
@@ -512,7 +516,7 @@ fn text_layout_key() -> u64 {
         nana_gpu::LogicalBinding::new(
             4,
             nana_gpu::LogicalBindingType::StorageBuffer { read_only: true },
-            vertex,
+            vertex_fragment,
         )
         .min_size(FX_WORD_BYTES),
     ])
@@ -590,7 +594,11 @@ pub(super) struct TextGpu {
     materials: std::collections::HashMap<u64, std::sync::Weak<nana_ui_core::MaterialInstance>>,
     material_bindings:
         std::collections::HashMap<u64, std::sync::Arc<super::super::material::MaterialBinding>>,
-    material_pipelines: std::collections::HashMap<(u64, bool), Option<wgpu::RenderPipeline>>,
+    material_pipelines: std::collections::HashMap<([u64; 3], bool), Option<wgpu::RenderPipeline>>,
+    combinations: std::collections::HashMap<u64, [u64; 3]>,
+    combination_programs: std::collections::HashMap<u64, [u64; 3]>,
+    bundles: std::collections::HashMap<u64, wgpu::BindGroup>,
+    identity: nana_ui_core::MaterialRef,
     material_device: std::sync::Arc<super::super::material::MaterialDevice>,
     pipeline: wgpu::RenderPipeline,
     /// The dual-source program, while subpixel text is on.
@@ -658,7 +666,7 @@ impl TextGpu {
                 nana_gpu::LogicalBinding::new(
                     4,
                     nana_gpu::LogicalBindingType::StorageBuffer { read_only: true },
-                    vertex,
+                    vertex_fragment,
                 )
                 .min_size(FX_WORD_BYTES),
             ])
@@ -697,7 +705,7 @@ impl TextGpu {
                     // Only the vertex stage reads a glyph: every fragment of it
                     // gets what it needs through the varyings.
                     storage_entry(3, wgpu::ShaderStages::VERTEX, INSTANCE_BYTES),
-                    storage_entry(4, wgpu::ShaderStages::VERTEX, FX_WORD_BYTES),
+                    storage_entry(4, wgpu::ShaderStages::VERTEX_FRAGMENT, FX_WORD_BYTES),
                 ],
             })
         };
@@ -744,6 +752,12 @@ impl TextGpu {
             materials: Default::default(),
             material_bindings: Default::default(),
             material_pipelines: Default::default(),
+            combinations: Default::default(),
+            combination_programs: Default::default(),
+            bundles: Default::default(),
+            identity: nana_ui_core::MaterialRef::new(nana_ui_core::MaterialProgram::new(
+                "fn material(i:MaterialInput)->vec4<f32>{return i.color;}",
+            )),
             material_device: super::super::material::MaterialDevice::shared(device, policy),
             pipeline,
             dual_source: None,
@@ -759,6 +773,17 @@ impl TextGpu {
     pub(super) fn register_material(&mut self, material: &nana_ui_core::MaterialRef) {
         self.materials.insert(material.key(), material.downgrade());
     }
+    pub(super) fn combination(&mut self, keys: [u64; 3]) -> u64 {
+        if keys == [0; 3] {
+            return 0;
+        }
+        use std::hash::{Hash, Hasher};
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        keys.hash(&mut hash);
+        let key = hash.finish();
+        self.combinations.insert(key, keys);
+        key
+    }
     pub(super) fn prepare_materials(
         &mut self,
         device: &wgpu::Device,
@@ -766,43 +791,102 @@ impl TextGpu {
         atlas: &GlyphAtlasManager,
         work: Option<&GpuWorkSink>,
     ) {
-        self.materials.retain(|_, value| value.strong_count() > 0);
+        self.materials.retain(|_, v| v.strong_count() > 0);
         self.material_bindings
-            .retain(|key, _| self.materials.contains_key(key));
-        let programs: std::collections::HashSet<_> = self
-            .materials
-            .values()
-            .filter_map(nana_ui_core::MaterialRef::upgrade)
-            .map(|m| m.program().key())
-            .collect();
-        self.material_pipelines
-            .retain(|(key, _), _| programs.contains(key));
-        let dual = self.dual_source.is_some();
-        for (key, weak) in &self.materials {
-            let Some(material) = nana_ui_core::MaterialRef::upgrade(weak) else {
-                continue;
-            };
-            if !self.material_bindings.contains_key(key) {
-                if let Some(binding) = self.material_device.prepare(device, queue, &material, work)
-                {
-                    self.material_bindings.insert(*key, binding);
+            .retain(|k, _| self.materials.contains_key(k));
+        self.combinations
+            .retain(|_, ks| ks.iter().all(|k| *k == 0 || self.materials.contains_key(k)));
+        self.bundles
+            .retain(|k, _| self.combinations.contains_key(k));
+        self.combination_programs
+            .retain(|k, _| self.combinations.contains_key(k));
+        self.materials
+            .insert(self.identity.key(), self.identity.downgrade());
+        let fallback = self
+            .material_bindings
+            .entry(self.identity.key())
+            .or_insert_with(|| {
+                self.material_device
+                    .prepare(device, queue, &self.identity, work)
+                    .expect("identity material")
+            })
+            .clone();
+        let mut active = std::collections::HashSet::new();
+        for (key, keys) in &self.combinations {
+            let materials: [nana_ui_core::MaterialRef; 3] = std::array::from_fn(|i| {
+                self.materials
+                    .get(&keys[i])
+                    .and_then(nana_ui_core::MaterialRef::upgrade)
+                    .unwrap_or_else(|| self.identity.clone())
+            });
+            let dual = self.dual_source.is_some();
+
+            let mut valid = [true; 3];
+            let bindings = std::array::from_fn(|i| {
+                let m = &materials[i];
+                if let Some(binding) = self.material_bindings.get(&m.key()) {
+                    return binding.clone();
                 }
-            }
-            self.material_pipelines.entry((material.program().key(), dual)).or_insert_with(|| {
-                let author = super::super::material::source(material.program())?;
-                let native = if dual { TEXT_SHADER_DUAL_SOURCE } else { TEXT_SHADER };
-                let source = format!("{native}\n{author}")
-                    .replace("out.color = input.color.rgb;", "let nm = nm_text_material(nm_text_MaterialInput(input.material_position, input.glyph_uv, input.glyph_size, input.glyph_uv, vec4<f32>(input.color.rgb, 1.))); out.color = nm.rgb;")
-                    .replace("input.color.a * corrected * clip_cover", "input.color.a * clamp(nm.a, 0., 1.) * corrected * clip_cover")
-                    .replace("* (input.color.a * clip_cover)", "* (input.color.a * clamp(nm.a, 0., 1.) * clip_cover)");
-                let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label:Some("text material"), bind_group_layouts:&[Some(&self.globals_layout), Some(atlas.layout()), Some(&self.material_device.layout)], immediate_size:0 });
-                let blend = if dual {
-                    let channel=wgpu::BlendComponent { src_factor:wgpu::BlendFactor::Src1, dst_factor:wgpu::BlendFactor::OneMinusSrc1, operation:wgpu::BlendOperation::Add };
-                    wgpu::BlendState { color:channel, alpha:channel }
-                } else { wgpu::BlendState::ALPHA_BLENDING };
-                self.material_device.pipeline((if dual {3} else {2}, self.format, 1, material.program().key(), 0), &[material.program()], device, || build_pipeline(device, &layout, self.format, &source, blend))
+                if let Some(binding) = self.material_device.prepare(device, queue, m, work) {
+                    self.material_bindings.insert(m.key(), binding.clone());
+                    binding
+                } else {
+                    valid[i] = false;
+                    fallback.clone()
+                }
+            });
+            let materials = std::array::from_fn::<_, 3, _>(|i| {
+                if valid[i] {
+                    materials[i].clone()
+                } else {
+                    self.identity.clone()
+                }
+            });
+            let programs = materials.each_ref().map(|m| m.program().key());
+            active.insert((programs, dual));
+            self.combination_programs.insert(*key, programs);
+            self.bundles
+                .entry(*key)
+                .or_insert_with(|| self.material_device.bundle(device, &bindings));
+            self.material_pipelines.entry((programs,dual)).or_insert_with(|| {
+                let native=if dual {TEXT_SHADER_DUAL_SOURCE}else{TEXT_SHADER};
+                let mut source=native.replace("if duration > 0.0 {", "if duration > 0.0 && text_glyph_fx[fx+12u]==0u {");
+                for (i,m) in materials.iter().enumerate() {
+                    source.push_str(&super::super::material::program_source_at(m.program(), &["nm_text_","nm_enter_","nm_exit_"][i],2,i as u32*4)?);
+                }
+                source=source.replace("out.color = input.color.rgb;", "let nm = nm_text_material(nm_text_MaterialInput(input.material_position,input.glyph_uv,input.glyph_size,input.glyph_uv,vec4<f32>(input.color.rgb,1.),1.,input.text_position,vec2<f32>(1.))); out.color = nm.rgb;")
+                    .replace("input.color.a * corrected * clip_cover", "input.color.a * clamp(nm.a,0.,1.) * corrected * clip_cover")
+                    .replace("* (input.color.a * clip_cover)", "* (input.color.a * clamp(nm.a,0.,1.) * clip_cover)")
+                    .replace("fn shade(input: VsOut)", "fn native_shade(input: VsOut)");
+                source.push_str(r#"
+fn shade(input:VsOut)->TextShade {
+    var result=native_shade(input);
+    let fx=input.transition.x;
+    if fx != 0u {
+        let progress=text_transition_progress(fx,input.transition.y);
+        let viewport=vec4<f32>(bitcast<f32>(text_glyph_fx[fx+23u]),bitcast<f32>(text_glyph_fx[fx+24u]),bitcast<f32>(text_glyph_fx[fx+25u]),bitcast<f32>(text_glyph_fx[fx+26u]));
+        let point=input.text_position-viewport.xy;
+        var mask=1.;
+        if text_glyph_fx[fx+12u]!=0u {
+            let whole=text_glyph_fx[fx+14u]!=0u;
+            mask*=clamp(nm_enter_material(nm_enter_MaterialInput(select(input.material_position,point,whole),select(input.glyph_uv,point/max(viewport.zw,vec2<f32>(1.)),whole),select(input.glyph_size,viewport.zw,whole),input.glyph_uv,vec4<f32>(input.color.rgb,1.),progress.x,point,viewport.zw)).a,0.,1.);
+        }
+        if text_glyph_fx[fx+13u]!=0u {
+            let whole=text_glyph_fx[fx+15u]!=0u;
+            mask*=clamp(nm_exit_material(nm_exit_MaterialInput(select(input.material_position,point,whole),select(input.glyph_uv,point/max(viewport.zw,vec2<f32>(1.)),whole),select(input.glyph_size,viewport.zw,whole),input.glyph_uv,vec4<f32>(input.color.rgb,1.),progress.y,point,viewport.zw)).a,0.,1.);
+        }
+        result.alpha*=mask;
+    }
+    return result;
+}
+"#);
+                let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {label:Some("text color and transition materials"),bind_group_layouts:&[Some(&self.globals_layout),Some(atlas.layout()),Some(&self.material_device.text_layout)],immediate_size:0});
+                let blend=if dual {let c=wgpu::BlendComponent{src_factor:wgpu::BlendFactor::Src1,dst_factor:wgpu::BlendFactor::OneMinusSrc1,operation:wgpu::BlendOperation::Add};wgpu::BlendState{color:c,alpha:c}}else{wgpu::BlendState::ALPHA_BLENDING};
+                use std::hash::{Hash,Hasher};let mut hash=std::collections::hash_map::DefaultHasher::new();programs.hash(&mut hash);
+                self.material_device.pipeline((if dual{13}else{12},self.format,1,hash.finish(),0),&materials.iter().map(|m|m.program()).collect::<Vec<_>>(),device,||build_pipeline(device,&layout,self.format,&source,blend))
             });
         }
+        self.material_pipelines.retain(|k, _| active.contains(k));
     }
 
     pub(super) fn instance_slots(&self) -> u32 {
@@ -1180,21 +1264,18 @@ impl TextGpu {
         if segment.count == 0 {
             return;
         }
-        let custom = self
-            .materials
-            .get(&segment.material)
-            .and_then(nana_ui_core::MaterialRef::upgrade)
-            .and_then(|material| {
-                let pipeline = self
-                    .material_pipelines
-                    .get(&(material.program().key(), self.dual_source.is_some()))?
-                    .as_ref()?;
-                let binding = self.material_bindings.get(&segment.material)?;
-                Some((pipeline, binding))
-            });
+        let custom = self.combinations.get(&segment.material).and_then(|_keys| {
+            let programs = *self.combination_programs.get(&segment.material)?;
+            Some((
+                self.material_pipelines
+                    .get(&(programs, self.dual_source.is_some()))?
+                    .as_ref()?,
+                self.bundles.get(&segment.material)?,
+            ))
+        });
         if let Some((pipeline, binding)) = custom {
             pass.set_pipeline(pipeline);
-            pass.set_bind_group(2, &binding.group, &[]);
+            pass.set_bind_group(2, binding, &[]);
         } else {
             pass.set_pipeline(self.dual_source.as_ref().unwrap_or(&self.pipeline));
         }

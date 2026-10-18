@@ -66,6 +66,8 @@ struct QuadPaintData {
     border_color_right: vec4<f32>,
     border_color_bottom: vec4<f32>,
     border_color_left: vec4<f32>,
+    presentation0: vec4<f32>, presentation1: vec4<f32>,
+    target0: vec4<f32>, target1: vec4<f32>,
 }
 
 fn gradient_axis(angle_deg: f32) -> vec2<f32> {

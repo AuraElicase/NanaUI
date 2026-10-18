@@ -25,6 +25,7 @@ pub(super) struct MaterialDevice {
     interface: ShaderInterface,
     images: Mutex<HashMap<(usize, u32, u32), Arc<MaterialImage>>>,
     pub layout: wgpu::BindGroupLayout,
+    pub text_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     bindings: Mutex<HashMap<u64, Weak<MaterialBinding>>>,
     rejected: Mutex<HashMap<u64, Weak<nana_ui_core::MaterialInstance>>>,
@@ -88,6 +89,34 @@ impl MaterialDevice {
             interface,
             images: Mutex::new(HashMap::new()),
             layout,
+            text_layout: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("text material bundle"),
+                entries: &(0..3)
+                    .flat_map(|slot| {
+                        let base = slot * 4;
+                        [
+                            wgpu::BindGroupLayoutEntry {
+                                binding: base,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                    has_dynamic_offset: false,
+                                    min_binding_size: wgpu::BufferSize::new(16),
+                                },
+                                count: None,
+                            },
+                            texture_entry(base + 1),
+                            texture_entry(base + 2),
+                            wgpu::BindGroupLayoutEntry {
+                                binding: base + 3,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                        ]
+                    })
+                    .collect::<Vec<_>>(),
+            }),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 mag_filter: wgpu::FilterMode::Linear,
                 min_filter: wgpu::FilterMode::Linear,
@@ -102,6 +131,42 @@ impl MaterialDevice {
             devices.insert(policy.generation(), Arc::downgrade(&result));
         }
         result
+    }
+    pub(super) fn bundle(
+        &self,
+        device: &wgpu::Device,
+        bindings: &[Arc<MaterialBinding>; 3],
+    ) -> wgpu::BindGroup {
+        let entries: Vec<_> = bindings
+            .iter()
+            .enumerate()
+            .flat_map(|(i, b)| {
+                let at = i as u32 * 4;
+                [
+                    wgpu::BindGroupEntry {
+                        binding: at,
+                        resource: b._parameters.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: at + 1,
+                        resource: wgpu::BindingResource::TextureView(&b._textures[0].view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: at + 2,
+                        resource: wgpu::BindingResource::TextureView(&b._textures[1].view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: at + 3,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ]
+            })
+            .collect();
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("text materials and masks"),
+            layout: &self.text_layout,
+            entries: &entries,
+        })
     }
     pub(super) fn pipeline(
         &self,
@@ -297,16 +362,20 @@ pub(super) fn compile(
     }
 }
 
-pub(super) fn source(program: &nana_ui_core::MaterialProgram) -> Option<String> {
-    program_source(program, "nm_text_", 2)
-}
-
 /// Namespace the WGSL IR, rather than replacing text: a helper named `color`
 /// must never rename `input.color`, and comments/local names are irrelevant.
 pub(super) fn program_source(
     program: &nana_ui_core::MaterialProgram,
     prefix: &str,
     group: u32,
+) -> Option<String> {
+    program_source_at(program, prefix, group, 0)
+}
+pub(super) fn program_source_at(
+    program: &nana_ui_core::MaterialProgram,
+    prefix: &str,
+    group: u32,
+    offset: u32,
 ) -> Option<String> {
     let result = (|| {
         if program.source.len() > 64 * 1024 {
@@ -375,6 +444,7 @@ pub(super) fn program_source(
                     return None;
                 }
                 binding.group = group;
+                binding.binding += offset;
             }
         }
         let info = naga::valid::Validator::new(

@@ -28,7 +28,10 @@ pub mod layout_frontier;
 mod layout_style_api;
 pub mod layout_style_change;
 pub mod material;
-pub use material::{MATERIAL_ABI, MaterialInstance, MaterialProgram, MaterialRef, MaterialTexture};
+pub use material::{
+    MATERIAL_ABI, MaterialInstance, MaterialProgram, MaterialRef, MaterialTexture,
+    PresentationMask, PresentationMaskSample, PresentationMaskSpace,
+};
 pub mod menu;
 pub mod menu_bar;
 pub mod motion;
@@ -128,7 +131,7 @@ pub use motion::{
     MotionInterrupt, MotionSample, MotionTargetId, MotionTiming, MotionTo, MotionTrack,
     MotionTrackId, MotionValue, MotionValueKind, MotionWorkCounters, PresentationOverlay,
     PresentationPair, PresentationSlot, PresentationStore, ProgressSample, RevealSchedule, Spring,
-    SpringParams, StepJump, TimedProgress, Timeline, classify_animatable_property,
+    SpringParams, StepJump, TextTransitions, TimedProgress, Timeline, classify_animatable_property,
     compile_motion_descriptor, cpu_fallback_reason, decode_motion_track, evaluate_descriptor,
     evaluate_glyph, evaluate_glyph_chain, evaluate_progress, evaluate_track, evaluate_track_at,
     invert_flip_translate, retarget_track, track_completion_deadline,

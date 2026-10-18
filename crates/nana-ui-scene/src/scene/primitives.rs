@@ -613,6 +613,7 @@ impl UiScene {
                                 let placed = layout.layout.objects.get(index)?;
                                 Some(crate::scene::GlyphObject {
                                     slot: primitive.id.slot,
+                                    target: text_bounds,
                                     ordinal: content
                                         .get(..placed.offset)
                                         .map_or(0, |before| before.graphemes(true).count())

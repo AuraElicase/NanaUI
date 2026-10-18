@@ -144,9 +144,13 @@ struct QuadPaintData {
     border_color_right: [f32; 4],
     border_color_bottom: [f32; 4],
     border_color_left: [f32; 4],
+    presentation0: [f32; 4],
+    presentation1: [f32; 4],
+    target0: [f32; 4],
+    target1: [f32; 4],
 }
 
-const _: () = assert!(std::mem::size_of::<QuadPaintData>() == 464);
+const _: () = assert!(std::mem::size_of::<QuadPaintData>() == 528);
 const _: () = assert!(std::mem::align_of::<QuadPaintData>() == 4);
 
 #[repr(C)]
@@ -163,7 +167,7 @@ pub(super) struct QuadPipeline {
     material_device: std::sync::Arc<super::material::MaterialDevice>,
     material_bindings: HashMap<u64, std::sync::Arc<super::material::MaterialBinding>>,
     material_refs: HashMap<u64, std::sync::Weak<nana_ui_core::MaterialInstance>>,
-    material_pipelines: HashMap<(u64, u64, u32), Option<wgpu::RenderPipeline>>,
+    material_pipelines: HashMap<(u64, u64, u32, bool), Option<wgpu::RenderPipeline>>,
     format: wgpu::TextureFormat,
     pipeline: wgpu::RenderPipeline,
     pipeline_msaa: wgpu::RenderPipeline,
@@ -183,7 +187,7 @@ pub(super) struct QuadPipeline {
     pending_paint: Vec<QuadPaintData>,
     uploaded_paint: Vec<QuadPaintData>,
     pending_urls: Vec<Option<String>>,
-    pending_materials: Vec<(u64, u64)>,
+    pending_materials: Vec<(u64, u64, bool)>,
     motion_layout: wgpu::BindGroupLayout,
     #[allow(
         dead_code,
@@ -432,27 +436,43 @@ impl QuadPipeline {
         device: &wgpu::Device,
         background: Option<&nana_ui_core::MaterialRef>,
         border: Option<&nana_ui_core::MaterialRef>,
+        masked: bool,
     ) {
         let bg = background.map_or(0, |m| m.program().key());
         let br = border.map_or(0, |m| m.program().key());
         for samples in [1, 4] {
-            self.material_pipelines.entry((bg,br,samples)).or_insert_with(|| {
+            self.material_pipelines.entry((bg,br,samples,masked)).or_insert_with(|| {
                 if background.is_some_and(|m| m.program().source.len()>65536) || border.is_some_and(|m| m.program().source.len()>65536) { return None; }
                 let mut source = QUAD_SHADER.to_owned();
-                if let Some(material) = background {
+                if let Some(material) = background.filter(|_|!masked) {
                     let author = super::material::program_source(material.program(), "nm_bg_", 2)?;
                     source.push_str(&author);
-                    source = source.replace("var mixed_color: vec4<f32> = compose_quad_fill(input.color, local_uv, paint);", "var mixed_color: vec4<f32> = compose_quad_fill(input.color, local_uv, paint); let nm_bg = nm_bg_material(nm_bg_MaterialInput((input.local_pos - input.pos) / globals.scale, local_uv, input.scale / globals.scale, vec2<f32>(0.), vec4<f32>(mixed_color.rgb / max(mixed_color.a, 0.00001), 1.))); mixed_color = vec4<f32>(nm_bg.rgb * clamp(nm_bg.a, 0., 1.), clamp(nm_bg.a, 0., 1.)) * mixed_color.a;");
+                    source = source.replace("var mixed_color: vec4<f32> = compose_quad_fill(input.color, local_uv, paint);", "var mixed_color: vec4<f32> = compose_quad_fill(input.color, local_uv, paint); let nm_bg = nm_bg_material(nm_bg_MaterialInput((input.local_pos - input.pos) / globals.scale, local_uv, input.scale / globals.scale, vec2<f32>(0.), vec4<f32>(mixed_color.rgb / max(mixed_color.a, 0.00001), 1.), 1., vec2<f32>(0.), input.scale / globals.scale)); mixed_color = vec4<f32>(nm_bg.rgb * clamp(nm_bg.a, 0., 1.), clamp(nm_bg.a, 0., 1.)) * mixed_color.a;");
                 }
-                if let Some(material) = border {
+                if let Some(material) = border.filter(|_|!masked) {
                     let author = super::material::program_source(material.program(), "nm_br_", 3)?;
                     source.push_str(&author);
-                    source = source.replace("var cover = clamp(0.5 + inner_dist, 0.0, 1.0);", "let nm_br = nm_br_material(nm_br_MaterialInput((input.local_pos - input.pos) / globals.scale, local_uv, input.scale / globals.scale, vec2<f32>(0.), vec4<f32>(edge_color.rgb / max(edge_color.a, 0.00001), 1.))); edge_color = vec4<f32>(nm_br.rgb * clamp(nm_br.a, 0., 1.), clamp(nm_br.a, 0., 1.)) * edge_color.a; var cover = clamp(0.5 + inner_dist, 0.0, 1.0);");
+                    source = source.replace("var cover = clamp(0.5 + inner_dist, 0.0, 1.0);", "let nm_br = nm_br_material(nm_br_MaterialInput((input.local_pos - input.pos) / globals.scale, local_uv, input.scale / globals.scale, vec2<f32>(0.), vec4<f32>(edge_color.rgb / max(edge_color.a, 0.00001), 1.), 1., vec2<f32>(0.), input.scale / globals.scale)); edge_color = vec4<f32>(nm_br.rgb * clamp(nm_br.a, 0., 1.), clamp(nm_br.a, 0., 1.)) * edge_color.a; var cover = clamp(0.5 + inner_dist, 0.0, 1.0);");
+                }
+                if masked {
+                    let mut expression=String::from("1.");
+                    for (i,m) in [background,border].into_iter().enumerate() {
+                        if let Some(m)=m {
+                            let prefix=format!("nm_mask{i}_");
+                            source.push_str(&super::material::program_source(m.program(),&prefix,2+i as u32)?);
+                            expression.push_str(&format!(" * clamp(nm_mask{i}_material(nm_mask{i}_MaterialInput(select(mask_local,mask_local-paint.target{i}.xy,paint.presentation{i}.y>0.),select(local_uv,(mask_local-paint.target{i}.xy)/max(paint.target{i}.zw,vec2<f32>(1.)),paint.presentation{i}.y>0.),select(input.scale/globals.scale,paint.target{i}.zw,paint.presentation{i}.y>0.),local_uv,vec4<f32>(1.),paint.presentation{i}.x,mask_local-paint.target{i}.xy,paint.target{i}.zw)).a,0.,1.)"));
+                        }
+                    }
+                    source=source.replace("let paint = paint_buffer.items[input.instance_index];",&format!("let paint = paint_buffer.items[input.instance_index]; let mask_local=(input.local_pos-input.pos)/globals.scale; let local_uv=(input.local_pos-input.pos)/max(input.scale,vec2<f32>(0.0001)); let presentation_mask={expression};"));
+                    // The original shader also declares local_uv; keep one declaration.
+                    source=source.replace("    let local_uv = (input.local_pos - input.pos) / max(input.scale, vec2(0.0001));","");
+                    source=source.replace("return quad_color * fade;","return quad_color * fade * presentation_mask;")
+                        .replace("under * shadow_alpha * polygon_cover) * fade;","under * shadow_alpha * polygon_cover) * fade * presentation_mask;");
                 }
                 // Keep both resource groups in the adapter layout, even when a
                 // material only uses one slot; bind a live instance to the other.
                 let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label:Some("surface material"), bind_group_layouts:&[Some(&self.bind_layout), Some(&self.motion_layout), Some(&self.material_device.layout), Some(&self.material_device.layout)], immediate_size:0 });
-                self.material_device.pipeline((1, self.format, samples, bg, br), &background.into_iter().chain(border).map(|m| m.program()).collect::<Vec<_>>(), device, || {
+                self.material_device.pipeline((if masked{21}else{1}, self.format, samples, bg, br), &background.into_iter().chain(border).map(|m| m.program()).collect::<Vec<_>>(), device, || {
                     let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor { label:Some("surface material"), source:wgpu::ShaderSource::Wgsl(source.into()) });
                     solid_pipeline(device, &shader, &layout, self.format, samples)
                 })
@@ -482,7 +502,7 @@ impl QuadPipeline {
             .filter_map(nana_ui_core::MaterialRef::upgrade)
             .map(|m| m.program().key())
             .collect();
-        self.material_pipelines.retain(|(a, b, _), _| {
+        self.material_pipelines.retain(|(a, b, _, _), _| {
             (*a == 0 || programs.contains(a)) && (*b == 0 || programs.contains(b))
         });
         self.motion_ids = (0, 0);
@@ -760,15 +780,24 @@ impl QuadPipeline {
                 );
             }
         }
+        let masked = !surface.presentation_masks.is_empty();
+        let first = surface
+            .presentation_masks
+            .first()
+            .map(|s| &s.mask.material)
+            .or(surface.background_material.as_ref());
+        let second = surface
+            .presentation_masks
+            .get(1)
+            .map(|s| &s.mask.material)
+            .or(surface.border_material.as_ref());
         let pair = (
-            surface.background_material.as_ref().map_or(0, |m| m.key()),
-            surface.border_material.as_ref().map_or(0, |m| m.key()),
+            first.map_or(0, |m| m.key()),
+            second.map_or(0, |m| m.key()),
+            masked,
         );
-        if pair != (0, 0) {
-            for m in [&surface.background_material, &surface.border_material]
-                .into_iter()
-                .flatten()
-            {
+        if pair.0 != 0 || pair.1 != 0 {
+            for m in [first, second].into_iter().flatten() {
                 self.material_refs.insert(m.key(), m.downgrade());
                 if !self.material_bindings.contains_key(&m.key()) {
                     if let Some(binding) = self.material_device.prepare(device, queue, m, work) {
@@ -776,13 +805,10 @@ impl QuadPipeline {
                     }
                 }
             }
-            self.prepare_material_pipeline(
-                device,
-                surface.background_material.as_ref(),
-                surface.border_material.as_ref(),
-            );
+            self.prepare_material_pipeline(device, first, second, masked);
         }
-        self.pending_materials.resize(self.pending.len(), (0, 0));
+        self.pending_materials
+            .resize(self.pending.len(), (0, 0, false));
         if let Some(slot) = self.pending_materials.get_mut(material_index) {
             *slot = pair;
         }
@@ -872,7 +898,38 @@ impl QuadPipeline {
                 );
             }
         }
-        self.pending_materials.resize(self.pending.len(), (0, 0));
+        if masked {
+            for (i, sample) in surface.presentation_masks.iter().take(2).enumerate() {
+                for data in &mut self.pending_paint[material_index..] {
+                    let params = [
+                        sample.progress,
+                        f32::from(sample.mask.space == nana_ui_core::PresentationMaskSpace::Target),
+                        0.,
+                        0.,
+                    ];
+                    let target = [
+                        sample.target.x,
+                        sample.target.y,
+                        sample.target.width,
+                        sample.target.height,
+                    ];
+                    if i == 0 {
+                        data.presentation0 = params;
+                        data.target0 = target;
+                    } else {
+                        data.presentation1 = params;
+                        data.target1 = target;
+                    }
+                }
+            }
+        }
+        if masked {
+            self.pending_materials
+                .resize(self.pending.len(), (0, 0, false));
+            self.pending_materials[material_index..].fill(pair);
+        }
+        self.pending_materials
+            .resize(self.pending.len(), (0, 0, false));
         Some(index)
     }
 
@@ -1051,12 +1108,21 @@ impl QuadPipeline {
         let mut index = start;
         while index < end {
             let url = self.pending_urls.get(index).cloned().unwrap_or(None);
-            let material = self.pending_materials.get(index).copied().unwrap_or((0, 0));
+            let material = self
+                .pending_materials
+                .get(index)
+                .copied()
+                .unwrap_or((0, 0, false));
             let batch_start = index;
             index += 1;
             while index < end
                 && self.pending_urls.get(index).cloned().unwrap_or(None) == url
-                && self.pending_materials.get(index).copied().unwrap_or((0, 0)) == material
+                && self
+                    .pending_materials
+                    .get(index)
+                    .copied()
+                    .unwrap_or((0, 0, false))
+                    == material
             {
                 index += 1;
             }
@@ -1077,6 +1143,7 @@ impl QuadPipeline {
                 bg.as_ref().map_or(0, |m| m.program().key()),
                 border.as_ref().map_or(0, |m| m.program().key()),
                 if sample_count > 1 { 4 } else { 1 },
+                material.2,
             );
             let binding = self
                 .material_bindings
@@ -2409,7 +2476,7 @@ pub(super) struct QuadPipelineTarget {
     pending_paint: Vec<QuadPaintData>,
     uploaded_paint: Vec<QuadPaintData>,
     pending_urls: Vec<Option<String>>,
-    pending_materials: Vec<(u64, u64)>,
+    pending_materials: Vec<(u64, u64, bool)>,
 }
 
 impl QuadPipeline {

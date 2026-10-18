@@ -292,6 +292,7 @@ fn root_layer_key(nodes: &SceneNodes, primitive: &ScenePrimitive) -> Option<Scen
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct QuadSurfacePaint {
+    pub presentation_masks: Vec<nana_ui_core::PresentationMaskSample>,
     pub background_material: Option<nana_ui_core::MaterialRef>,
     pub border_material: Option<nana_ui_core::MaterialRef>,
     pub background_image: Option<BackgroundImage>,
@@ -633,6 +634,7 @@ impl SceneTextEffects {
 /// effect table, which effect each grapheme plays, and the reveal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneGlyphPresentation {
+    pub transitions: nana_ui_core::TextTransitions,
     pub effects: Arc<[nana_ui_core::GlyphEffect]>,
     pub effect_chains: Arc<[nana_ui_core::GlyphEffectChain]>,
     /// Effect index per grapheme of the content; `u16::MAX` for none. Empty
@@ -675,7 +677,7 @@ impl SceneGlyphPresentation {
             }
             _ => Vec::new(),
         };
-        if !any && presentation.reveal.is_none() {
+        if !any && presentation.reveal.is_none() && presentation.transitions == Default::default() {
             return None;
         }
         Some(Arc::new(Self {
@@ -686,12 +688,16 @@ impl SceneGlyphPresentation {
             } else {
                 Arc::from([])
             },
+            transitions: presentation.transitions.clone(),
             reveal: presentation.reveal.clone(),
         }))
     }
 
     /// Until when it changes what is drawn; `None` while an effect loops.
     pub fn live_until(&self) -> Option<std::time::Duration> {
+        if self.transitions.exit.is_some() {
+            return Some(self.transitions.end());
+        }
         if self
             .cluster_effects
             .iter()
@@ -707,7 +713,9 @@ impl SceneGlyphPresentation {
         Some(
             self.reveal
                 .as_ref()
-                .map_or(std::time::Duration::ZERO, nana_ui_core::RevealSchedule::end),
+                .map_or(std::time::Duration::ZERO, |reveal| {
+                    self.transitions.reveal_end(reveal)
+                }),
         )
     }
 
@@ -1037,6 +1045,7 @@ pub(crate) struct GlyphObject {
     pub slot: u64,
     pub ordinal: u32,
     pub center: [f32; 2],
+    pub target: SceneRect,
     pub opacity: f32,
     pub transform: AffineTransform,
 }
@@ -2479,11 +2488,20 @@ impl UiScene {
         let mut moved = false;
         for (node, (presentation, objects)) in &self.glyph_objects {
             for object in objects.iter() {
+                let mut reveal = presentation.reveal.clone();
+                if presentation.transitions.entrance.is_some() {
+                    if let Some(r) = &mut reveal {
+                        r.intro.fade = false;
+                        r.intro.pop = false;
+                        r.intro.rise_px = 0.;
+                    }
+                }
+                let reveal_now = presentation.transitions.freeze_reveal.unwrap_or(now);
                 let sample = nana_ui_core::evaluate_glyph_chain(
                     presentation.effects_of(object.ordinal as usize),
-                    presentation.reveal.as_ref(),
+                    reveal.as_ref(),
                     object.ordinal,
-                    now,
+                    reveal_now,
                 );
                 let [cx, cy] = object.center;
                 let scale = sample.scale;
@@ -2501,6 +2519,58 @@ impl UiScene {
                 }) else {
                     continue;
                 };
+                if let ScenePrimitiveKind::Quad { surface, .. } = &mut held.primitive.kind {
+                    let mut masks = Vec::new();
+                    for (enter, mask) in [
+                        (true, &presentation.transitions.entrance),
+                        (false, &presentation.transitions.exit),
+                    ] {
+                        if let Some(mask) = mask {
+                            let progress = if enter {
+                                reveal.as_ref().map_or(1., |r| {
+                                    let ordinal = if mask.space
+                                        == nana_ui_core::PresentationMaskSpace::Target
+                                    {
+                                        0
+                                    } else {
+                                        object.ordinal as usize
+                                    };
+                                    r.at_s.get(ordinal).map_or(0., |at| {
+                                        if mask.duration.is_zero() {
+                                            return f32::from(
+                                                reveal_now.as_secs_f64()
+                                                    >= r.start.max(mask.start).as_secs_f64()
+                                                        + f64::from(*at),
+                                            );
+                                        }
+                                        ((reveal_now.as_secs_f64()
+                                            - r.start.max(mask.start).as_secs_f64()
+                                            - f64::from(*at))
+                                            / mask.duration.as_secs_f64().max(0.000001))
+                                        .clamp(0., 1.)
+                                            as f32
+                                    })
+                                })
+                            } else {
+                                mask.progress(now)
+                            };
+                            masks.push(nana_ui_core::PresentationMaskSample {
+                                mask: mask.clone(),
+                                progress,
+                                target: nana_ui_core::LogicalRect::new(
+                                    object.target.x - held.primitive.bounds.x,
+                                    object.target.y - held.primitive.bounds.y,
+                                    object.target.width,
+                                    object.target.height,
+                                ),
+                            });
+                        }
+                    }
+                    if surface.presentation_masks != masks {
+                        surface.presentation_masks = masks;
+                        moved = true;
+                    }
+                }
                 let opacity = object.opacity * sample.alpha;
                 let transform = object.transform.then(local);
                 if held.primitive.opacity != opacity || held.primitive.transform != transform {
@@ -3906,6 +3976,7 @@ fn quad_surface_from_style(
         .then_some(style.paint.outline.color)
         .flatten();
     QuadSurfacePaint {
+        presentation_masks: Vec::new(),
         background_material: style.paint.background_material.clone(),
         border_material: style.paint.border_material.clone(),
         background_image: style.paint.background_image.clone(),
