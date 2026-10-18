@@ -116,16 +116,20 @@ fn a_custom_card_is_transparent_before_its_layer_is_promoted() {
         if primitive.id.slot >> 32 == MODAL_SURFACE_PAINT {
             painted += 1;
             let draw = runtime.scene().draw_primitive(primitive.id).unwrap();
+            let groups = runtime.scene().primitive_opacity_groups(primitive);
+            assert_eq!(groups.len(), 1, "the complete custom card fades together");
+            assert_eq!(groups[0].node, id);
             assert_eq!(
-                draw.paint_opacity, 0.0,
+                groups[0].opacity, 0.0,
                 "custom card flashed at animation start"
             );
+            assert_eq!(draw.paint_opacity, 1.0, "the group owns the fade");
             let encoded = runtime.scene().compositor_primitive_encode(
                 primitive,
                 draw.transform,
                 draw.paint_opacity,
             );
-            assert_eq!(encoded.opacity, 0.0);
+            assert_eq!(encoded.opacity, 1.0, "no second fade inside the group");
             assert_eq!(encoded.motion_ids, (0, 0));
         }
     }
