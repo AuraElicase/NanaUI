@@ -17,9 +17,9 @@ pub(super) fn pack_equal_wrap_lines(
     gap: f32,
     parent_font_px: f32,
     nodes: &LayoutInputMap<'_>,
-) -> Vec<Vec<usize>> {
+) -> Vec<std::ops::Range<usize>> {
     let mut lines = Vec::new();
-    let mut line = Vec::new();
+    let mut start = 0;
     let mut widest = 0.0_f32;
     let mut margins = 0.0;
     for (index, child) in children.iter().enumerate() {
@@ -29,36 +29,34 @@ pub(super) fn pack_equal_wrap_lines(
             main_start_margin(margin, direction) + main_end_margin(margin, direction)
         });
         let main = main_extent(sizes[index], direction);
-        let need =
-            widest.max(main) * (line.len() + 1) as f32 + margins + margin + gap * line.len() as f32;
-        if !line.is_empty() && need > available + 0.01 {
-            lines.push(std::mem::take(&mut line));
+        let count = index - start;
+        let need = widest.max(main) * (count + 1) as f32 + margins + margin + gap * count as f32;
+        if count > 0 && need > available + 0.01 {
+            lines.push(start..index);
+            start = index;
             widest = 0.0;
             margins = 0.0;
         }
         widest = widest.max(main);
         margins += margin;
-        line.push(index);
     }
-    if !line.is_empty() {
-        lines.push(line);
+    if start < children.len() {
+        lines.push(start..children.len());
     }
     lines
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn equal_wrap_main_sizes(
+pub(super) fn equal_wrap_share(
     children: &[StableNodeId],
-    sizes: &mut [Size],
     direction: FlexDirection,
     available: f32,
     edge_base: f32,
     gap: f32,
     parent_font_px: f32,
     nodes: &LayoutInputMap<'_>,
-) {
+) -> f32 {
     if children.is_empty() {
-        return;
+        return 0.0;
     }
     let margins: f32 = children
         .iter()
@@ -72,12 +70,8 @@ pub(super) fn equal_wrap_main_sizes(
             })
         })
         .sum();
-    let share = ((available - margins - gap * children.len().saturating_sub(1) as f32)
-        / children.len() as f32)
-        .max(0.0);
-    for size in sizes {
-        set_main_extent(size, direction, share);
-    }
+    ((available - margins - gap * children.len().saturating_sub(1) as f32) / children.len() as f32)
+        .max(0.0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -107,12 +101,10 @@ pub(super) fn measure_equal_wrap(
         nodes,
     );
     let mut cross = 0.0;
-    for (line_index, indices) in lines.iter().enumerate() {
-        let line: Vec<_> = indices.iter().map(|&i| children[i]).collect();
-        let mut used: Vec<_> = indices.iter().map(|&i| sizes[i]).collect();
-        equal_wrap_main_sizes(
-            &line,
-            &mut used,
+    for (line_index, range) in lines.into_iter().enumerate() {
+        let line = &children[range];
+        let share = equal_wrap_share(
+            line,
             direction,
             available,
             edge_base,
@@ -121,10 +113,10 @@ pub(super) fn measure_equal_wrap(
             nodes,
         );
         let mut line_cross = 0.0_f32;
-        for (child, size) in line.iter().zip(used) {
+        for child in line {
             let measured = intrinsic_size_at_main(
                 *child,
-                main_extent(size, direction),
+                share,
                 direction,
                 content,
                 viewport,
