@@ -370,6 +370,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         // above the shadow, whose native owner is now the picture.
         #[cfg(target_os = "macos")]
         self.sync_underlays_of(id);
+        self.sync_auxiliary_window(id);
+        self.sync_auxiliaries_of(id);
     }
 
     /// Follow the window's visible body with its shadow companion. The scene
@@ -1172,19 +1174,28 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         }
     }
 
-    fn sync_auxiliary_window(&self, id: WindowId) {
+    pub(super) fn sync_auxiliary_window(&self, id: WindowId) {
         let Some(host) = self.window_contexts.get(&id) else {
             return;
         };
         let Some(binding) = host.auxiliary.as_ref() else {
             return;
         };
-        let mapped = host
+        let parent = host
             .settings
             .parent
-            .and_then(|parent| self.window_contexts.get(&parent))
-            .is_some_and(|parent| parent.presented.get());
-        binding.sync(mapped);
+            .and_then(|parent| self.window_contexts.get(&parent));
+        if let Some(parent) = parent {
+            // Parent mode delivery precedes propagation to children. Derive
+            // from the live owner, rather than temporarily using the child's
+            // previous band while that propagation is still in flight.
+            binding.sync(
+                parent.presented.get(),
+                parent.level == WindowLevel::AlwaysOnTop,
+                auxiliary_level(host.requested_level, Some(parent.level))
+                    == WindowLevel::AlwaysOnTop,
+            );
+        }
     }
 
     pub(super) fn sync_auxiliaries_of(&self, parent: WindowId) {
@@ -1405,6 +1416,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
     /// Refreshes the cached window geometry from the live window state and
     /// reports whether it moved.
     pub(super) fn sync_geometry(&mut self, id: WindowId) -> bool {
+        self.sync_auxiliary_window(id);
+        self.sync_auxiliaries_of(id);
         let previous = self.geometry_of(id);
         if let Some(host) = self.window_contexts.get_mut(&id) {
             host.geometry = window_geometry(host.surface.window().as_ref());
@@ -1998,6 +2011,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             self.reconcile_native_chrome(id);
             self.sync_underlays_of(id);
             self.request_redraw(id);
+            self.sync_auxiliary_window(id);
+            self.sync_auxiliaries_of(id);
         }
         result
     }

@@ -273,6 +273,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 // Activation raised the window; its underlay goes back under it.
                 if *focused {
                     self.sync_underlays_of(id);
+                    self.sync_auxiliary_window(id);
                     self.sync_auxiliaries_of(id);
                 }
                 if !*focused {

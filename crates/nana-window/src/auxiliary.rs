@@ -52,8 +52,11 @@ impl AuxiliaryWindow {
     /// must not prevent an independently shown preparation window appearing.
     /// Wayland loses its relationship when the owner is unmapped; the host
     /// calls this again after the owner's first presentation on each show.
-    pub fn sync(&self, parent_mapped: bool) {
-        self.inner.sync(parent_mapped);
+    /// Topmost arguments are the host's effective live levels. On Windows,
+    /// reconcile native bits when ownership/style work changed them behind
+    /// the backend's cached flags; do not activate or reorder matching bands.
+    pub fn sync(&self, parent_mapped: bool, parent_topmost: bool, topmost: bool) {
+        self.inner.sync(parent_mapped, parent_topmost, topmost);
     }
 }
 
@@ -61,9 +64,16 @@ impl AuxiliaryWindow {
 mod platform {
     use super::*;
     use raw_window_handle::RawWindowHandle;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GW_OWNER, GetWindow};
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongPtrW, HWND_NOTOPMOST, HWND_TOPMOST,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WS_EX_TOPMOST,
+    };
 
-    pub(super) struct Binding;
+    pub(super) struct Binding {
+        parent: HWND,
+        window: HWND,
+    }
 
     impl Binding {
         pub(super) fn attach<P, W>(parent: &P, window: &W) -> Result<Self, AuxiliaryWindowError>
@@ -88,10 +98,42 @@ mod platform {
                     "native owner was not installed".into(),
                 ));
             }
-            Ok(Self)
+            Ok(Self {
+                parent: parent.hwnd.get() as _,
+                window: window.hwnd.get() as _,
+            })
         }
 
-        pub(super) fn sync(&self, _parent_mapped: bool) {}
+        pub(super) fn sync(&self, _parent_mapped: bool, parent_topmost: bool, topmost: bool) {
+            // Win32 ownership and native style replay can change the owner's
+            // band without updating winit's cached flags. Reconcile the actual
+            // bits after the native operation; never toggle cached flags or
+            // activate a window to force an update. Each call is idempotent.
+            conform_band(self.parent, parent_topmost);
+            conform_band(self.window, topmost);
+        }
+    }
+
+    fn conform_band(window: HWND, topmost: bool) {
+        // SAFETY: the host releases this binding before either live HWND.
+        let actual = unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST != 0;
+        if actual != topmost {
+            unsafe {
+                SetWindowPos(
+                    window,
+                    if topmost {
+                        HWND_TOPMOST
+                    } else {
+                        HWND_NOTOPMOST
+                    },
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE,
+                );
+            }
+        }
     }
 }
 
@@ -140,7 +182,7 @@ mod platform {
             })
         }
 
-        pub(super) fn sync(&self, parent_mapped: bool) {
+        pub(super) fn sync(&self, parent_mapped: bool, _parent_topmost: bool, _topmost: bool) {
             if parent_mapped && !self.attached.replace(true) {
                 // SAFETY: the host supplies an acyclic parent tree and both
                 // retained windows remain live on the main thread.
@@ -235,7 +277,7 @@ mod platform {
             })
         }
 
-        pub(super) fn sync(&self, parent_mapped: bool) {
+        pub(super) fn sync(&self, parent_mapped: bool, _parent_topmost: bool, _topmost: bool) {
             if let Self::Wayland {
                 parent,
                 window,
@@ -266,7 +308,7 @@ mod platform {
 
     impl Drop for Binding {
         fn drop(&mut self) {
-            self.sync(false);
+            self.sync(false, false, false);
         }
     }
 }
@@ -283,6 +325,6 @@ mod platform {
         {
             Err(AuxiliaryWindowError("unsupported platform".into()))
         }
-        pub(super) fn sync(&self, _parent_mapped: bool) {}
+        pub(super) fn sync(&self, _parent_mapped: bool, _parent_topmost: bool, _topmost: bool) {}
     }
 }
