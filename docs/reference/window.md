@@ -49,6 +49,14 @@ WindowShadow 与 UiScene 的 `DropShadow` 是两条 authority：前者由 Window
 
 没有自绘标题栏的窗口设 `WindowDescriptor::system_caption(true)`。避免 Windows 无框窗口失去关闭按钮。
 
+Windows 原生拖动／缩放保留系统标题栏、Aero Snap 和系统边框行为。`LiveSizeMove`
+通过 `install_with_wake` 在操作期间安装窗口定时器，唤醒宿主事件源；Scene host
+在代理唤醒中运行正常帧需求调度，使其他窗口和隐藏 GPU 输出继续更新。结束操作、
+移除钩子或销毁窗口时停止定时器，静止窗口不因此获得额外重绘需求。回调只允许
+发出唤醒信号，不能内联调用宿主；嵌入式宿主应把代理唤醒交给 `EmbeddedRuntime::wake`。
+自绘标题栏通过队列投递启动原生拖动，使当前输入回调先返回，避免整个拖动期间
+占用应用回调。`host_managed_drag(true)` 仍是可选替代行为，不是维持渲染的必要开关。
+
 关闭 / 最小化 / 最大化是窗口动作。控件发出语义（`WindowChromeAction`）。Scene host 去执行。关闭与系统关闭一样只向程序发 `CloseRequested`。由程序决定是否关闭。普通控件拿不到窗口句柄。L1 CSS `-webkit-app-region` / `app-region` 不是拖拽合同：任意盒写 `drag` 也不会变成 caption。
 
 `WindowChromeState` 绑在明确的 `WindowId` 上。单窗口可用默认入口（只认收到的第一扇窗）。多窗口在等待 `WindowService::create_window` 获得 handle 后。用其 `id()` 调用 `for_window` 各建一份。关窗后不会自动接管别的窗口。

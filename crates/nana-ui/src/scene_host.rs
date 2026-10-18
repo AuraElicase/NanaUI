@@ -565,7 +565,7 @@ impl<Program: RuntimeProgram> ApplicationHandler for SceneRunner<Program> {
         let started = self.block_started();
         match self {
             Self::Starting(_) => self.poll_startup(event_loop),
-            Self::Ready(ready) => ready.drain_host_work(event_loop),
+            Self::Ready(ready) => ready.proxy_wake_up(event_loop),
             Self::Loading(_) | Self::Finished { .. } => {}
         }
         self.note_block(started);
@@ -1233,7 +1233,11 @@ fn complete_startup<Program: RuntimeProgram>(
         accessibility,
         accessibility_pending: PendingAccessibility::default(),
         size_move: {
-            let size_move = LiveSizeMove::install(window.as_ref())?;
+            let native_wake = proxy.clone();
+            let size_move = LiveSizeMove::install_with_wake(
+                window.as_ref(),
+                Arc::new(move || native_wake.wake_up()),
+            )?;
             size_move.set_content_aspect_ratio(windows::content_aspect_ratio(&settings));
             size_move
         },
@@ -3550,7 +3554,7 @@ impl<Program: RuntimeProgram> EmbeddedRuntime<Program> {
         true
     }
     pub fn wake(&mut self, event_loop: &dyn ActiveEventLoop) {
-        self.manager.drain_host_work(event_loop);
+        self.manager.proxy_wake_up(event_loop);
     }
     /// Refresh cached display HDR/headroom metadata after the embedding host
     /// receives a system display-parameter notification. This is an
