@@ -296,6 +296,13 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 ### 图表与带图标按钮
 
+Rust 行内标题工具使用 `IconButton::compact(true)`：固定 24×24 logical px，
+保留标准图标、焦点、提示、选中与禁用语义，不随普通控件密度增高。
+`Popover::compact_trigger(true)` 和 `ActionMenu::compact_trigger(true)` 的图标触发器
+使用同一尺寸配方；文字与自定义内容触发器不受影响。菜单打开时锚点保持原尺寸。
+这些选项默认关闭；关闭后恢复原有 `size`／主题尺寸。静息无底色的菜单入口可另配
+`bare_trigger(true)`，菜单内容区和菜单项仍沿用标准尺寸。
+
 `Chart::new(option)` 画一张图。`ChartOption` 的结构对应 ECharts 的 `option`（`grid`、`x_axis`、`y_axis`、`series`、`tooltip`、`legend`、`data_zoom`），值是 Rust 类型，模型在 `nana_ui::runtime::chart`（`nana-ui-charts` crate）。系列有折线/面积、柱状、饼/环/玫瑰、散点、雷达、仪表盘。换一份 option 就是一次更新：元素从屏幕上正在显示的位置过渡到新位置。悬停按类目或按项触发，强调和轴指针由着色器按动效时钟画，提示是图表自己的浮层，带颜色点和右对齐的数值。离开、卸载或 park 后关闭。图例切换、缩放窗口存在 `Chart::view`，事件是 `ChartEvent`。数据、名称和数值格式仍由应用提供。见 [Chart](../components/chart.md)。
 
 `Chart` 只走 Rust：option 是类型化数据，没有 Vue 标签。
