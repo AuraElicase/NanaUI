@@ -236,6 +236,13 @@ pub mod text {
 }
 
 pub mod gpu {
+    pub static MATERIAL_REJECTED: EventDescriptor = EventDescriptor::new(
+        Domain::GPU,
+        21,
+        "gpu.material.rejected",
+        Severity::Warn,
+        &[],
+    );
     use super::*;
     const D: Domain = Domain::GPU;
 

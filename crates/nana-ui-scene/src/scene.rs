@@ -292,6 +292,8 @@ fn root_layer_key(nodes: &SceneNodes, primitive: &ScenePrimitive) -> Option<Scen
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct QuadSurfacePaint {
+    pub background_material: Option<nana_ui_core::MaterialRef>,
+    pub border_material: Option<nana_ui_core::MaterialRef>,
     pub background_image: Option<BackgroundImage>,
     /// Extra CSS `background-image` layers after the first (below it).
     pub background_layers: Vec<BackgroundImage>,
@@ -577,6 +579,7 @@ pub struct SceneTextSpan {
 /// in [`ScenePrimitiveKind::Text::spans`], like any other coloured run.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SceneTextEffects {
+    pub material: Option<nana_ui_core::MaterialRef>,
     pub decoration: nana_ui_core::TextDecorationLine,
     /// `None` draws the lines in the glyphs' own fill.
     pub decoration_color: Option<nana_ui_core::PaintColor>,
@@ -588,7 +591,10 @@ pub struct SceneTextEffects {
 
 impl SceneTextEffects {
     pub fn is_empty(&self) -> bool {
-        !self.decoration.is_active() && self.stroke.is_none() && self.shadows.is_empty()
+        self.material.is_none()
+            && !self.decoration.is_active()
+            && self.stroke.is_none()
+            && self.shadows.is_empty()
     }
 
     /// Logical px these effects can reach past the glyphs' own ink.
@@ -611,6 +617,7 @@ impl SceneTextEffects {
     /// `over` laid on these effects: each one `over` sets wins.
     pub fn overlay(&self, over: &nana_ui_core::RichPaintStyle) -> Self {
         Self {
+            material: over.material.clone().or_else(|| self.material.clone()),
             decoration: over.decoration.unwrap_or(self.decoration),
             decoration_color: over.decoration_color.or(self.decoration_color),
             stroke: over.stroke.or(self.stroke),
@@ -841,7 +848,8 @@ impl SceneRichPaint {
                     .iter()
                     .filter(|(_, span)| {
                         let paint = &span.paint;
-                        paint.decoration.is_some()
+                        paint.material.is_some()
+                            || paint.decoration.is_some()
                             || paint.decoration_color.is_some()
                             || paint.stroke.is_some()
                             || paint.shadows.is_some()
@@ -865,6 +873,7 @@ fn hash_paint(color: &nana_ui_core::PaintColor, hasher: &mut impl std::hash::Has
 }
 
 fn hash_effects(effects: &SceneTextEffects, hasher: &mut impl std::hash::Hasher) {
+    hasher.write_u64(effects.material.as_ref().map_or(0, |m| m.key()));
     hasher.write_u8(
         u8::from(effects.decoration.underline) | u8::from(effects.decoration.line_through) << 1,
     );
@@ -939,6 +948,7 @@ pub fn css_text_effects(style: &nana_ui_core::LayoutStyle) -> SceneTextEffects {
             })
         });
     SceneTextEffects {
+        material: style.paint.text_material.clone(),
         decoration: style.text_decoration.unwrap_or_default(),
         decoration_color: None,
         stroke,
@@ -3896,6 +3906,8 @@ fn quad_surface_from_style(
         .then_some(style.paint.outline.color)
         .flatten();
     QuadSurfacePaint {
+        background_material: style.paint.background_material.clone(),
+        border_material: style.paint.border_material.clone(),
         background_image: style.paint.background_image.clone(),
         background_layers: style.paint.background_layers.clone(),
         content_image: style.paint.content_image.clone(),

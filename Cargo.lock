@@ -2633,6 +2633,7 @@ dependencies = [
  "bytemuck",
  "etagere",
  "image",
+ "naga",
  "nana-app-icon",
  "nana-diagnostics",
  "nana-frame-exchange",

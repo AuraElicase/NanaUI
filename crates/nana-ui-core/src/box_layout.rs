@@ -2569,6 +2569,12 @@ impl BackdropFilter {
 /// which keeps the border box but suppresses paint and hit-testing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PaintStyle {
+    #[serde(default)]
+    pub background_material: Option<crate::MaterialRef>,
+    #[serde(default)]
+    pub border_material: Option<crate::MaterialRef>,
+    #[serde(default)]
+    pub text_material: Option<crate::MaterialRef>,
     /// `None` inherits computed visibility from the parent.
     #[serde(default)]
     pub visibility: Option<VisibilitySpec>,
@@ -2677,7 +2683,9 @@ impl PaintStyle {
     }
 
     pub fn has_advanced_paint(&self) -> bool {
-        self.background_image.is_some()
+        self.background_material.is_some()
+            || self.border_material.is_some()
+            || self.background_image.is_some()
             || !self.background_layers.is_empty()
             || self.content_image.is_some()
             || self.mask.is_some()

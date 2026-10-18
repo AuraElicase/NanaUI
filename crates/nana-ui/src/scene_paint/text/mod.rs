@@ -978,6 +978,13 @@ impl TextPipeline {
         rich: Option<&Arc<SceneRichPaint>>,
         legacy_shadow: Option<nana_ui_core::TextShadowSpec>,
     ) {
+        if let Some(rich) = rich {
+            for effect in std::iter::once(&rich.base).chain(rich.runs.iter().map(|r| &r.effects)) {
+                if let Some(material) = &effect.material {
+                    self.gpu.register_material(material);
+                }
+            }
+        }
         self.effects = rich.cloned();
         self.legacy_shadow = if rich.is_some() { None } else { legacy_shadow };
     }
@@ -2189,7 +2196,22 @@ impl TextPipeline {
                     AtlasPageKind::Mask => (placement.page, placeholders[1]),
                     AtlasPageKind::Color => (placeholders[0], placement.page),
                 };
-                push_entry_segment(&mut segments, placeholders, mask_page, color_page, placed);
+                let material = if role == pipeline::ROLE_FILL
+                    && (placement.kind == AtlasPageKind::Mask || placement.subpixel)
+                {
+                    rich.and_then(|r| r.effects_at(glyph.cluster as usize).material.as_ref())
+                        .map_or(0, |m| m.key())
+                } else {
+                    0
+                };
+                push_entry_segment(
+                    &mut segments,
+                    placeholders,
+                    mask_page,
+                    color_page,
+                    placed,
+                    material,
+                );
                 target.entries.push_glyph(
                     id,
                     placed,
@@ -2770,6 +2792,7 @@ impl TextPipeline {
         encoder: &mut wgpu::CommandEncoder,
         work: Option<&crate::gpu_work::GpuWorkSink>,
     ) {
+        self.gpu.prepare_materials(device, queue, &self.atlas, work);
         self.uploads.flush(queue, &self.atlas, work);
         // Bind groups are created here, where the atlas is still `&mut`, so
         // `draw` only has to look one up. Nearly every frame's segments name
@@ -3108,6 +3131,7 @@ fn push_entry_segment(
     mask_page: u32,
     color_page: u32,
     offset: u32,
+    material: u64,
 ) {
     if let Some(open) = segments.last_mut() {
         let mask_ok = open.mask_page == mask_page
@@ -3116,7 +3140,7 @@ fn push_entry_segment(
         let color_ok = open.color_page == color_page
             || open.color_page == placeholders[1]
             || color_page == placeholders[1];
-        if mask_ok && color_ok {
+        if mask_ok && color_ok && open.material == material {
             if mask_page != placeholders[0] {
                 open.mask_page = mask_page;
             }
@@ -3128,6 +3152,7 @@ fn push_entry_segment(
         }
     }
     segments.push(EntrySegment {
+        material,
         mask_page,
         color_page,
         first: offset,
@@ -3422,6 +3447,7 @@ fn place_solid_quads(
             placeholders[0],
             placeholders[1],
             *placed,
+            0,
         );
         entries.push_glyph(
             id,
@@ -4704,6 +4730,42 @@ mod tests {
         paint_rich(device, queue, pipeline, &[]);
     }
 
+    #[test]
+    fn material_parameter_changes_reuse_layout_and_atlas() {
+        let (device, queue) = test_device();
+        let mut pipeline = TextPipeline::new(&device, &queue, wgpu::TextureFormat::Rgba8Unorm);
+        let material = nana_ui_core::MaterialRef::new(nana_ui_core::MaterialProgram::new(
+            "fn material(i:MaterialInput)->vec4<f32>{return i.color * material_param(0u);}",
+        ));
+        let first = effects(SceneTextEffects {
+            material: Some(material.clone().with_parameters(Arc::from([[1.; 4]]))),
+            ..Default::default()
+        });
+        paint_effects(&device, &queue, &mut pipeline, first.as_ref(), None);
+        let warm = pipeline.glyph_counters();
+        let layouts = pipeline.shape_cache_stats();
+        let next = effects(SceneTextEffects {
+            material: Some(material.with_parameters(Arc::from([[0.5; 4]]))),
+            ..Default::default()
+        });
+        paint_effects(&device, &queue, &mut pipeline, next.as_ref(), None);
+        let changed = pipeline.glyph_counters();
+        assert_eq!(
+            pipeline.shape_cache_stats().1,
+            layouts.1,
+            "parameters changed shaping"
+        );
+        assert_eq!(changed.glyph_rasterized, warm.glyph_rasterized);
+        assert_eq!(changed.glyph_upload_bytes, warm.glyph_upload_bytes);
+        paint_effects(&device, &queue, &mut pipeline, next.as_ref(), None);
+        let steady = pipeline.glyph_counters();
+        assert_eq!(
+            steady.text_instance_upload_bytes, changed.text_instance_upload_bytes,
+            "static material uploads glyphs"
+        );
+        assert_eq!(steady.glyph_upload_bytes, changed.glyph_upload_bytes);
+    }
+
     fn effects(base: SceneTextEffects) -> Option<Arc<SceneRichPaint>> {
         SceneRichPaint::new(base, Vec::new())
     }
@@ -4817,6 +4879,7 @@ mod tests {
         let mut pipeline = TextPipeline::new(&device, &queue, wgpu::TextureFormat::Rgba8Unorm);
         let paint = nana_ui_core::PaintColor::srgb;
         let rich = effects(SceneTextEffects {
+            material: None,
             decoration: nana_ui_core::TextDecorationLine {
                 underline: true,
                 line_through: true,
@@ -5353,6 +5416,7 @@ mod tests {
                 mask_page,
                 color_page,
                 offset as u32,
+                0,
             );
             pipeline.atlas.retain(*handle);
             pipeline.target.entries.push_glyph(
@@ -5485,6 +5549,7 @@ mod tests {
         assert_eq!(
             pipeline.target.segments[0],
             pipeline::DrawSegment {
+                material: 0,
                 mask_page: pipeline.target.segments[0].mask_page,
                 color_page: pipeline.target.segments[0].color_page,
                 first: 0,

@@ -27,6 +27,8 @@ pub mod layout_authority;
 pub mod layout_frontier;
 mod layout_style_api;
 pub mod layout_style_change;
+pub mod material;
+pub use material::{MATERIAL_ABI, MaterialInstance, MaterialProgram, MaterialRef, MaterialTexture};
 pub mod menu;
 pub mod menu_bar;
 pub mod motion;

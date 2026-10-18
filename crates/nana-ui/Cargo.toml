@@ -59,7 +59,7 @@ icons-tabler = ["dep:nana-icons-tabler"]
 # manifest, and answer `NANA_PACKAGE_VALIDATE` self-checks. Opt-in: embedded
 # hosts that do their own packaging never link `nana-package`.
 packaged-resources = ["dep:nana-package"]
-gpu = ["dep:bytemuck", "dep:nana-frame-exchange", "dep:nana-gpu", "dep:base64", "dep:etagere", "dep:image", "dep:pollster", "dep:nana-svg-raster", "dep:swash", "nana-ui-platform/fetch", "dep:wgpu", "dep:windows"]
+gpu = ["dep:naga", "dep:bytemuck", "dep:nana-frame-exchange", "dep:nana-gpu", "dep:base64", "dep:etagere", "dep:image", "dep:pollster", "dep:nana-svg-raster", "dep:swash", "nana-ui-platform/fetch", "dep:wgpu", "dep:windows"]
 # Explicit escape hatch to the WGPU objects behind the GPU contract
 # (`GpuContext::wgpu()`, `FrameContext::wgpu_encoder()`, `nana_ui::wgpu`, …).
 # Hosts that bring their own device and renderers that record their own
@@ -84,6 +84,7 @@ hosted = [
 ]
 
 [dependencies]
+naga = { version = "=30.0.1", features = ["wgsl-in", "wgsl-out"], optional = true }
 accesskit = { workspace = true, optional = true }
 bytemuck = { version = "1.24", features = ["derive"], optional = true }
 base64 = { workspace = true, optional = true }

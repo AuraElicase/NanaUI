@@ -16,6 +16,22 @@ use super::{
 };
 use crate::{PhysicalRect, gpu_work::ManagedBuffer};
 
+const QUAD_SHADER: &str = concat!(
+    include_str!("shader/motion.wgsl"),
+    "\n",
+    include_str!("shader/color.wgsl"),
+    "\n",
+    include_str!("shader/quad.wgsl"),
+    "\n",
+    include_str!("shader/vertex.wgsl"),
+    "\n",
+    include_str!("shader/quad_paint_data.wgsl"),
+    "\n",
+    include_str!("shader/quad_paint.wgsl"),
+    "\n",
+    include_str!("shader/quad_solid.wgsl"),
+);
+
 const INITIAL_INSTANCES: usize = 256;
 const PAINT_GRADIENT: u32 = 1;
 const PAINT_MASK: u32 = 2;
@@ -144,6 +160,11 @@ struct Uniforms {
 }
 
 pub(super) struct QuadPipeline {
+    material_device: std::sync::Arc<super::material::MaterialDevice>,
+    material_bindings: HashMap<u64, std::sync::Arc<super::material::MaterialBinding>>,
+    material_refs: HashMap<u64, std::sync::Weak<nana_ui_core::MaterialInstance>>,
+    material_pipelines: HashMap<(u64, u64, u32), Option<wgpu::RenderPipeline>>,
+    format: wgpu::TextureFormat,
     pipeline: wgpu::RenderPipeline,
     pipeline_msaa: wgpu::RenderPipeline,
     bind_layout: wgpu::BindGroupLayout,
@@ -162,6 +183,7 @@ pub(super) struct QuadPipeline {
     pending_paint: Vec<QuadPaintData>,
     uploaded_paint: Vec<QuadPaintData>,
     pending_urls: Vec<Option<String>>,
+    pending_materials: Vec<(u64, u64)>,
     motion_layout: wgpu::BindGroupLayout,
     #[allow(
         dead_code,
@@ -194,21 +216,7 @@ impl QuadPipeline {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("nana-ui.scene.quad.solid.shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(concat!(
-                include_str!("shader/motion.wgsl"),
-                "\n",
-                include_str!("shader/color.wgsl"),
-                "\n",
-                include_str!("shader/quad.wgsl"),
-                "\n",
-                include_str!("shader/vertex.wgsl"),
-                "\n",
-                include_str!("shader/quad_paint_data.wgsl"),
-                "\n",
-                include_str!("shader/quad_paint.wgsl"),
-                "\n",
-                include_str!("shader/quad_solid.wgsl"),
-            ))),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(QUAD_SHADER)),
         });
         // Trilinear. A default (`ImageSampling::Resample`) texture has one
         // level at its painted size, so this is plain bilinear for it; only an
@@ -387,6 +395,11 @@ impl QuadPipeline {
             mapped_at_creation: false,
         });
         Self {
+            material_device: super::material::MaterialDevice::shared(device, policy),
+            material_bindings: Default::default(),
+            material_refs: Default::default(),
+            material_pipelines: Default::default(),
+            format,
             pipeline,
             pipeline_msaa,
             bind_layout,
@@ -404,12 +417,46 @@ impl QuadPipeline {
             pending_paint: Vec::new(),
             uploaded_paint: Vec::new(),
             pending_urls: Vec::new(),
+            pending_materials: Vec::new(),
             motion_layout,
             motion_dummy,
             motion_ids: (0, 0),
             motion_origin: [0.0, 0.0],
             grid_scale: 1.0,
             corner_exponent: 2.0,
+        }
+    }
+
+    fn prepare_material_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        background: Option<&nana_ui_core::MaterialRef>,
+        border: Option<&nana_ui_core::MaterialRef>,
+    ) {
+        let bg = background.map_or(0, |m| m.program().key());
+        let br = border.map_or(0, |m| m.program().key());
+        for samples in [1, 4] {
+            self.material_pipelines.entry((bg,br,samples)).or_insert_with(|| {
+                if background.is_some_and(|m| m.program().source.len()>65536) || border.is_some_and(|m| m.program().source.len()>65536) { return None; }
+                let mut source = QUAD_SHADER.to_owned();
+                if let Some(material) = background {
+                    let author = super::material::program_source(material.program(), "nm_bg_", 2)?;
+                    source.push_str(&author);
+                    source = source.replace("var mixed_color: vec4<f32> = compose_quad_fill(input.color, local_uv, paint);", "var mixed_color: vec4<f32> = compose_quad_fill(input.color, local_uv, paint); let nm_bg = nm_bg_material(nm_bg_MaterialInput((input.local_pos - input.pos) / globals.scale, local_uv, input.scale / globals.scale, vec2<f32>(0.), vec4<f32>(mixed_color.rgb / max(mixed_color.a, 0.00001), 1.))); mixed_color = vec4<f32>(nm_bg.rgb * clamp(nm_bg.a, 0., 1.), clamp(nm_bg.a, 0., 1.)) * mixed_color.a;");
+                }
+                if let Some(material) = border {
+                    let author = super::material::program_source(material.program(), "nm_br_", 3)?;
+                    source.push_str(&author);
+                    source = source.replace("var cover = clamp(0.5 + inner_dist, 0.0, 1.0);", "let nm_br = nm_br_material(nm_br_MaterialInput((input.local_pos - input.pos) / globals.scale, local_uv, input.scale / globals.scale, vec2<f32>(0.), vec4<f32>(edge_color.rgb / max(edge_color.a, 0.00001), 1.))); edge_color = vec4<f32>(nm_br.rgb * clamp(nm_br.a, 0., 1.), clamp(nm_br.a, 0., 1.)) * edge_color.a; var cover = clamp(0.5 + inner_dist, 0.0, 1.0);");
+                }
+                // Keep both resource groups in the adapter layout, even when a
+                // material only uses one slot; bind a live instance to the other.
+                let layout=device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label:Some("surface material"), bind_group_layouts:&[Some(&self.bind_layout), Some(&self.motion_layout), Some(&self.material_device.layout), Some(&self.material_device.layout)], immediate_size:0 });
+                self.material_device.pipeline((1, self.format, samples, bg, br), &background.into_iter().chain(border).map(|m| m.program()).collect::<Vec<_>>(), device, || {
+                    let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor { label:Some("surface material"), source:wgpu::ShaderSource::Wgsl(source.into()) });
+                    solid_pipeline(device, &shader, &layout, self.format, samples)
+                })
+            });
         }
     }
 
@@ -424,6 +471,20 @@ impl QuadPipeline {
         self.pending.clear();
         self.pending_paint.clear();
         self.pending_urls.clear();
+        self.pending_materials.clear();
+        self.material_refs
+            .retain(|_, value| value.strong_count() > 0);
+        self.material_bindings
+            .retain(|key, _| self.material_refs.contains_key(key));
+        let programs: HashSet<_> = self
+            .material_refs
+            .values()
+            .filter_map(nana_ui_core::MaterialRef::upgrade)
+            .map(|m| m.program().key())
+            .collect();
+        self.material_pipelines.retain(|(a, b, _), _| {
+            (*a == 0 || programs.contains(a)) && (*b == 0 || programs.contains(b))
+        });
         self.motion_ids = (0, 0);
         self.motion_origin = [0.0, 0.0];
     }
@@ -629,6 +690,7 @@ impl QuadPipeline {
                 );
             }
         }
+        let material_index = self.pending.len();
         if layers.is_empty() {
             let paint = pack_shared(
                 device,
@@ -697,6 +759,32 @@ impl QuadPipeline {
                     fragment_clip,
                 );
             }
+        }
+        let pair = (
+            surface.background_material.as_ref().map_or(0, |m| m.key()),
+            surface.border_material.as_ref().map_or(0, |m| m.key()),
+        );
+        if pair != (0, 0) {
+            for m in [&surface.background_material, &surface.border_material]
+                .into_iter()
+                .flatten()
+            {
+                self.material_refs.insert(m.key(), m.downgrade());
+                if !self.material_bindings.contains_key(&m.key()) {
+                    if let Some(binding) = self.material_device.prepare(device, queue, m, work) {
+                        self.material_bindings.insert(m.key(), binding);
+                    }
+                }
+            }
+            self.prepare_material_pipeline(
+                device,
+                surface.background_material.as_ref(),
+                surface.border_material.as_ref(),
+            );
+        }
+        self.pending_materials.resize(self.pending.len(), (0, 0));
+        if let Some(slot) = self.pending_materials.get_mut(material_index) {
+            *slot = pair;
         }
         if let Some((paint_url, tiles, premultiplied)) = border_tiles.as_ref() {
             for tile in tiles {
@@ -784,6 +872,7 @@ impl QuadPipeline {
                 );
             }
         }
+        self.pending_materials.resize(self.pending.len(), (0, 0));
         Some(index)
     }
 
@@ -962,9 +1051,13 @@ impl QuadPipeline {
         let mut index = start;
         while index < end {
             let url = self.pending_urls.get(index).cloned().unwrap_or(None);
+            let material = self.pending_materials.get(index).copied().unwrap_or((0, 0));
             let batch_start = index;
             index += 1;
-            while index < end && self.pending_urls.get(index).cloned().unwrap_or(None) == url {
+            while index < end
+                && self.pending_urls.get(index).cloned().unwrap_or(None) == url
+                && self.pending_materials.get(index).copied().unwrap_or((0, 0)) == material
+            {
                 index += 1;
             }
             let bind_group = self
@@ -972,6 +1065,44 @@ impl QuadPipeline {
                 .get(&url)
                 .or_else(|| self.url_bind_groups.get(&None))
                 .expect("quad url bind groups must be rebuilt in upload");
+            let bg = self
+                .material_refs
+                .get(&material.0)
+                .and_then(nana_ui_core::MaterialRef::upgrade);
+            let border = self
+                .material_refs
+                .get(&material.1)
+                .and_then(nana_ui_core::MaterialRef::upgrade);
+            let key = (
+                bg.as_ref().map_or(0, |m| m.program().key()),
+                border.as_ref().map_or(0, |m| m.program().key()),
+                if sample_count > 1 { 4 } else { 1 },
+            );
+            let binding = self
+                .material_bindings
+                .get(&material.0)
+                .or_else(|| self.material_bindings.get(&material.1));
+            // Two material instances use separate parameter/texture groups.
+            if let (Some(pipeline), Some(binding)) = (
+                self.material_pipelines.get(&key).and_then(Option::as_ref),
+                binding,
+            ) {
+                pass.set_pipeline(pipeline);
+                pass.set_bind_group(2, &binding.group, &[]);
+                if let Some(border) = self
+                    .material_bindings
+                    .get(&material.1)
+                    .or_else(|| self.material_bindings.get(&material.0))
+                {
+                    pass.set_bind_group(3, &border.group, &[]);
+                }
+            } else {
+                pass.set_pipeline(if sample_count > 1 {
+                    &self.pipeline_msaa
+                } else {
+                    &self.pipeline
+                });
+            }
             pass.set_bind_group(0, bind_group, &[]);
             pass.draw(0..6, batch_start as u32..index as u32);
             if let Some(work) = gpu_work {
@@ -2278,6 +2409,7 @@ pub(super) struct QuadPipelineTarget {
     pending_paint: Vec<QuadPaintData>,
     uploaded_paint: Vec<QuadPaintData>,
     pending_urls: Vec<Option<String>>,
+    pending_materials: Vec<(u64, u64)>,
 }
 
 impl QuadPipeline {
@@ -2314,6 +2446,7 @@ impl QuadPipeline {
             pending_paint: Vec::new(),
             uploaded_paint: Vec::new(),
             pending_urls: Vec::new(),
+            pending_materials: Vec::new(),
         });
         std::mem::swap(&mut self.uniforms, &mut target.uniforms);
         std::mem::swap(&mut self.uploaded_uniforms, &mut target.uploaded_uniforms);
@@ -2327,5 +2460,6 @@ impl QuadPipeline {
         std::mem::swap(&mut self.pending_paint, &mut target.pending_paint);
         std::mem::swap(&mut self.uploaded_paint, &mut target.uploaded_paint);
         std::mem::swap(&mut self.pending_urls, &mut target.pending_urls);
+        std::mem::swap(&mut self.pending_materials, &mut target.pending_materials);
     }
 }
