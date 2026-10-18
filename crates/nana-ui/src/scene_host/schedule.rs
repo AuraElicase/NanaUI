@@ -56,6 +56,23 @@ pub(super) fn drain_host_batch(
 }
 
 impl<Program: RuntimeProgram> WindowManager<Program> {
+    pub(super) fn proxy_wake_up(&mut self, event_loop: &dyn ActiveEventLoop) {
+        self.drain_host_work(event_loop);
+        // Windows' native move/resize loop dispatches proxy messages but never
+        // reaches winit's outer AboutToWait. Serve all windows and hidden GPU
+        // outputs with the same demand/deadline policy during that loop.
+        #[cfg(target_os = "windows")]
+        if !self.shutting_down
+            && !event_loop.exiting()
+            && self
+                .window_contexts
+                .values()
+                .any(|host| host.size_move.is_active())
+        {
+            self.about_to_wait(event_loop);
+        }
+    }
+
     pub(super) fn drain_host_work(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.host_work.take_pending();
         self.host_work_deadline = None;

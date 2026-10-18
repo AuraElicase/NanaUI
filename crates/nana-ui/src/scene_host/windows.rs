@@ -876,7 +876,11 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let geometry = window_geometry(window.as_ref());
         #[cfg(target_os = "windows")]
         let modal_parent = settings.modal.then_some(settings.parent).flatten();
-        let size_move = LiveSizeMove::install(window.as_ref())?;
+        let native_wake = self.proxy.clone();
+        let size_move = LiveSizeMove::install_with_wake(
+            window.as_ref(),
+            Arc::new(move || native_wake.wake_up()),
+        )?;
         size_move.set_content_aspect_ratio(content_aspect_ratio(&settings));
         self.windows.register(id);
         let context = program_context(
