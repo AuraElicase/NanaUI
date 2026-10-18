@@ -1120,7 +1120,7 @@ fn send_nc_lbutton_down<W: HasWindowHandle + ?Sized>(window: &W, hit: usize) -> 
     use windows_sys::Win32::Foundation::{HWND, POINT};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetCursorPos, SendMessageW, WM_NCLBUTTONDOWN,
+        GetCursorPos, PostMessageW, WM_NCLBUTTONDOWN,
     };
 
     let Ok(handle) = window.window_handle() else {
@@ -1138,9 +1138,11 @@ fn send_nc_lbutton_down<W: HasWindowHandle + ?Sized>(window: &W, hit: usize) -> 
         } else {
             0
         };
-        SendMessageW(hwnd, WM_NCLBUTTONDOWN, hit, lparam);
+        // Start the native loop after the host's input callback returns. A
+        // synchronous send holds winit's application handler for the entire
+        // drag, so all other windows' input and redraws can only be buffered.
+        PostMessageW(hwnd, WM_NCLBUTTONDOWN, hit, lparam) != 0
     }
-    true
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
