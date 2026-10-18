@@ -30,7 +30,7 @@ static NEXT_TEXTURE_ID: AtomicU64 = AtomicU64::new(1 << 63);
 /// usable frame exists, so scene validation never loses the slot. A live
 /// exchange that has moved epoch but not yet published the next frame keeps
 /// the picture already showing; the placeholder would present an empty window.
-pub struct FrameBinding<E = u64> {
+pub struct FrameBinding<E = u64, M = ()> {
     device_generation: DeviceGeneration,
     slot: TextureSlot,
     alpha: HostTextureAlphaMode,
@@ -39,16 +39,27 @@ pub struct FrameBinding<E = u64> {
     showing_placeholder: bool,
     /// The binding changed since the window last presented.
     awaiting_present: bool,
-    current: Option<Arc<FrameLease<E>>>,
+    current: Option<Arc<FrameLease<E, M>>>,
     /// The frame replaced since the last present. The extracted UI frame may
     /// still sample it, so its slot is not returned before presentation.
-    retired: Option<Arc<FrameLease<E>>>,
+    retired: Option<Arc<FrameLease<E, M>>>,
 }
 
 impl<E: Copy + Eq + Send + Sync + 'static> FrameBinding<E> {
+    /// Construct a binding for an exchange without application payloads.
+    pub fn new(gpu: &GpuContext, slot: TextureSlot, alpha: HostTextureAlphaMode) -> Self {
+        Self::new_with_payload(gpu, slot, alpha)
+    }
+}
+
+impl<E: Copy + Eq + Send + Sync + 'static, M: Send + Sync + 'static> FrameBinding<E, M> {
     /// `gpu` is the device the window paints with. An inbox from another
     /// device is never bound.
-    pub fn new(gpu: &GpuContext, slot: TextureSlot, alpha: HostTextureAlphaMode) -> Self {
+    pub fn new_with_payload(
+        gpu: &GpuContext,
+        slot: TextureSlot,
+        alpha: HostTextureAlphaMode,
+    ) -> Self {
         // WGPU zero-initializes it: transparent black.
         let placeholder = gpu
             .create_texture(&GpuTextureDescriptor {
@@ -100,6 +111,11 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameBinding<E> {
         self.current.as_ref().map(|frame| frame.color_metadata())
     }
 
+    /// Application data belonging to the currently bound texture.
+    pub fn payload(&self) -> Option<&M> {
+        self.current.as_ref().map(|frame| frame.payload())
+    }
+
     /// Bind the latest frame `accept` admits. Returns whether the slot binding
     /// changed.
     ///
@@ -112,7 +128,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameBinding<E> {
     /// woken for every new frame; redraw it when its policy changes.
     pub fn prepare(
         &mut self,
-        inbox: Option<&FrameInbox<E>>,
+        inbox: Option<&FrameInbox<E, M>>,
         accept: impl Fn(&FrameToken<E>) -> bool,
     ) -> bool {
         if self.awaiting_present {
@@ -196,7 +212,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameBinding<E> {
     /// accepted frame is waiting.
     pub fn presented(
         &mut self,
-        inbox: Option<&FrameInbox<E>>,
+        inbox: Option<&FrameInbox<E, M>>,
         accept: impl Fn(&FrameToken<E>) -> bool,
     ) -> bool {
         self.retired = None;
@@ -224,10 +240,10 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameBinding<E> {
     }
 }
 
-fn usable<E: Copy + Eq>(
-    inbox: Option<&FrameInbox<E>>,
+fn usable<E: Copy + Eq, M>(
+    inbox: Option<&FrameInbox<E, M>>,
     accept: &impl Fn(&FrameToken<E>) -> bool,
-    frame: &FrameLease<E>,
+    frame: &FrameLease<E, M>,
 ) -> bool {
     accept(&frame.token())
         && inbox.is_some_and(|inbox| {
@@ -235,8 +251,8 @@ fn usable<E: Copy + Eq>(
         })
 }
 
-fn can_bind<E: Copy + Eq>(
-    frame: &FrameLease<E>,
+fn can_bind<E: Copy + Eq, M>(
+    frame: &FrameLease<E, M>,
     accept: &impl Fn(&FrameToken<E>) -> bool,
     alpha: HostTextureAlphaMode,
 ) -> bool {
@@ -275,7 +291,7 @@ fn metadata_compatible(metadata: FrameColorMetadata, alpha: HostTextureAlphaMode
     )
 }
 
-impl<E> Drop for FrameBinding<E> {
+impl<E, M> Drop for FrameBinding<E, M> {
     fn drop(&mut self) {
         // A returned slot texture is reused by the producer; the registration
         // that outlives this binding must not keep sampling it.
@@ -292,6 +308,65 @@ mod tests {
     use crate::gpu_texture::HostTextureRegistry;
     use nana_frame_exchange::{CopyOutcome, DEFAULT_CAPACITY, FrameExchange};
     use nana_gpu::__framework;
+
+    #[test]
+    fn payload_is_the_bound_frames_data_until_the_next_present() {
+        let gpu = crate::test_gpu::context();
+        let mut exchange = FrameExchange::<_, String>::new_with_payload(
+            &gpu,
+            DEFAULT_CAPACITY,
+            1u64,
+            Arc::new(|| {}),
+        );
+        let inbox = exchange.inbox();
+        let registry = HostTextureRegistry::new();
+        let mut binding = FrameBinding::<_, String>::new_with_payload(
+            &gpu,
+            registry.slot("payload"),
+            HostTextureAlphaMode::Premultiplied,
+        );
+        assert!(binding.payload().is_none());
+        let publish = |exchange: &mut FrameExchange<u64, String>, width, payload: &str| {
+            assert_eq!(
+                exchange.copy_from_with_payload(
+                    &source(&gpu, width),
+                    1,
+                    FrameColorMetadata::unknown(),
+                    payload.into()
+                ),
+                CopyOutcome::Submitted
+            );
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while !exchange.poll() {
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+        };
+        publish(&mut exchange, 4, "old");
+        assert!(binding.prepare(Some(&inbox), |_| true));
+        assert_eq!(binding.payload().map(String::as_str), Some("old"));
+        publish(&mut exchange, 4, "same size, new crop");
+        assert!(!binding.prepare(Some(&inbox), |_| true));
+        assert_eq!(binding.payload().map(String::as_str), Some("old"));
+        assert!(binding.presented(Some(&inbox), |_| true));
+        assert!(binding.prepare(Some(&inbox), |_| true));
+        assert_eq!(
+            binding.payload().map(String::as_str),
+            Some("same size, new crop")
+        );
+        assert_eq!(binding.retired.as_ref().unwrap().payload(), "old");
+        binding.presented(Some(&inbox), |_| true);
+        for width in [8, 12, 16] {
+            publish(&mut exchange, width, "resized");
+            assert!(binding.prepare(Some(&inbox), |_| true));
+            assert_eq!(binding.size(), Some((width, 4)));
+            assert_eq!(binding.payload().map(String::as_str), Some("resized"));
+            binding.presented(Some(&inbox), |_| true);
+        }
+        assert!(binding.prepare(Some(&inbox), |_| false));
+        assert!(binding.payload().is_none());
+        assert!(binding.size().is_none());
+    }
 
     #[test]
     fn metadata_contract_accepts_only_surface_safe_known_encodings() {

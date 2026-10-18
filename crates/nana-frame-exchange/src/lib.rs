@@ -367,15 +367,16 @@ impl Drop for Retirement {
 }
 
 /// A completed copy the consumer may sample until it drops the lease.
-pub struct FrameLease<E = u64> {
+pub struct FrameLease<E = u64, M = ()> {
     token: FrameToken<E>,
     texture: GpuTexture,
     color_metadata: FrameColorMetadata,
+    payload: M,
     ownership: Arc<SlotOwnership>,
     _retirement: Arc<Retirement>,
 }
 
-impl<E: Copy> FrameLease<E> {
+impl<E: Copy, M> FrameLease<E, M> {
     pub fn token(&self) -> FrameToken<E> {
         self.token
     }
@@ -401,9 +402,14 @@ impl<E: Copy> FrameLease<E> {
     pub fn color_metadata(&self) -> FrameColorMetadata {
         self.color_metadata
     }
+
+    /// Immutable application data copied with this frame, independent of its epoch.
+    pub fn payload(&self) -> &M {
+        &self.payload
+    }
 }
 
-impl<E> Drop for FrameLease<E> {
+impl<E, M> Drop for FrameLease<E, M> {
     fn drop(&mut self) {
         // Only record the return. Registering the queue callback that frees
         // the slot can enter the backend, which belongs to the producer lane.
@@ -413,21 +419,21 @@ impl<E> Drop for FrameLease<E> {
     }
 }
 
-struct Shared<E> {
+struct Shared<E, M> {
     exchange: u64,
     device_generation: DeviceGeneration,
-    latest: Mutex<Option<Arc<FrameLease<E>>>>,
+    latest: Mutex<Option<Arc<FrameLease<E, M>>>>,
     epoch: Mutex<E>,
     notified: AtomicBool,
     active: AtomicBool,
 }
 
 /// Consumer side. Never waits for the producer or for GPU completion.
-pub struct FrameInbox<E = u64> {
-    shared: Arc<Shared<E>>,
+pub struct FrameInbox<E = u64, M = ()> {
+    shared: Arc<Shared<E, M>>,
 }
 
-impl<E> Clone for FrameInbox<E> {
+impl<E, M> Clone for FrameInbox<E, M> {
     fn clone(&self) -> Self {
         Self {
             shared: Arc::clone(&self.shared),
@@ -435,14 +441,14 @@ impl<E> Clone for FrameInbox<E> {
     }
 }
 
-impl<E: Copy + Eq> FrameInbox<E> {
+impl<E: Copy + Eq, M> FrameInbox<E, M> {
     pub fn device_generation(&self) -> DeviceGeneration {
         self.shared.device_generation
     }
 
     /// Acknowledge the pending wake and acquire the latest frame. Repeated
     /// calls can return the same frame; compare tokens.
-    pub fn try_take_latest(&self) -> Option<Arc<FrameLease<E>>> {
+    pub fn try_take_latest(&self) -> Option<Arc<FrameLease<E, M>>> {
         // Acknowledge before loading: a racing publication either appears in
         // this load or raises a new wake.
         self.shared.notified.store(false, Ordering::Release);
@@ -450,7 +456,7 @@ impl<E: Copy + Eq> FrameInbox<E> {
     }
 
     /// Inspect the latest frame without acknowledging the wake.
-    pub fn latest(&self) -> Option<Arc<FrameLease<E>>> {
+    pub fn latest(&self) -> Option<Arc<FrameLease<E, M>>> {
         if !self.shared.active.load(Ordering::Acquire) {
             return None;
         }
@@ -477,24 +483,25 @@ impl<E: Copy + Eq> FrameInbox<E> {
     }
 }
 
-struct PendingCopy<E> {
+struct PendingCopy<E, M> {
     token: FrameToken<E>,
     color_metadata: FrameColorMetadata,
+    payload: M,
     completed: Arc<AtomicBool>,
 }
 
-struct Slot<E> {
+struct Slot<E, M> {
     ownership: Arc<SlotOwnership>,
     texture: Option<GpuTexture>,
-    pending: Option<PendingCopy<E>>,
+    pending: Option<PendingCopy<E, M>>,
 }
 
 /// Producer side, owned by one thread.
-pub struct FrameExchange<E = u64> {
-    shared: Arc<Shared<E>>,
+pub struct FrameExchange<E = u64, M = ()> {
+    shared: Arc<Shared<E, M>>,
     gpu: GpuContext,
     retirement: Arc<Retirement>,
-    slots: Box<[Slot<E>]>,
+    slots: Box<[Slot<E, M>]>,
     epoch: E,
     notify: Arc<dyn Fn() + Send + Sync>,
     sequence: u64,
@@ -503,9 +510,21 @@ pub struct FrameExchange<E = u64> {
 }
 
 impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
+    /// Construct an exchange without application payloads.
+    pub fn new(
+        gpu: &GpuContext,
+        capacity: NonZeroU8,
+        epoch: E,
+        notify: Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
+        Self::new_with_payload(gpu, capacity, epoch, notify)
+    }
+}
+
+impl<E: Copy + Eq + Send + Sync + 'static, M: Send + Sync + 'static> FrameExchange<E, M> {
     /// `notify` runs on the producer thread once per acknowledged wake; it
     /// should only schedule the consumer, never wait for it.
-    pub fn new(
+    pub fn new_with_payload(
         gpu: &GpuContext,
         capacity: NonZeroU8,
         epoch: E,
@@ -540,7 +559,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
         }
     }
 
-    pub fn inbox(&self) -> FrameInbox<E> {
+    pub fn inbox(&self) -> FrameInbox<E, M> {
         FrameInbox {
             shared: Arc::clone(&self.shared),
         }
@@ -565,7 +584,10 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
     ///
     /// Safe from any thread: the copy is submitted under the device's
     /// submission guard, so it never races a window's surface reconfiguration.
-    pub fn copy_from(&mut self, source: &GpuTexture, epoch: E) -> CopyOutcome {
+    pub fn copy_from(&mut self, source: &GpuTexture, epoch: E) -> CopyOutcome
+    where
+        M: Default,
+    {
         self.copy_from_with_metadata(source, epoch, FrameColorMetadata::unknown())
     }
 
@@ -578,18 +600,35 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
         source: &GpuTexture,
         epoch: E,
         color_metadata: FrameColorMetadata,
+    ) -> CopyOutcome
+    where
+        M: Default,
+    {
+        self.copy_from_with_payload(source, epoch, color_metadata, M::default())
+    }
+
+    /// Copy texels and immutable application data as one completed publication.
+    pub fn copy_from_with_payload(
+        &mut self,
+        source: &GpuTexture,
+        epoch: E,
+        color_metadata: FrameColorMetadata,
+        payload: M,
     ) -> CopyOutcome {
         if source.generation() != self.gpu.generation() {
             self.set_epoch(epoch);
             return CopyOutcome::DeviceMismatch;
         }
-        self.copy_raw(__framework::texture(source), epoch, color_metadata)
+        self.copy_raw(__framework::texture(source), epoch, color_metadata, payload)
     }
 
     /// [`Self::copy_from`] for a raw WGPU texture created on the exchange's
     /// device.
     #[cfg(feature = "wgpu-interop")]
-    pub fn copy_from_wgpu(&mut self, source: &wgpu::Texture, epoch: E) -> CopyOutcome {
+    pub fn copy_from_wgpu(&mut self, source: &wgpu::Texture, epoch: E) -> CopyOutcome
+    where
+        M: Default,
+    {
         self.copy_from_wgpu_with_metadata(source, epoch, FrameColorMetadata::unknown())
     }
 
@@ -601,8 +640,23 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
         source: &wgpu::Texture,
         epoch: E,
         color_metadata: FrameColorMetadata,
+    ) -> CopyOutcome
+    where
+        M: Default,
+    {
+        self.copy_from_wgpu_with_payload(source, epoch, color_metadata, M::default())
+    }
+
+    /// Raw WGPU variant of [`Self::copy_from_with_payload`].
+    #[cfg(feature = "wgpu-interop")]
+    pub fn copy_from_wgpu_with_payload(
+        &mut self,
+        source: &wgpu::Texture,
+        epoch: E,
+        color_metadata: FrameColorMetadata,
+        payload: M,
     ) -> CopyOutcome {
-        self.copy_raw(source, epoch, color_metadata)
+        self.copy_raw(source, epoch, color_metadata, payload)
     }
 
     fn copy_raw(
@@ -610,6 +664,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
         source: &wgpu::Texture,
         epoch: E,
         color_metadata: FrameColorMetadata,
+        payload: M,
     ) -> CopyOutcome {
         self.set_epoch(epoch);
         let size = source.size();
@@ -703,6 +758,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
                 sequence,
             },
             color_metadata,
+            payload,
             completed,
         });
         self.stats.submitted += 1;
@@ -727,7 +783,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
         }
         let _ = __framework::device(&self.gpu).poll(wgpu::PollType::Poll);
         let epoch = self.epoch;
-        let completed = |pending: &PendingCopy<E>| pending.completed.load(Ordering::Acquire);
+        let completed = |pending: &PendingCopy<E, M>| pending.completed.load(Ordering::Acquire);
         let newest = self
             .slots
             .iter()
@@ -758,6 +814,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
                 token: pending.token,
                 texture: texture.clone(),
                 color_metadata: pending.color_metadata,
+                payload: pending.payload,
                 ownership: Arc::clone(&slot.ownership),
                 _retirement: Arc::clone(&self.retirement),
             });
@@ -793,7 +850,7 @@ impl<E: Copy + Eq + Send + Sync + 'static> FrameExchange<E> {
     }
 }
 
-impl<E> Drop for FrameExchange<E> {
+impl<E, M> Drop for FrameExchange<E, M> {
     fn drop(&mut self) {
         self.shared.active.store(false, Ordering::Release);
         // Held leases stay valid; the textures retire with their last owner.
@@ -824,6 +881,93 @@ mod tests {
         );
         slot.release(2);
         assert!(slot.is_free());
+    }
+
+    #[test]
+    fn payloads_follow_completed_copies_without_invalidating_the_epoch() {
+        let gpu = test_gpu();
+        let mut exchange = FrameExchange::<_, String>::new_with_payload(
+            &gpu,
+            DEFAULT_CAPACITY,
+            7u64,
+            Arc::new(|| {}),
+        );
+        let inbox = exchange.inbox();
+        let texture = source(&gpu, 4, 1, wgpu::TextureUsages::COPY_SRC);
+        let color = FrameColorMetadata::unknown();
+        assert_eq!(
+            exchange.copy_from_with_payload(&texture, 7, color, "old crop".into()),
+            CopyOutcome::Submitted
+        );
+        wait(&gpu);
+        assert!(exchange.poll());
+        let old = inbox.latest().unwrap();
+        assert_eq!(old.payload(), "old crop");
+        assert_eq!(
+            exchange.copy_from_with_payload(&texture, 7, color, "new crop, same pixels".into()),
+            CopyOutcome::Submitted
+        );
+        let pending = exchange
+            .slots
+            .iter()
+            .find_map(|slot| slot.pending.as_ref())
+            .unwrap();
+        let completed = Arc::clone(&pending.completed);
+        wait(&gpu);
+        completed.store(false, Ordering::Release);
+        assert!(!exchange.poll());
+        assert_eq!(inbox.latest().unwrap().token(), old.token());
+        assert_eq!(inbox.latest().unwrap().payload(), "old crop");
+        completed.store(true, Ordering::Release);
+        assert!(exchange.poll());
+        let new = inbox.latest().unwrap();
+        assert_eq!(new.payload(), "new crop, same pixels");
+        assert!(inbox.is_current(&old.token()));
+        assert_eq!(old.payload(), "old crop");
+        assert!(new.token().sequence() > old.token().sequence());
+        assert_eq!(new.size(), old.size());
+        // All three slots are leased or the latest publication; excess work is dropped.
+        assert_eq!(
+            exchange.copy_from_with_payload(&texture, 7, color, "third".into()),
+            CopyOutcome::Submitted
+        );
+        wait(&gpu);
+        assert!(exchange.poll());
+        let third = inbox.latest().unwrap();
+        assert_eq!(
+            exchange.copy_from_with_payload(&texture, 7, color, "dropped".into()),
+            CopyOutcome::PoolFull
+        );
+        assert_eq!(inbox.latest().unwrap().payload(), "third");
+        assert_eq!(exchange.stats().occupied, 3);
+        drop(third);
+    }
+
+    #[test]
+    fn a_late_copy_never_publishes_its_payload_after_an_epoch_change() {
+        let gpu = test_gpu();
+        let mut exchange = FrameExchange::<_, String>::new_with_payload(
+            &gpu,
+            DEFAULT_CAPACITY,
+            1u64,
+            Arc::new(|| {}),
+        );
+        let texture = source(&gpu, 4, 1, wgpu::TextureUsages::COPY_SRC);
+        assert_eq!(
+            exchange.copy_from_with_payload(
+                &texture,
+                1,
+                FrameColorMetadata::unknown(),
+                "stale".into()
+            ),
+            CopyOutcome::Submitted
+        );
+        exchange.set_epoch(2);
+        wait(&gpu);
+        assert!(!exchange.poll());
+        assert!(exchange.inbox().latest().is_none());
+        assert_eq!(exchange.stats().stale_epoch, 1);
+        assert_eq!(exchange.stats().occupied, 0);
     }
 
     #[test]
