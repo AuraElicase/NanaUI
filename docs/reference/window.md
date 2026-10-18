@@ -292,6 +292,16 @@ IME：焦点进可编辑字段时 `Window::request_ime_update(Enable)` 一次（
 
 菜单是整体替换：再调一次 `SetMenuBar` 换掉整条。没有增量条目 API。重建一个菜单很便宜。而跨三个平台做 diff 不便宜。
 
+## 路径规范化与显示
+
+公共路径接口位于 `nana_ui::path`（底层为 `nana_ui_platform::path`）：
+
+- `normalize_path(&Path) -> Cow<Path>` 不访问磁盘，仅在普通 Windows 路径与扩展路径语义相同时去掉 `\\?\`；UNC 转为 `\\server\share\…`。长路径、末尾点或空格、DOS 保留名、设备/卷路径及非 Unicode 路径保留原样。其他平台不改写路径。
+- `canonicalize_path(path) -> io::Result<PathBuf>` 在 `std::fs::canonicalize` 后执行同一规范化；错误原样返回。它会访问磁盘，只在允许文件 I/O 的工作线程调用，不能用于 UI 格式化。
+- `display_path(path, wrap_separators) -> String` 无磁盘访问。普通盘符和 UNC 显示省略扩展前缀（包括长路径），特殊名称和设备路径保留原拼写。`true` 会在分隔符后加入 U+200B，供窄卡片换行。
+
+显示字符串只用于只读文字；文件访问、保存、复制、编辑、资源身份及安全目录检查继续使用真实路径。不要把带 U+200B 的文字写回设置、协议或剪贴板。`PathField` 的值及 `TextChanged` 原样传递；原生文件对话框仍返回真实路径，不执行显示格式化。
+
 ## 文件对话框
 
 系统文件对话框需要父窗口句柄。macOS 挂成 sheet,Windows 需要 owner HWND。而句柄只在宿主层。所以对话框和菜单栏走同一条路:模型在 `nana-ui-core`(`FileDialogRequest` / `FileDialogResult` / `FileFilter`),应用通过 `WindowHandle::open_file_dialog` 请求。由宿主执行。控件仍然拿不到句柄:`PathField` 只发 `BrowseRequested`,由应用翻译成一个请求。
@@ -320,7 +330,7 @@ Linux portal 返回 URI 数组。可保留路径中的换行。zenity fallback �
 | 平台 | 执行方式 |
 | --- | --- |
 | macOS | `/usr/bin/open -R` 选中文件；普通目录用 `open` 打开。带扩展名的目录（`.app` 等包）也用 `-R` 选中，避免被 `open` 启动或交给应用 |
-| Windows | `explorer.exe /select,"<path>"` 选中文件，`explorer.exe "<path>"` 打开目录；参数原样传给 explorer，路径先转成绝对路径、反斜杠、去掉 `\\?\` 前缀。explorer 成功也返回 1，不看退出码 |
+| Windows | `explorer.exe /select,"<path>"` 选中文件，`explorer.exe "<path>"` 打开目录；参数原样传给 explorer，路径先转成绝对路径，经公共 `normalize_path` 安全规范化。普通路径使用反斜杠；必须保留扩展语义的路径不强行去前缀。explorer 成功也返回 1，不看退出码 |
 | Linux | 工作线程上调用 `org.freedesktop.FileManager1` 的 `ShowItems`（文件）/ `ShowFolders`（目录）；没有服务应答时退回 `xdg-open` 打开目录（文件则打开其父目录）。这一步的失败不回传 |
 | 其它 | `RevealError::Unavailable` |
 

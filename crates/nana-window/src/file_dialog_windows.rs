@@ -377,24 +377,11 @@ fn owner_hwnd<W: HasWindowHandle + ?Sized>(window: &W) -> Option<HWND> {
     }
 }
 
-/// `SHCreateItemFromParsingName` rejects `\\?\`. Map `\\?\C:\...` → `C:\...`
-/// and `\\?\UNC\server\share` → `\\server\share`.
+/// Prefer Shell-compatible spelling without changing which directory is meant.
+/// A verbatim-only path may be rejected by the Shell; configure then skips it.
 fn win32_parsing_name(directory: &Path) -> Vec<u16> {
-    const EXTENDED: &[u16] = &[0x5C, 0x5C, 0x3F, 0x5C];
-    let wide: Vec<u16> = directory.as_os_str().encode_wide().collect();
-    let mut name = if wide.len() >= 8
-        && wide.starts_with(EXTENDED)
-        && wide[7] == 0x5C
-        && String::from_utf16(&wide[4..7]).is_ok_and(|label| label.eq_ignore_ascii_case("UNC"))
-    {
-        let mut name = vec![0x5C, 0x5C];
-        name.extend_from_slice(&wide[8..]);
-        name
-    } else if wide.starts_with(EXTENDED) {
-        wide[4..].to_vec()
-    } else {
-        wide
-    };
+    let path = nana_ui_platform::path::normalize_path(directory);
+    let mut name: Vec<u16> = path.as_os_str().encode_wide().collect();
     name.push(0);
     name
 }
@@ -555,5 +542,15 @@ mod tests {
             as_os(&win32_parsing_name(Path::new(r"C:\Windows"))),
             std::ffi::OsString::from(r"C:\Windows")
         );
+        for raw in [
+            r"\\?\C:\name.",
+            r"\\?\UNC\server\share\name ",
+            r"\\?\Volume{1234}\x",
+        ] {
+            assert_eq!(
+                as_os(&win32_parsing_name(Path::new(raw))),
+                std::ffi::OsString::from(raw)
+            );
+        }
     }
 }

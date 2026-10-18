@@ -88,7 +88,7 @@ fn reveal_command(path: &Path, target: Target) -> RevealCommand {
 
 #[cfg(target_os = "windows")]
 fn reveal_command(path: &Path, target: Target) -> RevealCommand {
-    // Explorer wants an absolute path with backslashes and no `\\?\` prefix.
+    // Use ordinary spelling only when it still names the same file.
     // Windows paths cannot contain `"`, so quoting is enough.
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
     let path = explorer_path(&absolute);
@@ -104,13 +104,12 @@ fn reveal_command(path: &Path, target: Target) -> RevealCommand {
 
 #[cfg(target_os = "windows")]
 fn explorer_path(path: &Path) -> String {
-    let path = path.to_string_lossy().replace('/', "\\");
-    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
-        format!(r"\\{rest}")
-    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
-        rest.to_owned()
+    let path = nana_ui_platform::path::normalize_path(path);
+    let text = path.to_string_lossy();
+    if text.starts_with(r"\\?\") {
+        text.into_owned()
     } else {
-        path
+        text.replace('/', "\\")
     }
 }
 
@@ -271,6 +270,11 @@ mod tests {
         assert_eq!(
             explorer_path(Path::new(r"\\?\UNC\srv\share")),
             r"\\srv\share"
+        );
+        assert_eq!(explorer_path(Path::new(r"\\?\C:\name.")), r"\\?\C:\name.");
+        assert_eq!(
+            explorer_path(Path::new(r"\\?\Volume{1234}\x")),
+            r"\\?\Volume{1234}\x"
         );
     }
 

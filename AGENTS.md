@@ -42,6 +42,8 @@ Read the focused contract document named by the selected skill before editing. R
 
 ## Non-negotiable contracts
 
+- Shared path spelling belongs to `nana-ui-platform::path` (facade `nana_ui::path`): normalize usable paths conservatively, canonicalize only on I/O workers, and format read-only display text separately. Never persist, copy or open display strings containing wrapping characters; native dialogs and editable path fields retain real paths. See `docs/reference/window.md`.
+
 - Preserve one authoritative \`UiWorld\` → \`UiScene\` path. \`PendingHostOps\` commit at the frame boundary; \`LayoutBoxStore\` is a projection and scrolling does not write Runtime layout boxes.
 - Use the shared \`ComponentRegistry\` for built-in and extension components. Keep \`event_flags\` in Runtime event listeners and GPU slots in Runtime \`CustomRenderNode\`.
 - Keep logical state separate from presentation overlays. Compositor animation must not write transient samples back into base style state.

@@ -323,9 +323,7 @@ impl PathEnvironment {
         let executable =
             std::env::current_exe().map_err(|e| PathsError::NoExecutable(e.to_string()))?;
         // Resolve symlinks so a launcher link does not move the app root.
-        let executable = std::fs::canonicalize(&executable)
-            .map(strip_verbatim)
-            .unwrap_or(executable);
+        let executable = crate::path::canonicalize_path(&executable).unwrap_or(executable);
         let vars = VARS
             .iter()
             .filter_map(|name| {
@@ -360,33 +358,6 @@ impl PathEnvironment {
 
     fn require(&self, name: &'static str) -> Result<PathBuf, PathsError> {
         self.var(name).ok_or(PathsError::MissingEnvironment(name))
-    }
-}
-
-/// Windows `canonicalize` returns verbatim paths (`\\?\C:\…`), in which
-/// `/` is not a separator and many tools refuse to open anything. Turn the
-/// plain drive and UNC forms back into ordinary paths.
-fn strip_verbatim(path: PathBuf) -> PathBuf {
-    let Some(text) = path.to_str() else {
-        return path;
-    };
-    if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
-        return PathBuf::from(format!(r"\\{unc}"));
-    }
-    // Only when the plain form means the same file: short enough for the
-    // legacy APIs, and no component ending in `.` or ` ` (which the plain
-    // form would silently trim).
-    match text.strip_prefix(r"\\?\") {
-        Some(rest)
-            if rest.as_bytes().get(1) == Some(&b':')
-                && rest.len() < 260
-                && !rest
-                    .split('\\')
-                    .any(|part| part.ends_with('.') || part.ends_with(' ')) =>
-        {
-            PathBuf::from(rest)
-        }
-        _ => path,
     }
 }
 
@@ -799,28 +770,6 @@ mod tests {
         assert_eq!(p.cache(), Path::new("/data/user/0/dev.nana.live/cache"));
         assert_eq!(p.logs(), Path::new("/data/user/0/dev.nana.live/files/logs"));
         assert!(p.runtime_resources().starts_with(p.data()));
-    }
-
-    #[test]
-    fn verbatim_windows_paths_become_ordinary_paths() {
-        assert_eq!(
-            strip_verbatim(PathBuf::from(r"\\?\C:\Games\App.exe")),
-            PathBuf::from(r"C:\Games\App.exe")
-        );
-        assert_eq!(
-            strip_verbatim(PathBuf::from(r"\\?\UNC\server\share\App.exe")),
-            PathBuf::from(r"\\server\share\App.exe")
-        );
-        let long = format!(r"\\?\C:\{}\App.exe", "d".repeat(300));
-        assert_eq!(strip_verbatim(PathBuf::from(&long)), PathBuf::from(&long));
-        assert_eq!(
-            strip_verbatim(PathBuf::from(r"\\?\C:\odd.\App.exe")),
-            PathBuf::from(r"\\?\C:\odd.\App.exe")
-        );
-        assert_eq!(
-            strip_verbatim(PathBuf::from("/opt/app/app")),
-            PathBuf::from("/opt/app/app")
-        );
     }
 
     #[test]
