@@ -23,7 +23,7 @@ use crate::{
 };
 use crate::{
     AppTitleBar, Breadcrumb, Dialog, Drawer, FormField, GpuView, IconGlyph, InteractiveCard,
-    LabeledValue, LevelMeter, List, MediaTransportBar, OverlayHost, Panel, SettingsCard,
+    LabeledValue, LevelMeter, List, MediaTransportBar, OverlayHost, Panel, PathText, SettingsCard,
     SidebarRow, Skeleton, StatusBar, Tabs, Toolbar, Tooltip, ValidationMessage, Video,
 };
 use nana_ui_core::{ButtonKind, Icon, RadiusTier, SemanticColorRole, StatusTone};

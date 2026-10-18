@@ -82,6 +82,8 @@ mod pane;
 mod pane_section;
 mod panel;
 mod path_field;
+mod path_text;
+pub use path_text::PathText;
 mod placeholders;
 mod popover;
 mod presence;

@@ -208,7 +208,11 @@ macro_rules! for_each_control {
                 icon: Option<Icon> = set,
                 compact: bool = set,
             };
+            PathText => path_text(value: text) for PathText {
+                value: Arc<str> = set,
+            };
             LabeledValue => labeled_value(label: text) for LabeledValue {
+                value_is_path: bool = set,
                 label: Arc<str> = set,
                 value: Arc<str> = set,
                 compact: bool = set,

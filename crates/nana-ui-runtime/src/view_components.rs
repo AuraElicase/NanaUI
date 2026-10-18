@@ -3985,6 +3985,7 @@ fn tooltip_surface_style(max_width: f32) -> NodeStyle {
             border_radius: Some(nana_ui_core::TooltipConfig::RADIUS),
             font_size: Some(nana_ui_core::TooltipConfig::FONT_SIZE),
             z_index: Some(1_000),
+            overflow_wrap: Some(nana_ui_core::OverflowWrapSpec::Anywhere),
             ..nana_ui_core::LayoutStyle::default()
         }),
         background: Some(nana_ui_core::SemanticColorRole::Surface),

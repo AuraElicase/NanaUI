@@ -442,12 +442,7 @@ impl AppContext {
     ) -> Result<bool, FrameworkError> {
         let current = self.read(summary, |summary| summary.action)?;
         let owned_current = self.validate_feedback_action(summary.id, current, action)?;
-        let ordered = action.into_iter().collect::<Vec<_>>();
-        let changed = current != action
-            || self
-                .world
-                .node(summary.id)
-                .is_some_and(|node| node.children != ordered);
+        let changed = current != action || owned_current != action;
         if !changed {
             return Ok(false);
         }
@@ -476,13 +471,24 @@ impl AppContext {
             .world
             .node(parent)
             .ok_or(FrameworkError::MissingView(parent))?;
-        if parent_node.children.len() > 1 {
+        // A full-value tooltip is framework chrome, not an application action slot.
+        let tooltip = self
+            .component_lifecycle
+            .tooltips
+            .get(&parent)
+            .map(|tip| tip.overlay);
+        let mut children = parent_node
+            .children
+            .iter()
+            .copied()
+            .filter(|id| Some(*id) != tooltip);
+        let owned_current = children.next();
+        if let Some(extra) = children.next() {
             return Err(FrameworkError::InvalidFeedbackSlots {
                 parent,
-                slot: parent_node.children.get(1).copied(),
+                slot: Some(extra),
             });
         }
-        let owned_current = parent_node.children.first().copied();
         match (current, owned_current) {
             (None, None) => {}
             (Some(declared), Some(owned)) if declared == owned => {}
@@ -520,6 +526,7 @@ impl AppContext {
                 });
             };
             if slot == parent
+                || Some(slot) == tooltip
                 || node.document != parent_node.document
                 || node.parent.is_some_and(|owner| owner != parent)
             {
@@ -642,11 +649,7 @@ impl AppContext {
         }
         self.sync_hover_card_focus(id);
         self.sync_sidebar_section_body_port(id);
-        let tooltip = self
-            .views
-            .get(&id)
-            .and_then(|view| view.downcast_ref::<IconButton>())
-            .and_then(|button| (!button.disabled).then(|| button.tooltip.clone()).flatten());
+        let tooltip = self.tooltip_configuration(id);
         match (tooltip, self.component_lifecycle.tooltips.get(&id).copied()) {
             (Some(configured), None) => {
                 let document = self
@@ -1080,19 +1083,64 @@ impl AppContext {
         Ok(())
     }
 
+    fn tooltip_configuration(&self, id: StableNodeId) -> Option<crate::IconButtonTooltip> {
+        if let Some(button) = self
+            .views
+            .get(&id)
+            .and_then(|view| view.downcast_ref::<IconButton>())
+        {
+            return (!button.disabled).then(|| button.tooltip.clone()).flatten();
+        }
+        let value = match self.world.standard_visual(id)? {
+            crate::StandardVisual::PathText { value } => value,
+            crate::StandardVisual::LabeledValue {
+                value_is_path: true,
+                value,
+                ..
+            } => value,
+            _ => return None,
+        };
+        (!value.is_empty()).then_some(crate::IconButtonTooltip {
+            label: value,
+            config: TooltipConfig {
+                delay_ms: 350,
+                ..TooltipConfig::default()
+            },
+        })
+    }
+
+    fn set_tooltip_visible(
+        &mut self,
+        target: StableNodeId,
+        overlay: Option<StableNodeId>,
+    ) -> Result<(), FrameworkError> {
+        if self
+            .views
+            .get(&target)
+            .is_some_and(|view| view.is::<IconButton>())
+        {
+            self.update_component(Entity::<IconButton>::from_stable_id(target), |button, _| {
+                button.tooltip_open = overlay.is_some();
+            })?;
+        }
+        let mut mutations = MutationQueue::new();
+        mutations.set_overlay_host(
+            target,
+            crate::OverlayHostState {
+                active: overlay,
+                restore_focus: None,
+            },
+        );
+        self.world.commit(mutations)?;
+        Ok(())
+    }
+
     pub(super) fn enter_tooltip(
         &mut self,
         target: StableNodeId,
         now: Duration,
     ) -> Result<(), FrameworkError> {
-        let Some(button) = self
-            .views
-            .get(&target)
-            .and_then(|view| view.downcast_ref::<IconButton>())
-        else {
-            return Ok(());
-        };
-        let Some(configured) = button.tooltip.as_ref() else {
+        let Some(configured) = self.tooltip_configuration(target) else {
             return Ok(());
         };
         let Some(lifecycle) = self.component_lifecycle.tooltips.get_mut(&target) else {
@@ -1114,14 +1162,7 @@ impl AppContext {
             return Ok(());
         }
         lifecycle.open = false;
-        self.update_component(
-            Entity::<IconButton>::from_stable_id(target),
-            |button, cx| {
-                button.tooltip_open = false;
-                cx.mutations()
-                    .set_overlay_host(target, crate::OverlayHostState::default());
-            },
-        )?;
+        self.set_tooltip_visible(target, None)?;
         Ok(())
     }
 
@@ -1137,19 +1178,7 @@ impl AppContext {
             lifecycle.show_at = None;
             lifecycle.open = true;
         }
-        self.update_component(
-            Entity::<IconButton>::from_stable_id(target),
-            |button, cx| {
-                button.tooltip_open = true;
-                cx.mutations().set_overlay_host(
-                    target,
-                    crate::OverlayHostState {
-                        active: Some(lifecycle.overlay),
-                        restore_focus: None,
-                    },
-                );
-            },
-        )?;
+        self.set_tooltip_visible(target, Some(lifecycle.overlay))?;
         Ok(true)
     }
 
@@ -1465,6 +1494,7 @@ impl AppContext {
         let padding_x = TooltipConfig::PADDING_X;
         let padding_y = TooltipConfig::PADDING_Y;
         let desired_width = (metrics.width + padding_x * 2.0 + 2.0)
+            .min((viewport.width - config.viewport_padding.max(0.0) * 2.0).max(0.0))
             .min(config.max_width)
             .max(0.0);
         let height = (metrics.height + padding_y * 2.0 + 2.0).max(0.0);
