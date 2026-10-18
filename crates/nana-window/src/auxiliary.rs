@@ -1,7 +1,7 @@
 //! Native ownership of independently movable auxiliary top-level windows.
 //!
 //! The host retains this binding until before either native window is destroyed.
-//! It never activates a window or promotes it to the desktop's topmost band.
+//! It never activates a window or requests topmost independently of its owner.
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
@@ -58,21 +58,98 @@ impl AuxiliaryWindow {
     pub fn sync(&self, parent_mapped: bool, parent_topmost: bool, topmost: bool) {
         self.inner.sync(parent_mapped, parent_topmost, topmost);
     }
+
+    /// Set the owner's effective policy before native operations. `None`
+    /// leaves the band to the fullscreen backend; ownership stays attached.
+    pub fn set_parent_topmost(&self, topmost: Option<bool>) {
+        self.inner.set_parent_topmost(topmost);
+    }
 }
 
 #[cfg(target_os = "windows")]
 mod platform {
     use super::*;
     use raw_window_handle::RawWindowHandle;
+    use std::{cell::Cell, rc::Rc};
     use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongPtrW, HWND_NOTOPMOST, HWND_TOPMOST,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WS_EX_TOPMOST,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WINDOWPOS,
+        WM_NCDESTROY, WM_STYLECHANGED, WM_WINDOWPOSCHANGED, WM_WINDOWPOSCHANGING, WS_EX_TOPMOST,
     };
 
     pub(super) struct Binding {
         parent: HWND,
         window: HWND,
+        guard: Rc<LevelGuard>,
+    }
+
+    struct LevelGuard {
+        window: HWND,
+        child: HWND,
+        expected: Cell<Option<bool>>,
+        attached: Cell<bool>,
+        syncing: Cell<bool>,
+    }
+
+    impl LevelGuard {
+        fn conform(&self) {
+            if self.expected.get() != Some(true) || self.syncing.replace(true) {
+                return;
+            }
+            conform_band(self.window, true);
+            self.syncing.set(false);
+        }
+    }
+
+    unsafe extern "system" fn level_proc(
+        window: HWND,
+        message: u32,
+        wparam: usize,
+        lparam: isize,
+        id: usize,
+        data: usize,
+    ) -> isize {
+        let pointer = data as *const LevelGuard;
+        // SAFETY: the binding retains this Rc while installed. Hold a local
+        // reference before forwarding: another handler can close the child
+        // and release its binding synchronously inside DefSubclassProc.
+        let guard = unsafe {
+            Rc::increment_strong_count(pointer);
+            Rc::from_raw(pointer)
+        };
+        if message == WM_NCDESTROY {
+            guard.attached.set(false);
+            unsafe {
+                RemoveWindowSubclass(guard.window, Some(level_proc), id);
+                RemoveWindowSubclass(guard.child, Some(level_proc), id);
+            }
+        }
+        let result = unsafe { DefSubclassProc(window, message, wparam, lparam) };
+        // Win32 resolves HWND_TOPMOST to an actual insert-after window before
+        // this message. With hidden IME windows in an owned group, that window
+        // can be non-topmost and the call succeeds without changing the band.
+        // Preserve the host's explicit policy at the native commit point. Do
+        // not alter matching bands, move-only work or fullscreen-owned policy.
+        if message == WM_WINDOWPOSCHANGING
+            && guard.attached.get()
+            && window == guard.window
+            && guard.expected.get() == Some(true)
+            && unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST == 0
+        {
+            let pos = unsafe { &mut *(lparam as *mut WINDOWPOS) };
+            if pos.flags & SWP_NOZORDER == 0 {
+                pos.hwndInsertAfter = HWND_TOPMOST;
+            }
+        }
+        if guard.attached.get()
+            && (message == WM_WINDOWPOSCHANGED
+                || (message == WM_STYLECHANGED && wparam == GWL_EXSTYLE as usize))
+        {
+            guard.conform();
+        }
+        result
     }
 
     impl Binding {
@@ -98,9 +175,50 @@ mod platform {
                     "native owner was not installed".into(),
                 ));
             }
+            let parent = parent.hwnd.get() as HWND;
+            let window = window.hwnd.get() as HWND;
+            let actual =
+                unsafe { GetWindowLongPtrW(parent, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST != 0;
+            let guard = Rc::new(LevelGuard {
+                window: parent,
+                child: window,
+                expected: Cell::new(Some(actual)),
+                attached: Cell::new(true),
+                syncing: Cell::new(false),
+            });
+            if unsafe {
+                SetWindowSubclass(
+                    parent,
+                    Some(level_proc),
+                    window as usize,
+                    Rc::as_ptr(&guard) as usize,
+                )
+            } == 0
+            {
+                return Err(AuxiliaryWindowError(
+                    std::io::Error::last_os_error().to_string(),
+                ));
+            }
+            // Implicit owner-band changes can be reported on the owned
+            // window alone, so observe both ends of the native association.
+            if unsafe {
+                SetWindowSubclass(
+                    window,
+                    Some(level_proc),
+                    window as usize,
+                    Rc::as_ptr(&guard) as usize,
+                )
+            } == 0
+            {
+                let error = std::io::Error::last_os_error();
+                guard.attached.set(false);
+                unsafe { RemoveWindowSubclass(parent, Some(level_proc), window as usize) };
+                return Err(AuxiliaryWindowError(error.to_string()));
+            }
             Ok(Self {
-                parent: parent.hwnd.get() as _,
-                window: window.hwnd.get() as _,
+                parent,
+                window,
+                guard,
             })
         }
 
@@ -109,8 +227,28 @@ mod platform {
             // band without updating winit's cached flags. Reconcile the actual
             // bits after the native operation; never toggle cached flags or
             // activate a window to force an update. Each call is idempotent.
-            conform_band(self.parent, parent_topmost);
-            conform_band(self.window, topmost);
+            if self.guard.attached.get() && self.guard.expected.get().is_some() {
+                self.guard.expected.set(Some(parent_topmost));
+                conform_band(self.parent, parent_topmost);
+                conform_band(self.window, topmost);
+            }
+        }
+
+        pub(super) fn set_parent_topmost(&self, topmost: Option<bool>) {
+            self.guard.expected.set(topmost);
+        }
+    }
+
+    impl Drop for Binding {
+        fn drop(&mut self) {
+            if self.guard.attached.replace(false) {
+                unsafe {
+                    RemoveWindowSubclass(self.parent, Some(level_proc), self.window as usize)
+                };
+                unsafe {
+                    RemoveWindowSubclass(self.window, Some(level_proc), self.window as usize)
+                };
+            }
         }
     }
 
@@ -168,6 +306,7 @@ mod platform {
     }
 
     impl Binding {
+        pub(super) fn set_parent_topmost(&self, _topmost: Option<bool>) {}
         pub(super) fn attach<P, W>(parent: &P, window: &W) -> Result<Self, AuxiliaryWindowError>
         where
             P: HasWindowHandle + HasDisplayHandle + ?Sized,
@@ -222,6 +361,7 @@ mod platform {
     }
 
     impl Binding {
+        pub(super) fn set_parent_topmost(&self, _topmost: Option<bool>) {}
         pub(super) fn attach<P, W>(parent: &P, window: &W) -> Result<Self, AuxiliaryWindowError>
         where
             P: HasWindowHandle + HasDisplayHandle + ?Sized,
@@ -318,6 +458,7 @@ mod platform {
     use super::*;
     pub(super) struct Binding;
     impl Binding {
+        pub(super) fn set_parent_topmost(&self, _topmost: Option<bool>) {}
         pub(super) fn attach<P, W>(_parent: &P, _window: &W) -> Result<Self, AuxiliaryWindowError>
         where
             P: HasWindowHandle + HasDisplayHandle + ?Sized,
