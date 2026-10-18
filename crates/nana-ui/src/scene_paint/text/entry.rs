@@ -59,6 +59,7 @@ pub(in crate::scene_paint) struct EntryKey {
 pub(super) struct EntrySegment {
     pub mask_page: u32,
     pub color_page: u32,
+    pub material: u64,
     pub first: u32,
     pub count: u32,
 }
@@ -665,7 +666,8 @@ impl SegmentBuilder {
         let first = base + segment.first;
         let compatible = adjacent
             && self.open.as_ref().is_some_and(|open| {
-                open.first + open.count <= first
+                open.material == segment.material
+                    && open.first + open.count <= first
                     && (open.mask_page == segment.mask_page
                         || open.mask_page == self.placeholders[0]
                         || segment.mask_page == self.placeholders[0])
@@ -690,6 +692,7 @@ impl SegmentBuilder {
         self.open = Some(DrawSegment {
             mask_page: segment.mask_page,
             color_page: segment.color_page,
+            material: segment.material,
             first,
             count: segment.count,
         });

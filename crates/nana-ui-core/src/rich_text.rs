@@ -367,6 +367,7 @@ impl RichShapeStyle {
 /// The paint tier of a span: everything drawn from glyphs already placed.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct RichPaintStyle {
+    pub material: Option<crate::MaterialRef>,
     /// Glyph fill.
     pub color: Option<PaintColor>,
     pub decoration: Option<TextDecorationLine>,
@@ -529,6 +530,7 @@ impl RichSpanStyle {
                 features: pick(&self.shape.features, &over.shape.features),
             },
             paint: RichPaintStyle {
+                material: pick(&self.paint.material, &over.paint.material),
                 color: pick(&self.paint.color, &over.paint.color),
                 decoration: pick(&self.paint.decoration, &over.paint.decoration),
                 decoration_color: pick(&self.paint.decoration_color, &over.paint.decoration_color),

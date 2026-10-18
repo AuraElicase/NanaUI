@@ -19,6 +19,7 @@ use nana_ui::{
     SceneWgpuPainter, runtime::*, wgpu,
 };
 use nana_ui_scene::{ScenePrimitiveKind, UiScene};
+use std::sync::Arc;
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: [u32; 2] = [320, 160];
@@ -52,7 +53,13 @@ fn retained_scene() -> UiScene {
     let root = cx.create_component(doc, Stack::column(8.0)).unwrap();
     let mut ids = vec![root.stable_id()];
     for text in LABELS {
-        let label = cx.create_component(doc, Text::new(text)).unwrap();
+        let mut label = Text::new(text);
+        Arc::make_mut(&mut label.style.layout).paint.text_material = Some(
+            nana_ui_core::MaterialRef::new(nana_ui_core::MaterialProgram::new(
+                "fn material(i:MaterialInput)->vec4<f32>{return vec4<f32>(i.color.rgb, .85+.15*sin(i.position.x*3.));}",
+            )),
+        );
+        let label = cx.create_component(doc, label).unwrap();
         cx.append_child(root, label).unwrap();
         ids.push(label.stable_id());
     }

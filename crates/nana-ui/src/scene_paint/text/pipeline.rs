@@ -119,6 +119,9 @@ struct VsOut {
     // The glyph's cell on its page, in normalized coordinates: the taps a
     // shrunk glyph averages stay in it rather than read a neighbour.
     @location(6) @interpolate(flat) cell: vec4<f32>,
+    @location(7) material_position: vec2<f32>,
+    @location(8) glyph_uv: vec2<f32>,
+    @location(9) @interpolate(flat) glyph_size: vec2<f32>,
 }
 
 @vertex
@@ -192,6 +195,9 @@ fn vs_main(vertex: VsIn) -> VsOut {
     var out: VsOut;
     out.position = globals.transform * vec4<f32>(world * clip_w, 0.0, clip_w);
     out.color = color;
+    out.material_position = vec2<f32>(offset) / run.raster;
+    out.glyph_uv = vec2<f32>(corner);
+    out.glyph_size = vec2<f32>(f32(width), f32(height)) / run.raster;
     // `atlas_uv` of one texel is the page's texel size.
     out.uv = texel * atlas_uv(vec2<u32>(1u), page);
     out.world_pos = world;
@@ -540,6 +546,7 @@ fn text_layout_key() -> u64 {
 pub(super) struct DrawSegment {
     pub mask_page: u32,
     pub color_page: u32,
+    pub material: u64,
     pub first: u32,
     pub count: u32,
 }
@@ -580,6 +587,11 @@ pub(super) struct TextTargetGpu {
 }
 
 pub(super) struct TextGpu {
+    materials: std::collections::HashMap<u64, std::sync::Weak<nana_ui_core::MaterialInstance>>,
+    material_bindings:
+        std::collections::HashMap<u64, std::sync::Arc<super::super::material::MaterialBinding>>,
+    material_pipelines: std::collections::HashMap<(u64, bool), Option<wgpu::RenderPipeline>>,
+    material_device: std::sync::Arc<super::super::material::MaterialDevice>,
     pipeline: wgpu::RenderPipeline,
     /// The dual-source program, while subpixel text is on.
     dual_source: Option<wgpu::RenderPipeline>,
@@ -729,6 +741,10 @@ impl TextGpu {
             .max_storage_buffer_binding_size
             .min(limits.max_buffer_size);
         Self {
+            materials: Default::default(),
+            material_bindings: Default::default(),
+            material_pipelines: Default::default(),
+            material_device: super::super::material::MaterialDevice::shared(device, policy),
             pipeline,
             dual_source: None,
             layout,
@@ -737,6 +753,55 @@ impl TextGpu {
             contrast: TextContrast::system(),
             policy: policy.cloned(),
             instance_slots: u32::try_from(instance_bytes / INSTANCE_BYTES).unwrap_or(u32::MAX),
+        }
+    }
+
+    pub(super) fn register_material(&mut self, material: &nana_ui_core::MaterialRef) {
+        self.materials.insert(material.key(), material.downgrade());
+    }
+    pub(super) fn prepare_materials(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        atlas: &GlyphAtlasManager,
+        work: Option<&GpuWorkSink>,
+    ) {
+        self.materials.retain(|_, value| value.strong_count() > 0);
+        self.material_bindings
+            .retain(|key, _| self.materials.contains_key(key));
+        let programs: std::collections::HashSet<_> = self
+            .materials
+            .values()
+            .filter_map(nana_ui_core::MaterialRef::upgrade)
+            .map(|m| m.program().key())
+            .collect();
+        self.material_pipelines
+            .retain(|(key, _), _| programs.contains(key));
+        let dual = self.dual_source.is_some();
+        for (key, weak) in &self.materials {
+            let Some(material) = nana_ui_core::MaterialRef::upgrade(weak) else {
+                continue;
+            };
+            if !self.material_bindings.contains_key(key) {
+                if let Some(binding) = self.material_device.prepare(device, queue, &material, work)
+                {
+                    self.material_bindings.insert(*key, binding);
+                }
+            }
+            self.material_pipelines.entry((material.program().key(), dual)).or_insert_with(|| {
+                let author = super::super::material::source(material.program())?;
+                let native = if dual { TEXT_SHADER_DUAL_SOURCE } else { TEXT_SHADER };
+                let source = format!("{native}\n{author}")
+                    .replace("out.color = input.color.rgb;", "let nm = nm_text_material(nm_text_MaterialInput(input.material_position, input.glyph_uv, input.glyph_size, input.glyph_uv, vec4<f32>(input.color.rgb, 1.))); out.color = nm.rgb;")
+                    .replace("input.color.a * corrected * clip_cover", "input.color.a * clamp(nm.a, 0., 1.) * corrected * clip_cover")
+                    .replace("* (input.color.a * clip_cover)", "* (input.color.a * clamp(nm.a, 0., 1.) * clip_cover)");
+                let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label:Some("text material"), bind_group_layouts:&[Some(&self.globals_layout), Some(atlas.layout()), Some(&self.material_device.layout)], immediate_size:0 });
+                let blend = if dual {
+                    let channel=wgpu::BlendComponent { src_factor:wgpu::BlendFactor::Src1, dst_factor:wgpu::BlendFactor::OneMinusSrc1, operation:wgpu::BlendOperation::Add };
+                    wgpu::BlendState { color:channel, alpha:channel }
+                } else { wgpu::BlendState::ALPHA_BLENDING };
+                self.material_device.pipeline((if dual {3} else {2}, self.format, 1, material.program().key(), 0), &[material.program()], device, || build_pipeline(device, &layout, self.format, &source, blend))
+            });
         }
     }
 
@@ -1115,7 +1180,24 @@ impl TextGpu {
         if segment.count == 0 {
             return;
         }
-        pass.set_pipeline(self.dual_source.as_ref().unwrap_or(&self.pipeline));
+        let custom = self
+            .materials
+            .get(&segment.material)
+            .and_then(nana_ui_core::MaterialRef::upgrade)
+            .and_then(|material| {
+                let pipeline = self
+                    .material_pipelines
+                    .get(&(material.program().key(), self.dual_source.is_some()))?
+                    .as_ref()?;
+                let binding = self.material_bindings.get(&segment.material)?;
+                Some((pipeline, binding))
+            });
+        if let Some((pipeline, binding)) = custom {
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(2, &binding.group, &[]);
+        } else {
+            pass.set_pipeline(self.dual_source.as_ref().unwrap_or(&self.pipeline));
+        }
         let Some(globals) = target.globals_bind_group.as_ref() else {
             return;
         };
@@ -1177,7 +1259,7 @@ fn build_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
-    source: &'static str,
+    source: &str,
     blend: wgpu::BlendState,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

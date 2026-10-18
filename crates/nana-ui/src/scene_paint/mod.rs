@@ -15,6 +15,7 @@ mod host_texture;
 mod icon;
 mod image_resample;
 pub(crate) mod image_url;
+mod material;
 mod mesh;
 mod motion;
 mod natural_sizes;
