@@ -465,6 +465,11 @@ pub struct WindowDescriptor {
     pub resizable: bool,
     pub role: WindowRole,
     pub modal: bool,
+    /// Owner of an auxiliary top-level window. Desktop hosts keep it above
+    /// its owner without confining it to the owner's client area. Auxiliaries
+    /// inherit a topmost owner's band; their own requested level is retained
+    /// when the owner returns to normal. Underlay uses the opposite ordering.
+    /// An initially hidden owner does not suppress a visible auxiliary.
     pub parent: Option<WindowId>,
     /// When true, keep the platform caption instead of NanaUI client chrome.
     ///

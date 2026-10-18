@@ -3,6 +3,34 @@
 use super::*;
 use nana_diagnostics::{framework::window as diagnostics_window, metric};
 
+/// Ownership adds a minimum band; an explicitly topmost auxiliary retains
+/// its request when the owner returns to normal. Underlays have their own
+/// native ordering contract and are never treated as auxiliary windows.
+pub(super) fn auxiliary_level(requested: WindowLevel, parent: Option<WindowLevel>) -> WindowLevel {
+    if parent == Some(WindowLevel::AlwaysOnTop) {
+        WindowLevel::AlwaysOnTop
+    } else {
+        requested
+    }
+}
+
+fn attach_auxiliary(
+    parent: &dyn winit::window::Window,
+    window: &dyn winit::window::Window,
+) -> Result<nana_window::AuxiliaryWindow, String> {
+    #[cfg(target_os = "linux")]
+    {
+        use winit::platform::wayland::WindowExtWayland;
+        if let (Some(parent), Some(window)) = (parent.xdg_toplevel(), window.xdg_toplevel()) {
+            // SAFETY: both windows use this host's display and outlive the
+            // binding, which WindowContext releases before either surface.
+            return unsafe { nana_window::AuxiliaryWindow::attach_wayland(parent, window) }
+                .map_err(|error| error.to_string());
+        }
+    }
+    nana_window::AuxiliaryWindow::attach(parent, window).map_err(|error| error.to_string())
+}
+
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn uses_host_managed_drag(settings: &WindowDescriptor, button: i16, has_underlay: bool) -> bool {
     settings.host_managed_drag
@@ -844,6 +872,14 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             ),
             _ => None,
         };
+        let auxiliary = if settings.role != WindowRole::Underlay {
+            parent
+                .as_deref()
+                .map(|parent| attach_auxiliary(parent, window.as_ref()))
+                .transpose()?
+        } else {
+            None
+        };
         // The surface has answered, so this window's effective material and the
         // chrome that matches it are settled together, before it is shown.
         let presentation = ResolvedWindowPresentation::resolve(
@@ -915,6 +951,15 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         } else {
             WindowLevel::Normal
         };
+        let requested_level = level;
+        let level = auxiliary_level(
+            level,
+            settings
+                .parent
+                .filter(|_| auxiliary.is_some())
+                .and_then(|id| self.window_contexts.get(&id).map(|host| host.level)),
+        );
+        window.set_window_level(super::display::winit_level(level));
         let pending_fullscreen = settings.fullscreen;
         let skip_taskbar_report = descriptor_skip_taskbar(window.as_ref(), &settings);
         let generation = *self.input_generations.entry(id).or_insert(1);
@@ -943,6 +988,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 size_move,
                 aspect_conform_pending: false,
                 level,
+                requested_level,
+                presented: std::cell::Cell::new(false),
                 mode: None,
                 pending_fullscreen,
                 native_controls_visible: true,
@@ -955,8 +1002,10 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 shadow: nana_window::shadow::WindowShadowState::default(),
                 shadow_body: None,
                 underlay,
+                auxiliary,
             },
         );
+        self.sync_auxiliary_window(id);
         #[cfg(target_os = "windows")]
         if let Some(parent) = modal_parent.and_then(|parent| self.window(parent)) {
             parent.set_enable(false);
@@ -1113,6 +1162,37 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         self.mutate_window_visibility(id, |window| window.set_visible(true));
         if let Some(window) = self.window(id) {
             window.focus_window();
+        }
+    }
+
+    fn sync_auxiliary_window(&self, id: WindowId) {
+        let Some(host) = self.window_contexts.get(&id) else {
+            return;
+        };
+        let Some(binding) = host.auxiliary.as_ref() else {
+            return;
+        };
+        let mapped = host
+            .settings
+            .parent
+            .and_then(|parent| self.window_contexts.get(&parent))
+            .is_some_and(|parent| parent.presented.get());
+        binding.sync(mapped);
+    }
+
+    pub(super) fn sync_auxiliaries_of(&self, parent: WindowId) {
+        for (&id, host) in &self.window_contexts {
+            if host.settings.parent == Some(parent) && host.auxiliary.is_some() {
+                self.sync_auxiliary_window(id);
+            }
+        }
+    }
+
+    pub(super) fn note_window_presented(&self, id: WindowId) {
+        if let Some(host) = self.window_contexts.get(&id)
+            && !host.presented.replace(true)
+        {
+            self.sync_auxiliaries_of(id);
         }
     }
     pub(super) fn move_window(&self, id: WindowId, position: (f32, f32)) {
@@ -1882,6 +1962,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         if result.is_some() {
             self.reconcile_native_chrome(id);
             self.sync_underlays_of(id);
+            if let Some(host) = self.window_contexts.get(&id)
+                && host.surface.window().is_visible() == Some(false)
+            {
+                host.presented.set(false);
+            }
+            self.sync_auxiliary_window(id);
+            self.sync_auxiliaries_of(id);
         }
         result
     }
@@ -2239,6 +2326,9 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let window = self.window(id).cloned().ok_or(WindowError::WindowClosed)?;
         match control {
             Control::Visible(visible) => {
+                if !visible {
+                    self.window_contexts.get(&id).unwrap().presented.set(false);
+                }
                 let focus_on_show = self.settings_of(id).focus_on_show;
                 self.mutate_window_visibility(id, |window| {
                     set_native_visible(window, visible, focus_on_show)
@@ -2553,6 +2643,24 @@ fn window_request_error(error: winit::error::RequestError) -> crate::WindowError
 #[cfg(test)]
 mod request_error_tests {
     use super::*;
+
+    #[test]
+    fn auxiliary_inherits_current_owner_band_without_latching_topmost() {
+        use WindowLevel::{AlwaysOnBottom, AlwaysOnTop, Normal};
+        // Applies equally to a window created during an in-flight level
+        // request and an already-created hidden window shown again later.
+        for requested in [AlwaysOnBottom, Normal, AlwaysOnTop] {
+            assert_eq!(auxiliary_level(requested, Some(AlwaysOnTop)), AlwaysOnTop);
+            assert_eq!(auxiliary_level(requested, Some(Normal)), requested);
+            assert_eq!(auxiliary_level(requested, None), requested);
+        }
+        let child = Normal;
+        let owner = [Normal, AlwaysOnTop, Normal, AlwaysOnTop, Normal];
+        assert_eq!(
+            owner.map(|level| auxiliary_level(child, Some(level))),
+            owner
+        );
+    }
 
     #[test]
     #[should_panic(expected = "input endpoint generation exhausted")]

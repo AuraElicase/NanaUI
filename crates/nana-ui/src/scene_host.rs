@@ -202,6 +202,11 @@ struct WindowContext {
     aspect_conform_pending: bool,
     /// Level last applied; platforms do not report it back.
     level: WindowLevel,
+    /// Requested level before an auxiliary inherits its owner's topmost band.
+    requested_level: WindowLevel,
+    /// First presentation since the latest show. Wayland requires a mapped
+    /// owner before set_parent, and drops the relationship on unmap.
+    presented: std::cell::Cell<bool>,
     /// Mode last delivered through `WindowEvent::ModeChanged`.
     mode: Option<WindowModeState>,
     /// Fullscreen applied once the window is visible and not fullscreen.
@@ -228,6 +233,7 @@ struct WindowContext {
     shadow_body: Option<ShadowBody>,
     /// Set for a `WindowRole::Underlay`: its binding beneath the parent.
     underlay: Option<nana_window::Underlay>,
+    auxiliary: Option<nana_window::AuxiliaryWindow>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -243,6 +249,7 @@ impl Drop for WindowContext {
         // The companion and the underlay binding go before the window.
         self.shadow.release();
         self.underlay = None;
+        self.auxiliary = None;
         clear_system_material(self.surface.window().as_ref());
     }
 }
@@ -1242,6 +1249,12 @@ fn complete_startup<Program: RuntimeProgram>(
             size_move
         },
         aspect_conform_pending: false,
+        requested_level: if settings.always_on_top {
+            WindowLevel::AlwaysOnTop
+        } else {
+            WindowLevel::Normal
+        },
+        presented: std::cell::Cell::new(false),
         level: if settings.always_on_top {
             WindowLevel::AlwaysOnTop
         } else {
@@ -1259,6 +1272,7 @@ fn complete_startup<Program: RuntimeProgram>(
         shadow: nana_window::shadow::WindowShadowState::default(),
         shadow_body: None,
         underlay: None,
+        auxiliary: None,
     };
     pending_native.keep();
     let mut ready = WindowManager {
