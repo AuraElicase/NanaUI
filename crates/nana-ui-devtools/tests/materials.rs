@@ -198,7 +198,7 @@ fn presentation_masks_preserve_color_and_erase_the_whole_text_target() {
     use std::time::Duration;
     let id = DocumentId::new(1).unwrap();
     let mask = MaterialRef::new(MaterialProgram::new(
-        "fn material(i:MaterialInput)->vec4<f32>{return vec4<f32>(1.,0.,0.,select(1.,0.,i.uv.x<i.progress));}",
+        "fn material(i:MaterialInput)->vec4<f32>{return vec4<f32>(1.,0.,0.,select(select(select(1.,0.,i.uv.x<i.progress),1.,i.progress<=0.),0.,i.progress>=1.));}",
     ));
     let mut builder = RichText::builder();
     builder.push("彩铅 ABC 😀\n第二行 ABC", RichSpanStyle::new());
@@ -224,7 +224,22 @@ fn presentation_masks_preserve_color_and_erase_the_whole_text_target() {
     let node = mounted.roots()[0];
     let mut session = RuntimeAgentSession::new(doc, 240, 130).unwrap();
     session.set_clear(Some([0.; 4]));
+    for _ in 0..3 {
+        let _ = session.screenshot_rgba().unwrap();
+    }
+    std::fs::create_dir_all("target/material-mask").unwrap();
+    session
+        .screenshot_png("target/material-mask/native.png")
+        .unwrap();
     let native = session.screenshot_rgba().unwrap().1;
+    assert!(
+        native
+            .chunks_exact(4)
+            .filter(|p| p[0] > 200 && p[1] < 50 && p[2] < 50 && p[3] > 200)
+            .count()
+            > 100,
+        "the inline image fixture was not actually visible"
+    );
     let mut presentation = GlyphPresentation::default();
     presentation.transitions = TextTransitions {
         exit: Some(PresentationMask {
@@ -233,7 +248,7 @@ fn presentation_masks_preserve_color_and_erase_the_whole_text_target() {
             start: Duration::ZERO,
             duration: Duration::from_secs(1),
         }),
-        viewport: Some(nana_ui_core::LogicalRect::new(0., 0., 240., 130.)),
+        viewport: Some(nana_ui_core::LogicalRect::new(20., 0., 180., 130.)),
         ..Default::default()
     };
     let mut queue = MutationQueue::new();
@@ -253,9 +268,9 @@ fn presentation_masks_preserve_color_and_erase_the_whole_text_target() {
     for y in 0..130 {
         for x in 0..240 {
             let p = (y * 240 + x) * 4;
-            if x < 119 {
+            if x < 109 {
                 assert_eq!(halfway[p + 3], 0, "left edge did not erase");
-            } else if x > 121 && native[p + 3] > 0 {
+            } else if x > 111 && native[p + 3] > 0 {
                 visible += 1;
                 assert_eq!(
                     &halfway[p..p + 4],
@@ -266,6 +281,22 @@ fn presentation_masks_preserve_color_and_erase_the_whole_text_target() {
         }
     }
     assert!(visible > 30, "right side vanished prematurely");
+    session
+        .document_mut()
+        .sync_presentation_clock(Duration::from_millis(700));
+    let late = session.screenshot_rgba().unwrap().1;
+    for y in 0..130 {
+        for x in 148..240 {
+            let p = (y * 240 + x) * 4;
+            if native[p + 3] > 0 {
+                assert_eq!(
+                    &late[p..p + 4],
+                    &native[p..p + 4],
+                    "inline object did not use the text's declared target at {x},{y}"
+                );
+            }
+        }
+    }
     session
         .document_mut()
         .sync_presentation_clock(Duration::from_secs(1));
