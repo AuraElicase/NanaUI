@@ -3,6 +3,7 @@
 //! every step of a user resize inside it.
 
 use raw_window_handle::HasWindowHandle;
+use std::sync::Arc;
 
 #[cfg(any(target_os = "windows", test))]
 const ENTER_SIZE_MOVE: u32 = 0x0231;
@@ -26,11 +27,29 @@ pub struct LiveSizeMove {
 
 impl LiveSizeMove {
     pub fn install<W: HasWindowHandle + ?Sized>(window: &W) -> Result<Self, String> {
+        Self::install_inner(window, None)
+    }
+
+    /// Keep host scheduling alive during Windows' nested native move/resize
+    /// loop. `wake` must only signal the host's event source, never run host
+    /// callbacks inline: native messages can arrive inside a borrowed handler.
+    /// The wake source is used only during the operation; other platforms ignore it.
+    pub fn install_with_wake<W: HasWindowHandle + ?Sized>(
+        window: &W,
+        wake: Arc<dyn Fn() + Send + Sync>,
+    ) -> Result<Self, String> {
+        Self::install_inner(window, Some(wake))
+    }
+
+    fn install_inner<W: HasWindowHandle + ?Sized>(
+        window: &W,
+        wake: Option<Arc<dyn Fn() + Send + Sync>>,
+    ) -> Result<Self, String> {
         #[cfg(not(target_os = "windows"))]
-        let _ = window;
+        let _ = (window, wake);
         Ok(Self {
             #[cfg(target_os = "windows")]
-            inner: windows_hook::Hook::install(window)?,
+            inner: windows_hook::Hook::install(window, wake)?,
         })
     }
 
@@ -68,6 +87,7 @@ mod windows_hook {
     use std::cell::Cell;
     use std::ffi::c_void;
     use std::ptr;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -75,14 +95,16 @@ mod windows_hook {
     use windows_sys::Win32::Graphics::Gdi::InvalidateRect;
     use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetClientRect, GetWindowRect, IsZoomed, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE,
-        WM_SETTINGCHANGE, WM_SIZING,
+        GetClientRect, GetWindowRect, IsZoomed, KillTimer, SetTimer, WM_ENTERSIZEMOVE,
+        WM_EXITSIZEMOVE, WM_NCDESTROY, WM_SETTINGCHANGE, WM_SIZING, WM_TIMER,
     };
 
     use crate::aspect::{AspectLock, SizingBasis};
     use crate::win32::WindowProp;
 
     const SUBCLASS_ID: usize = 0x4E_41_53_4D;
+    const WAKE_TIMER: usize = SUBCLASS_ID;
+    const WAKE_INTERVAL_MS: u32 = 16;
 
     /// Holds the installed `HookState` for readers outside the window
     /// procedure.
@@ -90,6 +112,7 @@ mod windows_hook {
 
     struct HookState {
         active: AtomicBool,
+        wake: Option<Arc<dyn Fn() + Send + Sync>>,
         aspect: Cell<Option<AspectLock>>,
         /// Measured when the current size-move loop began, for a window with
         /// an aspect lock.
@@ -102,7 +125,10 @@ mod windows_hook {
     }
 
     impl Hook {
-        pub(super) fn install<W: HasWindowHandle + ?Sized>(window: &W) -> Result<Self, String> {
+        pub(super) fn install<W: HasWindowHandle + ?Sized>(
+            window: &W,
+            wake: Option<Arc<dyn Fn() + Send + Sync>>,
+        ) -> Result<Self, String> {
             let handle = window
                 .window_handle()
                 .map_err(|error| format!("failed to acquire Win32 window handle: {error}"))?;
@@ -112,6 +138,7 @@ mod windows_hook {
             let hwnd = handle.hwnd.get() as *mut c_void;
             let state = Box::into_raw(Box::new(HookState {
                 active: AtomicBool::new(false),
+                wake,
                 aspect: Cell::new(None),
                 basis: Cell::new(None),
             }));
@@ -150,6 +177,8 @@ mod windows_hook {
 
     impl Drop for Hook {
         fn drop(&mut self) {
+            // SAFETY: a timer belongs to this HWND; removing it does not dispatch callbacks.
+            unsafe { KillTimer(self.hwnd, WAKE_TIMER) };
             // Readers of the property stop seeing `state` before it is freed.
             STATE_PROP.remove(self.hwnd);
             // SAFETY: dropped before the winit Window. Successful removal
@@ -276,8 +305,35 @@ mod windows_hook {
                 None
             };
             state.basis.set(basis);
+            if let Some(wake) = &state.wake {
+                // The outer event loop's waitable timer is not serviced by the
+                // nested DefWindowProc loop. WM_TIMER is, even with a stationary pointer.
+                // SAFETY: this is the live subclassed HWND on its window thread.
+                unsafe {
+                    if active {
+                        SetTimer(hwnd, WAKE_TIMER, WAKE_INTERVAL_MS, None);
+                    } else {
+                        KillTimer(hwnd, WAKE_TIMER);
+                    }
+                }
+                wake();
+            }
             // SAFETY: hwnd is the subclassed live window.
             unsafe { InvalidateRect(hwnd, ptr::null(), 0) };
+        }
+        if message == WM_TIMER && wparam == WAKE_TIMER {
+            // SAFETY: ref_data belongs to this installed subclass.
+            let state = unsafe { &*(ref_data as *const HookState) };
+            if state.active.load(Ordering::Acquire)
+                && let Some(wake) = &state.wake
+            {
+                wake();
+            }
+            return 0;
+        }
+        if message == WM_NCDESTROY {
+            // SAFETY: remove the timer before HWND reuse, even if the owner drops later.
+            unsafe { KillTimer(hwnd, WAKE_TIMER) };
         }
         if message == WM_SIZING {
             // winit snaps to resize increments first; the ratio has the last
@@ -310,5 +366,108 @@ mod tests {
         assert!(!size_move_active_after(EXIT_SIZE_MOVE, true));
         assert!(size_move_active_after(0x0005, true));
         assert!(!size_move_active_after(0x0005, false));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn native_timer_wakes_only_during_the_session_and_stops_when_dropped() {
+        use raw_window_handle::{
+            HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
+        };
+        use std::num::NonZeroIsize;
+        use std::ptr;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        use std::time::{Duration, Instant};
+        use windows_sys::Win32::Foundation::HWND;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, DispatchMessageW, MSG, PM_REMOVE, PeekMessageW,
+            SendMessageW, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WS_OVERLAPPEDWINDOW,
+        };
+
+        struct Window(HWND);
+        impl HasWindowHandle for Window {
+            fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+                let raw = Win32WindowHandle::new(NonZeroIsize::new(self.0 as isize).unwrap());
+                // SAFETY: this fixture owns the HWND until Drop on the same thread.
+                Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(raw)) })
+            }
+        }
+        impl Drop for Window {
+            fn drop(&mut self) {
+                // SAFETY: the fixture's own hidden window, on its creating thread.
+                unsafe { DestroyWindow(self.0) };
+            }
+        }
+        fn pump(hwnd: HWND) {
+            let until = Instant::now() + Duration::from_millis(80);
+            while Instant::now() < until {
+                let mut message = MSG::default();
+                // SAFETY: the message and fixture window remain live through dispatch.
+                unsafe {
+                    while PeekMessageW(&mut message, hwnd, 0, 0, PM_REMOVE) != 0 {
+                        DispatchMessageW(&message);
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+
+        // SAFETY: STATIC is a system window class; all pointers are valid for this call.
+        let window = Window(unsafe {
+            CreateWindowExW(
+                0,
+                crate::win32::wide("STATIC").as_ptr(),
+                ptr::null(),
+                WS_OVERLAPPEDWINDOW,
+                0,
+                0,
+                64,
+                64,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null(),
+            )
+        });
+        assert!(!window.0.is_null());
+        let count = Arc::new(AtomicUsize::new(0));
+        let observed = count.clone();
+        let hook = super::LiveSizeMove::install_with_wake(
+            &window,
+            Arc::new(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+            }),
+        )
+        .unwrap();
+        // SAFETY: these carry no pointer payload and target the fixture window.
+        unsafe { SendMessageW(window.0, WM_ENTERSIZEMOVE, 0, 0) };
+        assert!(hook.is_active());
+        let entered = count.load(Ordering::Relaxed);
+        pump(window.0);
+        assert!(
+            count.load(Ordering::Relaxed) > entered,
+            "stationary native loop must wake"
+        );
+        // SAFETY: same fixture and pointer-free native message.
+        unsafe { SendMessageW(window.0, WM_EXITSIZEMOVE, 0, 0) };
+        assert!(!hook.is_active());
+        let exited = count.load(Ordering::Relaxed);
+        pump(window.0);
+        assert_eq!(count.load(Ordering::Relaxed), exited, "no timer after exit");
+        // SAFETY: same fixture and pointer-free native message.
+        unsafe { SendMessageW(window.0, WM_ENTERSIZEMOVE, 0, 0) };
+        pump(window.0);
+        let dropped = count.load(Ordering::Relaxed);
+        drop(hook);
+        pump(window.0);
+        assert_eq!(
+            count.load(Ordering::Relaxed),
+            dropped,
+            "no callback after hook removal"
+        );
+        assert_eq!(Arc::strong_count(&count), 1, "wake callback was released");
     }
 }
