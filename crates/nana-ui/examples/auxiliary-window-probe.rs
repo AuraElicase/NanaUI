@@ -16,6 +16,7 @@ use std::{
 
 const GUIDE: WindowId = WindowId(1);
 const CARD: WindowId = WindowId(2);
+const STAGE: WindowId = WindowId(3);
 
 #[derive(Clone)]
 struct Message(String);
@@ -23,6 +24,8 @@ struct Message(String);
 struct Probe {
     documents: BTreeMap<WindowId, RuntimeDocument>,
     windows: BTreeMap<WindowId, WindowHandle>,
+    generations: BTreeMap<WindowId, u64>,
+    presented: std::collections::BTreeSet<WindowId>,
 }
 
 fn report(value: serde_json::Value) {
@@ -31,7 +34,9 @@ fn report(value: serde_json::Value) {
 }
 
 fn descriptor(id: WindowId) -> WindowDescriptor {
-    let mut settings = WindowDescriptor::new(if id == GUIDE {
+    let mut settings = WindowDescriptor::new(if id == STAGE {
+        "NanaUI auxiliary underlay"
+    } else if id == GUIDE {
         "NanaUI auxiliary guide"
     } else {
         "NanaUI auxiliary card"
@@ -39,7 +44,14 @@ fn descriptor(id: WindowId) -> WindowDescriptor {
     .initial_size(360.0, 320.0)
     .minimum_size(240.0, 200.0);
     settings.parent = Some(WindowId::PRIMARY);
-    settings.role = WindowRole::Tool;
+    if std::env::args().any(|argument| argument == "--without-shadows") {
+        settings.shadow = nana_ui::WindowShadow::None;
+    }
+    settings.role = if id == STAGE {
+        WindowRole::Underlay
+    } else {
+        WindowRole::Tool
+    };
     settings.focus_on_show = id == GUIDE;
     settings.initial_position = Some(if id == GUIDE {
         (240.0, 200.0)
@@ -61,6 +73,7 @@ impl RuntimeProgram for Probe {
             (1, WindowId::PRIMARY, "Owner"),
             (2, GUIDE, "Preparation"),
             (3, CARD, "Card"),
+            (4, STAGE, "Stage underlay"),
         ] {
             let doc_id = DocumentId::new(index).unwrap();
             let mut doc = RuntimeDocument::new(doc_id);
@@ -81,6 +94,8 @@ impl RuntimeProgram for Probe {
             Self {
                 documents,
                 windows: BTreeMap::new(),
+                generations: BTreeMap::new(),
+                presented: Default::default(),
             },
             vec![],
         ))
@@ -107,11 +122,30 @@ impl RuntimeProgram for Probe {
         Message(command): Message,
         _: &RuntimeProgramContext<Message>,
     ) -> RuntimeProgramUpdate {
+        #[cfg(target_os = "windows")]
+        if let Some(pid) = command
+            .strip_prefix("allow-external ")
+            .and_then(|pid| pid.trim().parse::<u32>().ok())
+        {
+            // Test-only handoff: the foreground probe permits its parent
+            // inspector to perform one genuine external application switch.
+            let granted =
+                unsafe { windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(pid) }
+                    .is_ok();
+            report(
+                serde_json::json!({"kind":"foreground-permission", "pid":pid, "granted":granted}),
+            );
+            return RuntimeProgramUpdate::default();
+        }
         let owner = &self.windows[&WindowId::PRIMARY];
         let mut commands = vec![];
         match command.trim() {
             "main" => {
                 let _request = owner.set_visible(true);
+                commands.push(WindowCommand::Open {
+                    id: STAGE,
+                    settings: descriptor(STAGE),
+                });
                 commands.push(WindowCommand::Open {
                     id: CARD,
                     settings: descriptor(CARD),
@@ -128,6 +162,11 @@ impl RuntimeProgram for Probe {
             }
             "focus" => {
                 let _request = owner.focus();
+            }
+            "focus-guide" => {
+                if let Some(guide) = self.windows.get(&GUIDE) {
+                    let _request = guide.focus();
+                }
             }
             "minimize" | "restore" => {
                 let _request = owner.set_minimized(command.trim() == "minimize");
@@ -153,7 +192,13 @@ impl RuntimeProgram for Probe {
         context: &RuntimeProgramContext<Message>,
     ) -> RuntimeProgramUpdate {
         report(serde_json::json!({ "event": format!("{event:?}") }));
+        if let WindowEvent::FocusChanged { id, focused } = &event {
+            report(serde_json::json!({"kind":"focus", "window":id.0, "focused":focused}));
+        }
         if let WindowEvent::Ready { id, .. } = event {
+            let generation = self.generations.entry(id).or_default();
+            *generation += 1;
+            report(serde_json::json!({"kind":"ready", "window":id.0, "generation":generation}));
             self.windows.insert(id, context.window());
             if id == WindowId::PRIMARY {
                 return RuntimeProgramUpdate {
@@ -166,6 +211,7 @@ impl RuntimeProgram for Probe {
             }
         } else if let WindowEvent::Closed { id } = event {
             self.windows.remove(&id);
+            self.presented.remove(&id);
         } else if let WindowEvent::OpenFailed { error, .. } = event {
             panic!("{error}");
         } else if let WindowEvent::CloseRequested {
@@ -176,11 +222,26 @@ impl RuntimeProgram for Probe {
         }
         RuntimeProgramUpdate::default()
     }
+
+    fn window_frame_presented(
+        &mut self,
+        id: WindowId,
+        _: &RuntimeProgramContext<Message>,
+    ) -> RuntimeProgramUpdate {
+        if self.presented.insert(id) {
+            report(serde_json::json!({"kind":"presented", "window":id.0,
+                "generation":self.generations.get(&id)}));
+        }
+        RuntimeProgramUpdate::default()
+    }
 }
 
 fn main() -> Result<(), nana_ui::HostedRunError> {
     let mut settings = WindowDescriptor::new("NanaUI auxiliary owner").initial_size(800.0, 600.0);
     settings.visible = false;
+    if std::env::args().any(|argument| argument == "--without-shadows") {
+        settings.shadow = nana_ui::WindowShadow::None;
+    }
     settings.initial_position = Some((100.0, 100.0));
     run_runtime::<Probe>(settings)
 }

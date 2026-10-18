@@ -417,6 +417,8 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         });
         host.shadow
             .set_shape(window.as_ref(), crate::window_shadow::shape(shape), visible);
+        self.sync_auxiliary_window(id);
+        self.sync_auxiliaries_of(id);
         metric!(diagnostics_window::SHADOW_SYNC_APPLIED);
     }
     fn set_mouse_passthrough_mode(
@@ -1174,6 +1176,44 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         }
     }
 
+    fn effective_owned_level(&self, id: WindowId) -> Option<WindowLevel> {
+        let host = self.window_contexts.get(&id)?;
+        let owner = host
+            .settings
+            .parent
+            .and_then(|parent| self.effective_owned_level(parent));
+        if host.settings.role == WindowRole::Underlay {
+            owner.or(Some(host.requested_level))
+        } else {
+            Some(auxiliary_level(
+                host.requested_level,
+                owner.filter(|_| host.auxiliary.is_some()),
+            ))
+        }
+    }
+
+    fn auxiliary_parent_policy(&self, mut parent: WindowId) -> Option<bool> {
+        let level = self.effective_owned_level(parent)?;
+        loop {
+            let host = self.window_contexts.get(&parent)?;
+            if host.surface.window().fullscreen().is_some() {
+                return None;
+            }
+            match host.settings.parent {
+                Some(owner) => parent = owner,
+                None => return Some(level == WindowLevel::AlwaysOnTop),
+            }
+        }
+    }
+
+    fn prepare_auxiliary_levels(&self) {
+        for host in self.window_contexts.values() {
+            if let (Some(binding), Some(parent)) = (&host.auxiliary, host.settings.parent) {
+                binding.set_parent_topmost(self.auxiliary_parent_policy(parent));
+            }
+        }
+    }
+
     pub(super) fn sync_auxiliary_window(&self, id: WindowId) {
         let Some(host) = self.window_contexts.get(&id) else {
             return;
@@ -1189,11 +1229,12 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
             // Parent mode delivery precedes propagation to children. Derive
             // from the live owner, rather than temporarily using the child's
             // previous band while that propagation is still in flight.
+            let policy = self.auxiliary_parent_policy(host.settings.parent.unwrap());
+            binding.set_parent_topmost(policy);
             binding.sync(
                 parent.presented.get(),
-                parent.level == WindowLevel::AlwaysOnTop,
-                auxiliary_level(host.requested_level, Some(parent.level))
-                    == WindowLevel::AlwaysOnTop,
+                policy.unwrap_or(false),
+                self.effective_owned_level(id) == Some(WindowLevel::AlwaysOnTop),
             );
         }
     }
@@ -1210,6 +1251,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         if let Some(host) = self.window_contexts.get(&id)
             && !host.presented.replace(true)
         {
+            self.sync_auxiliary_window(id);
             self.sync_auxiliaries_of(id);
         }
     }
@@ -1978,6 +2020,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         id: WindowId,
         mutate: impl FnOnce(&dyn winit::window::Window) -> R,
     ) -> Option<R> {
+        self.prepare_auxiliary_levels();
         let result = self.window(id).map(|window| mutate(window.as_ref()));
         if result.is_some() {
             self.reconcile_native_chrome(id);
@@ -2006,6 +2049,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         id: WindowId,
         mutate: impl FnOnce(&dyn winit::window::Window) -> R,
     ) -> Option<R> {
+        self.prepare_auxiliary_levels();
         let result = self.window(id).map(|window| mutate(window.as_ref()));
         if result.is_some() {
             self.reconcile_native_chrome(id);
