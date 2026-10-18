@@ -41,7 +41,7 @@ fn find_monitor(event_loop: &dyn ActiveEventLoop, display: DisplayId) -> Option<
         .find(|monitor| monitor.id() == display.0)
 }
 
-fn winit_level(level: WindowLevel) -> winit::window::WindowLevel {
+pub(super) fn winit_level(level: WindowLevel) -> winit::window::WindowLevel {
     match level {
         WindowLevel::Normal => winit::window::WindowLevel::Normal,
         WindowLevel::AlwaysOnTop => winit::window::WindowLevel::AlwaysOnTop,
@@ -208,9 +208,35 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         let Some(host) = self.window_contexts.get_mut(&id) else {
             return;
         };
-        host.level = level;
+        host.requested_level = level;
+        self.apply_owned_window_level(event_loop, id);
+    }
+
+    fn apply_owned_window_level(&mut self, event_loop: &dyn ActiveEventLoop, id: WindowId) {
+        let Some(host) = self.window_contexts.get(&id) else {
+            return;
+        };
+        let parent = host
+            .settings
+            .parent
+            .filter(|_| host.auxiliary.is_some())
+            .and_then(|parent| self.window_contexts.get(&parent).map(|host| host.level));
+        let level = super::windows::auxiliary_level(host.requested_level, parent);
+        self.window_contexts.get_mut(&id).unwrap().level = level;
         self.mutate_native_style(id, |window| window.set_window_level(winit_level(level)));
         self.sync_window_mode(event_loop, id);
+        // A mode callback can close or create windows. Read the live tree
+        // afterwards, so newly opened auxiliaries and hidden cards agree.
+        let children: Vec<_> = self
+            .window_contexts
+            .iter()
+            .filter_map(|(&child, host)| {
+                (host.settings.parent == Some(id) && host.auxiliary.is_some()).then_some(child)
+            })
+            .collect();
+        for child in children {
+            self.apply_owned_window_level(event_loop, child);
+        }
     }
 
     /// Observe the window, apply a deferred fullscreen request once the window

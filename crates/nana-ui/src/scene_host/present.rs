@@ -506,6 +506,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         painter.record_submit(&submission);
         stage_clock.mark(&stage::PRESENTATION_POST_SUBMIT_NS);
         self.graphics.present_frame(frame);
+        self.note_window_presented(id);
         stage_clock.mark(&stage::PRESENTATION_PRESENT_NS);
         self.note_native_live_resize_presented(id);
         crate::host_diagnostics::frame_presented(frame_started, submit, gpu_work);

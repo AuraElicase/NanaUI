@@ -211,6 +211,10 @@ name = "desktop-overlay-probe"
 required-features = ["hosted", "bundled-fonts"]
 
 [[example]]
+name = "auxiliary-window-probe"
+required-features = ["hosted", "bundled-fonts", "controls"]
+
+[[example]]
 name = "window-output-probe"
 required-features = ["hosted", "bundled-fonts", "native-export"]
 

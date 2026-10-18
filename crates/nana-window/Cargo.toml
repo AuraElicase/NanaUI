@@ -87,6 +87,7 @@ ashpd = { version = "0.13", default-features = false, features = ["async-io", "r
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 # Match the host's dynamically loaded Wayland backend, including standalone users.
 wayland-backend = { version = "0.3", features = ["dlopen"] }
+wayland-sys = { version = "0.31", features = ["client", "dlopen"] }
 futures-lite = "2"
 async-channel = "2"
 async-process = "2"

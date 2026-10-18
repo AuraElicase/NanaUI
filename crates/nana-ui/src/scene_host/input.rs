@@ -250,6 +250,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 );
                 // Minimizing and restoring arrive as occlusion changes.
                 self.sync_underlays_of(id);
+                self.sync_auxiliaries_of(id);
                 if *occluded {
                     self.occluded.insert(id);
                     // Nothing of an occluded window shows — minimized or
@@ -272,6 +273,7 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                 // Activation raised the window; its underlay goes back under it.
                 if *focused {
                     self.sync_underlays_of(id);
+                    self.sync_auxiliaries_of(id);
                 }
                 if !*focused {
                     self.input_mut(id).clear_pointers();

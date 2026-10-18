@@ -8,6 +8,8 @@ pub use browser::{
     NativeBrowser,
 };
 mod aspect;
+mod auxiliary;
+pub use auxiliary::{AuxiliaryWindow, AuxiliaryWindowError};
 mod contrast_preference;
 #[cfg(target_os = "windows")]
 mod dcomp;
