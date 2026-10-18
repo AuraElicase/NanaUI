@@ -154,6 +154,21 @@ impl UiWorld {
             }
         };
         match visual {
+            StandardVisual::PathText { value } => {
+                let value = crate::path_text::shorten_path(value, content.width, |text| {
+                    self.chrome_text_measure(id)
+                        .width(text, style.font_size, style.font_weight)
+                });
+                Some(crate::ComponentGeometry::PathText {
+                    text: text_region(
+                        content,
+                        value.into(),
+                        false,
+                        style.font_size,
+                        style.font_weight,
+                    ),
+                })
+            }
             StandardVisual::ModalFrame {
                 title,
                 description,
@@ -2064,6 +2079,7 @@ impl UiWorld {
             StandardVisual::LabeledValue {
                 label,
                 value,
+                value_is_path,
                 value_role,
                 value_weight,
                 compact,
@@ -2129,7 +2145,14 @@ impl UiWorld {
                             width: value_width,
                             height: value_height,
                         },
-                        content: Arc::clone(value).into(),
+                        content: if *value_is_path {
+                            crate::path_text::shorten_path(value, value_width, |text| {
+                                measure.width(text, value_size, Some(*value_weight))
+                            })
+                            .into()
+                        } else {
+                            Arc::clone(value).into()
+                        },
                         color: Some(self.style_model.color(*value_role).as_rgba_array()),
                         font_size: value_size,
                         font_weight: Some(*value_weight),

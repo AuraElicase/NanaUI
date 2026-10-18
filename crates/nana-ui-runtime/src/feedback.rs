@@ -30,11 +30,12 @@ fn project_visual(
     if world.node_style(id) != Some(&style) {
         mutations.set_style(id, style);
     }
+    let pointer_events = matches!(&visual, StandardVisual::LabeledValue { value_is_path: true, value, .. } if !value.is_empty());
     if world.standard_visual(id) != Some(visual.clone()) {
         mutations.set_standard_visual(id, Some(visual));
     }
     let interaction = InteractionState {
-        pointer_events: false,
+        pointer_events,
         focusable: false,
     };
     if world.interaction(id) != Some(interaction) {
@@ -415,6 +416,8 @@ pub enum ValueEmphasis {
 pub struct LabeledValue {
     pub label: Arc<str>,
     pub value: Arc<str>,
+    /// Treat the value as a read-only path, with middle elision and full tooltip.
+    pub value_is_path: bool,
     pub emphasis: ValueEmphasis,
     pub compact: bool,
     /// An existing child view. No icon or action behavior is synthesized.
@@ -427,11 +430,18 @@ impl LabeledValue {
         Self {
             label: label.into(),
             value: value.into(),
+            value_is_path: false,
             emphasis: ValueEmphasis::Strong,
             compact: true,
             action: None,
             style: NodeStyle::default(),
         }
+    }
+
+    pub fn path_value(mut self, path: impl Into<Arc<str>>) -> Self {
+        self.value = path.into();
+        self.value_is_path = true;
+        self
     }
 
     pub fn emphasis(mut self, emphasis: ValueEmphasis) -> Self {
@@ -503,6 +513,7 @@ impl ComponentView for LabeledValue {
             StandardVisual::LabeledValue {
                 label: Arc::clone(&self.label),
                 value: Arc::clone(&self.value),
+                value_is_path: self.value_is_path,
                 value_role,
                 value_weight,
                 compact: self.compact,
@@ -1829,6 +1840,7 @@ mod tests {
             Some(StandardVisual::LabeledValue {
                 label: Arc::from("Revision"),
                 value: Arc::from("42"),
+                value_is_path: false,
                 value_role: SemanticColorRole::Text,
                 value_weight: 500,
                 compact: true,

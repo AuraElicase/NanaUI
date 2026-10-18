@@ -4697,6 +4697,7 @@ fn feedback_geometry_emits_semantic_quad_text_and_icon_primitives() {
     labeled.standard_visual = Some(StandardVisual::LabeledValue {
         label: Arc::from("Revision"),
         value: Arc::from("42"),
+        value_is_path: false,
         value_role: nana_ui_core::SemanticColorRole::Text,
         value_weight: 600,
         compact: true,
@@ -4879,6 +4880,7 @@ fn labeled_value_and_card_text_primitives_enable_ellipsis() {
     labeled.standard_visual = Some(StandardVisual::LabeledValue {
         label: Arc::from("Source"),
         value: long_path.clone(),
+        value_is_path: false,
         value_role: nana_ui_core::SemanticColorRole::Text,
         value_weight: 600,
         compact: false,

@@ -896,9 +896,13 @@ pub enum StandardVisual {
         compact: bool,
         action: Option<StableNodeId>,
     },
+    PathText {
+        value: Arc<str>,
+    },
     LabeledValue {
         label: Arc<str>,
         value: Arc<str>,
+        value_is_path: bool,
         value_role: SemanticColorRole,
         value_weight: u16,
         compact: bool,
@@ -1664,6 +1668,9 @@ pub enum ComponentGeometry {
         title: ComponentTextRegion,
         message: Option<ComponentTextRegion>,
         action: Option<LayoutBox>,
+    },
+    PathText {
+        text: ComponentTextRegion,
     },
     LabeledValue {
         label: ComponentTextRegion,

@@ -3035,6 +3035,14 @@ impl AppContext {
         &self,
         entity: Entity<IconButton>,
     ) -> Result<Option<Entity<Tooltip>>, FrameworkError> {
+        self.component_tooltip(entity)
+    }
+
+    /// The full-content tooltip owned by a component (including read-only paths).
+    pub fn component_tooltip<C: ComponentView>(
+        &self,
+        entity: Entity<C>,
+    ) -> Result<Option<Entity<Tooltip>>, FrameworkError> {
         self.read(entity, |_| ())?;
         Ok(self
             .component_lifecycle

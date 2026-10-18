@@ -302,6 +302,8 @@ IME：焦点进可编辑字段时 `Window::request_ime_update(Enable)` 一次（
 - `canonicalize_path(path) -> io::Result<PathBuf>` 在 `std::fs::canonicalize` 后执行同一规范化；错误原样返回。它会访问磁盘，只在允许文件 I/O 的工作线程调用，不能用于 UI 格式化。
 - `display_path(path, wrap_separators) -> String` 无磁盘访问。普通盘符和 UNC 显示省略扩展前缀（包括长路径），特殊名称和设备路径保留原拼写。`true` 会在分隔符后加入 U+200B，供窄卡片换行。
 
+只读路径摘要使用 `display_path(path, false)`，交给 Runtime `PathText`、`LabeledValue::path_value` 或 `SettingsRow::path_hint`。它们按实际可用宽度和同一文本引擎测量省略中间目录，优先保留根与尾部；极窄时先舍弃父目录和根，再按 Unicode 字素缩短末尾名称并优先保留扩展名。完整值保持在无障碍树与悬浮 350ms 出现的换行 Tooltip 中，页面隐藏、park 或卸载会关闭提示。普通文字仍按原控件规则显示。
+
 显示字符串只用于只读文字；文件访问、保存、复制、编辑、资源身份及安全目录检查继续使用真实路径。不要把带 U+200B 的文字写回设置、协议或剪贴板。`PathField` 的值及 `TextChanged` 原样传递；原生文件对话框仍返回真实路径，不执行显示格式化。
 
 ## 文件对话框

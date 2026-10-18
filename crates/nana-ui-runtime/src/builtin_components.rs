@@ -21,8 +21,8 @@ use crate::{
     EmptyState, ExtensionRegistrar, FindReplaceBar, FormField, FrameworkError, GpuTextureView,
     GpuView, HostedTextarea, IconButton, IconGlyph, InteractionRequestCard, InteractiveCard,
     LabeledValue, LevelMeter, List, ListItem, ListItemSlots, ModalSurface, NodeStyle, NumberInput,
-    PaneChrome, PathField, Popover, Progress, QrCode, RangeField, RichTextView, ScrollView,
-    SearchDropdown, SearchDropdownOption, SegmentedControl, Select, SettingsCard,
+    PaneChrome, PathField, PathText, Popover, Progress, QrCode, RangeField, RichTextView,
+    ScrollView, SearchDropdown, SearchDropdownOption, SegmentedControl, Select, SettingsCard,
     SettingsCollapsibleCard, SettingsPage, SettingsRow, SidebarFooter, SidebarFrame, SidebarRow,
     SidebarRowState, SidebarRowTone, SidebarSection, Skeleton, Spinner, SplitPane, Stack,
     StatusBadge, Switch, Table, TableCell, TableRow, Tabs, Text, TextArea, TextDiagnosticSeverity,
@@ -146,6 +146,7 @@ fn install_builtins<const BIND: bool>(
     component::<ValidationMessage, BIND>(registrar)?;
     component::<EmptyState, BIND>(registrar)?;
     component::<LabeledValue, BIND>(registrar)?;
+    component::<PathText, BIND>(registrar)?;
     component::<Dialog, BIND>(registrar)?;
     component::<ConfirmDialog, BIND>(registrar)?;
     component::<Select, BIND>(registrar)?;
@@ -821,6 +822,14 @@ impl RegisterableComponent for EmptyState {
     }
 }
 
+impl RegisterableComponent for PathText {
+    const TYPE_ID: &'static str = crate::component_descriptors::PATH_TEXT.type_id;
+    const TAGS: &'static [&'static str] = crate::component_descriptors::PATH_TEXT.tags;
+    fn from_semantic(spec: &SemanticSpec<'_>) -> Self {
+        Self::new(spec.value)
+    }
+}
+
 impl RegisterableComponent for LabeledValue {
     const TYPE_ID: &'static str = crate::component_descriptors::LABELED_VALUE.type_id;
     const TAGS: &'static [&'static str] = crate::component_descriptors::LABELED_VALUE.tags;
@@ -833,6 +842,7 @@ impl RegisterableComponent for LabeledValue {
         let mut component = LabeledValue::new(spec.label, spec.value)
             .emphasis(emphasis)
             .compact(flag_attr(spec, &["compact"]));
+        component.value_is_path = flag_attr(spec, &["value-is-path", "valueIsPath"]);
         if let Some(action) = spec.slot("action") {
             component = component.action_child(action);
         }
@@ -1626,6 +1636,7 @@ impl RegisterableComponent for SettingsRow {
         if let Some(width) = attr_f32(spec, &["stack-below", "stackBelow"]) {
             component = component.stack_below(width);
         }
+        component.hint_is_path = flag_attr(spec, &["hint-is-path", "hintIsPath"]);
         if !spec.hint.is_empty() {
             component = component.hint(Arc::<str>::from(spec.hint));
         }
