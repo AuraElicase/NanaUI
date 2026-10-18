@@ -1871,6 +1871,13 @@ pub(super) fn place_node_scoped(
         };
         plan_sequential &= justify == JustifySpec::Start && grid_tracks.is_none();
         let full_main = main_extent(content, direction);
+        let line_slot = |indices| LineBoxSlot {
+            indices,
+            main_start: 0.0,
+            main_available: full_main,
+            cross_y: 0.0,
+            pin_cross: false,
+        };
         let mut line_slots = if wrapping {
             if style.equal_wrap {
                 pack_equal_wrap_lines(
@@ -1884,13 +1891,7 @@ pub(super) fn place_node_scoped(
                     nodes,
                 )
                 .into_iter()
-                .map(|indices| LineBoxSlot {
-                    indices,
-                    main_start: 0.0,
-                    main_available: full_main,
-                    cross_y: 0.0,
-                    pin_cross: false,
-                })
+                .map(|range| line_slot(range.collect()))
                 .collect()
             } else if ifc && !writing.is_vertical() {
                 pack_ifc_line_boxes(
@@ -1920,23 +1921,11 @@ pub(super) fn place_node_scoped(
                     ifc,
                 )
                 .into_iter()
-                .map(|indices| LineBoxSlot {
-                    indices,
-                    main_start: 0.0,
-                    main_available: full_main,
-                    cross_y: 0.0,
-                    pin_cross: false,
-                })
+                .map(line_slot)
                 .collect()
             }
         } else {
-            vec![LineBoxSlot {
-                indices: (0..flow.len()).collect(),
-                main_start: 0.0,
-                main_available: full_main,
-                cross_y: 0.0,
-                pin_cross: false,
-            }]
+            vec![line_slot((0..flow.len()).collect())]
         };
         if matches!(wrap, FlexWrap::WrapReverse) {
             line_slots.reverse();
@@ -1968,9 +1957,8 @@ pub(super) fn place_node_scoped(
             });
             let mut line_adjust = None;
             if style.equal_wrap && wrapping {
-                equal_wrap_main_sizes(
+                let share = equal_wrap_share(
                     &line_flow,
-                    &mut line_sizes,
                     direction,
                     slot.main_available,
                     child_edge_base,
@@ -1978,6 +1966,9 @@ pub(super) fn place_node_scoped(
                     child_font_px,
                     nodes,
                 );
+                for size in &mut line_sizes {
+                    set_main_extent(size, direction, share);
+                }
             } else if let Some(tracks) = line_tracks.filter(|tracks| !tracks.is_empty()) {
                 apply_grid_main_sizes(
                     &line_flow,
