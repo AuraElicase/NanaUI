@@ -60,6 +60,7 @@ descriptors! {
     STATUS_BADGE => { type_id: "nana.status-badge", tags: &["status-badge"] },
     VALIDATION_MESSAGE => { type_id: "nana.validation-message", tags: &["validation-message"] },
     EMPTY_STATE => { type_id: "nana.empty-state", tags: &["empty-state"] },
+    PATH_TEXT => { type_id: "nana.path-text", tags: &["path-text"] },
     LABELED_VALUE => { type_id: "nana.labeled-value", tags: &["labeled-value"] },
     DIALOG => { type_id: "nana.dialog", tags: &["dialog"] },
     CONFIRM_DIALOG => { type_id: "nana.confirm-dialog", tags: &["confirm-dialog"] },

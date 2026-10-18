@@ -3634,6 +3634,7 @@ fn component_geometry_owns_text(geometry: Option<&ComponentGeometry>) -> bool {
                 | ComponentGeometry::StatusBadge { .. }
                 | ComponentGeometry::ValidationMessage { .. }
                 | ComponentGeometry::EmptyState { .. }
+                | ComponentGeometry::PathText { .. }
                 | ComponentGeometry::LabeledValue { .. }
                 | ComponentGeometry::SelectionOption { .. }
                 | ComponentGeometry::ModalFrame { .. }

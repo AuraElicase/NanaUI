@@ -874,6 +874,7 @@ fn measures_text_each_pass(visual: &StandardVisual) -> bool {
         | StandardVisual::KeyCaptureLayer { .. }
         | StandardVisual::KeymapLayer
         | StandardVisual::ListItem { .. }
+        | StandardVisual::PathText { .. }
         | StandardVisual::LabeledValue { .. }
         | StandardVisual::ActionMenuItem { .. }
         | StandardVisual::CommandPalette { .. } => true,

@@ -732,7 +732,9 @@ impl UiScene {
                     text::build(&context, &mut emit)
                 }
                 Some(ComponentGeometry::EmptyState { .. }) => text::build(&context, &mut emit),
-                Some(ComponentGeometry::LabeledValue { .. }) => text::build(&context, &mut emit),
+                Some(
+                    ComponentGeometry::PathText { .. } | ComponentGeometry::LabeledValue { .. },
+                ) => text::build(&context, &mut emit),
                 Some(ComponentGeometry::SelectionOption { .. }) => {
                     controls_base::build(&context, &mut emit)
                 }
@@ -2143,6 +2145,7 @@ impl UiScene {
                     | StandardVisual::StatusBadge { .. }
                     | StandardVisual::ValidationMessage { .. }
                     | StandardVisual::EmptyState { .. }
+                    | StandardVisual::PathText { .. }
                     | StandardVisual::LabeledValue { .. }
                     | StandardVisual::SelectionOption { .. }
                     | StandardVisual::ModalFrame { .. }
