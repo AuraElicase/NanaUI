@@ -467,7 +467,7 @@ impl UiScene {
                 }
                 // Presentation only: the painter samples it on the motion
                 // clock; the scene keeps asking for frames while it moves.
-                let glyph_presentation =
+                let mut glyph_presentation =
                     node.glyph_presentation.as_ref().and_then(|presentation| {
                         crate::scene::SceneGlyphPresentation::new(
                             text.value.as_str(),
@@ -475,7 +475,41 @@ impl UiScene {
                             presentation,
                         )
                     });
-                if let Some(presentation) = &glyph_presentation {
+                if let Some(presentation) = &mut glyph_presentation {
+                    if (presentation.transitions.entrance.is_some()
+                        || presentation.transitions.exit.is_some())
+                        && presentation.transitions.viewport.is_none()
+                    {
+                        let mut viewport = text_bounds;
+                        if let Some(inverse) = super::attributes::inverse(transform) {
+                            for clip in clips.iter() {
+                                if let Some(rect) = super::visibility::transform(
+                                    clip.bounds,
+                                    clip.transform.then(inverse),
+                                ) {
+                                    let x = viewport.x.max(rect.x);
+                                    let y = viewport.y.max(rect.y);
+                                    let right =
+                                        (viewport.x + viewport.width).min(rect.x + rect.width);
+                                    let bottom =
+                                        (viewport.y + viewport.height).min(rect.y + rect.height);
+                                    viewport = SceneRect {
+                                        x,
+                                        y,
+                                        width: (right - x).max(0.),
+                                        height: (bottom - y).max(0.),
+                                    };
+                                }
+                            }
+                        }
+                        Arc::make_mut(presentation).transitions.viewport =
+                            Some(nana_ui_core::LogicalRect::new(
+                                viewport.x - text_bounds.x,
+                                viewport.y - text_bounds.y,
+                                viewport.width,
+                                viewport.height,
+                            ));
+                    }
                     self.glyph_live.insert(id, presentation.live_until());
                 }
                 let editor_marks = node
@@ -613,7 +647,15 @@ impl UiScene {
                                 let placed = layout.layout.objects.get(index)?;
                                 Some(crate::scene::GlyphObject {
                                     slot: primitive.id.slot,
-                                    target: text_bounds,
+                                    target: presentation.transitions.viewport.map_or(
+                                        text_bounds,
+                                        |r| SceneRect {
+                                            x: text_bounds.x + r.x,
+                                            y: text_bounds.y + r.y,
+                                            width: r.width,
+                                            height: r.height,
+                                        },
+                                    ),
                                     ordinal: content
                                         .get(..placed.offset)
                                         .map_or(0, |before| before.graphemes(true).count())
