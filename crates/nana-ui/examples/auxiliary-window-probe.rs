@@ -1,6 +1,6 @@
 //! Native ownership regression probe. Start with a preparation window above
 //! an initially hidden owner. Commands on stdin: main, top, normal, hide,
-//! show, focus, minimize, restore, close, reopen, quit. Check native ordering
+//! show, focus, minimize, restore, close, reopen, close-owner, quit. Check native ordering
 //! alongside the Ready/ModeChanged/Closed and focus events printed as JSON.
 use nana_ui::runtime::{DocumentId, RuntimeDocument, Stack, Text, view::widget};
 use nana_ui::{
@@ -137,6 +137,7 @@ impl RuntimeProgram for Probe {
                 id: CARD,
                 settings: descriptor(CARD),
             }),
+            "close-owner" => commands.push(WindowCommand::Close(WindowId::PRIMARY)),
             "quit" => return RuntimeProgramUpdate::exit(),
             _ => {}
         }

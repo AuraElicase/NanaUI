@@ -134,9 +134,14 @@ def main():
              not s["windows"]["owner"]["minimized"])
         command("close")
         wait("card-closed", lambda s: not s["windows"]["card"]["handle"])
+        command("top")
         command("reopen")
-        wait("card-recreated-with-owner", above)
-        command("quit")
+        wait("card-created-during-owner-level-change", lambda s: above(s) and
+             all(v["topmost"] for v in s["windows"].values()))
+        command("normal")
+        wait("recreated-card-returns-to-normal", lambda s: above(s) and
+             all(not v["topmost"] for v in s["windows"].values()))
+        command("close-owner")
         assert process.wait(timeout=20) == 0
         wait_closed = snapshot()
         assert not any(v["handle"] for v in wait_closed["windows"].values())
