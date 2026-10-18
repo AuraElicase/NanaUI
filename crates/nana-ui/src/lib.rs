@@ -286,7 +286,7 @@ pub use nana_ui_platform::{
     CanonicalInputEvent, CommittedText, CompositionInput, CursorIcon, FileDragInput, FileDragKind,
     HeadlessHostServices, HostServiceError, HostServices, InputDisposition, InputModifiers,
     InputPayload, KeyInput, KeyState, PointerInput, PointerPhase, PointerType, TextInputContext,
-    TextInputPurpose, WheelInput, WheelUnit,
+    TextInputPurpose, WheelInput, WheelUnit, path,
 };
 #[cfg(feature = "hosted")]
 pub use nana_ui_platform::{

@@ -8,6 +8,7 @@ description: Maintain NanaUI's platform-owned native window boundary. Use when c
 Read [`docs/reference/window.md`](../../../docs/reference/window.md) and the platform contracts in [`docs/reference/architecture.md`](../../../docs/reference/architecture.md).
 
 - Keep raw window handles and platform APIs inside `nana-window` and `nana-ui-platform`. Ordinary controls consume public outcomes and commands only.
+- Reuse `nana-ui-platform::path` (`nana_ui::path`) for path normalization and read-only display; preserve extended paths when required for I/O. Display formatting does no I/O and its optional U+200B wrapping must never reach persistence, clipboard, editable fields or native commands. See the path contract in `docs/reference/window.md`.
 - Clear an existing effect before reapplying it. Return the effect actually applied or an explicit fallback; never report a requested effect after failure.
 - Use a readable opaque fallback when a native material is unavailable. Do not silently substitute a different material family.
 - Keep title-bar drag, client-area chrome, native controls, scaling, input, IME, clipboard, display, and fullscreen ownership in the platform boundary. Framework UI supplies layout slots and public state.

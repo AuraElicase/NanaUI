@@ -4,6 +4,7 @@
 mod clipboard;
 #[cfg(feature = "fetch")]
 mod fetch;
+pub mod path;
 mod paths;
 mod persist;
 mod persistence_worker;
