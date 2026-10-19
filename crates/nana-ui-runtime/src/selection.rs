@@ -398,7 +398,9 @@ const SEGMENTED_TRACK_BORDER: f32 = nana_ui_core::HAIRLINE;
 /// here with `space::XXS`, which dropped the rule and left the pill a pixel
 /// rounder than the corner it sits in. Deriving the inset from the two values
 /// that produce it is what stops that happening again.
-const SEGMENTED_PILL_INSET: f32 = SEGMENTED_TRACK_PADDING + SEGMENTED_TRACK_BORDER;
+fn segmented_pill_inset(world: &UiWorld) -> f32 {
+    world.theme().spacing().xxs + world.theme().border().hairline
+}
 
 pub(crate) fn selection_chrome_style(
     chrome: SelectionChrome,
@@ -417,7 +419,7 @@ pub(crate) fn selection_chrome_style(
         SelectionChrome::Radio => (2.0, 0.0, 0.0, None, None),
     };
     let vertical = matches!(chrome.orientation(), SelectionOrientation::Vertical);
-    let layout = LayoutStyle {
+    let mut layout = LayoutStyle {
         direction: Some(if vertical {
             FlexDirection::Column
         } else {
@@ -443,6 +445,15 @@ pub(crate) fn selection_chrome_style(
         border_width: Some(border_width),
         ..LayoutStyle::default()
     };
+    layout.theme.gap = Some(crate::theme_intent::space(match chrome {
+        SelectionChrome::Tabs => nana_ui_core::SpacingStep::Xs,
+        SelectionChrome::Segmented | SelectionChrome::Radio => nana_ui_core::SpacingStep::Xxs,
+    }));
+    if chrome == SelectionChrome::Segmented {
+        layout.theme.padding = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
+        layout.theme.border_width =
+            Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
+    }
     NodeStyle {
         layout: Arc::new(layout),
         background,
@@ -469,7 +480,7 @@ fn segmented_option_style(size: ControlSize, chrome: SelectionChrome, fill: bool
         // the installed metrics so a density change can move it.
         (None, None)
     };
-    let layout = LayoutStyle {
+    let mut layout = LayoutStyle {
         padding_left,
         padding_right,
         font_size: Some(size.text_size()),
@@ -496,6 +507,15 @@ fn segmented_option_style(size: ControlSize, chrome: SelectionChrome, fill: bool
         width: fill.then_some(LengthSpec::Fill),
         ..LayoutStyle::default()
     };
+    layout.theme.control_typography(size);
+    crate::theme_intent::weight(
+        &mut layout,
+        if radio {
+            nana_ui_core::TextWeight::Regular
+        } else {
+            nana_ui_core::TextWeight::Medium
+        },
+    );
     // A radio row keeps its label at rest colour and never fills: selection
     // reads from the ring, not from a highlighted row.
     let selected = if radio {
@@ -612,7 +632,9 @@ impl ComponentView for SegmentedOption {
         let mut effective_style = self.style.clone();
         let metrics = world.theme_metrics();
         let radius = match self.chrome {
-            SelectionChrome::Segmented => (metrics.radius_sm - SEGMENTED_PILL_INSET).max(0.0),
+            SelectionChrome::Segmented => {
+                (metrics.radius_sm - segmented_pill_inset(world)).max(0.0)
+            }
             SelectionChrome::Tabs | SelectionChrome::Radio => metrics.radius_sm,
         };
         {
@@ -620,7 +642,7 @@ impl ComponentView for SegmentedOption {
             layout.border_radius = Some(radius);
             if matches!(self.chrome, SelectionChrome::Segmented) {
                 layout.height = Some(LengthSpec::Px(
-                    (self.size.height_in(metrics) - nana_ui_core::space::SM).max(0.0),
+                    (self.size.height_in(metrics) - world.theme().spacing().sm).max(0.0),
                 ));
             }
         }
@@ -629,7 +651,7 @@ impl ComponentView for SegmentedOption {
             let inset = if radio {
                 self.size.radio_lead()
             } else {
-                self.size.padding_x_in(world.theme_metrics()) + nana_ui_core::space::XXS
+                self.size.padding_x_in(world.theme_metrics()) + world.theme().spacing().xxs
             };
             // The icon has no box of its own: it is drawn inside the leading
             // inset, so the inset has to grow by the icon and its gap or the
@@ -638,11 +660,18 @@ impl ComponentView for SegmentedOption {
             // is no reason to leave the label flush against the right edge, and
             // dropping it also measured every icon option short by one inset.
             let layout = Arc::make_mut(&mut effective_style.layout);
-            layout.padding_left = Some(LengthSpec::Px(if self.icon.is_some() {
-                inset + self.size.icon_size() + nana_ui_core::space::XS
+            layout.padding_left = Some(if self.icon.is_some() && radio {
+                LengthSpec::Px(inset + self.size.icon_size() + world.theme().spacing().xs)
+            } else if self.icon.is_some() {
+                // Paint uses the resolved label font for the icon. Keep its
+                // leading share at 1em so a CSS font override agrees too.
+                LengthSpec::CalcEmOffset {
+                    em: 1.0,
+                    offset_px: inset + world.theme().spacing().xs,
+                }
             } else {
-                inset
-            }));
+                LengthSpec::Px(inset)
+            });
             if !radio {
                 layout.padding_right = Some(LengthSpec::Px(inset));
             }

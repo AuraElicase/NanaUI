@@ -86,7 +86,13 @@ pub(crate) fn format_range_value(value: f64, step: f64) -> Arc<str> {
 }
 
 fn range_field_style() -> NodeStyle {
+    let mut layout = nana_ui_core::LayoutStyle::default();
+    layout
+        .theme
+        .control_typography(nana_ui_core::ControlSize::Medium);
+    crate::theme_intent::weight(&mut layout, nana_ui_core::TextWeight::Medium);
     NodeStyle {
+        layout: Arc::new(layout),
         background: Some(nana_ui_core::SemanticColorRole::Accent),
         border: Some(nana_ui_core::SemanticColorRole::BorderStrong),
         interaction: crate::InteractionStyle {
@@ -105,6 +111,8 @@ fn range_field_style() -> NodeStyle {
     }
 }
 
+const MULTILINE_LINE_HEIGHT: f32 = 1.45;
+
 fn text_field_style(multiline: bool) -> NodeStyle {
     let mut layout = (*control_layout()).clone();
     layout.width = Some(nana_ui_core::LengthSpec::Percent(100.0));
@@ -112,7 +120,9 @@ fn text_field_style(multiline: bool) -> NodeStyle {
     layout.overflow_y = nana_ui_core::OverflowSpec::Hidden;
     if multiline {
         layout.theme.line_height = None;
-        layout.line_height = Some(nana_ui_core::LineHeightSpec::Relative(1.45));
+        layout.line_height = Some(nana_ui_core::LineHeightSpec::Relative(
+            MULTILINE_LINE_HEIGHT,
+        ));
         layout.min_height = Some(nana_ui_core::LengthSpec::Px(
             nana_ui_core::ControlSize::Medium.height_in(nana_ui_core::UI_METRICS) * 3.0,
         ));
@@ -2795,6 +2805,20 @@ impl TextArea {
     pub fn auto_grow(mut self, min_rows: usize, max_rows: usize) -> Self {
         let min_rows = min_rows.max(1);
         self.auto_grow = Some((min_rows, max_rows.max(min_rows)));
+        if !self.style_override {
+            let layout = Arc::make_mut(&mut self.style.layout);
+            // Bind the compact default here, before declarative CSS can
+            // override it with an authored absolute or relative line-height.
+            if layout.theme.line_height.is_none()
+                && layout.line_height
+                    == Some(nana_ui_core::LineHeightSpec::Relative(
+                        MULTILINE_LINE_HEIGHT,
+                    ))
+            {
+                layout.theme.line_height =
+                    Some(nana_ui_core::ThemeToken::Line(nana_ui_core::LineRole::Line).into());
+            }
+        }
         self
     }
 
@@ -3194,8 +3218,31 @@ impl ComponentView for TextArea {
             } else {
                 max_rows
             };
-            let line = size.line_height();
-            let chrome = (size.height_in(world.theme_metrics()) - line).max(2.0);
+            // Row budgets must use the same installed typography and authored
+            // line-height as shaping, including relative or literal overrides.
+            let layout = &effective_style.layout;
+            let theme = world.theme();
+            let font = layout.theme.font_size.as_ref().map_or_else(
+                || {
+                    layout
+                        .font_size
+                        .unwrap_or_else(|| size.text_size_in(theme.typography()))
+                },
+                |font| font.resolve(theme),
+            );
+            let line_height = layout
+                .theme
+                .line_height
+                .as_ref()
+                .map_or(layout.line_height, |line| {
+                    Some(nana_ui_core::LineHeightSpec::Absolute(line.resolve(theme)))
+                });
+            let line = nana_ui_core::text_line_box_height_px(font, line_height);
+            let border = layout.theme.border_width.as_ref().map_or_else(
+                || layout.border_width.unwrap_or(0.0),
+                |border| border.resolve(theme),
+            );
+            let chrome = (size.height_in(world.theme_metrics()) - line).max(2.0 * border);
             effective_style.control_padding_y = None;
             effective_style.control_height = None;
             let layout = Arc::make_mut(&mut effective_style.layout);
@@ -3206,8 +3253,7 @@ impl ComponentView for TextArea {
             layout.max_height = Some(nana_ui_core::LengthSpec::Px(
                 max_rows as f32 * line + chrome + footer_band,
             ));
-            layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(line));
-            layout.padding_top = Some(nana_ui_core::LengthSpec::Px((chrome - 2.0) / 2.0));
+            layout.padding_top = Some(nana_ui_core::LengthSpec::Px((chrome - 2.0 * border) / 2.0));
             layout.padding_bottom = layout.padding_top;
             layout.word_break = Some(nana_ui_core::WordBreakSpec::BreakAll);
             layout.white_space_nowrap = false;
@@ -4731,6 +4777,9 @@ impl RangeField {
     }
     pub fn size(mut self, size: nana_ui_core::ControlSize) -> Self {
         self.size = size;
+        Arc::make_mut(&mut self.style.layout)
+            .theme
+            .control_typography(size);
         self
     }
     /// Draw only a rail `girth` thick, filled up to the value, across the

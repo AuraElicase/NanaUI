@@ -1488,6 +1488,11 @@ impl AppContext {
                 if mini {
                     // The meter keeps its own girth, centred on the rail.
                     pin_across(layout, (MINI_PROGRESS_GIRTH - PROGRESS_GIRTH) / 2.0);
+                    layout.theme.offset_top = Some(
+                        crate::theme_intent::space(nana_ui_core::SpacingStep::Sm)
+                            .scaled(-0.5)
+                            .offset(MINI_PROGRESS_GIRTH / 2.0),
+                    );
                 } else {
                     fill_track(layout);
                 }
@@ -1502,10 +1507,24 @@ impl AppContext {
             if mini {
                 layout.width = Some(LengthSpec::Px(control * 2.0));
                 layout.min_width = Some(LengthSpec::Px(control * 1.5));
+                layout.theme.width = Some(
+                    nana_ui_core::ThemeExpr::token(nana_ui_core::ThemeToken::Control(
+                        ControlSize::Medium,
+                    ))
+                    .scaled(2.0),
+                );
+                layout.theme.min_width = Some(
+                    nana_ui_core::ThemeExpr::token(nana_ui_core::ThemeToken::Control(
+                        ControlSize::Medium,
+                    ))
+                    .scaled(1.5),
+                );
                 layout.flex_shrink = Some(1.0);
             } else {
                 layout.width = None;
                 layout.min_width = None;
+                layout.theme.width = None;
+                layout.theme.min_width = None;
                 layout.flex_shrink = None;
             }
         })?;
@@ -1578,6 +1597,7 @@ fn fill_track(layout: &mut LayoutStyle) {
     layout.offset_left = None;
     layout.offset_right = None;
     layout.offset_top = None;
+    layout.theme.offset_top = None;
     layout.height = None;
     layout.width = Some(LengthSpec::Fill);
     layout.min_width = Some(LengthSpec::Px(0.0));
@@ -1587,6 +1607,7 @@ fn fill_track(layout: &mut LayoutStyle) {
 
 /// A track pinned across its positioned parent, `top` below its top edge.
 fn pin_across(layout: &mut LayoutStyle, top: f32) {
+    layout.theme.offset_top = None;
     layout.position = PositionSpec::Absolute;
     layout.offset_left = Some(LengthSpec::Px(0.0));
     layout.offset_right = Some(LengthSpec::Px(0.0));
