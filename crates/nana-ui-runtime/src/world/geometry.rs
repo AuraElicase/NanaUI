@@ -1297,6 +1297,33 @@ impl UiWorld {
                     geometry
                 })
             }
+            StandardVisual::Checkbox { size, .. } => {
+                let reserve = size.indicator_size_in(self.theme.typography(), self.theme.spacing());
+                let extent = reserve.min(content.height);
+                let gap = size.indicator_gap_in(self.theme.spacing());
+                Some(crate::ComponentGeometry::Checkbox {
+                    border_width: self.theme.border().hairline,
+                    check_weight: self.theme.typography().bold,
+                    indicator: LayoutBox {
+                        x: content.x,
+                        y: content.y + (content.height - extent) / 2.0,
+                        width: extent,
+                        height: extent,
+                    },
+                    label: text_region(
+                        LayoutBox {
+                            x: content.x + reserve + gap,
+                            y: content.y,
+                            width: (content.width - reserve - gap).max(0.0),
+                            height: content.height,
+                        },
+                        self.text(id).unwrap_or_default().into(),
+                        false,
+                        style.font_size,
+                        style.font_weight,
+                    ),
+                })
+            }
             StandardVisual::Switch {
                 thumb_progress,
                 label,
@@ -1330,19 +1357,29 @@ impl UiWorld {
                     content.x + content.width
                 };
                 let text_width = (text_right - text_x).max(0.0);
+                let label_size = size.text_size_in(self.theme.typography());
+                let label_line = (label_size * self.theme.typography().line
+                    / self.theme.typography().body)
+                    .max(label_size);
+                let hint_size = size.caption_size_in(self.theme.typography());
+                let hint_line = (hint_size * self.theme.typography().line
+                    / self.theme.typography().body)
+                    .max(hint_size);
                 let (label_bounds, hint_bounds) = if hint.is_some() {
                     (
                         LayoutBox {
                             x: text_x,
                             y: content.y,
                             width: text_width,
-                            height: 18.0_f32.min(content.height),
+                            height: label_line.min(content.height),
                         },
                         Some(LayoutBox {
                             x: text_x,
-                            y: content.y + 20.0,
+                            y: content.y + label_line + self.theme.spacing().xxs,
                             width: text_width,
-                            height: (content.height - 20.0).max(0.0),
+                            height: (content.height - label_line - self.theme.spacing().xxs)
+                                .max(0.0)
+                                .min(hint_line),
                         }),
                     )
                 } else {
@@ -1428,21 +1465,22 @@ impl UiWorld {
                     )
                 };
                 Some(crate::ComponentGeometry::Switch {
+                    border_width: self.theme.border().hairline,
                     thumb_progress: *thumb_progress,
                     label: text_region(
                         label_bounds,
                         Arc::clone(label),
                         false,
                         size.text_size_in(self.theme.typography()),
-                        Some(500),
+                        Some(self.theme.typography().medium),
                     ),
                     hint: hint.as_ref().zip(hint_bounds).map(|(hint, bounds)| {
                         text_region(
                             bounds,
                             Arc::clone(hint),
                             true,
-                            (size.text_size_in(self.theme.typography()) - 1.0).max(10.0),
-                            None,
+                            size.caption_size_in(self.theme.typography()),
+                            Some(self.theme.typography().regular),
                         )
                     }),
                     control,
@@ -1573,11 +1611,12 @@ impl UiWorld {
                 )
             }
             StandardVisual::Range {
-                rail: Some(_),
+                rail: Some(girth),
                 value,
                 size,
                 ..
             } => Some(crate::ComponentGeometry::Range {
+                border_width: self.theme.border().hairline,
                 label: None,
                 value: text_region(
                     // A rail draws no readout: an empty region at its end.
@@ -1590,11 +1629,24 @@ impl UiWorld {
                     Arc::clone(value),
                     false,
                     size.text_size_in(self.theme.typography()),
-                    Some(500),
+                    Some(self.theme.typography().medium),
                 ),
                 unit: None,
-                // The rail spans the box: the pointer maps onto all of it.
-                track: content,
+                // Keep the full horizontal pointer range while the thumb
+                // band follows the same live type extent as an ordinary range.
+                track: LayoutBox {
+                    y: content.y
+                        + (content.height
+                            - size
+                                .text_size_in(self.theme.typography())
+                                .min(content.height))
+                            / 2.0,
+                    height: size
+                        .text_size_in(self.theme.typography())
+                        .min(content.height),
+                    ..content
+                },
+                track_girth: girth.min(content.height),
                 thumb_ring: None,
             }),
             StandardVisual::Range {
@@ -1613,17 +1665,33 @@ impl UiWorld {
                     nana_ui_core::ControlSize::Medium => self.theme.spacing().md,
                     nana_ui_core::ControlSize::Large => self.theme.spacing().lg,
                 };
-                let label_width = label
-                    .as_ref()
-                    .map_or(0.0, |_| 84.0_f32.min(content.width * 0.28));
+                let measure = self.chrome_text_measure(id);
+                let label_width = label.as_ref().map_or(0.0, |label| {
+                    measure
+                        .width(label, style.font_size, style.font_weight)
+                        .min(content.width * 0.28)
+                });
                 let show_value = !value.is_empty();
                 let unit_width = if show_value {
-                    unit.as_ref().map_or(0.0, |_| 32.0_f32.min(content.width))
+                    unit.as_ref().map_or(0.0, |unit| {
+                        measure
+                            .width(
+                                unit,
+                                size.caption_size_in(self.theme.typography()),
+                                Some(self.theme.typography().regular),
+                            )
+                            .min(content.width)
+                    })
                 } else {
                     0.0
                 };
                 let value_width = if show_value {
-                    60.0_f32.min((content.width - unit_width).max(0.0))
+                    // Reserve four digits so ordinary value changes keep the
+                    // track stable; longer readouts retain their natural width.
+                    measure
+                        .width(value, style.font_size, style.font_weight)
+                        .max(measure.width("0000", style.font_size, style.font_weight))
+                        .min((content.width - unit_width).max(0.0))
                 } else {
                     0.0
                 };
@@ -1637,8 +1705,9 @@ impl UiWorld {
                 let thumb = if track_gradient.is_some() {
                     self.theme.spacing().xxxl
                 } else {
-                    size.icon_size()
-                };
+                    size.text_size_in(self.theme.typography())
+                }
+                .min(content.height);
                 let track = LayoutBox {
                     x: track_x + thumb / 2.0,
                     y: content.y + (content.height - thumb) / 2.0,
@@ -1646,6 +1715,7 @@ impl UiWorld {
                     height: thumb.min(content.height),
                 };
                 Some(crate::ComponentGeometry::Range {
+                    border_width: self.theme.border().hairline,
                     label: label.as_ref().map(|label| {
                         text_region(
                             LayoutBox {
@@ -1687,6 +1757,12 @@ impl UiWorld {
                         )
                     }),
                     track,
+                    track_girth: if track_gradient.is_some() {
+                        self.theme.spacing().xl
+                    } else {
+                        self.theme.spacing().xs
+                    }
+                    .min(track.height),
                     thumb_ring: track_gradient
                         .is_some()
                         .then(|| crate::ContrastRing::from_effects(self.theme.effects())),
@@ -1791,7 +1867,7 @@ impl UiWorld {
                         .filter(|detail| !detail.is_empty())
                         .map(|detail| {
                             let label_size = style.font_size;
-                            let detail_size = (label_size - 1.0).max(10.0);
+                            let detail_size = self.theme.typography().meta;
                             let gap = self.theme.spacing().md;
                             let measure = self.chrome_text_measure(id);
                             let label_natural = measure.width(
@@ -1799,7 +1875,11 @@ impl UiWorld {
                                 label_size,
                                 style.font_weight,
                             );
-                            let detail_natural = measure.width(&detail, detail_size, None);
+                            let detail_natural = measure.width(
+                                &detail,
+                                detail_size,
+                                Some(self.theme.typography().regular),
+                            );
                             let min_detail_visible = self.theme.spacing().xxxl;
                             let detail_width =
                                 if label_natural + gap + detail_natural <= label_rect.width {
@@ -1811,8 +1891,9 @@ impl UiWorld {
                                 };
                             let detail_x =
                                 (label_rect.x + label_rect.width - detail_width).max(label_rect.x);
-                            let detail_height =
-                                (detail_size * 1.2).min(label_rect.height.max(detail_size));
+                            let detail_height = (detail_size * self.theme.typography().line
+                                / self.theme.typography().body)
+                                .min(label_rect.height.max(detail_size));
                             let detail_y =
                                 label_rect.y + (label_rect.height - detail_height).max(0.0) / 2.0;
                             label_rect.width = ((detail_x - gap) - label_rect.x).max(0.0);
@@ -1826,7 +1907,7 @@ impl UiWorld {
                                 content: detail.into(),
                                 color: Some(secondary),
                                 font_size: detail_size,
-                                font_weight: None,
+                                font_weight: Some(self.theme.typography().regular),
                             }
                         });
                 // 紧跟 label 的 note：与 detail 同字号同取色，只用 label 与
@@ -1838,7 +1919,7 @@ impl UiWorld {
                     .filter(|note| !note.is_empty())
                     .and_then(|note| {
                         let label_size = style.font_size;
-                        let note_size = (label_size - 1.0).max(10.0);
+                        let note_size = self.theme.typography().meta;
                         let gap = self.theme.spacing().sm;
                         let measure = self.chrome_text_measure(id);
                         let label_natural = measure.width(
@@ -1846,14 +1927,17 @@ impl UiWorld {
                             label_size,
                             style.font_weight,
                         );
-                        let note_natural = measure.width(&note, note_size, None);
+                        let note_natural =
+                            measure.width(&note, note_size, Some(self.theme.typography().regular));
                         let label_width = label_natural.min(label_rect.width);
                         let note_x = label_rect.x + label_width + gap;
                         let room = label_rect.x + label_rect.width - note_x;
                         if room < note_natural.min(self.theme.spacing().xxxl) {
                             return None;
                         }
-                        let note_height = (note_size * 1.2).min(label_rect.height.max(note_size));
+                        let note_height = (note_size * self.theme.typography().line
+                            / self.theme.typography().body)
+                            .min(label_rect.height.max(note_size));
                         label_rect.width = label_width;
                         Some(crate::ComponentTextRegion {
                             bounds: LayoutBox {
@@ -1865,7 +1949,7 @@ impl UiWorld {
                             content: note.into(),
                             color: Some(secondary),
                             font_size: note_size,
-                            font_weight: None,
+                            font_weight: Some(self.theme.typography().regular),
                         })
                     });
                 Some(crate::ComponentGeometry::ListItem {

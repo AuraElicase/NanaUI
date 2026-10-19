@@ -3465,7 +3465,20 @@ impl UiWorld {
         }
         let padding = self.used_layout_padding(id);
         let border = source.layout.resolved_border_edges();
-        let leading_visual = text_leading_inset(self.nodes.visual(id));
+        let leading_visual = match self.nodes.visual(id) {
+            Some(StandardVisual::Checkbox { size, .. }) => {
+                size.indicator_size_in(self.theme.typography(), self.theme.spacing())
+                    + if self.text(id).is_some_and(|label| !label.is_empty()) {
+                        size.indicator_gap_in(self.theme.spacing())
+                    } else {
+                        0.0
+                    }
+            }
+            Some(StandardVisual::Switch { .. }) => {
+                self.theme.metrics().switch.track_width + self.theme.metrics().switch.label_gap
+            }
+            _ => 0.0,
+        };
         let counter_reserved = self
             .text_input_character_counter(id)
             .map(|counter| {
@@ -3582,18 +3595,9 @@ pub(super) fn same_text_constraint_inputs(previous: &NodeStyle, next: &NodeStyle
         && a.font_size.map(f32::to_bits) == b.font_size.map(f32::to_bits)
 }
 
-/// Width a leading indicator takes from the text box of a checkbox or switch.
-fn text_leading_inset(visual: Option<&StandardVisual>) -> f32 {
-    match visual {
-        Some(StandardVisual::Checkbox { size, .. }) => size.indicator_size() + size.indicator_gap(),
-        Some(StandardVisual::Switch { .. }) => 38.0,
-        _ => 0.0,
-    }
-}
-
 /// What plain text resolution reads from a node's visual: which text path the
-/// node takes, and the inset a leading indicator takes from its box. Two
-/// visuals with the same key cannot change a plain text node's constraints.
+/// node takes and which indicator step it reserves. Pixel values are resolved
+/// from the installed theme when text constraints are built.
 pub(crate) fn text_visual_key(visual: Option<&StandardVisual>) -> (u8, u32) {
     let path = match visual {
         Some(StandardVisual::TextInput { .. }) => 1,
@@ -3602,7 +3606,16 @@ pub(crate) fn text_visual_key(visual: Option<&StandardVisual>) -> (u8, u32) {
         // Every other visual leaves plain text on the plain path.
         None | Some(_) => 0,
     };
-    (path, text_leading_inset(visual).to_bits())
+    let indicator = match visual {
+        Some(StandardVisual::Checkbox { size, .. }) => match size {
+            nana_ui_core::ControlSize::Small => 1,
+            nana_ui_core::ControlSize::Medium => 2,
+            nana_ui_core::ControlSize::Large => 3,
+        },
+        Some(StandardVisual::Switch { .. }) => 4,
+        _ => 0,
+    };
+    (path, indicator)
 }
 
 impl UiWorld {
