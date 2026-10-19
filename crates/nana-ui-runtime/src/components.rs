@@ -2102,6 +2102,18 @@ impl NodeStyle {
         self
     }
 
+    /// Bind a layout field to an expression resolved against the installed theme.
+    pub fn theme(
+        mut self,
+        property: nana_ui_core::ThemeProperty,
+        expression: impl Into<nana_ui_core::ThemeExpr>,
+    ) -> Self {
+        Arc::make_mut(&mut self.layout)
+            .theme
+            .set(property, Some(expression.into()));
+        self
+    }
+
     /// Name the radius step instead of spending it. See [`Self::radius`].
     pub fn radius(mut self, tier: nana_ui_core::RadiusTier) -> Self {
         self.radius = Some(tier);

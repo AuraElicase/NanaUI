@@ -39,9 +39,11 @@ mod structural;
 mod style;
 mod task;
 mod teleport;
+mod theme;
 #[cfg(feature = "reactive-trace")]
 pub(crate) mod trace;
 mod transition;
+pub use theme::theme_signal;
 
 pub use crate::VirtualAlignment;
 #[doc(hidden)]

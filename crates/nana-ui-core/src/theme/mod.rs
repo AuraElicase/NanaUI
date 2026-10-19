@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 pub mod compiled;
 pub mod definition;
 pub mod dialog;
+pub mod layout;
+pub use layout::{ThemeExpr, ThemeLayout, ThemeProperty, ThemeToken};
 pub mod recipe;
 pub mod registry;
 pub mod scrollbar;

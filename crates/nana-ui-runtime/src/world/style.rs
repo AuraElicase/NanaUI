@@ -521,6 +521,18 @@ impl UiWorld {
     ) -> (Arc<nana_ui_core::LayoutStyle>, bool) {
         let (mut resolved, mut copied) =
             Self::resolve_layout_intent(style, self.style_model.metrics);
+        if !style.layout.theme.is_empty() {
+            let before = Arc::clone(&resolved);
+            style
+                .layout
+                .theme
+                .apply(Arc::make_mut(&mut resolved), &self.theme);
+            if *before == *resolved {
+                resolved = before;
+            } else {
+                copied = true;
+            }
+        }
         // A locale's direction, where the node names none (Issue #269).
         if resolved.dir.is_none()
             && let Some(direction) = self.locale_direction(id)
@@ -574,6 +586,9 @@ impl UiWorld {
             moved += 1;
             if !self.presence_live(id) {
                 continue;
+            }
+            if changed.intersects(nana_ui_core::LayoutStyleChange::FONT) {
+                self.mark_subtree(id, DirtyMask::STYLE);
             }
             let classified = self.classify_layout_change(id, changed);
             self.record_layout_invalidation(
@@ -881,6 +896,10 @@ impl UiWorld {
             self.cancel_hover_transition(id);
         }
         let previous_metrics = self.style_model.metrics;
+        let token_layout_changed = self.theme.spacing() != next.spacing()
+            || self.theme.typography() != next.typography()
+            || self.theme.border() != next.border()
+            || self.theme.metrics() != next.metrics();
         // A dialog card is placed from its recipe and the hairline its
         // dividers take, which no layout input names; a change to either
         // reaches only the modal frames.
@@ -934,7 +953,7 @@ impl UiWorld {
             work.record_allocation(1, ids.len().saturating_mul(size_of::<StableNodeId>()));
         }
         let mut dependents = 0;
-        if metrics_changed {
+        if metrics_changed || token_layout_changed {
             // Design intent resolves against the metrics, so a metrics install
             // is the one event that has to re-run it. Doing it here, once, is
             // what keeps it off every frame's read path.
@@ -966,7 +985,7 @@ impl UiWorld {
         }
         let seeds = (self.layout_seeds_created - seeds_before) as usize;
         let counts = &mut self.pending_drain_counts;
-        if metrics_changed {
+        if metrics_changed || token_layout_changed {
             counts.theme_to_layout_seeds += seeds;
             counts.theme_metric_dependents_invalidated += dependents;
         } else {
@@ -1366,7 +1385,8 @@ fn scaled_line_height(
 /// Whether `style` declares design intent the installed metrics resolve: a
 /// radius tier, a control height or padding step, a surface inset, a square.
 fn style_declares_intent(style: &NodeStyle) -> bool {
-    style.radius.is_some()
+    !style.layout.theme.is_empty()
+        || style.radius.is_some()
         || style.corner_radii.is_some()
         || style.control_height.is_some()
         || style.control_padding_x.is_some()
