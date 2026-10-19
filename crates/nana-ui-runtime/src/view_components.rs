@@ -29,6 +29,31 @@ fn control_layout() -> Arc<nana_ui_core::LayoutStyle> {
     })
 }
 
+/// Shared page-spacing target (24px by default) for heading icon tools.
+pub(crate) fn compact_icon_style(mut style: NodeStyle) -> NodeStyle {
+    use nana_ui_core::LengthSpec::Px;
+    style.square = None;
+    style.control_height = None;
+    style.control_padding_x = None;
+    style.control_padding_y = None;
+    let layout = Arc::make_mut(&mut style.layout);
+    layout.width = Some(Px(24.0));
+    layout.height = Some(Px(24.0));
+    layout.min_width = Some(Px(24.0));
+    layout.min_height = Some(Px(24.0));
+    let edge = crate::theme_intent::space(nana_ui_core::SpacingStep::Page);
+    layout.theme.width = Some(edge.clone());
+    layout.theme.height = Some(edge.clone());
+    layout.theme.min_width = Some(edge.clone());
+    layout.theme.min_height = Some(edge);
+    layout.padding_left = Some(Px(0.0));
+    layout.padding_right = Some(Px(0.0));
+    layout.padding_top = Some(Px(0.0));
+    layout.padding_bottom = Some(Px(0.0));
+    layout.flex_shrink = Some(0.0);
+    style
+}
+
 fn add_length_px(length: nana_ui_core::LengthSpec, offset: f32) -> nana_ui_core::LengthSpec {
     use nana_ui_core::LengthSpec;
     match length {
@@ -587,6 +612,8 @@ pub struct Button {
     pub trailing_icon: Option<nana_ui_core::Icon>,
     pub icon_size: Option<f32>,
     pub icon_gap: f32,
+    /// Default icon spacing remains a token until projection; numeric setters opt out.
+    pub themed_icon_gap: Option<nana_ui_core::ThemeExpr>,
     /// Where the glyph–label group sits; centred unless a row-like button
     /// asks for the start edge.
     pub content_align: TextHorizontalAlignment,
@@ -638,6 +665,7 @@ impl Button {
             trailing_icon: None,
             icon_size: None,
             icon_gap: nana_ui_core::space::SM,
+            themed_icon_gap: Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm)),
             content_align: TextHorizontalAlignment::Center,
             kind: nana_ui_core::ButtonKind::Ghost,
             size: nana_ui_core::ControlSize::Medium,
@@ -711,6 +739,7 @@ impl Button {
     pub fn icon_gap(mut self, gap: f32) -> Self {
         if gap.is_finite() && gap >= 0.0 {
             self.icon_gap = gap;
+            self.themed_icon_gap = None;
         }
         self
     }
@@ -809,6 +838,10 @@ impl ComponentView for Button {
         true
     }
 
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         // The label goes to the text, the visual and the accessible name.
         // Compare each against the world first and copy the label once,
@@ -826,11 +859,13 @@ impl ComponentView for Button {
         let icon_size = self
             .icon_size
             .filter(|size| size.is_finite() && *size >= 0.0)
-            .unwrap_or(self.size.icon_size());
-        let icon_gap = if self.icon_gap.is_finite() {
+            .unwrap_or(self.size.text_size_in(world.theme().typography()));
+        let icon_gap = if let Some(gap) = &self.themed_icon_gap {
+            gap.resolve(world.theme()).max(0.0)
+        } else if self.icon_gap.is_finite() {
             self.icon_gap.max(0.0)
         } else {
-            6.0
+            world.theme().spacing().sm
         };
         let visual_current = matches!(
             world.standard_visual_ref(id),
@@ -948,6 +983,8 @@ pub struct IconButton {
     pub label: Arc<str>,
     pub kind: nana_ui_core::ButtonKind,
     pub size: nana_ui_core::ControlSize,
+    /// Use the theme's page-spacing square for inline heading tools (default 24px).
+    pub compact: bool,
     pub selected: bool,
     pub disabled: bool,
     pub tooltip: Option<IconButtonTooltip>,
@@ -1019,6 +1056,7 @@ impl IconButton {
             label: label.into(),
             kind: nana_ui_core::ButtonKind::Ghost,
             size: nana_ui_core::ControlSize::Medium,
+            compact: false,
             selected: false,
             disabled: false,
             tooltip: None,
@@ -1038,6 +1076,13 @@ impl IconButton {
         self.style.square = Some(nana_ui_core::SquareSize::Control(size));
         self
     }
+    /// A heading tool with the theme's page-spacing target and Body glyph.
+    /// Independent of `size`; disabling restores the declared control size.
+    pub fn compact(mut self, compact: bool) -> Self {
+        self.compact = compact;
+        self
+    }
+
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
         self
@@ -1119,6 +1164,10 @@ impl ComponentView for IconButton {
         }
     }
 
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         if world.text(id).is_some_and(|text| !text.is_empty()) {
             mutations.set_text(
@@ -1133,7 +1182,11 @@ impl ComponentView for IconButton {
         }
         let visual = StandardVisual::Icon {
             icon: self.icon,
-            size: self.size.icon_size(),
+            size: if self.compact {
+                nana_ui_core::ControlSize::Medium.text_size_in(world.theme().typography())
+            } else {
+                self.size.text_size_in(world.theme().typography())
+            },
             tooltip: self.tooltip.as_ref().map(|tooltip| crate::TooltipVisual {
                 label: Arc::clone(&tooltip.label),
                 config: tooltip.config,
@@ -1144,7 +1197,11 @@ impl ComponentView for IconButton {
             mutations.set_standard_visual(id, Some(visual));
         }
         let selected = self.selected || self.kind == nana_ui_core::ButtonKind::Selected;
-        let mut effective_style = self.style.clone();
+        let mut effective_style = if self.compact {
+            compact_icon_style(self.style.clone())
+        } else {
+            self.style.clone()
+        };
         if !self.colors_from_style {
             kind_colors(self.kind, selected, &mut effective_style);
             if self.disabled {
@@ -1231,6 +1288,8 @@ fn kind_colors(kind: nana_ui_core::ButtonKind, selected: bool, style: &mut NodeS
 pub struct IconGlyph {
     pub icon: nana_ui_core::Icon,
     pub size: f32,
+    /// Optional size intent shared by its box and painted glyph.
+    pub themed_size: Option<nana_ui_core::ThemeExpr>,
     pub decorative: bool,
     pub style: NodeStyle,
 }
@@ -1240,6 +1299,7 @@ impl IconGlyph {
         Self {
             icon,
             size: nana_ui_core::ControlSize::Small.icon_size(),
+            themed_size: Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Meta).into()),
             decorative: false,
             style: NodeStyle {
                 foreground: Some(nana_ui_core::SemanticColorRole::Muted),
@@ -1250,6 +1310,18 @@ impl IconGlyph {
 
     pub fn size(mut self, size: f32) -> Self {
         self.size = size.max(0.0);
+        self.themed_size = None;
+        self
+    }
+
+    /// Use one of the standard type-scale extents for inline decoration.
+    pub fn size_role(self, role: nana_ui_core::TypeRole) -> Self {
+        self.size_theme(nana_ui_core::ThemeToken::Type(role).into())
+    }
+
+    /// Keep layout and paint on the same live theme expression.
+    pub fn size_theme(mut self, size: nana_ui_core::ThemeExpr) -> Self {
+        self.themed_size = Some(size);
         self
     }
 
@@ -1277,6 +1349,10 @@ impl IconGlyph {
         layout.height = Some(edge);
         layout.min_width = Some(edge);
         layout.min_height = Some(edge);
+        layout.theme.width = self.themed_size.clone();
+        layout.theme.height = self.themed_size.clone();
+        layout.theme.min_width = self.themed_size.clone();
+        layout.theme.min_height = self.themed_size.clone();
         layout.flex_grow = Some(0.0);
         layout.flex_shrink = Some(0.0);
         style
@@ -1297,6 +1373,10 @@ impl ComponentView for IconGlyph {
         }
     }
 
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         if world.text(id) != Some("") {
             mutations.set_text(
@@ -1308,7 +1388,10 @@ impl ComponentView for IconGlyph {
         }
         let visual = StandardVisual::Icon {
             icon: self.icon,
-            size: self.size,
+            size: self
+                .themed_size
+                .as_ref()
+                .map_or(self.size, |size| size.resolve(world.theme()).max(0.0)),
             tooltip: None,
         };
         if world.standard_visual(id) != Some(visual.clone()) {
@@ -4071,8 +4154,11 @@ fn checkbox_style() -> NodeStyle {
 }
 
 fn checkbox_style_for(size: nana_ui_core::ControlSize) -> NodeStyle {
+    let mut layout = nana_ui_core::LayoutStyle::default();
+    layout.theme.control_typography(size);
+    crate::theme_intent::weight(&mut layout, nana_ui_core::TextWeight::Regular);
     NodeStyle {
-        layout: Arc::new(nana_ui_core::LayoutStyle::default()),
+        layout: Arc::new(layout),
         control_height: Some(nana_ui_core::ControlHeight::Min(size)),
         foreground: Some(nana_ui_core::SemanticColorRole::Text),
         background: Some(nana_ui_core::SemanticColorRole::Background),
@@ -4122,8 +4208,13 @@ fn checkbox_style_for(size: nana_ui_core::ControlSize) -> NodeStyle {
 }
 
 fn switch_style() -> NodeStyle {
+    let mut layout = nana_ui_core::LayoutStyle::default();
+    layout
+        .theme
+        .control_typography(nana_ui_core::ControlSize::Medium);
+    crate::theme_intent::weight(&mut layout, nana_ui_core::TextWeight::Medium);
     NodeStyle {
-        layout: Arc::new(nana_ui_core::LayoutStyle::default()),
+        layout: Arc::new(layout),
         foreground: Some(nana_ui_core::SemanticColorRole::Text),
         radius: Some(nana_ui_core::RadiusTier::Sm),
         interaction: crate::InteractionStyle {
@@ -4460,6 +4551,9 @@ impl Switch {
         self.size = size;
         self.style.control_height = Some(nana_ui_core::ControlHeight::Min(size));
         self.style.control_padding_x = Some(size.into());
+        Arc::make_mut(&mut self.style.layout)
+            .theme
+            .control_typography(size);
         self
     }
     pub fn loading(mut self, loading: bool) -> Self {
@@ -4545,6 +4639,9 @@ impl ComponentView for Switch {
         let bare = self.label.is_empty() && self.hint.is_none();
         let metrics = world.theme_metrics();
         let mut effective_style = self.style.clone();
+        let vertical_padding = effective_style
+            .control_padding_y
+            .map(|padding| padding.resolve(metrics));
         {
             let layout = Arc::make_mut(&mut effective_style.layout);
             if layout.width.is_none() {
@@ -4554,13 +4651,32 @@ impl ComponentView for Switch {
                     nana_ui_core::LengthSpec::Fill
                 });
             }
-            if self.hint.is_some() && layout.height.is_none() {
+            if !bare && layout.height.is_none() && layout.theme.height.is_none() {
+                let typography = world.theme().typography();
+                let line = |font: f32| (font * typography.line / typography.body).max(font);
+                let label_line = line(self.size.text_size_in(typography));
+                let text_height = if self.hint.is_some() {
+                    label_line
+                        + world.theme().spacing().xxs
+                        + line(self.size.caption_size_in(typography))
+                } else {
+                    label_line
+                };
+                let mut resolved = layout.clone();
+                layout.theme.apply(&mut resolved, world.theme());
+                let padding = resolved.resolved_padding();
+                let inset = vertical_padding
+                    .map_or(padding.top + padding.bottom, |padding| padding * 2.0)
+                    + resolved.border_width.unwrap_or(0.0) * 2.0;
                 layout.min_height = Some(nana_ui_core::LengthSpec::Px(
-                    self.size.height_in(metrics) + nana_ui_core::space::LG,
+                    self.size
+                        .height_in(metrics)
+                        .max(text_height.max(metrics.switch.track_height) + inset),
                 ));
+                layout.theme.min_height = None;
             }
         }
-        if self.hint.is_some() || effective_style.layout.height.is_some() {
+        if !bare || effective_style.layout.height.is_some() {
             // The hint row is taller than the size step, and an L2 CSS box is
             // a spent number; don't let intent write the control height back
             // over either.
@@ -4901,6 +5017,12 @@ impl ComponentView for RangeField {
             tag: "range-field".into(),
         }
     }
+
+    // Readouts have no ordinary text node to grow their row after a theme install.
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let value = format_range_value(self.value, self.step);
         let rail = self.rail.filter(|girth| girth.is_finite() && *girth > 0.0);
@@ -4942,8 +5064,57 @@ impl ComponentView for RangeField {
                 layout.width = Some(nana_ui_core::LengthSpec::Fill);
             }
         }
-        if effective_style.control_height.is_none() && effective_style.layout.height.is_none() {
-            effective_style.control_height = Some(nana_ui_core::ControlHeight::Min(self.size));
+        if effective_style.layout.height.is_none()
+            && effective_style.layout.theme.height.is_none()
+            && !matches!(
+                effective_style.control_height,
+                Some(nana_ui_core::ControlHeight::Exact(_))
+            )
+        {
+            let theme = world.theme();
+            let mut resolved = (*effective_style.layout).clone();
+            effective_style.layout.theme.apply(&mut resolved, theme);
+            let font = resolved.font_size.unwrap_or(theme.typography().body);
+            let line_height =
+                resolved
+                    .line_height
+                    .or(Some(nana_ui_core::LineHeightSpec::Absolute(
+                        theme.typography().line,
+                    )));
+            let line = nana_ui_core::text_line_box_height_px(font, line_height);
+            let caption_line = nana_ui_core::text_line_box_height_px(
+                self.size.caption_size_in(theme.typography()),
+                line_height,
+            );
+            let thumb = if track_gradient.is_some() {
+                theme.spacing().xxxl
+            } else {
+                self.size.text_size_in(theme.typography())
+            };
+            let padding = resolved.resolved_padding();
+            let vertical_padding = effective_style
+                .control_padding_y
+                .map_or(padding.top + padding.bottom, |padding| {
+                    padding.resolve(theme.metrics()) * 2.0
+                });
+            let border = resolved.resolved_border_edges();
+            let minimum =
+                line.max(caption_line).max(thumb) + vertical_padding + border.top + border.bottom;
+            let control_minimum = effective_style
+                .control_height
+                .map_or(self.size.height_in(theme.metrics()), |height| {
+                    height.resolve(theme.metrics())
+                });
+            let authored_minimum = match resolved.min_height {
+                Some(nana_ui_core::LengthSpec::Px(minimum)) => minimum,
+                _ => 0.0,
+            };
+            effective_style.control_height = None;
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.min_height = Some(nana_ui_core::LengthSpec::Px(
+                minimum.max(control_minimum).max(authored_minimum),
+            ));
+            layout.theme.min_height = None;
         }
         if rail.is_none() && track_gradient.is_none() {
             effective_style.control_padding_x = Some(nana_ui_core::ControlPadding::Field);

@@ -142,6 +142,27 @@ impl ControlSize {
         }
     }
 
+    /// Indicator extent resolved from the installed spacing and typography.
+    pub const fn indicator_size_in(
+        self,
+        typography: crate::TypographyTokens,
+        spacing: crate::SpacingTokens,
+    ) -> f32 {
+        match self {
+            Self::Small => spacing.xxl,
+            Self::Medium => typography.line,
+            Self::Large => typography.line_tall,
+        }
+    }
+
+    /// Label clearance resolved from the installed spacing scale.
+    pub const fn indicator_gap_in(self, spacing: crate::SpacingTokens) -> f32 {
+        match self {
+            Self::Small => spacing.sm,
+            Self::Medium | Self::Large => spacing.md,
+        }
+    }
+
     /// Left inset a radio row reserves before its label: a small row inset,
     /// the ring, and the label gap.
     pub const fn radio_lead(self) -> f32 {

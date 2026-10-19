@@ -1,6 +1,7 @@
 //! Real shaping must export natural width while retaining constrained paint.
 use nana_ui::{NanaTextShaper, runtime::*};
 use nana_ui_core::{LengthSpec, TextWeight, ThemeDefinition, TypeRole, WordBreakSpec};
+use nana_ui_scene::{ScenePrimitiveKind, UiScene};
 use std::sync::Arc;
 
 fn settle(cx: &mut AppContext, doc: DocumentId, shaper: &mut NanaTextShaper) {
@@ -259,51 +260,121 @@ fn range_readouts_share_the_installed_typography_with_real_shaping() {
     let range = cx
         .create_component(
             doc,
-            RangeField::new(100.0, 0.0, 100.0, 1.0)
+            RangeField::new(100000.0, 0.0, 100000.0, 1.0)
                 .label("Radius")
-                .unit("px"),
+                .unit("pixels"),
         )
         .unwrap();
-    let mut theme = ThemeDefinition::NANA_DARK;
-    theme.typography.body = 18.0;
-    theme.typography.meta = 14.0;
-    theme.typography.line = 24.0;
-    theme.typography.medium = 550;
-    theme.typography.regular = 450;
-    cx.set_theme_definition(&theme).unwrap();
     let mut shaper = NanaTextShaper::default();
     settle(&mut cx, doc, &mut shaper);
-    let ComponentGeometry::Range {
-        label, value, unit, ..
-    } = cx.world().component_geometry(range.stable_id()).unwrap()
-    else {
-        panic!("range geometry");
-    };
-    for (region, size, weight) in [
-        (label.unwrap(), 18.0, 550),
-        (value, 18.0, 550),
-        (unit.unwrap(), 14.0, 450),
-    ] {
-        assert_eq!(region.font_size, size);
-        assert_eq!(region.font_weight, Some(weight));
-        let mut style = cx
-            .world()
-            .computed_style(range.stable_id())
-            .unwrap()
-            .clone();
-        style.font_size = region.font_size;
-        style.font_weight = region.font_weight;
-        let metrics = shaper.shape(
-            StableNodeId::new(u64::MAX).unwrap(),
-            &TextContent {
-                value: region.content,
-            },
-            &style,
-            TextShapeConstraints::default(),
+    for (body, meta, line) in [(18.0, 14.0, 24.0), (30.0, 24.0, 40.0), (10.0, 8.0, 16.0)] {
+        let mut theme = ThemeDefinition::NANA_DARK;
+        theme.typography.body = body;
+        theme.typography.meta = meta;
+        theme.typography.line = line;
+        theme.typography.medium = 550;
+        theme.typography.regular = 450;
+        cx.set_theme_definition(&theme).unwrap();
+        settle(&mut cx, doc, &mut shaper);
+        let ComponentGeometry::Range {
+            label,
+            value,
+            unit,
+            track,
+            ..
+        } = cx.world().component_geometry(range.stable_id()).unwrap()
+        else {
+            panic!("range geometry");
+        };
+        assert_eq!(
+            track.height, body,
+            "ordinary thumb follows the control type role"
         );
-        assert!(
-            region.bounds.width + 0.5 >= metrics.width,
-            "readout must fit its real shaped text"
-        );
+        for (region, size, weight) in [
+            (label.unwrap(), body, 550),
+            (value, body, 550),
+            (unit.unwrap(), meta, 450),
+        ] {
+            assert_eq!(region.font_size, size);
+            assert_eq!(region.font_weight, Some(weight));
+            let mut style = cx
+                .world()
+                .computed_style(range.stable_id())
+                .unwrap()
+                .clone();
+            style.font_size = region.font_size;
+            style.font_weight = region.font_weight;
+            let metrics = shaper.shape(
+                StableNodeId::new(u64::MAX).unwrap(),
+                &TextContent {
+                    value: region.content.clone(),
+                },
+                &style,
+                TextShapeConstraints::default(),
+            );
+            assert!(
+                region.bounds.width + 0.5 >= metrics.width,
+                "readout must fit its real shaped text: {region:?} vs {metrics:?}"
+            );
+            assert!(
+                region.bounds.height + 0.5 >= metrics.height,
+                "readout must fit its real line box: {region:?} vs {metrics:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn list_metadata_uses_meta_regular_when_a_mounted_theme_changes() {
+    let mut cx = AppContext::new();
+    let doc = DocumentId::new(905).unwrap();
+    let mut row = ListItem::new("Title").note("Note").detail("Detail");
+    // Metadata is optional in a fit-content row; give both regions real room.
+    Arc::make_mut(&mut row.style.layout).width = Some(LengthSpec::Px(400.0));
+    let item = cx.create_component(doc, row).unwrap();
+    let mut shaper = NanaTextShaper::default();
+    settle(&mut cx, doc, &mut shaper);
+    for (meta, regular) in [(18.0, 550), (10.0, 400)] {
+        let mut theme = ThemeDefinition::NANA_DARK;
+        theme.typography.meta = meta;
+        theme.typography.regular = regular;
+        cx.set_theme_definition(&theme).unwrap();
+        settle(&mut cx, doc, &mut shaper);
+        let ComponentGeometry::ListItem { note, detail, .. } =
+            cx.world().component_geometry(item.stable_id()).unwrap()
+        else {
+            panic!("list geometry");
+        };
+        for region in [
+            note.expect("note remains visible"),
+            detail.expect("detail remains visible"),
+        ] {
+            assert_eq!(region.font_size, meta);
+            assert_eq!(region.font_weight, Some(regular));
+        }
+        let mut scene = UiScene::new();
+        scene.apply_delta(cx.world().extract_document(doc), []);
+        let metadata: Vec<_> = scene
+            .primitives()
+            .filter(|primitive| {
+                primitive.node == item.stable_id() && matches!(primitive.id.slot, 3 | 4)
+            })
+            .collect();
+        assert_eq!(metadata.len(), 2);
+        for primitive in metadata {
+            let ScenePrimitiveKind::Text {
+                line_height,
+                size,
+                weight,
+                ..
+            } = &primitive.kind
+            else {
+                panic!("metadata paints text");
+            };
+            assert_eq!(*size, meta);
+            assert_eq!(*weight, Some(regular));
+            assert!((line_height.unwrap().resolve_px(*size) - primitive.bounds.height).abs() < 0.5);
+        }
+        assert_eq!(cx.world().text(item.stable_id()), Some("Title"));
     }
 }
