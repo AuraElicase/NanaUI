@@ -18,10 +18,9 @@ impl UiWorld {
         let measure = self.chrome_text_measure(id);
         let layout = spec.layout_for(
             [bounds.width, bounds.height],
-            &style_model.palette,
+            self.theme(),
             |role| style_model.color(role).as_rgba_array(),
-            &ChromeLabelMeasure(measure),
-            measure.engine_identity(),
+            measure,
             self.animation_now(),
         );
         crate::ComponentGeometry::Chart {
