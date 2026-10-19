@@ -20,6 +20,42 @@ use crate::{
     ScenePaintViewport, ScenePresentationParameters, ScenePresentationProfile, SceneWgpuPainter,
 };
 
+/// Where [`PresentationFrameDriver::encode`] finds the painter of a profile.
+pub(crate) trait PresentationPainters {
+    fn painter(
+        &mut self,
+        gpu: &GpuContext,
+        profile: ScenePresentationProfile,
+    ) -> &mut SceneWgpuPainter;
+}
+
+/// A painter per profile.
+impl PresentationPainters for HashMap<ScenePresentationProfile, SceneWgpuPainter> {
+    fn painter(
+        &mut self,
+        gpu: &GpuContext,
+        profile: ScenePresentationProfile,
+    ) -> &mut SceneWgpuPainter {
+        self.entry(profile)
+            .or_insert_with(|| SceneWgpuPainter::new_with_presentation(gpu, profile))
+    }
+}
+
+/// One painter for every profile: the glyph and icon atlases, text caches
+/// and URL images are shared, and each working format keeps its pipelines.
+impl PresentationPainters for Option<SceneWgpuPainter> {
+    fn painter(
+        &mut self,
+        gpu: &GpuContext,
+        profile: ScenePresentationProfile,
+    ) -> &mut SceneWgpuPainter {
+        let painter =
+            self.get_or_insert_with(|| SceneWgpuPainter::new_with_presentation(gpu, profile));
+        painter.select_presentation(profile);
+        painter
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct DirectPresentation {
     pub id: RenderTargetId,
@@ -182,7 +218,7 @@ impl PresentationFrameDriver {
         retained_scene: Option<&UiScene>,
         frame: &mut FrameContext,
         gpu: &GpuContext,
-        painters: &mut HashMap<ScenePresentationProfile, SceneWgpuPainter>,
+        painters: &mut impl PresentationPainters,
         mut surface: Option<&mut ExternalSurface>,
         direct_target: Option<&GpuRenderTarget>,
         transfer: &mut Option<OutputTransfer>,
@@ -218,9 +254,7 @@ impl PresentationFrameDriver {
         if let Some((plan, request)) = prepared.retained {
             let surface = surface.as_mut().expect("retained route has a producer");
             let profile = surface.config().presentation;
-            let painter = painters
-                .entry(profile)
-                .or_insert_with(|| SceneWgpuPainter::new_with_presentation(gpu, profile));
+            let painter = painters.painter(gpu, profile);
             painter.set_resource_fetch_host(fetch_host.clone());
             let result = Self::encode_retained(
                 surface,
@@ -307,15 +341,13 @@ impl PresentationFrameDriver {
         scene: &UiScene,
         frame: &mut FrameContext,
         gpu: &GpuContext,
-        painters: &mut HashMap<ScenePresentationProfile, SceneWgpuPainter>,
+        painters: &mut impl PresentationPainters,
         target: &GpuRenderTarget,
         textures: Option<&HostTextureRegistry>,
         renderers: Option<&SceneGpuRendererRegistry>,
         fetch_host: Option<SharedFetchHost>,
     ) -> Result<Option<GpuWorkObservation>, ExternalSurfaceError> {
-        let painter = painters
-            .entry(direct.profile)
-            .or_insert_with(|| SceneWgpuPainter::new_with_presentation(gpu, direct.profile));
+        let painter = painters.painter(gpu, direct.profile);
         painter.set_resource_fetch_host(fetch_host);
         painter.set_alpha_encoding(direct.alpha);
         painter.set_subpixel_text(direct.text_aa);

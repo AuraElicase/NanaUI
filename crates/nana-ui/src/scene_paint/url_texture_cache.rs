@@ -267,7 +267,7 @@ impl Drop for JobHandle {
 }
 
 struct Job {
-    egress: Egress,
+    egress: Partition,
     key: String,
     serial: u64,
     source: Source,
@@ -277,7 +277,7 @@ struct Job {
 }
 
 struct Done {
-    egress: Egress,
+    egress: Partition,
     key: String,
     serial: u64,
     prepared: Option<Prepared>,
@@ -421,7 +421,16 @@ impl Pending {
     }
 }
 
-/// Everything loaded through one egress.
+/// Which [`Bucket`] an entry lives in: what one egress loaded, uploaded for
+/// one source encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Partition {
+    egress: Egress,
+    /// The texture is `Rgba8UnormSrgb` rather than raw `Rgba8Unorm`.
+    srgb: bool,
+}
+
+/// Everything loaded through one egress for one source encoding.
 #[derive(Default)]
 struct Bucket {
     /// Keeps the address behind a remote bucket's [`Egress`] from being reused
@@ -444,7 +453,7 @@ struct Bucket {
 /// document an image only another document's policy admitted.
 #[derive(Default)]
 pub(crate) struct UrlTextureCache {
-    buckets: HashMap<Egress, Bucket>,
+    buckets: HashMap<Partition, Bucket>,
     fetch_host: Option<SharedFetchHost>,
     ready: Arc<AtomicBool>,
     wake: Option<ImageWake>,
@@ -466,11 +475,11 @@ pub(crate) struct UrlTextureCache {
 }
 
 impl UrlTextureCache {
+    /// Upload the images looked up next for the given source encoding. Each
+    /// encoding keeps a bucket of its own, so a painter serving both an sRGB
+    /// and a raw-linear profile never samples one's texture as the other's.
     pub(crate) fn set_srgb_source(&mut self, enabled: bool) {
-        if self.srgb_source != enabled {
-            self.srgb_source = enabled;
-            self.buckets.clear();
-        }
+        self.srgb_source = enabled;
     }
     pub(crate) fn set_wake(&mut self, wake: ImageWake) {
         self.wake = Some(wake);
@@ -486,19 +495,32 @@ impl UrlTextureCache {
             LOCAL
         }
     }
+    /// The bucket a lookup of `url` reads and fills: its egress, uploaded for
+    /// the source encoding of the profile painted next.
+    fn partition(&self, url: &str) -> Partition {
+        Partition {
+            egress: self.egress(url),
+            srgb: self.srgb_source,
+        }
+    }
     /// Stop the in-flight requests started through `host` and drop what it
     /// loaded, releasing the bucket's hold on the host.
     pub(crate) fn release_fetch_host(&mut self, host: &SharedFetchHost) {
-        if let Some(bucket) = self.buckets.remove(&egress_of(Some(host))) {
+        let egress = egress_of(Some(host));
+        self.buckets.retain(|partition, bucket| {
+            if partition.egress != egress {
+                return true;
+            }
             for pending in bucket.pending.values() {
                 pending.cancellation.cancel();
             }
-        }
+            false
+        });
     }
-    fn bucket_mut(&mut self, egress: Egress) -> &mut Bucket {
+    fn bucket_mut(&mut self, partition: Partition) -> &mut Bucket {
         let host = &self.fetch_host;
-        self.buckets.entry(egress).or_insert_with(|| Bucket {
-            _host: host.clone().filter(|_| egress != LOCAL),
+        self.buckets.entry(partition).or_insert_with(|| Bucket {
+            _host: host.clone().filter(|_| partition.egress != LOCAL),
             ..Bucket::default()
         })
     }
@@ -529,7 +551,7 @@ impl UrlTextureCache {
     }
     pub(crate) fn get(&self, key: &str) -> Option<&Option<CachedUrlTexture>> {
         self.buckets
-            .get(&self.egress(key))?
+            .get(&self.partition(key))?
             .entries
             .get(key)
             .map(|entry| {
@@ -545,13 +567,13 @@ impl UrlTextureCache {
             .as_ref()
             .map_or((0, 0), |texture| (texture.width, texture.height));
         let entry = Entry::new(texture, natural, self.frame);
-        self.bucket_mut(self.egress(&key))
+        self.bucket_mut(self.partition(&key))
             .entries
             .insert(key, entry);
     }
     pub(crate) fn contains_retained(&self, key: &str) -> bool {
         self.buckets
-            .get(&self.egress(key))
+            .get(&self.partition(key))
             .is_some_and(|bucket| bucket.entries.contains_key(key))
     }
 
@@ -560,7 +582,7 @@ impl UrlTextureCache {
     pub(crate) fn natural_size(&self, url: &str, sampling: ImageSampling) -> Option<[u32; 2]> {
         let entry = self
             .buckets
-            .get(&self.egress(url))?
+            .get(&self.partition(url))?
             .entries
             .get(cache_key(url, sampling).as_ref())?;
         let (width, height) = entry.natural;
@@ -608,7 +630,7 @@ impl UrlTextureCache {
         work: Option<&crate::gpu_work::GpuWorkSink>,
     ) -> Option<(u32, u32)> {
         let key = cache_key(url, sampling);
-        let egress = self.egress(url);
+        let egress = self.partition(url);
         let frame = self.frame;
         if let Some(bucket) = self.buckets.get_mut(&egress) {
             if let Some(entry) = bucket.entries.get_mut(key.as_ref()) {
@@ -726,7 +748,7 @@ impl UrlTextureCache {
 
     fn submit(
         &mut self,
-        egress: Egress,
+        egress: Partition,
         key: &str,
         source: Source,
         goal: Goal,
@@ -765,9 +787,16 @@ impl UrlTextureCache {
         }
     }
 
+    /// Demand is merged over every target, whichever encoding it samples.
     fn refit(&mut self, key: &str, now: Instant) {
-        let demand = self.demand.extent(key);
         let egress = self.egress(key);
+        for srgb in [false, true] {
+            self.refit_in(Partition { egress, srgb }, key, now);
+        }
+    }
+
+    fn refit_in(&mut self, egress: Partition, key: &str, now: Instant) {
+        let demand = self.demand.extent(key);
         let Some(entry) = self
             .buckets
             .get_mut(&egress)
@@ -1275,7 +1304,7 @@ impl UrlTextureCache {
     /// Level-0 size and mip count of the texture uploaded for `key`.
     pub(crate) fn texture_shape(&self, key: &str) -> Option<(u32, u32, u32)> {
         self.buckets
-            .get(&self.egress(key))?
+            .get(&self.partition(key))?
             .entries
             .get(key)?
             .texture
@@ -1325,12 +1354,59 @@ mod tests {
                 .flat_map(|bucket| bucket.entries.values())
         }
         fn insert_pending(&mut self, url: &str, pending: Pending) {
-            let egress = self.egress(url);
+            let egress = self.partition(url);
             self.bucket_mut(egress).pending.insert(url.into(), pending);
         }
         fn pending(&self, url: &str) -> Option<&Pending> {
-            self.buckets.get(&self.egress(url))?.pending.get(url)
+            self.buckets.get(&self.partition(url))?.pending.get(url)
         }
+    }
+
+    #[test]
+    fn each_source_encoding_keeps_its_own_texture() {
+        use base64::Engine as _;
+        let gpu = crate::test_gpu::context();
+        let device = nana_gpu::__framework::device(&gpu);
+        let queue = nana_gpu::__framework::queue(&gpu);
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([200, 100, 50, 255]))
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let url = format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png.into_inner())
+        );
+        let uploads = || UPLOADS.with(Cell::get);
+        let mut cache = UrlTextureCache::default();
+        cache.set_srgb_source(true);
+        cache.begin_frame();
+        let start = uploads();
+        assert_eq!(
+            cache.load_with_work(device, queue, &url, None),
+            Some((2, 2))
+        );
+        assert_eq!(uploads(), start + 1);
+        cache.set_srgb_source(false);
+        assert_eq!(
+            cache.load_with_work(device, queue, &url, None),
+            Some((2, 2))
+        );
+        assert_eq!(
+            uploads(),
+            start + 2,
+            "a raw-linear profile samples a texture of its own"
+        );
+        cache.set_srgb_source(true);
+        assert_eq!(
+            cache.load_with_work(device, queue, &url, None),
+            Some((2, 2))
+        );
+        assert_eq!(
+            uploads(),
+            start + 2,
+            "and the sRGB one is still there for the profile that uses it"
+        );
+        assert_eq!(cache.entry_keys().len(), 2);
     }
 
     #[test]

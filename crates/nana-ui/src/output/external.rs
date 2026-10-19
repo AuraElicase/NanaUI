@@ -927,6 +927,7 @@ impl ExternalSurface {
                 .as_mut()
                 .ok_or(ExternalSurfaceError::NoPainter)?,
         };
+        painter.select_presentation(self.config.presentation);
         painter.set_alpha_encoding(encoding);
         painter.paint_target(
             id,

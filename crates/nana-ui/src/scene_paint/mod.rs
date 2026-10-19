@@ -359,7 +359,7 @@ use icon::{IconPipeline, PreparedIcon};
 use mesh::{MeshPipeline, MeshRange, PathRange, StrokeStyle};
 use motion::{MotionGpuResources, eval_format_for_gpu};
 use quad::QuadPipeline;
-use text::{PreparedText, TextPipeline};
+use text::{PreparedText, TextPipeline, TextProgram};
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct ScenePaintViewport {
@@ -379,8 +379,18 @@ pub struct ScenePaintViewport {
     pub clear: bool,
 }
 
+/// Paints [`UiScene`]s into the host's targets.
+///
+/// One painter can serve every presentation profile on its device. What a
+/// profile does not change is its core and is shared: the text engine with
+/// its shape and raster caches and glyph atlas, the icon atlas, the URL
+/// images (bucketed by source encoding), the motion resources and every
+/// target's retained state. What a working format changes is a pipeline
+/// set, built on first use and kept while the format is painted.
 pub struct SceneWgpuPainter {
     targets: std::collections::HashMap<RenderTargetId, TargetState>,
+    /// The pipeline sets of the working formats not painted right now.
+    pipeline_sets: std::collections::HashMap<PipelineSetKey, PipelineSet>,
     prepared_batch: Option<PreparedBatch>,
     gpu: GpuContext,
     /// Targets whose retained GPU state was recorded into a frame that was
@@ -398,6 +408,9 @@ pub struct SceneWgpuPainter {
     working_format: wgpu::TextureFormat,
     presentation: ScenePresentationProfile,
     presentation_parameters: ScenePresentationParameters,
+    // The active `PipelineSet` is spread over `quads`, `meshes`, the
+    // programs inside `icons` and `text`, `host_textures`, `backdrop` and
+    // `charts`; the atlases beside those programs are core.
     quads: QuadPipeline,
     motion: MotionGpuResources,
     meshes: MeshPipeline,
@@ -455,6 +468,9 @@ pub enum AlphaEncoding {
 struct PaintedDest {
     instance: u64,
     presentation_epoch: u64,
+    /// What [`SceneWgpuPainter::paint`]'s own state was painted for; a target
+    /// of [`SceneWgpuPainter::paint_target`] keeps one profile for life.
+    presentation: ScenePresentationProfile,
     viewport: ScenePaintViewport,
     size: [u32; 2],
 }
@@ -482,6 +498,36 @@ struct TargetState {
     natural_sizes: natural_sizes::NaturalSizes,
     image_revision: u64,
     bound_fetch_host: Option<SharedFetchHost>,
+}
+
+/// What a [`PipelineSet`] is compiled for: the working format, and whether
+/// the `url(...)` textures its bindings name are uploaded as sRGB.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PipelineSetKey {
+    working_format: wgpu::TextureFormat,
+    srgb_source: bool,
+}
+
+impl PipelineSetKey {
+    fn of(presentation: ScenePresentationProfile) -> Self {
+        Self {
+            working_format: __framework::format_to_wgpu(presentation.working_format()),
+            srgb_source: !presentation.is_direct_linear(),
+        }
+    }
+}
+
+/// Every pipeline family compiled for one working format. Pipelines come
+/// from the device's registry, so a second set of a format another painter
+/// already built compiles nothing.
+struct PipelineSet {
+    quads: QuadPipeline,
+    meshes: MeshPipeline,
+    icons: wgpu::RenderPipeline,
+    text: TextProgram,
+    host_textures: HostTexturePipeline,
+    backdrop: BackdropPipeline,
+    charts: Option<chart::ChartPipeline>,
 }
 
 struct PreparedBatch {
@@ -646,6 +692,7 @@ impl SceneWgpuPainter {
         );
         Self {
             targets: std::collections::HashMap::new(),
+            pipeline_sets: std::collections::HashMap::new(),
             prepared_batch: None,
             gpu: gpu.clone(),
             retained_targets: RetainedWrites::new(),
@@ -716,6 +763,87 @@ impl SceneWgpuPainter {
         self.presentation
     }
 
+    /// Paint the next targets for `presentation`. A target keeps the profile
+    /// it was first painted with; another profile is another target.
+    ///
+    /// A profile of the working format in use changes only the final
+    /// transfer. One of another format swaps that format's [`PipelineSet`]
+    /// in, building it on first use; atlases and caches carry over.
+    pub(crate) fn select_presentation(&mut self, presentation: ScenePresentationProfile) {
+        if presentation == self.presentation {
+            return;
+        }
+        let current = PipelineSetKey::of(self.presentation);
+        let next = PipelineSetKey::of(presentation);
+        if next != current {
+            let mut set = self
+                .pipeline_sets
+                .remove(&next)
+                .unwrap_or_else(|| self.build_pipeline_set(next.working_format));
+            self.swap_pipeline_set(&mut set);
+            self.pipeline_sets.insert(current, set);
+            self.format = next.working_format;
+            self.working_format = next.working_format;
+            self.url_cache.set_srgb_source(next.srgb_source);
+        }
+        self.presentation = presentation;
+    }
+
+    /// The pipeline families for targets of `format`, over this painter's
+    /// atlases, compiled side by side as [`Self::new_with_presentation`] does.
+    fn build_pipeline_set(&self, format: wgpu::TextureFormat) -> PipelineSet {
+        let device = &self.device;
+        let queue = &self.queue;
+        let gpu = &self.gpu;
+        let policy = gpu.policy();
+        let atlas_layout = self.text.atlas_layout();
+        std::thread::scope(|scope| {
+            let meshes = beside!(scope, "nana-paint-mesh", {
+                MeshPipeline::new_with_policy(device, format, Some(policy))
+            });
+            let text = beside!(scope, "nana-paint-text", {
+                TextProgram::new(device, format, atlas_layout, policy)
+            });
+            let host_textures = beside!(scope, "nana-paint-host-texture", {
+                HostTexturePipeline::new(device, queue, format, policy, gpu)
+            });
+            let backdrop = beside!(scope, "nana-paint-backdrop", {
+                BackdropPipeline::new(device, format, policy)
+            });
+            let quads = QuadPipeline::new_with_policy(device, format, Some(policy));
+            let icons = self.icons.pipeline_for(device, format, Some(policy));
+            PipelineSet {
+                quads,
+                meshes: meshes.join(),
+                icons,
+                text: text.join(),
+                host_textures: host_textures.join(),
+                backdrop: backdrop.join(),
+                charts: None,
+            }
+        })
+    }
+
+    /// Exchange the active pipeline families with `set`.
+    fn swap_pipeline_set(&mut self, set: &mut PipelineSet) {
+        std::mem::swap(&mut self.quads, &mut set.quads);
+        std::mem::swap(&mut self.meshes, &mut set.meshes);
+        self.icons.swap_pipeline(&mut set.icons);
+        self.text.swap_program(&self.device, &mut set.text);
+        std::mem::swap(&mut self.host_textures, &mut set.host_textures);
+        std::mem::swap(&mut self.backdrop, &mut set.backdrop);
+        std::mem::swap(&mut self.charts, &mut set.charts);
+    }
+
+    /// Keep only the pipeline sets some of `presentations` paints with.
+    pub(crate) fn retain_presentations(&mut self, presentations: &[ScenePresentationProfile]) {
+        self.pipeline_sets.retain(|key, _| {
+            presentations
+                .iter()
+                .any(|presentation| PipelineSetKey::of(*presentation) == *key)
+        });
+    }
+
     /// Runtime HDR metadata used by the final presentation pass. Updating it
     /// only writes a small uniform; the painter, retained scene and pipelines
     /// remain reusable across display headroom changes.
@@ -783,6 +911,10 @@ impl SceneWgpuPainter {
         self.image_revision = self.image_revision.wrapping_add(1);
         self.quads.invalidate_image_bindings();
         self.host_textures.invalidate_image_bindings();
+        for set in self.pipeline_sets.values_mut() {
+            set.quads.invalidate_image_bindings();
+            set.host_textures.invalidate_image_bindings();
+        }
         // Other targets observe this revision when they become active.
         true
     }
@@ -1147,6 +1279,7 @@ impl SceneWgpuPainter {
         let painted = PaintedDest {
             instance,
             presentation_epoch: scene.presentation_epoch(),
+            presentation: self.presentation,
             viewport,
             size: dest_physical,
         };

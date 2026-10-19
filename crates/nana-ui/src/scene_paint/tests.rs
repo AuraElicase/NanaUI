@@ -4887,6 +4887,186 @@ fn a_reused_batch_without_text_is_not_rebuilt_for_gaps() {
     assert_eq!(rebuilds, 1, "only the first frame builds a batch");
 }
 
+/// A label beside a GPU view. The view keeps every frame off the retained
+/// dest, so a repaint either reuses the prepared batch or rebuilds it.
+fn label_beside_a_gpu_view(label: &str) -> UiScene {
+    use nana_ui_runtime::GpuView;
+
+    let mut view = host_texture_child(2, 1, 0.0, 0.0, 32.0, 32.0, "0");
+    view.custom_render = Some(GpuView::new(0).custom_render());
+    let mut text = overflowing_text_child(3, 1, 0.0, 32.0, 128.0, 64.0, [1.0; 4]);
+    text.text = Some(TextContent {
+        value: label.into(),
+    });
+    text.style = Arc::new(ComputedStyle {
+        color: Some([1.0; 4]),
+        font_size: 14.0,
+        ..ComputedStyle::default()
+    });
+    let mut root = colored_quad_node(1, 0.0, 0.0, 128.0, 96.0, [0.0, 0.0, 1.0, 1.0]);
+    root.children = Arc::new(vec![view.id, text.id]);
+    let mut scene = UiScene::new();
+    scene.apply_delta([root, view, text], []);
+    scene
+}
+
+/// Paints targets of 128x96 `RGBA8_UNORM_SRGB` through `painter` with the
+/// GPU-view renderer, returning whether the batch was rebuilt and the pixels.
+fn shared_core_painter_frame(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> impl Fn(&mut SceneWgpuPainter, u64, &UiScene) -> (bool, Vec<u8>) {
+    let mut registry = SceneGpuRendererRegistry::new();
+    registry.insert("gpu-view", Arc::new(crate::DefaultGpuViewRenderer::new()));
+    let viewport = ScenePaintViewport {
+        logical_size: [128.0, 96.0],
+        physical_size: [128, 96],
+        scale_factor: 1.0,
+        scene_origin: [0.0, 0.0],
+        target_origin: [0.0, 0.0],
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        clear: true,
+    };
+    let (device, queue) = (device.clone(), queue.clone());
+    move |painter, id, scene| {
+        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+        let (texture, target) = test_copy_target(&device, format, 128, 96);
+        let mut encoder = device.create_command_encoder(&Default::default());
+        painter
+            .paint_target_encoder(
+                RenderTargetId(id),
+                scene,
+                &mut encoder,
+                &target,
+                viewport,
+                None,
+                Some(&registry),
+            )
+            .unwrap();
+        let rebuilt = painter.last_gpu_work().expect("painted").batch_rebuilds > 0;
+        (
+            rebuilt,
+            readback_rgba(&device, &queue, encoder, &texture, 128, 96),
+        )
+    }
+}
+
+#[test]
+fn one_painter_paints_every_profile_as_a_painter_of_its_own_would() {
+    let (device, queue) = test_device();
+    let gpu = crate::test_gpu::context();
+    let srgb = ScenePresentationProfile::sdr(GpuTextureFormat::RGBA8_UNORM_SRGB);
+    let float = srgb.with_force_float_working();
+    assert_ne!(
+        srgb.working_format(),
+        float.working_format(),
+        "the profiles need pipeline sets of their own"
+    );
+    let paint = shared_core_painter_frame(&device, &queue);
+    let scene = label_beside_a_gpu_view("Shared core");
+    let mut own_srgb = SceneWgpuPainter::new_with_presentation(&gpu, srgb);
+    let mut own_float = SceneWgpuPainter::new_with_presentation(&gpu, float);
+    let (_, expected_srgb) = paint(&mut own_srgb, 1, &scene);
+    let (_, expected_float) = paint(&mut own_float, 2, &scene);
+
+    let mut shared = SceneWgpuPainter::new_with_presentation(&gpu, srgb);
+    assert_eq!(paint(&mut shared, 1, &scene).1, expected_srgb);
+    shared.select_presentation(float);
+    assert_eq!(shared.working_format(), float.working_format());
+    assert_eq!(
+        paint(&mut shared, 2, &scene).1,
+        expected_float,
+        "the second profile paints through its own pipelines"
+    );
+    shared.select_presentation(srgb);
+    assert_eq!(
+        paint(&mut shared, 1, &scene),
+        (false, expected_srgb),
+        "switching back keeps the first target's batch and its pixels"
+    );
+    assert_eq!(shared.pipeline_sets.len(), 1, "the idle set is kept");
+
+    let one = own_srgb.text_glyph_counters();
+    let both = shared.text_glyph_counters();
+    assert_eq!(both.glyph_atlas_bytes, one.glyph_atlas_bytes, "one atlas");
+    assert_eq!(both.glyph_atlas_pages, one.glyph_atlas_pages);
+    assert_eq!(
+        both.glyph_raster_cache_bytes, one.glyph_raster_cache_bytes,
+        "one raster cache"
+    );
+    assert_eq!(
+        both.glyph_rasterized, one.glyph_rasterized,
+        "every glyph is rasterized once for both profiles"
+    );
+    assert_eq!(
+        both.glyph_upload_bytes, one.glyph_upload_bytes,
+        "and uploaded once"
+    );
+
+    shared.retain_presentations(&[srgb]);
+    assert!(shared.pipeline_sets.is_empty(), "an unused set is dropped");
+}
+
+#[test]
+fn a_glyph_evicted_under_one_profile_rebuilds_the_batch_another_retained() {
+    let (device, queue) = test_device();
+    let gpu = crate::test_gpu::context();
+    let srgb = ScenePresentationProfile::sdr(GpuTextureFormat::RGBA8_UNORM_SRGB);
+    let float = srgb.with_force_float_working();
+    let paint = shared_core_painter_frame(&device, &queue);
+    let mut painter = SceneWgpuPainter::new_with_presentation(&gpu, srgb);
+    // One page barely wider than a line of text: the other profile's labels
+    // cannot all coexist with this one's glyphs.
+    painter.text = TextPipeline::with_atlas_budget(
+        &device,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+        64,
+        64 * 64 + 8,
+        gpu.policy(),
+    );
+    let first = label_beside_a_gpu_view("abcdefghij");
+    let (built, expected) = paint(&mut painter, 1, &first);
+    assert!(built);
+    assert_eq!(
+        paint(&mut painter, 1, &first),
+        (false, expected.clone()),
+        "an unchanged frame reuses its batch"
+    );
+
+    painter.select_presentation(float);
+    paint(&mut painter, 2, &first);
+    painter.select_presentation(srgb);
+    assert_eq!(
+        paint(&mut painter, 1, &first),
+        (false, expected.clone()),
+        "a profile that places nothing new leaves the other's batch valid"
+    );
+
+    let epoch = painter.text.placement_epoch();
+    let before = painter.text_glyph_counters();
+    painter.select_presentation(float);
+    for label in ["KLMNOPQRST", "UVWXYZ0123", "456789!?@#"] {
+        paint(&mut painter, 2, &label_beside_a_gpu_view(label));
+    }
+    let after = painter.text_glyph_counters();
+    assert!(
+        after.glyph_atlas_evict > before.glyph_atlas_evict,
+        "the fixture evicts glyphs the first target's batch named"
+    );
+    assert_ne!(
+        painter.text.placement_epoch(),
+        epoch,
+        "the other profile's labels moved what the shared atlas holds"
+    );
+    painter.select_presentation(srgb);
+    let (rebuilt, pixels) = paint(&mut painter, 1, &first);
+    assert!(
+        rebuilt,
+        "a batch naming atlas rectangles another profile reused is rebuilt"
+    );
+    assert_eq!(pixels, expected, "and samples its own glyphs again");
+}
+
 fn runtime_button_over_host_texture_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
