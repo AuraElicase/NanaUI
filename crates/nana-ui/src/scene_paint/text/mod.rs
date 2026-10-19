@@ -818,6 +818,28 @@ impl SubpixelOrder {
     }
 }
 
+/// The part of a [`TextPipeline`] a working format changes: its programs
+/// and the materials compiled for them. Everything else is format-free.
+pub(super) struct TextProgram(TextGpu);
+
+impl TextProgram {
+    /// A program for targets of `format`, over the atlas pages a pipeline's
+    /// [`TextPipeline::atlas_layout`] binds.
+    pub(super) fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        atlas_layout: &wgpu::BindGroupLayout,
+        policy: &nana_gpu::GpuDeviceState,
+    ) -> Self {
+        Self(TextGpu::new_with_policy(
+            device,
+            format,
+            atlas_layout,
+            Some(policy),
+        ))
+    }
+}
+
 pub(super) struct TextPipeline {
     /// The `nana-text` engine this painter lays paragraphs out through, and
     /// the one whose faces its rasterizer scales. One per process, so a
@@ -893,6 +915,29 @@ impl TextPipeline {
         Self::with_atlas_limits_policy(device, format, GlyphAtlasLimits::default(), Some(policy))
     }
 
+    /// A pipeline whose atlas is one `page_edge` page within `byte_budget`,
+    /// for painter tests that need eviction within a few labels. Its layouts
+    /// come from `policy`, as a painter's do: the device's pipeline registry
+    /// keys text programs by those layouts.
+    #[cfg(test)]
+    pub(super) fn with_atlas_budget(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        page_edge: u32,
+        byte_budget: usize,
+        policy: &nana_gpu::GpuDeviceState,
+    ) -> Self {
+        Self::with_atlas_limits_policy(
+            device,
+            format,
+            GlyphAtlasLimits {
+                page_edge,
+                byte_budget,
+            },
+            Some(policy),
+        )
+    }
+
     #[cfg(test)]
     fn with_atlas_limits(
         device: &wgpu::Device,
@@ -910,7 +955,7 @@ impl TextPipeline {
     ) -> Self {
         let raster = GlyphRasterCache::default();
         let atlas = GlyphAtlasManager::new(device, raster.generation(), limits, policy);
-        let gpu = TextGpu::new_with_policy(device, format, &atlas, policy);
+        let gpu = TextGpu::new_with_policy(device, format, atlas.layout(), policy);
         let target = TextPipelineTarget::new(gpu.new_target(device));
         Self {
             engine: crate::text_engine::nana_text_engine(),
@@ -1026,6 +1071,24 @@ impl TextPipeline {
         self.gpu.set_subpixel(device, mode != GlyphRenderMode::Mask);
         self.subpixel = mode;
         true
+    }
+
+    /// Where a text program for another working format binds this
+    /// pipeline's atlas pages; see [`TextGpu::new_with_policy`].
+    pub(super) fn atlas_layout(&self) -> &wgpu::BindGroupLayout {
+        self.atlas.layout()
+    }
+
+    /// Draw through `program`, built for another working format, handing
+    /// back the one in use. The engine, shape and raster caches, the atlas and
+    /// every target's entries stay: they are the same whatever the format.
+    /// `program` takes this pipeline's subpixel mode first.
+    pub(super) fn swap_program(&mut self, device: &wgpu::Device, program: &mut TextProgram) {
+        let subpixel = self.subpixel != GlyphRenderMode::Mask;
+        if program.0.subpixel() != subpixel {
+            program.0.set_subpixel(device, subpixel);
+        }
+        std::mem::swap(&mut self.gpu, &mut program.0);
     }
 
     /// The scene's corner curve exponent, for the clips of the text drawn

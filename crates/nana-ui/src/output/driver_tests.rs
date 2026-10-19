@@ -364,6 +364,73 @@ fn final_transfer_preserves_encoded_premultiplied_channels_across_sdr_formats() 
     }
 }
 
+#[test]
+fn incompatible_profiles_share_one_glyph_atlas_and_upload_glyphs_once() {
+    let gpu = test_gpu::context();
+    let bgra = ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM);
+    let float = bgra.with_force_float_working();
+    let id = DocumentId::new(1).unwrap();
+    let mut document = RuntimeDocument::new(id);
+    document
+        .context_mut()
+        .create_component(id, Text::new("Shared glyph atlas"))
+        .unwrap();
+    super::driver::flush_presentation(
+        &mut document,
+        nana_ui_runtime::LayoutViewport::new(64.0, 48.0),
+        &mut crate::NanaTextShaper::default(),
+    )
+    .unwrap();
+    let scene = document.scene();
+    // Each run is a fresh driver, so the figures are a cold first frame.
+    let run = |profiles: &[ScenePresentationProfile]| {
+        let consumers: Vec<_> = profiles
+            .iter()
+            .zip(1..)
+            .map(|(profile, id)| {
+                let mut endpoint = consumer(id);
+                endpoint.requirements.profile = *profile;
+                endpoint
+            })
+            .collect();
+        let mut driver = PresentationDriver::new(&gpu);
+        driver.configure(&consumers).unwrap();
+        assert_eq!(driver.plan().groups.len(), profiles.len());
+        render_fresh(&mut driver, scene);
+        let uploads = driver.work().gpu_upload_bytes.unwrap();
+        let pixels: Vec<_> = consumers
+            .iter()
+            .map(|endpoint| read_pixels(completed(&mut driver, endpoint.id).texture().unwrap()))
+            .collect();
+        (driver.text_glyph_counters(), uploads, pixels)
+    };
+    let (one, one_uploads, one_pixels) = run(&[bgra]);
+    let (_, _, float_pixels) = run(&[float]);
+    let (two, two_uploads, two_pixels) = run(&[bgra, float]);
+    assert!(one.glyph_rasterized > 0, "the fixture draws text");
+    assert_eq!(
+        two.glyph_atlas_bytes, one.glyph_atlas_bytes,
+        "a second profile adds no atlas pages"
+    );
+    assert_eq!(
+        two.glyph_raster_cache_bytes, one.glyph_raster_cache_bytes,
+        "nor raster cache entries"
+    );
+    assert_eq!(
+        two.glyph_upload_bytes, one.glyph_upload_bytes,
+        "its glyphs are uploaded once"
+    );
+    assert!(
+        two_uploads <= 2 * one_uploads - one.glyph_upload_bytes as usize,
+        "the second group uploads only its own instances: {two_uploads} for two, {one_uploads} for one"
+    );
+    assert_eq!(two_pixels[0], one_pixels[0], "the first profile's pixels");
+    assert_eq!(
+        two_pixels[1], float_pixels[0],
+        "the second profile's pixels"
+    );
+}
+
 /// Timing evidence is opt-in and run in release mode; structural invariants
 /// remain the ordinary CI gate, independent of the speed of its GPU runner.
 #[test]

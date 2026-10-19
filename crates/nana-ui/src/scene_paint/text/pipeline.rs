@@ -617,19 +617,22 @@ pub(super) struct TextGpu {
 }
 
 impl TextGpu {
+    /// The text program for targets of `format`, sampling atlas pages bound
+    /// through `atlas_layout`. The atlas itself is not part of it, so one
+    /// atlas serves every format.
     pub(super) fn new_with_policy(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-        atlas: &GlyphAtlasManager,
+        atlas_layout: &wgpu::BindGroupLayout,
         policy: Option<&nana_gpu::GpuDeviceState>,
     ) -> Self {
-        Self::new_inner(device, format, atlas, policy)
+        Self::new_inner(device, format, atlas_layout, policy)
     }
 
     fn new_inner(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-        atlas: &GlyphAtlasManager,
+        atlas_layout: &wgpu::BindGroupLayout,
         policy: Option<&nana_gpu::GpuDeviceState>,
     ) -> Self {
         let globals_layout = if let Some(policy) = policy {
@@ -711,7 +714,7 @@ impl TextGpu {
         };
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("nana-ui.scene.text.pipeline"),
-            bind_group_layouts: &[Some(&globals_layout), Some(atlas.layout())],
+            bind_group_layouts: &[Some(&globals_layout), Some(atlas_layout)],
             immediate_size: 0,
         });
         let create = || {
@@ -910,6 +913,10 @@ fn shade(input:VsOut)->TextShade {
     /// glyph draws through the one that is current, so the switch is a whole
     /// frame's worth of text at once. Only for a device that
     /// [`supports_subpixel`](Self::supports_subpixel).
+    pub(super) fn subpixel(&self) -> bool {
+        self.dual_source.is_some()
+    }
+
     pub(super) fn set_subpixel(&mut self, device: &wgpu::Device, enabled: bool) {
         // `src0 * src1 + dst * (1 - src1)`, channel by channel.
         let per_channel = wgpu::BlendComponent {
