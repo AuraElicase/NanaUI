@@ -3497,6 +3497,21 @@ fn component_text_primitive(
             ..
         })
     );
+    // Validation feedback is measured as an ordinary paragraph. Its paint
+    // must keep that wrapping/overflow intent, including explicit overrides,
+    // instead of taking the single-line chrome default from its caller.
+    let validation = matches!(
+        node.standard_visual,
+        Some(StandardVisual::ValidationMessage { .. })
+    );
+    let (ellipsis, max_lines) = if validation {
+        (
+            node.source_style.layout.uses_text_ellipsis(),
+            node.source_style.layout.resolved_line_clamp(),
+        )
+    } else {
+        (ellipsis, None)
+    };
     let intrinsic_multiline = matches!(
         node.standard_visual,
         Some(StandardVisual::EmptyState { .. } | StandardVisual::ModalFrame { .. })
@@ -3505,7 +3520,7 @@ fn component_text_primitive(
         Some(
             ComponentGeometry::NativeMarkdown { .. } | ComponentGeometry::SelectableRichText { .. }
         )
-    );
+    ) || (validation && node.source_style.layout.text_wraps());
     ScenePrimitive {
         id: PrimitiveId { node: id, slot },
         node: id,
@@ -3536,7 +3551,7 @@ fn component_text_primitive(
             letter_spacing: node.style.letter_spacing,
             wrap: multiline || intrinsic_multiline,
             ellipsis,
-            max_lines: None,
+            max_lines,
             shaping: if node.editable {
                 TextShaping::Advanced
             } else {
