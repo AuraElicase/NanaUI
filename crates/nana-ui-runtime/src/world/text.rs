@@ -607,12 +607,13 @@ pub(super) fn progress_geometry(
     label: Option<&Arc<str>>,
     cancellable: bool,
     default_label_color: [f32; 4],
+    fallback_girth: f32,
 ) -> Option<crate::ComponentGeometry> {
     let ratio = value_ratio.clamp(0.0, 1.0);
     let girth = if girth.is_finite() && girth > 0.0 {
         girth
     } else {
-        6.0
+        fallback_girth
     };
     let cancel_size = 24.0_f32.min(bounds.height).min(bounds.width);
     let heading = if label.is_some() || cancellable {
@@ -3515,15 +3516,13 @@ impl UiWorld {
     }
 }
 
-/// A single line that ellipsizes against its measured box: what it paints is
-/// cut to that box, but the width it asks of layout is its whole line. Were it
-/// to report the cut width, a shrink-to-fit parent would keep the old box
-/// forever — a label changed to something longer could only ever shrink.
+/// Ellipsized text paints within its measured box, but asks layout for its
+/// unclipped natural width. This includes line-clamp: it enables wrapping,
+/// then substitutes an ellipsis on the last visible line. Exporting that
+/// shortened line's width would pin a shrink-to-fit parent to its old size.
 fn cut_to_its_box(constraints: &crate::TextShapeConstraints) -> bool {
     constraints.ellipsis
-        && !constraints.wrap
-        && constraints.max_lines.is_none()
-        && !constraints.preserve_lines
+        && (constraints.max_lines.is_some() || (!constraints.wrap && !constraints.preserve_lines))
         && constraints.max_width.is_some()
 }
 
@@ -4304,35 +4303,19 @@ impl UiWorld {
                     &mut node_work,
                 );
                 let mut metrics = crate::text_node::text_metrics_of_layout(&layout);
-                if cut_to_its_box(&constraints)
-                    && !layout.is_vertical()
-                    && layout
-                        .overflow
-                        .contains(nana_text::OverflowFlags::ELLIPSIZED)
-                {
-                    let natural = nana_text::lock_text_engine(engine).layout(
-                        kind,
-                        source,
-                        &crate::text_node::nana_text_style(&style),
-                        &crate::text_node::nana_text_constraints(
-                            &style,
-                            &unbounded(constraints),
-                            alignment,
-                        ),
-                        &mut node_work,
-                    );
-                    metrics.width = crate::text_node::text_metrics_of_layout(&natural).width;
-                }
-                // Wrapped lines are as wide as the box they wrapped to; the
-                // text's own width is its lines unwrapped. Layout needs that
-                // to widen a box that shrinks to its content once the box's
-                // limit grows, rather than keep the width it wrapped to.
-                let unwrapped = (wraps_to_its_box(&constraints)
-                    && !layout.is_vertical()
-                    && layout
-                        .lines
-                        .iter()
-                        .any(|line| line.break_cause == nana_text::LineBreakCause::Wrap))
+                // A capped paragraph's last line can be ellipsized instead of
+                // reporting a soft wrap. Keep its natural width separately
+                // from the measured visible lines, just as for ordinary wrap.
+                let unwrapped = (!layout.is_vertical()
+                    && ((cut_to_its_box(&constraints)
+                        && layout
+                            .overflow
+                            .contains(nana_text::OverflowFlags::ELLIPSIZED))
+                        || (wraps_to_its_box(&constraints)
+                            && layout
+                                .lines
+                                .iter()
+                                .any(|line| line.break_cause == nana_text::LineBreakCause::Wrap))))
                 .then(|| {
                     let natural = nana_text::lock_text_engine(engine).layout(
                         kind,
@@ -4347,7 +4330,15 @@ impl UiWorld {
                     );
                     (crate::text_node::text_metrics_of_layout(&natural), natural)
                 })
-                .filter(|(natural, _)| natural.width > metrics.width);
+                .filter(|(natural, _)| !constraints.wrap || natural.width > metrics.width);
+                let unwrapped = if !constraints.wrap {
+                    if let Some((natural, _)) = unwrapped {
+                        metrics.width = natural.width;
+                    }
+                    None
+                } else {
+                    unwrapped
+                };
                 if copied {
                     node_work.text_source_clones += 1;
                     self.record_string_clone(text_bytes);
@@ -4379,25 +4370,28 @@ impl UiWorld {
                     crate::text_node::TextNodeState::constraint_moved_without_reshaping,
                 );
                 let mut metrics = shaper.shape(id, &self.record(id).text, &style, constraints);
-                if cut_to_its_box(&constraints)
-                    && constraints
-                        .max_width
-                        .is_some_and(|max| metrics.width >= max - 0.5)
-                {
-                    let natural =
-                        shaper.shape(id, &self.record(id).text, &style, unbounded(constraints));
-                    metrics.width = metrics.width.max(natural.width);
-                }
-                // The host does not say where it broke its lines, only how
-                // tall they came out. One line that fit is the whole text;
-                // more than one may have wrapped, so ask for them unwrapped
-                // (cached by its constraints, like the first).
                 let lines_tall = crate::components::resolved_text_line_height(&style) * 1.5;
-                let unwrapped = (wraps_to_its_box(&constraints) && metrics.height > lines_tall)
+                // Host-only shapers expose no overflow flags. A clamped run
+                // can end short of its budget because the ellipsis has width.
+                let needs_natural = (cut_to_its_box(&constraints)
+                    && (constraints.max_lines.is_some()
+                        || constraints
+                            .max_width
+                            .is_some_and(|max| metrics.width >= max - 0.5)))
+                    || (wraps_to_its_box(&constraints) && metrics.height > lines_tall);
+                let unwrapped = needs_natural
                     .then(|| {
                         shaper.shape(id, &self.record(id).text, &style, unbounded(constraints))
                     })
-                    .filter(|natural| natural.width > metrics.width);
+                    .filter(|natural| !constraints.wrap || natural.width > metrics.width);
+                let unwrapped = if !constraints.wrap {
+                    if let Some(natural) = unwrapped {
+                        metrics.width = natural.width;
+                    }
+                    None
+                } else {
+                    unwrapped
+                };
                 if constraint_only {
                     // `shape` still runs; a width constraint is not a new shaped run.
                     shaper.runs = runs;

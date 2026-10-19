@@ -666,7 +666,7 @@ pub struct Progress {
     /// fill across the track.
     pub indeterminate: bool,
     /// The track's thickness; `None`, or one that is not a positive number,
-    /// keeps the 6px rail.
+    /// follows the installed theme's small spacing step.
     pub thickness: Option<f32>,
     /// The track's colour; `None` is Subtle.
     pub track: Option<SemanticColorRole>,
@@ -761,10 +761,13 @@ impl Progress {
         sanitize_progress_max(self.max)
     }
 
-    fn resolved_thickness(&self) -> f32 {
+    fn explicit_thickness(&self) -> Option<f32> {
         self.thickness
             .filter(|thickness| thickness.is_finite() && *thickness > 0.0)
-            .unwrap_or(PROGRESS_GIRTH)
+    }
+
+    fn resolved_thickness(&self) -> f32 {
+        self.explicit_thickness().unwrap_or(PROGRESS_GIRTH)
     }
 
     fn displayed_value(&self) -> f64 {
@@ -827,6 +830,10 @@ impl Progress {
             thickness
         };
         layout.height = Some(LengthSpec::Px(content + padding.top + padding.bottom));
+        layout.theme.height = self.explicit_thickness().is_none().then(|| {
+            crate::theme_intent::space(nana_ui_core::SpacingStep::Sm)
+                .offset(content - thickness + padding.top + padding.bottom)
+        });
         layout.direction = Some(FlexDirection::Column);
         layout.gap = Some(LengthSpec::Px(PROGRESS_GAP));
         layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
@@ -864,6 +871,10 @@ impl ComponentView for Progress {
     /// preference either way starts or stops it, and changes what the fill
     /// shows.
     fn wants_reduced_motion_reproject() -> bool {
+        true
+    }
+
+    fn wants_metrics_reproject() -> bool {
         true
     }
 
@@ -935,7 +946,9 @@ impl ComponentView for Progress {
                 label: self.label.clone(),
                 cancellable: self.cancellable,
                 mode,
-                thickness: self.resolved_thickness(),
+                thickness: self
+                    .explicit_thickness()
+                    .unwrap_or(world.theme().spacing().sm),
                 fill: self.fill,
             },
             accessibility,
