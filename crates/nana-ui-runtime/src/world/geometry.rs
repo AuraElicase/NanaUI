@@ -1932,18 +1932,10 @@ impl UiWorld {
                 intent,
                 compact,
             } => {
-                let (indicator_slot, gap, text_size) = if *compact {
-                    (
-                        self.theme.spacing().xl,
-                        self.theme.spacing().xs,
-                        self.theme.typography().hint,
-                    )
+                let (indicator_slot, gap) = if *compact {
+                    (self.theme.spacing().xl, self.theme.spacing().xs)
                 } else {
-                    (
-                        self.theme.spacing().xxl,
-                        self.theme.spacing().sm,
-                        self.theme.typography().meta,
-                    )
+                    (self.theme.spacing().xxl, self.theme.spacing().sm)
                 };
                 let diameter = indicator_slot * STATUS_DOT_FRACTION;
                 let foreground = self
@@ -1969,8 +1961,8 @@ impl UiWorld {
                         },
                         content: Arc::clone(message).into(),
                         color: Some(foreground),
-                        font_size: text_size,
-                        font_weight: None,
+                        font_size: style.font_size,
+                        font_weight: style.font_weight,
                     },
                     foreground,
                 })
