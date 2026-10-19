@@ -10,7 +10,10 @@
 //! rows size to their content, the given height only an estimate.
 //! [`EachVirtual::within`] lets the rows scroll with an ancestor
 //! `ScrollView` (a page's) instead of one of their own, and
-//! [`EachVirtual::grid`] flows items into as many columns as fit.
+//! [`EachVirtual::grid`] flows items into as many columns as fit. A column
+//! change rebuilds grid rows, so their internal node IDs may change; focus
+//! follows the same item key and relative descendant path. Geometry changes
+//! that keep the grid grouping keep the mounted nodes themselves.
 
 use std::borrow::Cow;
 use std::cell::Cell;
@@ -522,6 +525,13 @@ struct EachVirtualBinding<T: 'static, K: 'static, RF> {
     published: (u64, u64),
 }
 
+/// A grid regroup replaces row scopes. Preserve interaction by item identity,
+/// not by its old row/column or by another item's similarly named control.
+struct GridFocus<K> {
+    key: K,
+    path: Vec<(usize, Option<String>, crate::NodeKind)>,
+}
+
 /// Every item with its key, first of each key only.
 fn keyed<T: Clone, K: Eq + Hash + Clone>(
     stamp: u64,
@@ -670,6 +680,10 @@ where
         // first width regroups even when that fits the one column units
         // start at.
         let units = regroup.then(|| self.units(columns, &items.items)).flatten();
+        let focus = columns
+            .is_some_and(|columns| columns != self.geometry.units.columns)
+            .then(|| self.grid_focus(cx))
+            .flatten();
         let geometry = &mut self.geometry;
         geometry.offset = viewport.offset[1];
         geometry.extent = viewport.extent[1];
@@ -727,6 +741,20 @@ where
             }
             self.synced = Some(items.stamp);
         }
+        if let Some(focus) = &focus
+            && geometry.unit_of(&focus.key).is_some()
+            && matches!(request, None | Some(Request::Keep(..)))
+        {
+            request = Some(Request::Reveal(
+                focus.key.clone(),
+                VirtualAlignment::Nearest,
+            ));
+        }
+        let retained = focus
+            .as_ref()
+            .and_then(|focus| geometry.unit_of(&focus.key))
+            .map(|at| vec![geometry.units.units[at].clone()])
+            .unwrap_or_default();
         let target = request
             .as_ref()
             .and_then(|request| geometry.target(request));
@@ -763,7 +791,7 @@ where
                 self.overscan,
                 target,
                 self.version,
-                &[],
+                &retained,
                 key_at,
                 index_of,
                 slot,
@@ -779,7 +807,7 @@ where
                 self.overscan,
                 target,
                 self.version,
-                &[],
+                &retained,
                 key_at,
                 index_of,
                 slot,
@@ -792,6 +820,9 @@ where
             self.geometry.offset = offset;
         }
         self.geometry.rows = self.built_rows(cx);
+        if let Some(focus) = focus {
+            self.restore_grid_focus(cx, focus)?;
+        }
         // Rows revealed at their estimate are measured after the next
         // layout, which moves an item aligned to the end or the center:
         // reveal it again then, until nothing it shows is estimated.
@@ -835,6 +866,73 @@ where
 
     fn with_shared<R>(&self, f: impl FnOnce(&mut Shared<K>) -> R) -> R {
         f(&mut self.shared.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+
+    fn grid_focus(&self, cx: &AppContext) -> Option<GridFocus<K>> {
+        let document = cx.world().node(self.list.stable_id())?.document;
+        let mut node = cx.world().focused(document)?;
+        let mut path = Vec::new();
+        loop {
+            if let Some((key, _)) = self.geometry.rows.iter().find(|(_, cell)| **cell == node) {
+                path.reverse();
+                return Some(GridFocus {
+                    key: key.clone(),
+                    path,
+                });
+            }
+            let child = cx.world().node(node)?;
+            let parent = child.parent?;
+            let siblings = cx.world().node(parent)?.children;
+            let index = siblings.iter().position(|id| *id == node)?;
+            let key = cx.assembly_key(parent, node).map(str::to_owned);
+            path.push((index, key, child.kind));
+            node = parent;
+            if node == self.list.stable_id() {
+                return None;
+            }
+        }
+    }
+
+    fn restore_grid_focus(
+        &self,
+        cx: &mut AppContext,
+        focus: GridFocus<K>,
+    ) -> Result<(), FrameworkError> {
+        let Some(mut node) = self.geometry.rows.get(&focus.key).copied() else {
+            return Ok(());
+        };
+        let document = cx
+            .world()
+            .node(node)
+            .ok_or(FrameworkError::MissingView(node))?
+            .document;
+        // A focus listener may have intentionally moved focus while old rows
+        // were removed. Such a request takes precedence over restoration.
+        if cx.world().focused(document).is_some() {
+            return Ok(());
+        }
+        for (index, key, kind) in focus.path {
+            let Some(parent) = cx.world().node(node) else {
+                return Ok(());
+            };
+            let child = match key {
+                Some(key) => parent
+                    .children
+                    .into_iter()
+                    .find(|child| cx.assembly_key(node, *child) == Some(key.as_str())),
+                None => parent.children.get(index).copied(),
+            };
+            let Some(child) = child.filter(|child| {
+                cx.world()
+                    .node(*child)
+                    .is_some_and(|node| node.kind == kind)
+            }) else {
+                return Ok(());
+            };
+            node = child;
+        }
+        cx.focus_node_in_place(document, node)?;
+        Ok(())
     }
 
     /// Scroll so the viewport's top is `offset` into the list: now, as far
