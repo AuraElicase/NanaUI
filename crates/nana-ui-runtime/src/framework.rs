@@ -2293,7 +2293,10 @@ impl AppContext {
         if *self.world.installed_theme() == *theme {
             return Ok(false);
         }
-        let metrics_changed = !self.world.theme_metrics().same_layout(&theme.metrics());
+        let metrics_changed = !self.world.theme_metrics().same_layout(&theme.metrics())
+            || self.world.theme().spacing() != theme.spacing()
+            || self.world.theme().typography() != theme.typography()
+            || self.world.theme().border() != theme.border();
         let recipes_changed = self.world.theme().recipes() != theme.recipes()
             || self.world.theme().border() != theme.border();
         let mut queue = MutationQueue::new();

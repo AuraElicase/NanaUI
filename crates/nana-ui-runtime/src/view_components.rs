@@ -306,7 +306,8 @@ pub trait ComponentView: Clone + PartialEq + Send + 'static {
         false
     }
 
-    /// Opt in to one reprojection when installed `ThemeMetrics` change.
+    /// Opt in to one reprojection when installed layout tokens change
+    /// (metrics, spacing, typography, or border widths).
     ///
     /// Derived geometry that `project` spends from `height_in` / `padding_x_in`
     /// (a list's `count × row`, a segmented option's `height - 6`) is not a
@@ -418,6 +419,35 @@ impl Text {
 
     pub fn style(mut self, style: NodeStyle) -> Self {
         self.style = style;
+        self
+    }
+
+    /// Standard typography retained until the installed theme resolves it.
+    pub fn typography(mut self, role: nana_ui_core::TypeRole) -> Self {
+        let layout = Arc::make_mut(&mut self.style.layout);
+        layout.font_size = Some(nana_ui_core::TypographyTokens::DEFAULT.size(role));
+        layout.theme.font_size = Some(nana_ui_core::ThemeToken::Type(role).into());
+        let line = if matches!(
+            role,
+            nana_ui_core::TypeRole::Hint
+                | nana_ui_core::TypeRole::Meta
+                | nana_ui_core::TypeRole::Body
+        ) {
+            nana_ui_core::LineRole::Line
+        } else {
+            nana_ui_core::LineRole::Tall
+        };
+        layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(
+            nana_ui_core::TypographyTokens::DEFAULT.line_height(line),
+        ));
+        layout.theme.line_height = Some(nana_ui_core::ThemeToken::Line(line).into());
+        self
+    }
+
+    pub fn text_weight(mut self, role: nana_ui_core::TextWeight) -> Self {
+        let layout = Arc::make_mut(&mut self.style.layout);
+        layout.font_weight = Some(nana_ui_core::TypographyTokens::DEFAULT.weight(role));
+        layout.theme.font_weight = Some(nana_ui_core::ThemeToken::Weight(role).into());
         self
     }
 
@@ -1518,6 +1548,7 @@ impl ListItem {
         layout.direction = Some(nana_ui_core::FlexDirection::Row);
         layout.align_items = nana_ui_core::AlignSpec::Center;
         layout.gap = Some(nana_ui_core::LengthSpec::Px(nana_ui_core::space::MD));
+        layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
         layout.font_size = Some(nana_ui_core::ControlSize::Small.text_size());
         layout
             .theme
@@ -3947,8 +3978,21 @@ impl ComponentView for Tooltip {
 }
 
 fn tooltip_surface_style(max_width: f32) -> NodeStyle {
+    let mut theme = nana_ui_core::ThemeLayout {
+        font_size: Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Hint).into()),
+        border_width: Some(
+            nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into(),
+        ),
+        padding_left: Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm)),
+        padding_right: Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm)),
+        padding_top: Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs)),
+        padding_bottom: Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs)),
+        ..Default::default()
+    };
+    theme.border_radius = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
     NodeStyle {
         layout: Arc::new(nana_ui_core::LayoutStyle {
+            theme: theme.into(),
             position: nana_ui_core::PositionSpec::Fixed,
             max_width: Some(nana_ui_core::LengthSpec::Px(max_width)),
             padding_left: Some(nana_ui_core::LengthSpec::Px(
@@ -5352,9 +5396,20 @@ impl Stack {
         self
     }
 
+    /// A standard gap that follows the installed spacing scale.
+    pub fn gap_theme(mut self, step: nana_ui_core::SpacingStep) -> Self {
+        let layout = Arc::make_mut(&mut self.style.layout);
+        layout.gap = Some(nana_ui_core::LengthSpec::Px(
+            nana_ui_core::SpacingTokens::DEFAULT.resolve(step),
+        ));
+        layout.theme.gap = Some(nana_ui_core::ThemeToken::Space(step).into());
+        self
+    }
+
     pub fn gap(mut self, gap: f32) -> Self {
-        Arc::make_mut(&mut self.style.layout).gap =
-            Some(nana_ui_core::LengthSpec::Px(gap.max(0.0)));
+        let layout = Arc::make_mut(&mut self.style.layout);
+        layout.theme.gap = None;
+        layout.gap = Some(nana_ui_core::LengthSpec::Px(gap.max(0.0)));
         self
     }
 

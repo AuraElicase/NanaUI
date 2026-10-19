@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use nana_ui_core::{
     ControlSize, DialogClosePolicy, DialogSize, DrawerSide, LayoutStyle, LengthSpec, PositionSpec,
-    UI_METRICS,
 };
 
 use crate::{
@@ -571,18 +570,17 @@ pub(crate) fn modal_root_style() -> NodeStyle {
         }),
         ..NodeStyle::default()
     }
+    .theme(
+        nana_ui_core::ThemeProperty::FontSize,
+        nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Body),
+    )
 }
 
 pub(crate) const DRAWER_WIDTH: f32 = 360.0;
 pub(crate) const MODAL_PAD_X: f32 = nana_ui_core::space::XXXL;
-pub(crate) const DRAWER_HEADER_PAD_Y: f32 = nana_ui_core::space::XXL;
-pub(crate) const MODAL_BODY_PAD_TOP: f32 = nana_ui_core::space::MD;
-pub(crate) const DRAWER_FOOTER_PAD_Y: f32 = nana_ui_core::space::XL;
-pub(crate) const MODAL_TITLE_DESC_GAP: f32 = nana_ui_core::space::XS;
-pub(crate) const MODAL_CLOSE_SIZE: f32 = ControlSize::Small.height_in(UI_METRICS);
-pub(crate) const DRAWER_CLOSE_GAP: f32 = nana_ui_core::space::LG;
-pub(crate) const MODAL_ACTION_GAP: f32 = nana_ui_core::space::MD;
-pub(crate) const MODAL_ACTION_HEIGHT: f32 = ControlSize::Medium.height_in(UI_METRICS);
+#[cfg(test)]
+pub(crate) const MODAL_ACTION_HEIGHT: f32 = ControlSize::Medium.height_in(nana_ui_core::UI_METRICS);
+#[cfg(test)]
 pub(crate) const MODAL_BODY_TEXT_SIZE: f32 = nana_ui_core::type_scale::BODY;
 
 /// A drawer's title icon square: the built-in dialog's. A dialog's comes
@@ -630,6 +628,7 @@ pub(crate) struct ModalChrome {
     /// Where the actions start below the band's top: a drawer centres
     /// them in a band it gives the footer slot whole.
     action_top: f32,
+    action_height: f32,
     header_divider: f32,
     footer_divider: f32,
     /// Whether the hairlines keep inside the header's and the footer's
@@ -644,20 +643,27 @@ pub(crate) struct ModalChrome {
 impl ModalChrome {
     /// `hairline` is the installed theme's stroke, the thickness of a
     /// divider the recipe asks for.
-    pub fn measure(
+    pub fn measure_in(
         kind: ModalSurfaceKind,
         title: crate::TextMetrics,
         description: Option<crate::TextMetrics>,
         slots: &ModalSlots,
         recipe: &nana_ui_core::DialogRecipe,
         hairline: f32,
+        theme: &nana_ui_core::CompiledTheme,
     ) -> Self {
+        let spacing = theme.spacing();
+        let action_height = ControlSize::Medium.height_in(theme.metrics());
         let has_footer = slots.footer.is_some() || !slots.actions.is_empty();
         let drawer = matches!(kind, ModalSurfaceKind::Drawer(_));
         let text_height =
-            title.height + description.map_or(0.0, |metrics| MODAL_TITLE_DESC_GAP + metrics.height);
+            title.height + description.map_or(0.0, |metrics| spacing.xs + metrics.height);
         let (icon_size, close_size, gap) = if drawer {
-            (DRAWER_ICON_SIZE, MODAL_CLOSE_SIZE, DRAWER_CLOSE_GAP)
+            (
+                DRAWER_ICON_SIZE,
+                ControlSize::Small.height_in(theme.metrics()),
+                spacing.lg,
+            )
         } else {
             (recipe.icon_size, recipe.close_size, recipe.header_gap)
         };
@@ -670,27 +676,28 @@ impl ModalChrome {
         });
         if drawer {
             let footer_height = if has_footer {
-                DRAWER_FOOTER_PAD_Y * 2.0 + MODAL_ACTION_HEIGHT
+                spacing.xl * 2.0 + action_height
             } else {
                 0.0
             };
             return Self {
-                header_height: DRAWER_HEADER_PAD_Y * 2.0 + row_height,
+                header_height: spacing.xxl * 2.0 + row_height,
                 footer_height,
-                body_pad_top: MODAL_BODY_PAD_TOP,
-                body_pad_bottom: MODAL_BODY_PAD_TOP,
-                header_x: MODAL_PAD_X,
-                body_x: MODAL_PAD_X,
-                footer_x: MODAL_PAD_X,
-                action_gap: MODAL_ACTION_GAP,
-                row_top: DRAWER_HEADER_PAD_Y,
+                body_pad_top: spacing.md,
+                body_pad_bottom: spacing.md,
+                header_x: spacing.xxxl,
+                body_x: spacing.xxxl,
+                footer_x: spacing.xxxl,
+                action_gap: spacing.md,
+                row_top: spacing.xxl,
                 row_height,
                 text_height,
                 icon,
                 close,
                 gap,
                 footer_top: 0.0,
-                action_top: DRAWER_FOOTER_PAD_Y,
+                action_top: spacing.xl,
+                action_height,
                 header_divider: 0.0,
                 footer_divider: 0.0,
                 inset_dividers: false,
@@ -708,7 +715,7 @@ impl ModalChrome {
         Self {
             header_height: recipe.header.top + row_height + recipe.header.bottom + header_divider,
             footer_height: if has_footer {
-                footer_top + MODAL_ACTION_HEIGHT + recipe.footer.bottom
+                footer_top + action_height + recipe.footer.bottom
             } else {
                 0.0
             },
@@ -726,6 +733,7 @@ impl ModalChrome {
             gap,
             footer_top,
             action_top: footer_top,
+            action_height,
             header_divider,
             footer_divider,
             inset_dividers: recipe.divider_inset == nana_ui_core::DialogDividerInset::Content,
@@ -810,7 +818,7 @@ impl ModalChrome {
         let (y, height) = if self.drawer {
             (band_top, self.footer_height)
         } else {
-            (band_top + self.footer_top, MODAL_ACTION_HEIGHT)
+            (band_top + self.footer_top, self.action_height)
         };
         crate::LayoutBox {
             x: surface.x + self.footer_x,
@@ -868,12 +876,12 @@ impl ModalChrome {
 pub(crate) fn modal_title_type(
     kind: ModalSurfaceKind,
     recipe: &nana_ui_core::DialogRecipe,
+    typography: nana_ui_core::TypographyTokens,
 ) -> nana_ui_core::RecipeText {
     match kind {
-        ModalSurfaceKind::Drawer(_) => nana_ui_core::RecipeText::new(
-            nana_ui_core::type_scale::SECTION,
-            Some(nana_ui_core::type_scale::SEMIBOLD),
-        ),
+        ModalSurfaceKind::Drawer(_) => {
+            nana_ui_core::RecipeText::new(typography.section, Some(typography.semibold))
+        }
         ModalSurfaceKind::Dialog(_) | ModalSurfaceKind::Confirm(_) => recipe.title,
     }
 }

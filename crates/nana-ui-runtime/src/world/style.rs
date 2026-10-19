@@ -588,7 +588,11 @@ impl UiWorld {
                 continue;
             }
             if changed.intersects(nana_ui_core::LayoutStyleChange::FONT) {
-                self.mark_subtree(id, DirtyMask::STYLE);
+                // Style resolution changes the font, but the pre-layout text
+                // pass only visits scheduled text. Keep its intrinsic metrics
+                // in the same frame as the new typography, including descendants
+                // that inherit the font from this node.
+                self.mark_subtree(id, DirtyMask::STYLE | DirtyMask::TEXT);
             }
             let classified = self.classify_layout_change(id, changed);
             self.record_layout_invalidation(
@@ -903,8 +907,8 @@ impl UiWorld {
         // A dialog card is placed from its recipe and the hairline its
         // dividers take, which no layout input names; a change to either
         // reaches only the modal frames.
-        let dialog_changed = self.theme.recipes().dialog() != next.recipes().dialog()
-            || self.theme.border().hairline != next.border().hairline;
+        let dialog_changed =
+            self.theme.recipes().dialog() != next.recipes().dialog() || token_layout_changed;
         self.style_model = next.style_model();
         self.theme = next;
         self.palette_epoch = self.palette_epoch.wrapping_add(1).max(1);
@@ -940,7 +944,7 @@ impl UiWorld {
                 .filter(|id| {
                     matches!(
                         self.nodes.visual(*id),
-                        Some(StandardVisual::ModalFrame { .. })
+                        Some(StandardVisual::ModalFrame { .. } | StandardVisual::EmptyState { .. })
                     )
                 })
                 .collect::<Vec<_>>()
@@ -963,8 +967,9 @@ impl UiWorld {
         work.record_layout_invalidation(modal_frames.len());
         self.record_theme_work(work);
         for id in modal_frames {
-            // The card's width wraps its title, and its slots are placed in
-            // it: the frame measures and places again by its recipe.
+            // These visuals shape several internal typography roles. A
+            // description or message can change while the root's own font
+            // stays equal, so they measure their complete text block again.
             self.nodes
                 .invalidate_text(id, crate::text_node::TextDirty::CONSTRAINT);
             self.mark(id, DirtyMask::TEXT);

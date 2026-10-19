@@ -2944,7 +2944,7 @@ fn place_triggered_menu_items(
         )?;
         if size.height > 0.0 {
             if placed_any {
-                content_height += crate::popover::MENU_ITEM_GAP;
+                content_height += nodes.world.theme().spacing().xxs;
             }
             placed_any = true;
         }
@@ -3013,7 +3013,7 @@ fn place_triggered_menu_items(
             )?;
         }
         if child_size.height > 0.0 {
-            cursor_y += child_size.height + crate::popover::MENU_ITEM_GAP;
+            cursor_y += child_size.height + nodes.world.theme().spacing().xxs;
         }
     }
     Ok(())
@@ -3033,17 +3033,18 @@ pub(super) fn place_modal_children(
     scope: Option<&ScopeContext<'_>>,
 ) -> Result<(), UiWorldError> {
     let recipe = *nodes.world.theme().recipes().dialog();
-    let chrome = crate::overlay_surfaces::ModalChrome::measure(
+    let chrome = crate::overlay_surfaces::ModalChrome::measure_in(
         modal.kind,
         modal.title,
         modal.description,
         &modal.slots,
         &recipe,
         nodes.world.theme().border().hairline,
+        nodes.world.theme(),
     );
     let body_copy = modal.body_text.map_or(0.0, |metrics| metrics.height);
     let body_gap = if body_copy > 0.0 && modal.slots.body.is_some() {
-        8.0
+        nodes.world.theme().spacing().md
     } else {
         0.0
     };
@@ -3162,7 +3163,10 @@ pub(super) fn place_modal_children(
     for id in actions {
         let measured = intrinsic_size_scoped(
             id,
-            Size::new(footer.width, crate::overlay_surfaces::MODAL_ACTION_HEIGHT),
+            Size::new(
+                footer.width,
+                nana_ui_core::ControlSize::Medium.height_in(nodes.world.theme_metrics()),
+            ),
             Some(FlexDirection::Row),
             viewport,
             parent_font_px,
@@ -3174,7 +3178,7 @@ pub(super) fn place_modal_children(
             measured.width.min(footer.width),
             measured
                 .height
-                .min(crate::overlay_surfaces::MODAL_ACTION_HEIGHT),
+                .min(nana_ui_core::ControlSize::Medium.height_in(nodes.world.theme_metrics())),
         );
         action_right -= action_size.width;
         place_modal_slot(
