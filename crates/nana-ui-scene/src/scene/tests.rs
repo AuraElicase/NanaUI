@@ -5969,6 +5969,8 @@ fn a_rail_range_draws_its_girth_and_shows_the_thumb_only_with_visible_focus() {
         },
         unit: None,
         track: range.layout,
+        track_girth: 2.0,
+        border_width: 1.0,
         thumb_ring: None,
     }));
     style_mut(&mut range).background = Some([0.2, 0.5, 0.9, 1.0]);
@@ -6087,6 +6089,8 @@ fn a_gradient_range_paints_its_stops_and_rings_the_value() {
             width: 184.0,
             height: 16.0,
         },
+        track_girth: nana_ui_core::space::XL,
+        border_width: 1.0,
         thumb_ring: Some(TEST_RING),
     }));
     style_mut(&mut range).background = Some([0.2, 0.5, 0.9, 1.0]);
@@ -6974,6 +6978,7 @@ fn migrated_components_consume_runtime_subregion_geometry() {
             height: 16.0,
         },
         track_background: [0.2, 0.5, 0.9, 1.0],
+        border_width: 1.0,
         track_border: [0.1, 0.4, 0.8, 1.0],
         thumb_background: [1.0, 1.0, 1.0, 1.0],
     }));
@@ -7036,6 +7041,8 @@ fn migrated_components_consume_runtime_subregion_geometry() {
             width: 120.0,
             height: 16.0,
         },
+        track_girth: 4.0,
+        border_width: 1.0,
         thumb_ring: None,
     }));
     range.layout.width = 240.0;
@@ -7236,7 +7243,8 @@ fn migrated_components_consume_runtime_subregion_geometry() {
             .unwrap()
             .bounds
             .x,
-        103.0
+        // The resolved 16px thumb band owns the knob extent: center 110 - 8.
+        102.0
     );
     assert!(matches!(
         scene

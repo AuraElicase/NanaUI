@@ -1084,7 +1084,7 @@ fn menu_option_icon(
     metrics: ThemeMetrics,
     theme: &nana_ui_core::CompiledTheme,
 ) -> (f32, Option<(Icon, LayoutBox, [f32; 4])>) {
-    let icon_size = size.icon_size();
+    let icon_size = size.text_size_in(theme.typography());
     let mut cursor = row.x + size.padding_x_in(metrics);
     let icon = icon.map(|icon| {
         let bounds = LayoutBox {

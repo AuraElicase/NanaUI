@@ -1493,6 +1493,13 @@ pub struct CalendarHoverGeometry {
 // an allocation per projection and changes the shared Runtime/Scene DTO.
 #[allow(clippy::large_enum_variant)]
 pub enum ComponentGeometry {
+    /// Resolved checkbox chrome and label share Runtime's measurement inputs.
+    Checkbox {
+        indicator: LayoutBox,
+        label: ComponentTextRegion,
+        border_width: f32,
+        check_weight: u16,
+    },
     ModalFrame {
         scrim: LayoutBox,
         surface: LayoutBox,
@@ -1616,6 +1623,7 @@ pub enum ComponentGeometry {
         label: ComponentTextRegion,
         hint: Option<ComponentTextRegion>,
         control: LayoutBox,
+        border_width: f32,
         track_background: [f32; 4],
         track_border: [f32; 4],
         thumb_background: [f32; 4],
@@ -1625,6 +1633,9 @@ pub enum ComponentGeometry {
         value: ComponentTextRegion,
         unit: Option<ComponentTextRegion>,
         track: LayoutBox,
+        /// Theme-resolved thickness of the painted rail inside the thumb band.
+        track_girth: f32,
+        border_width: f32,
         /// The ring a gradient track's thumb is drawn as; `None` for the
         /// regular filled track.
         thumb_ring: Option<ContrastRing>,
