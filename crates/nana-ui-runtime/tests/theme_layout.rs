@@ -194,3 +194,131 @@ fn a_plain_measured_list_refreshes_published_extents_when_theme_geometry_changes
     assert_eq!(rows.item(&1).unwrap().offset, 48.0);
     assert_eq!(rows.item(&0).unwrap().extent, 48.0);
 }
+
+#[test]
+fn a_duration_badge_exports_its_new_intrinsic_width_after_a_theme_install() {
+    use nana_ui_core::{LengthSpec, TypeRole};
+    use nana_ui_runtime::{Stack, Text, Thumbnail};
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(991).unwrap();
+    let root = cx
+        .create_component(
+            document,
+            Stack::column(0.0).with_layout(|layout| {
+                layout.width = Some(LengthSpec::Px(400.0));
+                layout.height = Some(LengthSpec::Px(200.0));
+            }),
+        )
+        .unwrap();
+    let badge = cx
+        .create_detached_component(document, Thumbnail::badge())
+        .unwrap();
+    let text = cx
+        .create_detached_component(
+            document,
+            Text::new("23:10").typography(TypeRole::Meta).truncating(),
+        )
+        .unwrap();
+    cx.append_child(root, badge).unwrap();
+    cx.append_child(badge, text).unwrap();
+    let settle = |cx: &mut AppContext| {
+        for _ in 0..6 {
+            let work = cx.take_system_work();
+            cx.resolve_styles(&work.style).unwrap();
+            cx.shape_text(&work.text, &mut nana_ui_runtime::MeasureTextShaper)
+                .unwrap();
+            cx.layout_document(document, LayoutViewport::new(800.0, 600.0))
+                .unwrap();
+            cx.shape_text_for_layout(document, &mut nana_ui_runtime::MeasureTextShaper)
+                .unwrap();
+        }
+    };
+    settle(&mut cx);
+    let width = cx.world().layout_box(badge.stable_id()).unwrap().width;
+    let mut theme = ThemeDefinition::NANA_DARK;
+    theme.typography.meta = 30.0;
+    theme.typography.line = 40.0;
+    cx.set_theme_definition(&theme).unwrap();
+    let scheduled = cx.take_system_work();
+    assert!(
+        scheduled.text.contains(&text.stable_id()),
+        "new typography must reshape before layout"
+    );
+    cx.restore_system_work(scheduled);
+    settle(&mut cx);
+    let text_width = cx.world().text_metrics(text.stable_id()).unwrap().width;
+    let badge_box = cx.world().layout_box(badge.stable_id()).unwrap();
+    let text_box = cx.world().layout_box(text.stable_id()).unwrap();
+    assert_eq!(
+        cx.world()
+            .computed_style(text.stable_id())
+            .unwrap()
+            .font_size,
+        30.0
+    );
+    assert!(
+        badge_box.width > width * 1.5,
+        "badge must grow from {width} to fit {text_width}, actual {badge_box:?}"
+    );
+    assert!(
+        text_box.height >= 29.5,
+        "text height must be remeasured: {text_box:?}"
+    );
+    assert!(
+        text_box.width + 0.5 >= text_width,
+        "duration must fit, {text_box:?} vs {text_width}"
+    );
+}
+
+#[test]
+fn transport_internal_text_and_spacing_follow_live_theme_installs() {
+    use nana_ui_core::LengthSpec;
+    use nana_ui_runtime::{MediaTransportBar, Stack};
+    let document = DocumentId::new(992).unwrap();
+    let mut cx = AppContext::new();
+    let root = cx
+        .create_component(
+            document,
+            Stack::column(0.0).with_layout(|layout| {
+                layout.width = Some(LengthSpec::Px(1000.0));
+                layout.height = Some(LengthSpec::Px(600.0));
+            }),
+        )
+        .unwrap();
+    let bar = cx
+        .create_detached_component(document, MediaTransportBar::new())
+        .unwrap();
+    cx.append_child(root, bar).unwrap();
+    cx.assemble_media_transport_bar(bar).unwrap();
+    let slots = cx.read(bar, |bar| bar.slots().clone()).unwrap();
+    let time = slots.time.unwrap();
+    let row = slots.row.unwrap();
+    let settle = |cx: &mut AppContext| {
+        for _ in 0..6 {
+            let work = cx.take_system_work();
+            cx.resolve_styles(&work.style).unwrap();
+            cx.shape_text(&work.text, &mut nana_ui_runtime::MeasureTextShaper)
+                .unwrap();
+            cx.layout_document(document, LayoutViewport::new(1000.0, 600.0))
+                .unwrap();
+            cx.shape_text_for_layout(document, &mut nana_ui_runtime::MeasureTextShaper)
+                .unwrap();
+        }
+    };
+    settle(&mut cx);
+    let before = cx.world().text_metrics(time).unwrap().width;
+    let mut theme = ThemeDefinition::NANA_DARK;
+    theme.typography.meta = 24.0;
+    theme.typography.line = 32.0;
+    theme.tokens.spacing.xl = 24.0;
+    theme.tokens.spacing.xs = 8.0;
+    cx.set_theme_definition(&theme).unwrap();
+    settle(&mut cx);
+    assert_eq!(cx.read(bar, |bar| bar.slots().time).unwrap(), Some(time));
+    assert_eq!(cx.world().computed_style(time).unwrap().font_size, 24.0);
+    let left = cx.world().node(row).unwrap().children[0];
+    let left_box = cx.world().layout_box(left).unwrap();
+    let center_box = cx.world().layout_box(slots.center.unwrap()).unwrap();
+    assert!((center_box.x - left_box.x - left_box.width - 24.0).abs() < 0.5);
+    assert!(cx.world().text_metrics(time).unwrap().width > before * 1.5);
+}

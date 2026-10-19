@@ -125,6 +125,30 @@ impl StatusBadge {
         };
         layout.padding_left = Some(LengthSpec::Px(horizontal + indicator + gap));
         layout.padding_right = Some(LengthSpec::Px(horizontal));
+        use nana_ui_core::SpacingStep;
+        let horizontal_step = if self.compact {
+            SpacingStep::Sm
+        } else {
+            SpacingStep::Md
+        };
+        let gap_step = if self.compact {
+            SpacingStep::Xs
+        } else {
+            SpacingStep::Sm
+        };
+        let vertical_step = if self.compact {
+            SpacingStep::Xxs
+        } else {
+            SpacingStep::Xs
+        };
+        layout.theme.padding_left = Some(
+            crate::theme_intent::space(horizontal_step)
+                .scaled(2.0)
+                .plus(crate::theme_intent::space(gap_step)),
+        );
+        layout.theme.padding_right = Some(crate::theme_intent::space(horizontal_step));
+        layout.theme.padding_top = Some(crate::theme_intent::space(vertical_step));
+        layout.theme.padding_bottom = Some(crate::theme_intent::space(vertical_step));
         layout.padding_top = Some(LengthSpec::Px(vertical));
         layout.padding_bottom = Some(LengthSpec::Px(vertical));
         layout.border_width = Some(0.0);
@@ -134,7 +158,16 @@ impl StatusBadge {
         } else {
             nana_ui_core::type_scale::META
         });
+        crate::theme_intent::font(
+            layout,
+            if self.compact {
+                nana_ui_core::TypeRole::Hint
+            } else {
+                nana_ui_core::TypeRole::Meta
+            },
+        );
         layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
+        crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Medium);
         style
     }
 }
@@ -226,11 +259,31 @@ impl ValidationMessage {
             nana_ui_core::space::SM
         };
         layout.padding_left = Some(LengthSpec::Px(indicator + gap));
+        layout.theme.padding_left = Some(
+            crate::theme_intent::space(if self.compact {
+                nana_ui_core::SpacingStep::Xl
+            } else {
+                nana_ui_core::SpacingStep::Xxl
+            })
+            .plus(crate::theme_intent::space(if self.compact {
+                nana_ui_core::SpacingStep::Xs
+            } else {
+                nana_ui_core::SpacingStep::Sm
+            })),
+        );
         layout.font_size = Some(if self.compact {
             nana_ui_core::type_scale::HINT
         } else {
             nana_ui_core::type_scale::META
         });
+        crate::theme_intent::font(
+            layout,
+            if self.compact {
+                nana_ui_core::TypeRole::Hint
+            } else {
+                nana_ui_core::TypeRole::Meta
+            },
+        );
         layout.font_weight = None;
         style
     }
@@ -343,11 +396,30 @@ impl EmptyState {
         } else {
             (nana_ui_core::space::XXXL, nana_ui_core::space::PAGE)
         };
+        crate::theme_intent::font(
+            layout,
+            if self.compact {
+                nana_ui_core::TypeRole::Meta
+            } else {
+                nana_ui_core::TypeRole::Body
+            },
+        );
+        crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Semibold);
         if layout.padding_left.is_none() {
             layout.padding_left = Some(LengthSpec::Px(horizontal));
+            layout.theme.padding_left = Some(crate::theme_intent::space(if self.compact {
+                nana_ui_core::SpacingStep::Sm
+            } else {
+                nana_ui_core::SpacingStep::Xxxl
+            }));
         }
         if layout.padding_right.is_none() {
             layout.padding_right = Some(LengthSpec::Px(horizontal));
+            layout.theme.padding_right = Some(crate::theme_intent::space(if self.compact {
+                nana_ui_core::SpacingStep::Sm
+            } else {
+                nana_ui_core::SpacingStep::Xxxl
+            }));
         }
         // The real intrinsic leading block is written after TextShaper has
         // measured title/message for the resolved content width.
@@ -356,6 +428,11 @@ impl EmptyState {
         }
         if layout.padding_bottom.is_none() {
             layout.padding_bottom = Some(LengthSpec::Px(vertical));
+            layout.theme.padding_bottom = Some(crate::theme_intent::space(if self.compact {
+                nana_ui_core::SpacingStep::Md
+            } else {
+                nana_ui_core::SpacingStep::Page
+            }));
         }
         layout.border_width = Some(0.0);
         style
@@ -741,10 +818,13 @@ impl Progress {
         layout.height = Some(LengthSpec::Px(content + padding.top + padding.bottom));
         layout.direction = Some(FlexDirection::Column);
         layout.gap = Some(LengthSpec::Px(PROGRESS_GAP));
+        layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
         layout.border_width = Some(0.0);
         if self.label.is_some() {
             layout.font_size = Some(PROGRESS_LABEL_SIZE);
+            crate::theme_intent::font(layout, nana_ui_core::TypeRole::Meta);
             layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
+            crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Medium);
         }
         style
     }
@@ -960,11 +1040,17 @@ impl Spinner {
         layout.direction = Some(FlexDirection::Row);
         layout.align_items = AlignSpec::Center;
         layout.gap = Some(LengthSpec::Px(SPINNER_GAP));
+        layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
         layout.padding_left = Some(LengthSpec::Px(if self.painted_label().is_empty() {
             0.0
         } else {
             size + SPINNER_GAP
         }));
+        layout.theme.padding_left = if self.painted_label().is_empty() {
+            None
+        } else {
+            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm).offset(size))
+        };
         // `padding_left` above is the spinner's own glyph lane and stays
         // framework-owned; the other three edges are the caller's.
         for edge in [
@@ -978,6 +1064,7 @@ impl Spinner {
         }
         layout.border_width = Some(0.0);
         layout.font_size = Some(SPINNER_LABEL_SIZE);
+        crate::theme_intent::font(layout, nana_ui_core::TypeRole::Meta);
         style
     }
 }

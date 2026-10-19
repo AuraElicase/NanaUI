@@ -152,6 +152,18 @@ impl Thumbnail {
                 layout.position = PositionSpec::Absolute;
                 layout.offset_right = Some(LengthSpec::Px(space::SM));
                 layout.offset_bottom = Some(LengthSpec::Px(space::SM));
+                layout.theme.offset_right =
+                    Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
+                layout.theme.offset_bottom =
+                    Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
+                layout.theme.padding_left =
+                    Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
+                layout.theme.padding_right =
+                    Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
+                layout.theme.padding_top =
+                    Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
+                layout.theme.padding_bottom =
+                    Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
                 layout.z_index = Some(2);
                 layout.padding_left = Some(LengthSpec::Px(space::SM));
                 layout.padding_right = Some(LengthSpec::Px(space::SM));
