@@ -36,7 +36,6 @@ fn consumer(id: u64) -> OutputConsumer {
             profile: ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM),
             alpha: OutputAlpha::GammaPremultiplied,
             text_aa: OutputTextAa::Grayscale,
-            sample_count: 1,
             device_generation: test_gpu::context().generation(),
             ownership: OutputOwnership::SameDevice,
             persistent: true,
