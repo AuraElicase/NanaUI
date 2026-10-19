@@ -411,7 +411,7 @@ impl ControlHeight {
 /// each have their own metrics field and are not "a medium control with
 /// different padding", so naming them as steps here is what lets those two
 /// stop reading [`UI_METRICS`] directly. Same shape as [`RadiusTier`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ControlPadding {
     /// Small / compact controls.
     Compact,
