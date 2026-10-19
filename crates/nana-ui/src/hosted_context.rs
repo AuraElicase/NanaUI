@@ -1252,10 +1252,7 @@ impl DeviceRequest {
         let capabilities = surface.get_capabilities(&adapter);
         let format = preferred_surface_format(&capabilities.formats)
             .ok_or(HostedGpuError::SurfaceHasNoFormats)?;
-        // Dual-source blending is what subpixel (ClearType) text draws with;
-        // taken whenever the adapter has it, like the caller's own features.
-        let required_features =
-            adapter.features() & (required_features | wgpu::Features::DUAL_SOURCE_BLENDING);
+        let required_features = shared_device_features(adapter.features(), required_features);
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("NanaUI hosted shared device"),
@@ -1350,6 +1347,17 @@ impl fmt::Display for HostedRunError {
 }
 
 impl std::error::Error for HostedRunError {}
+
+/// Shared content producers must be able to sample compressed textures on the
+/// host's device. Enabling a supported format does not change UI texture storage;
+/// unsupported formats remain unavailable, including after device recovery.
+fn shared_device_features(available: wgpu::Features, requested: wgpu::Features) -> wgpu::Features {
+    available
+        & (requested
+            | wgpu::Features::DUAL_SOURCE_BLENDING
+            | wgpu::Features::TEXTURE_COMPRESSION_BC
+            | wgpu::Features::TEXTURE_COMPRESSION_ASTC)
+}
 
 /// The instance every hosted device is created on: `backends`, and on DX12
 /// the shader compiler [`dx12_shader_compiler`] chooses.
@@ -1701,6 +1709,36 @@ mod tests {
         preferred_alpha_mode, preferred_live_present_mode, preferred_surface_format,
         resolve_surface_profile_internal, surface_profile_changed, surface_size_changed,
     };
+
+    #[test]
+    fn shared_device_enables_only_supported_compression_and_requested_features() {
+        use wgpu::Features as F;
+        let optional =
+            F::DUAL_SOURCE_BLENDING | F::TEXTURE_COMPRESSION_BC | F::TEXTURE_COMPRESSION_ASTC;
+        for available in [
+            F::empty(),
+            F::TEXTURE_COMPRESSION_BC,
+            F::TEXTURE_COMPRESSION_ASTC,
+            optional,
+        ] {
+            assert_eq!(
+                super::shared_device_features(available, F::empty()),
+                available
+            );
+            assert_eq!(
+                super::shared_device_features(available | F::TIMESTAMP_QUERY, F::TIMESTAMP_QUERY),
+                available | F::TIMESTAMP_QUERY,
+            );
+            assert_eq!(
+                super::shared_device_features(available, F::TIMESTAMP_QUERY),
+                available
+            );
+        }
+        assert_eq!(
+            super::shared_device_features(F::TIMESTAMP_QUERY, F::empty()),
+            F::empty()
+        );
+    }
 
     #[cfg(target_os = "windows")]
     #[test]
