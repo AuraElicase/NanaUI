@@ -1641,8 +1641,8 @@ impl UiWorld {
                             },
                             Arc::clone(label),
                             false,
-                            size.text_size_in(self.theme.typography()),
-                            Some(500),
+                            style.font_size,
+                            style.font_weight,
                         )
                     }),
                     value: text_region(
@@ -1654,8 +1654,8 @@ impl UiWorld {
                         },
                         Arc::clone(value),
                         false,
-                        size.text_size_in(self.theme.typography()),
-                        Some(500),
+                        style.font_size,
+                        style.font_weight,
                     ),
                     unit: unit.as_ref().map(|unit| {
                         text_region(
@@ -1667,8 +1667,8 @@ impl UiWorld {
                             },
                             Arc::clone(unit),
                             true,
-                            (size.text_size_in(self.theme.typography()) - 1.0).max(10.0),
-                            None,
+                            size.caption_size_in(self.theme.typography()),
+                            Some(self.theme.typography().regular),
                         )
                     }),
                     track,
@@ -2147,7 +2147,12 @@ impl UiWorld {
                 selected,
                 disabled,
             } => {
-                let icon_extent = size.icon_size().min(content.height);
+                let icon_extent = if *indicator {
+                    size.icon_size()
+                } else {
+                    style.font_size
+                }
+                .min(content.height);
                 let base_padding = if *indicator {
                     size.radio_lead()
                 } else {
@@ -2239,8 +2244,8 @@ impl UiWorld {
                         },
                         Arc::clone(label),
                         false,
-                        size.text_size_in(self.theme.typography()),
-                        Some(500),
+                        style.font_size,
+                        style.font_weight,
                     ),
                     // The radio ring is the one indicator that predates the
                     // focus tokens, and it follows the same rule: a clicked
@@ -2277,6 +2282,7 @@ impl UiWorld {
                 self.style_model
                     .color(SemanticColorRole::Text)
                     .as_rgba_array(),
+                self.theme.spacing().sm,
             ),
             StandardVisual::LevelMeter {
                 value_ratio, girth, ..
@@ -2296,6 +2302,7 @@ impl UiWorld {
                     None,
                     false,
                     [0.0; 4],
+                    self.theme.spacing().xs,
                 )
             }
             StandardVisual::FormField {

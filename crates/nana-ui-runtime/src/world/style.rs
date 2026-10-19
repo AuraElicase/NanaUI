@@ -138,8 +138,34 @@ impl UiWorld {
             None if parent.is_some() => inherited.text_scale,
             None => self.root_text_scale(self.record(id).document),
         };
-        let font_size_base = layout.font_size.unwrap_or(inherited.font_size_base);
-        let line_height_base = layout.line_height.or(inherited.line_height_base);
+        // Roots inherit typography from the installed theme. Descendants still
+        // inherit their parent, including explicit application font overrides.
+        let typography = self.theme.typography();
+        let font_size_base = layout.font_size.unwrap_or_else(|| {
+            if parent.is_some() {
+                inherited.font_size_base
+            } else {
+                typography.body
+            }
+        });
+        let font_weight = layout.font_weight.or_else(|| {
+            if parent.is_some() {
+                inherited.font_weight
+            } else {
+                Some(typography.regular)
+            }
+        });
+        let line_height_base = layout.line_height.or_else(|| {
+            if parent.is_some() {
+                inherited.line_height_base
+            } else {
+                // A unitless root line follows larger descendant fonts too;
+                // at Body it is exactly the theme's Line box.
+                Some(nana_ui_core::LineHeightSpec::Relative(
+                    typography.line / typography.body,
+                ))
+            }
+        });
         let next = ComputedStyle {
             paint_colors: nana_ui_core::PaintColorSlots {
                 color: layout.paint_colors.color.or_else(|| {
@@ -190,7 +216,7 @@ impl UiWorld {
                 .or(inherited.selection_background),
             selection_color: layout.selection_color.or(inherited.selection_color),
             font_size: font_size_base * text_scale,
-            font_weight: layout.font_weight.or(inherited.font_weight),
+            font_weight,
             italic: layout.font_italic.unwrap_or(inherited.italic),
             font_family: layout
                 .font_family
@@ -900,6 +926,10 @@ impl UiWorld {
             self.cancel_hover_transition(id);
         }
         let previous_metrics = self.style_model.metrics;
+        let body_changed = self.theme.typography().body != next.typography().body;
+        let regular_changed = self.theme.typography().regular != next.typography().regular;
+        let line_ratio_changed = self.theme.typography().line / self.theme.typography().body
+            != next.typography().line / next.typography().body;
         let token_layout_changed = self.theme.spacing() != next.spacing()
             || self.theme.typography() != next.typography()
             || self.theme.border() != next.border()
@@ -962,6 +992,33 @@ impl UiWorld {
             // is the one event that has to re-run it. Doing it here, once, is
             // what keeps it off every frame's read path.
             dependents = self.reresolve_layout_intent();
+            // An unstyled root has no authored token intent to re-resolve. Its
+            // inherited defaults nevertheless changed and must shape this frame.
+            let default_roots = self
+                .live_document_roots
+                .values()
+                .flat_map(|roots| roots.iter().copied())
+                .filter(|root| {
+                    let layout = &self.record(*root).resolved_layout;
+                    (body_changed && layout.font_size.is_none())
+                        || (regular_changed && layout.font_weight.is_none())
+                        || (line_ratio_changed && layout.line_height.is_none())
+                })
+                .collect::<Vec<_>>();
+            for root in default_roots {
+                self.mark_subtree(root, DirtyMask::STYLE | DirtyMask::TEXT);
+                let classified =
+                    self.classify_layout_change(root, nana_ui_core::LayoutStyleChange::FONT);
+                self.record_layout_invalidation(
+                    root,
+                    nana_ui_core::LayoutInvalidation {
+                        source: nana_ui_core::LayoutInvalidationSource::Resource,
+                        reason: nana_ui_core::InvalidationReason::RESOURCE,
+                        ..classified
+                    },
+                );
+                dependents += 1;
+            }
             work.record_layout_invalidation(dependents);
         }
         work.record_layout_invalidation(modal_frames.len());

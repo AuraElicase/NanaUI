@@ -13,6 +13,7 @@ pub enum ThemeToken {
     Border(BorderWidth),
     Radius(RadiusTier),
     Control(crate::ControlSize),
+    ControlPadding(crate::ControlPadding),
 }
 impl ThemeToken {
     pub fn resolve(self, theme: &CompiledTheme) -> f32 {
@@ -24,6 +25,7 @@ impl ThemeToken {
             Self::Border(role) => theme.border().resolve(role),
             Self::Radius(tier) => tier.resolve(theme.metrics()),
             Self::Control(size) => size.height_in(theme.metrics()),
+            Self::ControlPadding(padding) => padding.resolve(theme.metrics()),
         }
     }
 }
