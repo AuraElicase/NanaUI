@@ -16,7 +16,7 @@ use nana_ui_charts::{
     ChartLayout, ChartOption, ChartTheme, ChartViewState, LabelMeasure, LayoutInput, layout,
     transition,
 };
-use nana_ui_core::{SemanticColorRole, SemanticPalette};
+use nana_ui_core::{CompiledTheme, SemanticColorRole, SemanticPalette};
 
 use crate::view_components::project_common;
 use crate::{
@@ -40,6 +40,8 @@ pub struct ChartSpec {
 struct ChartMemo {
     size: [f32; 2],
     palette: SemanticPalette,
+    font_size: f32,
+    font_weight: u16,
     /// The text engine that measured the labels.
     measure: usize,
     layout: Arc<ChartLayout>,
@@ -85,37 +87,45 @@ impl ChartSpec {
             .map(|memo| Arc::clone(&memo.layout))
     }
 
-    /// The layout at `size` under `palette`, made at most once per pair. The
+    /// The layout at `size` under the theme's colors and label typography. The
     /// first layout of a spec starts its motion at `now`; a later one (a
     /// resize, a theme change) settles at once.
     pub(crate) fn layout_for(
         &self,
         size: [f32; 2],
-        palette: &SemanticPalette,
+        compiled_theme: &CompiledTheme,
         resolve: impl Fn(SemanticColorRole) -> [f32; 4],
-        measure: &dyn LabelMeasure,
-        measure_identity: usize,
+        measure: crate::text_width::ChromeTextMeasure<'_>,
         now: Duration,
     ) -> Arc<ChartLayout> {
+        let palette = compiled_theme.palette();
+        let typography = compiled_theme.typography();
+        let measure_identity = measure.engine_identity();
         let mut memo = self
             .memo
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(memo) = memo.as_ref()
             && memo.size == size
-            && memo.palette == *palette
+            && memo.palette == palette
+            && memo.font_size == typography.meta
+            && memo.font_weight == typography.regular
             && memo.measure == measure_identity
         {
             return Arc::clone(&memo.layout);
         }
-        let theme = ChartTheme::new(palette, &self.option, resolve);
+        let theme = ChartTheme::new(&palette, &self.option, resolve).with_typography(typography);
+        let measure = ChartLabelMeasure(measure, theme.font_weight);
         let mut fresh = layout(&LayoutInput {
             option: &self.option,
             size,
             theme: &theme,
-            measure,
+            measure: &measure,
             state: &self.view,
         });
+        for text in &mut fresh.texts {
+            text.weight.get_or_insert(theme.font_weight);
+        }
         if memo.is_none() && self.animate {
             transition::begin(&mut fresh, self.previous.as_deref(), &self.option, now);
         } else {
@@ -124,7 +134,9 @@ impl ChartSpec {
         let fresh = Arc::new(fresh);
         *memo = Some(ChartMemo {
             size,
-            palette: *palette,
+            palette,
+            font_size: theme.font_size,
+            font_weight: theme.font_weight,
             measure: measure_identity,
             layout: Arc::clone(&fresh),
         });
@@ -298,6 +310,15 @@ pub(crate) struct ChromeLabelMeasure<'a>(pub crate::text_width::ChromeTextMeasur
 impl LabelMeasure for ChromeLabelMeasure<'_> {
     fn measure(&self, text: &str, size: f32) -> [f32; 2] {
         [self.0.width(text, size, None), (size * 1.35).ceil()]
+    }
+}
+
+/// Chart axes measure at the same regular weight their text regions paint.
+struct ChartLabelMeasure<'a>(crate::text_width::ChromeTextMeasure<'a>, u16);
+
+impl LabelMeasure for ChartLabelMeasure<'_> {
+    fn measure(&self, text: &str, size: f32) -> [f32; 2] {
+        [self.0.width(text, size, Some(self.1)), (size * 1.35).ceil()]
     }
 }
 
