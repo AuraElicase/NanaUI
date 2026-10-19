@@ -30,6 +30,7 @@ mod custom_paint;
 mod paint_script;
 mod property_grid;
 mod scrub_field;
+mod theme_intent;
 /// The BCP 47 tag [`MutationQueue::set_language`] and
 /// [`UiWorld::set_default_language`] take.
 pub use nana_text::font::LanguageTag;

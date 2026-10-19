@@ -458,6 +458,7 @@ pub(super) fn shape_empty_state_text(
     inherited: &ComputedStyle,
     max_width: Option<f32>,
     shaper: &mut impl TextShaper,
+    typography: nana_ui_core::TypographyTokens,
 ) -> EmptyStateTextPresentation {
     let StandardVisual::EmptyState {
         title,
@@ -470,17 +471,17 @@ pub(super) fn shape_empty_state_text(
     };
     let mut title_style = inherited.clone();
     title_style.font_size = if *compact {
-        nana_ui_core::type_scale::META
+        typography.meta
     } else {
-        nana_ui_core::type_scale::BODY
+        typography.body
     };
-    title_style.font_weight = Some(nana_ui_core::type_scale::SEMIBOLD);
+    title_style.font_weight = Some(typography.semibold);
     title_style.line_height = None;
     let mut message_style = inherited.clone();
     message_style.font_size = if *compact {
-        nana_ui_core::type_scale::HINT
+        typography.hint
     } else {
-        nana_ui_core::type_scale::META
+        typography.meta
     };
     message_style.font_weight = None;
     message_style.line_height = None;
@@ -523,6 +524,7 @@ pub(super) fn shape_modal_text(
     max_width: Option<f32>,
     body_width: Option<f32>,
     shaper: &mut impl TextShaper,
+    typography: nana_ui_core::TypographyTokens,
 ) -> ModalTextPresentation {
     let StandardVisual::ModalFrame {
         title,
@@ -545,7 +547,7 @@ pub(super) fn shape_modal_text(
         wrap: body_width.is_some(),
         ..constraints
     };
-    let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe);
+    let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe, typography);
     let mut title_style = inherited.clone();
     title_style.font_size = title_type.size;
     if let Some(weight) = title_type.weight {
@@ -553,11 +555,11 @@ pub(super) fn shape_modal_text(
     }
     title_style.line_height = None;
     let mut description_style = inherited.clone();
-    description_style.font_size = nana_ui_core::type_scale::META;
+    description_style.font_size = typography.meta;
     description_style.font_weight = None;
     description_style.line_height = None;
     let mut body_style = inherited.clone();
-    body_style.font_size = crate::overlay_surfaces::MODAL_BODY_TEXT_SIZE;
+    body_style.font_size = typography.body;
     body_style.font_weight = None;
     body_style.line_height = None;
     ModalTextPresentation {
@@ -3833,17 +3835,25 @@ impl UiWorld {
         else {
             return changed;
         };
-        let spacing = if *compact { 2.0 } else { 6.0 };
-        let vertical = if *compact { 8.0 } else { 24.0 };
+        let spacing = if *compact {
+            self.theme.spacing().xxs
+        } else {
+            self.theme.spacing().sm
+        };
+        let vertical = if *compact {
+            self.theme.spacing().md
+        } else {
+            self.theme.spacing().page
+        };
         let mut height = presentation.title.height;
         if icon.is_some() {
-            height += 22.0 + spacing;
+            height += self.theme.spacing().page_tight + self.theme.spacing().xxs + spacing;
         }
         if let Some(message) = presentation.message {
             height += spacing + message.height;
         }
         if action.is_some() {
-            height += spacing + 4.0;
+            height += spacing + self.theme.spacing().xs;
         }
         let padding_top = nana_ui_core::LengthSpec::Px(vertical + height);
         let mut style = self.record(id).style.clone();
@@ -3920,11 +3930,21 @@ impl UiWorld {
                         let Some(layout) = self.component_layout_box(id) else {
                             continue;
                         };
-                        let horizontal = if *compact { 6.0 } else { 16.0 };
+                        let horizontal = if *compact {
+                            self.theme.spacing().sm
+                        } else {
+                            self.theme.spacing().xxxl
+                        };
                         let width = (layout.width - horizontal * 2.0).max(0.0);
                         let runs = shaper.runs;
-                        let intrinsic =
-                            shape_empty_state_text(id, visual, computed, Some(width), &mut shaper);
+                        let intrinsic = shape_empty_state_text(
+                            id,
+                            visual,
+                            computed,
+                            Some(width),
+                            &mut shaper,
+                            self.theme.typography(),
+                        );
                         work.record_text_pass(1, usize::from(shaper.runs > runs));
                         validate_text_metrics(id, intrinsic.title)?;
                         if let Some(message) = intrinsic.message {
@@ -3949,13 +3969,14 @@ impl UiWorld {
                             None,
                             self.theme.recipes().dialog(),
                         );
-                        let chrome = crate::overlay_surfaces::ModalChrome::measure(
+                        let chrome = crate::overlay_surfaces::ModalChrome::measure_in(
                             *kind,
                             crate::TextMetrics::default(),
                             None,
                             slots,
                             self.theme.recipes().dialog(),
                             self.theme.border().hairline,
+                            &self.theme,
                         );
                         let wrap_width = chrome.text_width(surface, root);
                         let body_width = chrome.body_box(surface).width;
@@ -3968,6 +3989,7 @@ impl UiWorld {
                             Some(wrap_width),
                             Some(body_width),
                             &mut shaper,
+                            self.theme.typography(),
                         );
                         work.record_text_pass(1, usize::from(shaper.runs > runs));
                         validate_text_metrics(id, intrinsic.title)?;
@@ -4984,7 +5006,14 @@ impl UiWorld {
                 if let Some(visual @ StandardVisual::EmptyState { .. }) = visual {
                     stampable = false;
                     let runs = shaper.runs;
-                    let intrinsic = shape_empty_state_text(id, visual, &style, None, &mut shaper);
+                    let intrinsic = shape_empty_state_text(
+                        id,
+                        visual,
+                        &style,
+                        None,
+                        &mut shaper,
+                        self.theme.typography(),
+                    );
                     work.record_text_pass(1, usize::from(shaper.runs > runs));
                     validate_text_metrics(id, intrinsic.title)?;
                     if let Some(message) = intrinsic.message {
@@ -5003,6 +5032,7 @@ impl UiWorld {
                         None,
                         None,
                         &mut shaper,
+                        self.theme.typography(),
                     );
                     work.record_text_pass(1, usize::from(shaper.runs > runs));
                     validate_text_metrics(id, intrinsic.title)?;

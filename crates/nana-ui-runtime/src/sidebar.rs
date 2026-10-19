@@ -85,6 +85,7 @@ pub fn sidebar_top_bar_tool_button(icon: Icon, label: impl Into<Arc<str>>) -> Ic
         layout.padding_left = Some(LengthSpec::Px(0.0));
         layout.padding_right = Some(LengthSpec::Px(0.0));
         layout.margin_right = Some(LengthSpec::Px(ROW_PADDING_RIGHT));
+        layout.theme.margin_right = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
     }
     button.style.control_padding_x = None;
     button
@@ -217,7 +218,10 @@ impl SidebarFrame {
             body: None,
             footer: None,
             gap: FRAME_GAP,
-            style: NodeStyle::default(),
+            style: NodeStyle::default().theme(
+                nana_ui_core::ThemeProperty::Gap,
+                crate::theme_intent::space(nana_ui_core::SpacingStep::Xxl),
+            ),
         }
     }
 
@@ -264,6 +268,7 @@ impl SidebarFrame {
 
     pub fn gap(mut self, gap: f32) -> Self {
         self.gap = gap.max(0.0);
+        Arc::make_mut(&mut self.style.layout).theme.gap = None;
         self
     }
 
@@ -288,9 +293,17 @@ impl SidebarFrame {
             && layout.padding_left.is_none()
         {
             layout.padding_top = Some(LengthSpec::Px(FRAME_PADDING_TOP));
+            layout.theme.padding_top =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Lg));
             layout.padding_right = Some(LengthSpec::Px(FRAME_PADDING_RIGHT));
+            layout.theme.padding_right =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
             layout.padding_bottom = Some(LengthSpec::Px(FRAME_PADDING_BOTTOM));
+            layout.theme.padding_bottom =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Lg));
             layout.padding_left = Some(LengthSpec::Px(FRAME_PADDING_LEFT));
+            layout.theme.padding_left =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xl));
         }
         if !layout.overflow_x.clips() {
             layout.overflow_x = nana_ui_core::OverflowSpec::Hidden;
@@ -384,7 +397,10 @@ impl SidebarRow {
             tone: SidebarRowTone::Default,
             disclosure: None,
             hovered: false,
-            style: NodeStyle::default(),
+            style: NodeStyle::default().theme(
+                nana_ui_core::ThemeProperty::Gap,
+                crate::theme_intent::space(nana_ui_core::SpacingStep::Sm),
+            ),
         }
     }
 
@@ -410,6 +426,7 @@ impl SidebarRow {
 
     pub fn gap(mut self, gap: f32) -> Self {
         self.gap = gap.max(0.0);
+        Arc::make_mut(&mut self.style.layout).theme.gap = None;
         self
     }
 
@@ -461,14 +478,35 @@ impl SidebarRow {
         layout.width = Some(LengthSpec::Fill);
         layout.gap = Some(LengthSpec::Px(self.gap));
         layout.padding_left = Some(LengthSpec::Px(sidebar_row_depth_inset(self.depth)));
+        layout.theme.padding_left = Some(if self.depth == 0 {
+            crate::theme_intent::space(nana_ui_core::SpacingStep::Md)
+        } else {
+            crate::theme_intent::space(nana_ui_core::SpacingStep::Page)
+                .plus(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm))
+                .plus(
+                    crate::theme_intent::space(nana_ui_core::SpacingStep::Xl)
+                        .scaled(f32::from(self.depth - 1)),
+                )
+        });
         layout.padding_right = Some(LengthSpec::Px(ROW_PADDING_RIGHT));
+        layout.theme.padding_right =
+            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
         layout.font_size = Some(self.size.text_size());
+        layout.theme.control_typography(self.size);
         layout.line_height = Some(LineHeightSpec::Absolute(self.size.line_height()));
         layout.font_weight = Some(if self.state == SidebarRowState::AncestorActive {
             600
         } else {
             500
         });
+        crate::theme_intent::weight(
+            layout,
+            if self.state == SidebarRowState::AncestorActive {
+                nana_ui_core::TextWeight::Semibold
+            } else {
+                nana_ui_core::TextWeight::Medium
+            },
+        );
         // Only the default: an author who set an explicit px radius keeps it.
         let unset_radius = layout.border_radius.is_none();
         if unset_radius {
@@ -909,11 +947,19 @@ impl SidebarSection {
         layout.align_items = AlignSpec::Center;
         layout.width = Some(LengthSpec::Fill);
         layout.gap = Some(LengthSpec::Px(SECTION_HEADER_GAP));
+        layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
         layout.padding_left = Some(LengthSpec::Px(ROW_PADDING_LEFT));
+        layout.theme.padding_left = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
         layout.padding_right = Some(LengthSpec::Px(ROW_PADDING_RIGHT));
+        layout.theme.padding_right =
+            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
         layout.font_size = Some(SECTION_HEADER_TITLE_SIZE);
+        crate::theme_intent::font(layout, nana_ui_core::TypeRole::Hint);
         layout.line_height = Some(LineHeightSpec::Absolute(SECTION_HEADER_TITLE_SIZE));
+        layout.theme.line_height =
+            Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Hint).into());
         layout.font_weight = Some(SECTION_HEADER_TITLE_WEIGHT);
+        crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Bold);
         layout.white_space_nowrap = true;
         layout.text_overflow_ellipsis = true;
         layout.flex_grow = Some(0.0);
@@ -1158,8 +1204,12 @@ fn title_slot_style() -> NodeStyle {
     style.text_vertical_alignment = crate::TextVerticalAlignment::Center;
     let layout = Arc::make_mut(&mut style.layout);
     layout.font_size = Some(SECTION_HEADER_TITLE_SIZE);
+    crate::theme_intent::font(layout, nana_ui_core::TypeRole::Hint);
     layout.line_height = Some(LineHeightSpec::Absolute(SECTION_HEADER_TITLE_SIZE));
+    layout.theme.line_height =
+        Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Hint).into());
     layout.font_weight = Some(SECTION_HEADER_TITLE_WEIGHT);
+    crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Bold);
     layout.flex_grow = Some(1.0);
     layout.flex_shrink = Some(1.0);
     layout.width = Some(LengthSpec::Fill);
@@ -1174,6 +1224,7 @@ fn count_slot_style(visible: bool) -> NodeStyle {
     style.text_vertical_alignment = crate::TextVerticalAlignment::Center;
     let layout = Arc::make_mut(&mut style.layout);
     layout.font_size = Some(SECTION_COUNT_SIZE);
+    crate::theme_intent::font(layout, nana_ui_core::TypeRole::Hint);
     layout.flex_grow = Some(0.0);
     layout.flex_shrink = Some(0.0);
     layout.hidden = !visible;
@@ -1190,14 +1241,22 @@ fn body_port_style(expansion: f32, empty_text: Option<&str>, content_height: f32
     layout.overflow_x = OverflowSpec::Hidden;
     layout.overflow_y = OverflowSpec::Hidden;
     layout.gap = Some(LengthSpec::Px(SECTION_BODY_GAP));
+    layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
     layout.flex_grow = Some(0.0);
     layout.flex_shrink = Some(0.0);
     if empty_text.is_some() {
         layout.padding_top = Some(LengthSpec::Px(SECTION_EMPTY_PADDING_Y));
+        layout.theme.padding_top = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
         layout.padding_bottom = Some(LengthSpec::Px(SECTION_EMPTY_PADDING_Y));
+        layout.theme.padding_bottom =
+            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
         layout.padding_left = Some(LengthSpec::Px(SECTION_EMPTY_PADDING_X));
+        layout.theme.padding_left = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
         layout.padding_right = Some(LengthSpec::Px(SECTION_EMPTY_PADDING_X));
+        layout.theme.padding_right =
+            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
         layout.font_size = Some(SECTION_EMPTY_FONT_SIZE);
+        crate::theme_intent::font(layout, nana_ui_core::TypeRole::Meta);
     }
     let clip_height = content_height * expansion.clamp(0.0, 1.0);
     // 收缩中的剪裁口同步淡出内容；稳态不写 opacity，绘制与既有样式逐位一致。
@@ -1320,6 +1379,9 @@ impl SidebarFooter {
         layout.align_items = AlignSpec::Center;
         layout.justify_content = JustifySpec::Start;
         layout.width = Some(LengthSpec::Fill);
+        if layout.gap.is_none() {
+            layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
+        }
         layout.gap = Some(layout.gap.unwrap_or(LengthSpec::Px(FOOTER_GAP)));
         layout.flex_grow = Some(0.0);
         layout.flex_shrink = Some(0.0);
