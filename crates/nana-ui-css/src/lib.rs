@@ -77,6 +77,8 @@ pub use css_map::{
     resolve_grid_track_sizes, resolve_paint_color,
 };
 pub use css_written::{WrittenLayout, written_layout};
+mod css_theme;
+pub use css_theme::parse_theme_expr;
 pub use style::{
     CssPaintColor, is_non_token_css_color, map_css_color_for_tokens, parse_css_color,
     parse_css_paint_color, resolve_css_paint_color,

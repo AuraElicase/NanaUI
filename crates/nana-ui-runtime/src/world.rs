@@ -2333,6 +2333,11 @@ impl UiWorld {
         &self.installed_theme
     }
 
+    /// Shared installed theme for reactive consumers deriving geometry from it.
+    pub fn installed_theme_arc(&self) -> Arc<nana_ui_core::CompiledTheme> {
+        Arc::clone(&self.installed_theme)
+    }
+
     /// Whether the system high-contrast overlay is on.
     pub fn high_contrast(&self) -> bool {
         self.high_contrast

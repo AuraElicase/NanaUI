@@ -5,7 +5,9 @@
 
 use crate::theme::{ThemeMetrics, UI_METRICS, space, type_scale};
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum ControlSize {
     Small,
     #[default]
