@@ -5018,6 +5018,12 @@ impl ComponentView for RangeField {
             tag: "range-field".into(),
         }
     }
+
+    // Readouts have no ordinary text node to grow their row after a theme install.
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let value = format_range_value(self.value, self.step);
         let rail = self.rail.filter(|girth| girth.is_finite() && *girth > 0.0);
@@ -5059,8 +5065,57 @@ impl ComponentView for RangeField {
                 layout.width = Some(nana_ui_core::LengthSpec::Fill);
             }
         }
-        if effective_style.control_height.is_none() && effective_style.layout.height.is_none() {
-            effective_style.control_height = Some(nana_ui_core::ControlHeight::Min(self.size));
+        if effective_style.layout.height.is_none()
+            && effective_style.layout.theme.height.is_none()
+            && !matches!(
+                effective_style.control_height,
+                Some(nana_ui_core::ControlHeight::Exact(_))
+            )
+        {
+            let theme = world.theme();
+            let mut resolved = (*effective_style.layout).clone();
+            effective_style.layout.theme.apply(&mut resolved, theme);
+            let font = resolved.font_size.unwrap_or(theme.typography().body);
+            let line_height =
+                resolved
+                    .line_height
+                    .or(Some(nana_ui_core::LineHeightSpec::Absolute(
+                        theme.typography().line,
+                    )));
+            let line = nana_ui_core::text_line_box_height_px(font, line_height);
+            let caption_line = nana_ui_core::text_line_box_height_px(
+                self.size.caption_size_in(theme.typography()),
+                line_height,
+            );
+            let thumb = if track_gradient.is_some() {
+                theme.spacing().xxxl
+            } else {
+                self.size.text_size_in(theme.typography())
+            };
+            let padding = resolved.resolved_padding();
+            let vertical_padding = effective_style
+                .control_padding_y
+                .map_or(padding.top + padding.bottom, |padding| {
+                    padding.resolve(theme.metrics()) * 2.0
+                });
+            let border = resolved.resolved_border_edges();
+            let minimum =
+                line.max(caption_line).max(thumb) + vertical_padding + border.top + border.bottom;
+            let control_minimum = effective_style
+                .control_height
+                .map_or(self.size.height_in(theme.metrics()), |height| {
+                    height.resolve(theme.metrics())
+                });
+            let authored_minimum = match resolved.min_height {
+                Some(nana_ui_core::LengthSpec::Px(minimum)) => minimum,
+                _ => 0.0,
+            };
+            effective_style.control_height = None;
+            let layout = Arc::make_mut(&mut effective_style.layout);
+            layout.min_height = Some(nana_ui_core::LengthSpec::Px(
+                minimum.max(control_minimum).max(authored_minimum),
+            ));
+            layout.theme.min_height = None;
         }
         if rail.is_none() && track_gradient.is_none() {
             effective_style.control_padding_x = Some(nana_ui_core::ControlPadding::Field);
