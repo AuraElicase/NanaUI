@@ -44,6 +44,8 @@ cargo run -p nana-ui --example hosted-gpu-demo --features hosted,bundled-fonts,w
 
 `run_runtime` 会创建进程唯一的一份 `GpuContext`（附加窗口只新建 Surface 并共享该上下文；外部事件循环则通过 `EmbeddedRuntime` 与 `HostedGpuShared::from_device` 注入现有设备，切勿再次 `request_device`）。
 
+宿主创建及恢复共享设备时，自动启用适配器支持的 BC／ASTC 纹理压缩能力，供内容生产端在同一设备上采样压缩纹理；这不会改变 UI 自身的纹理存储策略。不支持的能力不请求，生产端按设备实际能力选择格式或回退。外部注入设备和应用离屏宿主须在创建设备时自行请求所需的压缩能力。
+
 :::api
 
 ```rust view
