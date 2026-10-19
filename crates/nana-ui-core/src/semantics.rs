@@ -95,6 +95,23 @@ impl ControlSize {
         }
     }
 
+    /// Resolve standard control text from the installed typography scale.
+    pub const fn text_size_in(self, typography: crate::TypographyTokens) -> f32 {
+        match self {
+            Self::Small => typography.meta,
+            Self::Medium => typography.body,
+            Self::Large => typography.section,
+        }
+    }
+
+    pub const fn caption_size_in(self, typography: crate::TypographyTokens) -> f32 {
+        match self {
+            Self::Small => typography.hint,
+            Self::Medium => typography.meta,
+            Self::Large => typography.body,
+        }
+    }
+
     /// One type-scale step below [`Self::text_size`].
     pub const fn caption_size(self) -> f32 {
         match self {

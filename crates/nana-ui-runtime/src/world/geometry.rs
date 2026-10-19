@@ -42,10 +42,6 @@ const STATUS_DOT_FRACTION: f32 = 10.0 / 24.0;
 /// Block extent of a progress bar.
 pub(crate) const PROGRESS_GIRTH: f32 = nana_ui_core::space::SM;
 
-/// Extent of the glyph an empty state leads with. Composed, the way §1.5
-/// composed the other off-ladder sizes: one page-tight step plus the smallest.
-const EMPTY_STATE_ICON: f32 = nana_ui_core::space::PAGE_TIGHT + nana_ui_core::space::XXS;
-
 pub(super) fn key_capture_geometry(
     content: LayoutBox,
     recording: bool,
@@ -125,7 +121,8 @@ impl UiWorld {
         // Reading `node.layout` directly here would create a second geometry
         // authority for component projections.
         let bounds = self.component_layout_box(id)?;
-        let source = self.nodes.get(id)?.style.clone();
+        let mut source = self.nodes.get(id)?.style.clone();
+        source.layout = Arc::clone(&self.record(id).resolved_layout);
         let padding = self.used_layout_padding(id);
         let border = source.layout.resolved_border_width();
         let content = self.component_content_box(id)?;
@@ -181,13 +178,14 @@ impl UiWorld {
             } => {
                 let presentation = self.nodes.modal_text(id).copied().unwrap_or_default();
                 let recipe = self.theme.recipes().dialog();
-                let chrome = crate::overlay_surfaces::ModalChrome::measure(
+                let chrome = crate::overlay_surfaces::ModalChrome::measure_in(
                     *kind,
                     presentation.title,
                     presentation.description,
                     slots,
                     recipe,
                     self.theme.border().hairline,
+                    &self.theme,
                 );
                 let body_copy = presentation.body.map_or(0.0, |metrics| metrics.height);
                 let body_slot = slots
@@ -195,7 +193,7 @@ impl UiWorld {
                     .and_then(|id| self.component_layout_box(id))
                     .map_or(0.0, |region| region.height);
                 let body_gap = if body_copy > 0.0 && body_slot > 0.0 {
-                    8.0
+                    self.theme.spacing().md
                 } else {
                     0.0
                 };
@@ -207,7 +205,11 @@ impl UiWorld {
                     recipe,
                 );
                 let text_width = chrome.text_width(surface, bounds);
-                let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe);
+                let title_type = crate::overlay_surfaces::modal_title_type(
+                    *kind,
+                    recipe,
+                    self.theme.typography(),
+                );
                 let body = chrome.body_box(surface);
                 let (title_x, title_y) = chrome.title_origin(surface);
                 let surface_paint = surface_painter.as_ref().map(|painter| {
@@ -218,7 +220,7 @@ impl UiWorld {
                     };
                     let title_height = presentation.title.height
                         + presentation.description.map_or(0.0, |description| {
-                            crate::overlay_surfaces::MODAL_TITLE_DESC_GAP + description.height
+                            self.theme.spacing().xs + description.height
                         });
                     // The header band stops where its divider starts, so a
                     // shape drawn to its height meets the rule, not its far
@@ -323,15 +325,13 @@ impl UiWorld {
                         text_region(
                             LayoutBox {
                                 x: title_x,
-                                y: title_y
-                                    + presentation.title.height
-                                    + crate::overlay_surfaces::MODAL_TITLE_DESC_GAP,
+                                y: title_y + presentation.title.height + self.theme.spacing().xs,
                                 width: text_width,
                                 height: presentation.description.unwrap_or_default().height,
                             },
                             Arc::clone(description),
                             true,
-                            12.0,
+                            self.theme.typography().meta,
                             None,
                         )
                     }),
@@ -345,7 +345,7 @@ impl UiWorld {
                             },
                             Arc::clone(message),
                             false,
-                            crate::overlay_surfaces::MODAL_BODY_TEXT_SIZE,
+                            self.theme.typography().body,
                             None,
                         )
                     }),
@@ -639,7 +639,7 @@ impl UiWorld {
                         },
                         content: crate::TextValue::from(label.text.as_str()),
                         color: Some(marker_color(label.severity)),
-                        font_size: size.text_size(),
+                        font_size: size.text_size_in(self.theme.typography()),
                         font_weight: None,
                     })
                     .collect();
@@ -1076,7 +1076,7 @@ impl UiWorld {
                                     &value[head_line_start..head_line_end],
                                 ),
                                 color: Some(caret_color),
-                                font_size: size.text_size(),
+                                font_size: size.text_size_in(self.theme.typography()),
                                 font_weight: style.font_weight,
                             },
                             background: style
@@ -1156,7 +1156,7 @@ impl UiWorld {
                     folds: fold_geometry,
                     git_marks: git_geometry,
                     line_labels_color: self.style_model.color(SemanticColorRole::Faint).as_rgba_array(),
-                    line_labels_font_size: size.caption_size(),
+                    line_labels_font_size: size.caption_size_in(self.theme.typography()),
                     text: crate::ComponentTextRegion {
                         bounds: frame.text_bounds(
                             presentation.content_size.width,
@@ -1174,7 +1174,7 @@ impl UiWorld {
                                 .color
                                 .unwrap_or_else(|| self.style_model.color(SemanticColorRole::Text).as_rgba_array())
                         }),
-                        font_size: size.text_size(),
+                        font_size: size.text_size_in(self.theme.typography()),
                         font_weight: style.font_weight,
                     },
                     multiline,
@@ -1208,7 +1208,7 @@ impl UiWorld {
                                             line_height,
                                         },
                                         bounds,
-                                        size.text_size(),
+                                        size.text_size_in(self.theme.typography()),
                                         &self.style_model.palette,
                                     )
                                 })
@@ -1231,7 +1231,7 @@ impl UiWorld {
                                         line_height,
                                     },
                                     bounds,
-                                    size.text_size(),
+                                    size.text_size_in(self.theme.typography()),
                                     &self.style_model.palette,
                                 )
                             })
@@ -1250,7 +1250,7 @@ impl UiWorld {
                                         line_height,
                                     },
                                     bounds,
-                                    size.text_size(),
+                                    size.text_size_in(self.theme.typography()),
                                     &self.style_model.palette,
                                     self.chrome_text_measure(id),
                                 )
@@ -1433,7 +1433,7 @@ impl UiWorld {
                         label_bounds,
                         Arc::clone(label),
                         false,
-                        size.text_size(),
+                        size.text_size_in(self.theme.typography()),
                         Some(500),
                     ),
                     hint: hint.as_ref().zip(hint_bounds).map(|(hint, bounds)| {
@@ -1441,7 +1441,7 @@ impl UiWorld {
                             bounds,
                             Arc::clone(hint),
                             true,
-                            (size.text_size() - 1.0).max(10.0),
+                            (size.text_size_in(self.theme.typography()) - 1.0).max(10.0),
                             None,
                         )
                     }),
@@ -1589,7 +1589,7 @@ impl UiWorld {
                     },
                     Arc::clone(value),
                     false,
-                    size.text_size(),
+                    size.text_size_in(self.theme.typography()),
                     Some(500),
                 ),
                 unit: None,
@@ -1609,9 +1609,9 @@ impl UiWorld {
                 // as bare numbers sitting next to `SpacingTokens`' own SM / MD
                 // / LG, which are the same three values.
                 let gap = match size {
-                    nana_ui_core::ControlSize::Small => nana_ui_core::space::SM,
-                    nana_ui_core::ControlSize::Medium => nana_ui_core::space::MD,
-                    nana_ui_core::ControlSize::Large => nana_ui_core::space::LG,
+                    nana_ui_core::ControlSize::Small => self.theme.spacing().sm,
+                    nana_ui_core::ControlSize::Medium => self.theme.spacing().md,
+                    nana_ui_core::ControlSize::Large => self.theme.spacing().lg,
                 };
                 let label_width = label
                     .as_ref()
@@ -1635,7 +1635,7 @@ impl UiWorld {
                 // A gradient track's thumb is a ring that stands proud of the
                 // strip; the band is the ring's height so it fits.
                 let thumb = if track_gradient.is_some() {
-                    nana_ui_core::space::XXXL
+                    self.theme.spacing().xxxl
                 } else {
                     size.icon_size()
                 };
@@ -1656,7 +1656,7 @@ impl UiWorld {
                             },
                             Arc::clone(label),
                             false,
-                            size.text_size(),
+                            size.text_size_in(self.theme.typography()),
                             Some(500),
                         )
                     }),
@@ -1669,7 +1669,7 @@ impl UiWorld {
                         },
                         Arc::clone(value),
                         false,
-                        size.text_size(),
+                        size.text_size_in(self.theme.typography()),
                         Some(500),
                     ),
                     unit: unit.as_ref().map(|unit| {
@@ -1682,7 +1682,7 @@ impl UiWorld {
                             },
                             Arc::clone(unit),
                             true,
-                            (size.text_size() - 1.0).max(10.0),
+                            (size.text_size_in(self.theme.typography()) - 1.0).max(10.0),
                             None,
                         )
                     }),
@@ -1792,7 +1792,7 @@ impl UiWorld {
                         .map(|detail| {
                             let label_size = style.font_size;
                             let detail_size = (label_size - 1.0).max(10.0);
-                            let gap = nana_ui_core::space::MD;
+                            let gap = self.theme.spacing().md;
                             let measure = self.chrome_text_measure(id);
                             let label_natural = measure.width(
                                 self.text(id).unwrap_or_default(),
@@ -1800,7 +1800,7 @@ impl UiWorld {
                                 style.font_weight,
                             );
                             let detail_natural = measure.width(&detail, detail_size, None);
-                            let min_detail_visible = nana_ui_core::space::XXXL;
+                            let min_detail_visible = self.theme.spacing().xxxl;
                             let detail_width =
                                 if label_natural + gap + detail_natural <= label_rect.width {
                                     detail_natural
@@ -1839,7 +1839,7 @@ impl UiWorld {
                     .and_then(|note| {
                         let label_size = style.font_size;
                         let note_size = (label_size - 1.0).max(10.0);
-                        let gap = nana_ui_core::space::SM;
+                        let gap = self.theme.spacing().sm;
                         let measure = self.chrome_text_measure(id);
                         let label_natural = measure.width(
                             self.text(id).unwrap_or_default(),
@@ -1850,7 +1850,7 @@ impl UiWorld {
                         let label_width = label_natural.min(label_rect.width);
                         let note_x = label_rect.x + label_width + gap;
                         let room = label_rect.x + label_rect.width - note_x;
-                        if room < note_natural.min(nana_ui_core::space::XXXL) {
+                        if room < note_natural.min(self.theme.spacing().xxxl) {
                             return None;
                         }
                         let note_height = (note_size * 1.2).min(label_rect.height.max(note_size));
@@ -1883,17 +1883,17 @@ impl UiWorld {
             } => {
                 let (horizontal, indicator_slot, gap, text_size) = if *compact {
                     (
-                        nana_ui_core::space::SM,
-                        nana_ui_core::space::SM,
-                        nana_ui_core::space::XS,
-                        nana_ui_core::type_scale::HINT,
+                        self.theme.spacing().sm,
+                        self.theme.spacing().sm,
+                        self.theme.spacing().xs,
+                        self.theme.typography().hint,
                     )
                 } else {
                     (
-                        nana_ui_core::space::MD,
-                        nana_ui_core::space::MD,
-                        nana_ui_core::space::SM,
-                        nana_ui_core::type_scale::META,
+                        self.theme.spacing().md,
+                        self.theme.spacing().md,
+                        self.theme.spacing().sm,
+                        self.theme.typography().meta,
                     )
                 };
                 let diameter = indicator_slot * STATUS_DOT_FRACTION;
@@ -1921,7 +1921,7 @@ impl UiWorld {
                         content: Arc::clone(label).into(),
                         color: Some(foreground),
                         font_size: text_size,
-                        font_weight: Some(nana_ui_core::type_scale::MEDIUM),
+                        font_weight: Some(self.theme.typography().medium),
                     },
                     background,
                     foreground,
@@ -1934,15 +1934,15 @@ impl UiWorld {
             } => {
                 let (indicator_slot, gap, text_size) = if *compact {
                     (
-                        nana_ui_core::space::XL,
-                        nana_ui_core::space::XS,
-                        nana_ui_core::type_scale::HINT,
+                        self.theme.spacing().xl,
+                        self.theme.spacing().xs,
+                        self.theme.typography().hint,
                     )
                 } else {
                     (
-                        nana_ui_core::space::XXL,
-                        nana_ui_core::space::SM,
-                        nana_ui_core::type_scale::META,
+                        self.theme.spacing().xxl,
+                        self.theme.spacing().sm,
+                        self.theme.typography().meta,
                     )
                 };
                 let diameter = indicator_slot * STATUS_DOT_FRACTION;
@@ -1984,19 +1984,19 @@ impl UiWorld {
             } => {
                 let (horizontal, vertical, title_size, message_size, spacing) = if *compact {
                     (
-                        nana_ui_core::space::SM,
-                        nana_ui_core::space::MD,
-                        nana_ui_core::type_scale::META,
-                        nana_ui_core::type_scale::HINT,
-                        nana_ui_core::space::XXS,
+                        self.theme.spacing().sm,
+                        self.theme.spacing().md,
+                        self.theme.typography().meta,
+                        self.theme.typography().hint,
+                        self.theme.spacing().xxs,
                     )
                 } else {
                     (
-                        nana_ui_core::space::XXXL,
-                        nana_ui_core::space::PAGE,
-                        nana_ui_core::type_scale::BODY,
-                        nana_ui_core::type_scale::META,
-                        nana_ui_core::space::SM,
+                        self.theme.spacing().xxxl,
+                        self.theme.spacing().page,
+                        self.theme.typography().body,
+                        self.theme.typography().meta,
+                        self.theme.spacing().sm,
                     )
                 };
                 let width = (bounds.width - horizontal * 2.0).max(0.0);
@@ -2018,7 +2018,8 @@ impl UiWorld {
                 };
                 let mut y = bounds.y + vertical;
                 let icon = icon.map(|icon| {
-                    let icon_width = EMPTY_STATE_ICON.min(width);
+                    let icon_width =
+                        (self.theme.spacing().page_tight + self.theme.spacing().xxs).min(width);
                     let icon_bounds = LayoutBox {
                         x: if *compact {
                             bounds.x + horizontal
@@ -2027,9 +2028,9 @@ impl UiWorld {
                         },
                         y,
                         width: icon_width,
-                        height: EMPTY_STATE_ICON,
+                        height: (self.theme.spacing().page_tight + self.theme.spacing().xxs),
                     };
-                    y += EMPTY_STATE_ICON + spacing;
+                    y += (self.theme.spacing().page_tight + self.theme.spacing().xxs) + spacing;
                     (
                         icon,
                         icon_bounds,
@@ -2049,7 +2050,7 @@ impl UiWorld {
                             .as_rgba_array()
                     }),
                     font_size: title_size,
-                    font_weight: Some(600),
+                    font_weight: Some(self.theme.typography().semibold),
                 };
                 y += presentation.title.height;
                 let message = message.as_ref().map(|message| {
@@ -2086,9 +2087,9 @@ impl UiWorld {
                 action,
             } => {
                 let gap = if *compact {
-                    nana_ui_core::space::XS
+                    self.theme.spacing().xs
                 } else {
-                    nana_ui_core::space::MD
+                    self.theme.spacing().md
                 };
                 let right = action
                     .and_then(|action| self.component_layout_box(action))
@@ -2096,8 +2097,8 @@ impl UiWorld {
                         (action.x - gap).max(bounds.x)
                     });
                 let available = (right - bounds.x).max(0.0);
-                let label_size = nana_ui_core::type_scale::HINT;
-                let value_size = nana_ui_core::type_scale::META;
+                let label_size = self.theme.typography().hint;
+                let value_size = self.theme.typography().meta;
                 let label_height = (label_size * 1.2).min(bounds.height.max(label_size));
                 let value_height = (value_size * 1.2).min(bounds.height.max(value_size));
                 // 属性名按自身文本测宽保底,不再压缩到字号常数;两侧都放得下时各取自然宽度。
@@ -2108,7 +2109,7 @@ impl UiWorld {
                     measure.width(label, label_size, None)
                 };
                 let value_natural = measure.width(value, value_size, Some(*value_weight));
-                let min_value_visible = nana_ui_core::space::XXXL;
+                let min_value_visible = self.theme.spacing().xxxl;
                 // 放不下时值侧占满剩余宽度,超出部分由文本图元的省略号收尾;
                 // 仅属性名自身就放不下(剩余为负)才回退最小可见宽度。
                 let value_width = if label_natural + gap + value_natural <= available {
@@ -2173,7 +2174,7 @@ impl UiWorld {
                 let base_padding = if *indicator {
                     size.radio_lead()
                 } else {
-                    size.padding_x_in(self.style_model.metrics) + nana_ui_core::space::XXS
+                    size.padding_x_in(self.style_model.metrics) + self.theme.spacing().xxs
                 };
                 let ring = indicator.then(|| {
                     let extent = size.indicator_size().min(bounds.height);
@@ -2261,7 +2262,7 @@ impl UiWorld {
                         },
                         Arc::clone(label),
                         false,
-                        size.text_size(),
+                        size.text_size_in(self.theme.typography()),
                         Some(500),
                     ),
                     // The radio ring is the one indicator that predates the
@@ -2306,7 +2307,7 @@ impl UiWorld {
                 let girth = if girth.is_finite() && *girth > 0.0 {
                     *girth
                 } else {
-                    nana_ui_core::space::XS
+                    self.theme.spacing().xs
                 };
                 progress_geometry(
                     bounds,
@@ -2453,9 +2454,9 @@ impl UiWorld {
                 // A ring has to be wide enough to stay open around the colour
                 // it marks; a dot only has to be seen.
                 let thumb = if *picture {
-                    nana_ui_core::space::XXL
+                    self.theme.spacing().xxl
                 } else {
-                    nana_ui_core::space::MD
+                    self.theme.spacing().md
                 };
                 let nx = nx.clamp(0.0, 1.0);
                 let ny = ny.clamp(0.0, 1.0);
@@ -2536,15 +2537,18 @@ impl UiWorld {
                 rows,
                 highlighted,
                 ..
-            } if query.is_some() || !rows.is_empty() => Some(crate::menus::context_menu_geometry(
-                bounds,
-                query.as_ref(),
-                rows,
-                *highlighted,
-                &self.style_model.palette,
-                self.style_model.metrics,
-                &self.framework_strings().menu_search,
-            )),
+            } if query.is_some() || !rows.is_empty() => {
+                Some(crate::menus::context_menu_geometry_in(
+                    bounds,
+                    query.as_ref(),
+                    rows,
+                    *highlighted,
+                    &self.style_model.palette,
+                    self.style_model.metrics,
+                    &self.framework_strings().menu_search,
+                    &self.theme,
+                ))
+            }
             StandardVisual::MenuSurface {
                 trigger,
                 trigger_icon,
@@ -2582,7 +2586,7 @@ impl UiWorld {
                 disabled,
                 size,
                 ..
-            } => Some(crate::menus::action_menu_item_geometry(
+            } => Some(crate::menus::action_menu_item_geometry_in(
                 bounds,
                 label,
                 hint.as_ref(),
@@ -2594,6 +2598,7 @@ impl UiWorld {
                 &self.style_model.palette,
                 self.style_model.metrics,
                 self.chrome_text_measure(id),
+                &self.theme,
             )),
             StandardVisual::TreeView {
                 rows,

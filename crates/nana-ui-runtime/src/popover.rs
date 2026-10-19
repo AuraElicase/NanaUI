@@ -72,6 +72,9 @@ pub struct Popover {
     pub gap: f32,
     pub width: f32,
     pub padding: f32,
+    /// Standard default spacing; numeric setters clear the binding.
+    pub gap_theme: Option<nana_ui_core::SpacingStep>,
+    pub padding_theme: Option<nana_ui_core::SpacingStep>,
     pub close_on_escape: bool,
     pub close_on_outside: bool,
     /// Resting trigger has no fill and no border. Hover, press and the open
@@ -95,6 +98,8 @@ impl Popover {
             gap: POPOVER_GAP,
             width: POPOVER_WIDTH,
             padding: POPOVER_PADDING,
+            gap_theme: Some(nana_ui_core::SpacingStep::Sm),
+            padding_theme: Some(nana_ui_core::SpacingStep::Lg),
             close_on_escape: true,
             close_on_outside: true,
             bare_trigger: false,
@@ -146,6 +151,7 @@ impl Popover {
 
     pub fn gap(mut self, gap: f32) -> Self {
         self.gap = gap.max(0.0);
+        self.gap_theme = None;
         self
     }
 
@@ -156,6 +162,7 @@ impl Popover {
 
     pub fn padding(mut self, padding: f32) -> Self {
         self.padding = padding.max(0.0);
+        self.padding_theme = None;
         self
     }
 
@@ -204,6 +211,10 @@ impl crate::ComponentView for Popover {
         }
     }
 
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     /// Items attach and detach under the open surface, so the anchored
     /// projection must re-run with them to keep the origin math current.
     fn wants_child_reproject() -> bool {
@@ -221,8 +232,10 @@ impl crate::ComponentView for Popover {
             self.trigger_content,
             self.open,
             self.width,
-            self.padding,
-            self.gap,
+            self.padding_theme
+                .map_or(self.padding, |step| world.theme().spacing().resolve(step)),
+            self.gap_theme
+                .map_or(self.gap, |step| world.theme().spacing().resolve(step)),
             self.placement,
             self.alignment,
             "popover",
@@ -241,13 +254,14 @@ pub struct ActionMenu {
 
 impl ActionMenu {
     pub fn new() -> Self {
-        Self {
-            popover: Popover::new()
-                .alignment(PopoverAlignment::Start)
-                .gap(ACTION_MENU_GAP)
-                .width(ACTION_MENU_WIDTH)
-                .padding(ACTION_MENU_PADDING),
-        }
+        let mut popover = Popover::new()
+            .alignment(PopoverAlignment::Start)
+            .gap(ACTION_MENU_GAP)
+            .width(ACTION_MENU_WIDTH)
+            .padding(ACTION_MENU_PADDING);
+        popover.gap_theme = Some(nana_ui_core::SpacingStep::Xs);
+        popover.padding_theme = Some(nana_ui_core::SpacingStep::Xs);
+        Self { popover }
     }
 
     pub fn trigger(mut self, trigger: impl Into<Arc<str>>) -> Self {
@@ -300,6 +314,9 @@ impl Default for ActionMenu {
 }
 
 impl crate::ComponentView for ActionMenu {
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         activation: Some(crate::AppContext::toggle_action_menu),
         activate_at: Some(crate::AppContext::activate_action_menu_at),
@@ -330,8 +347,14 @@ impl crate::ComponentView for ActionMenu {
             self.popover.trigger_content,
             self.popover.open,
             self.popover.width,
-            self.popover.padding,
-            self.popover.gap,
+            self.popover
+                .padding_theme
+                .map_or(self.popover.padding, |step| {
+                    world.theme().spacing().resolve(step)
+                }),
+            self.popover.gap_theme.map_or(self.popover.gap, |step| {
+                world.theme().spacing().resolve(step)
+            }),
             self.popover.placement,
             self.popover.alignment,
             "action-menu",
@@ -632,6 +655,11 @@ fn bare_trigger_style(mut style: NodeStyle, open: bool) -> NodeStyle {
 }
 
 pub(crate) fn menu_surface_style(width: f32, padding: f32) -> NodeStyle {
+    let mut theme = nana_ui_core::ThemeLayout::default();
+    theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
+    theme.border_width =
+        Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
+    theme.font_size = Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Body).into());
     NodeStyle {
         layout: Arc::new(nana_ui_core::LayoutStyle {
             position: PositionSpec::Fixed,
@@ -639,6 +667,7 @@ pub(crate) fn menu_surface_style(width: f32, padding: f32) -> NodeStyle {
             min_width: Some(LengthSpec::Px(MENU_MIN_WIDTH)),
             direction: Some(FlexDirection::Column),
             gap: Some(LengthSpec::Px(MENU_ITEM_GAP)),
+            theme: theme.into(),
             padding_left: Some(LengthSpec::Px(padding)),
             padding_right: Some(LengthSpec::Px(padding)),
             padding_top: Some(LengthSpec::Px(padding)),
@@ -745,7 +774,7 @@ pub(crate) fn menu_surface_geometry(
             },
             content: Arc::clone(value).into(),
             color: Some(style.color.unwrap_or_else(|| palette.text.as_rgba_array())),
-            font_size: nana_ui_core::type_scale::BODY,
+            font_size: style.font_size,
             font_weight: None,
         }),
         trigger_icon: trigger_icon.map(|icon| {
