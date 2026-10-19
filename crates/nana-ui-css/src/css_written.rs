@@ -259,6 +259,108 @@ fn reference() -> &'static (Value, Value) {
         // pseudo-elements set these) still gets a value of its own, so the
         // witness stays complete should a declaration ever write one.
         layout.border_radius = Some(1.0);
+        layout.theme.gap = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.row_gap = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.column_gap = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.padding = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.padding_top = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.padding_right = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.padding_bottom = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.padding_left = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.margin = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.margin_top = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.margin_right = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.margin_bottom = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.margin_left = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.offset_top = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.offset_right = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.offset_bottom = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.offset_left = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.height = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.min_width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.max_width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.min_height = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.max_height = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.flex_basis = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.font_size = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.font_weight = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.line_height = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.letter_spacing = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.border_width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.border_top_width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.border_right_width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.border_bottom_width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.border_left_width = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
+        layout.theme.border_radius = Some(nana_ui_core::ThemeExpr::token(
+            nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
+        ));
         layout.layout_isolation = true;
         layout.adaptation = Some(nana_ui_core::dynamic_layout::AdaptationProfile::RIGID);
         layout.placeholder_color = Some([0.5; 4]);

@@ -20,6 +20,7 @@
 //! start a second authority, and the audit gate in
 //! `scripts/audit-theme-hardcoding.py` is what notices.
 
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::motion::Easing;
@@ -166,7 +167,7 @@ pub struct SpacingTokens {
 }
 
 /// Which spacing step a node wants, rather than how many pixels that is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SpacingStep {
     Xxs,
     Xs,
@@ -237,7 +238,7 @@ impl Default for SpacingTokens {
 
 /// Font size steps. Weights live on [`TypographyTokens`] beside them because a
 /// theme that moves the scale usually moves the weights with it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TypeRole {
     /// Compact chrome caption (hints, section titles, toast copy).
     Hint,
@@ -256,7 +257,7 @@ pub enum TypeRole {
 }
 
 /// Line box steps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LineRole {
     /// Body line box (small / medium controls).
     Line,
@@ -265,7 +266,7 @@ pub enum LineRole {
 }
 
 /// Weight steps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TextWeight {
     Regular,
     Medium,
@@ -374,7 +375,7 @@ pub struct BorderTokens {
 }
 
 /// Which stroke width a node wants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BorderWidth {
     Hairline,
 }

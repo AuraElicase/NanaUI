@@ -49,6 +49,27 @@ enum Container {
 struct Grid {
     min_width: f32,
     gap: f32,
+    gap_theme: Option<nana_ui_core::SpacingStep>,
+}
+
+/// Only geometry dependencies: a palette change leaves this computed equal
+/// and does not schedule a virtual measurement pass.
+#[derive(Clone, PartialEq)]
+struct ThemeGeometry {
+    spacing: nana_ui_core::SpacingTokens,
+    typography: nana_ui_core::TypographyTokens,
+    metrics: nana_ui_core::ThemeMetrics,
+    border: nana_ui_core::BorderTokens,
+}
+impl ThemeGeometry {
+    fn read(theme: &nana_ui_core::CompiledTheme) -> Self {
+        Self {
+            spacing: theme.spacing(),
+            typography: theme.typography(),
+            metrics: theme.metrics(),
+            border: theme.border(),
+        }
+    }
 }
 
 /// What the virtual list places: one item, or one grid row of them.
@@ -185,6 +206,17 @@ impl<T, K, S, KF, RF> EachVirtual<T, K, S, KF, RF> {
         self.grid = Some(Grid {
             min_width: min_width.max(1.0),
             gap: gap.max(0.0),
+            gap_theme: None,
+        });
+        self
+    }
+
+    /// Grid whose column and row gaps follow the installed theme.
+    pub fn grid_theme(mut self, min_width: f32, gap: nana_ui_core::SpacingStep) -> Self {
+        self.grid = Some(Grid {
+            min_width: min_width.max(1.0),
+            gap: nana_ui_core::SpacingTokens::DEFAULT.resolve(gap),
+            gap_theme: Some(gap),
         });
         self
     }
@@ -475,6 +507,7 @@ struct EachVirtualBinding<T: 'static, K: 'static, RF> {
     scroll: Option<Entity<ScrollView>>,
     list: Entity<List>,
     grid: Option<Grid>,
+    theme: Option<Computed<ThemeGeometry>>,
     state: VirtualListItems<Unit<K>, Stack>,
     /// The binding's own geometry; published to `shared` after each sync.
     geometry: Geometry<K>,
@@ -518,6 +551,9 @@ where
     /// The keyed items; reads what the binding depends on.
     fn read(&self) -> Keyed<K, T> {
         self.moved.get();
+        if let Some(theme) = self.theme {
+            theme.get();
+        }
         if let Some(within) = self.within {
             within.get();
         }
@@ -606,6 +642,21 @@ where
     }
 
     fn sync(&mut self, cx: &mut AppContext, items: Keyed<K, T>) -> Result<(), FrameworkError> {
+        if let (Some(grid), Some(theme)) = (&mut self.grid, self.theme)
+            && let Some(step) = grid.gap_theme
+        {
+            let gap = theme.get().spacing.resolve(step).max(0.0);
+            if gap != grid.gap {
+                let difference = gap - grid.gap;
+                grid.gap = gap;
+                self.geometry.layout = VirtualListLayout::new(
+                    (0..self.geometry.units.units.len())
+                        .map(|at| (self.geometry.layout.extent(at..at + 1) + difference).max(1.0))
+                        .collect::<Vec<_>>(),
+                );
+                self.version += 1;
+            }
+        }
         let Some(scroll) = self.scroll(cx)? else {
             return Ok(());
         };
@@ -686,8 +737,13 @@ where
         let index_of = |unit: &Unit<K>| units.index.get(unit).copied();
         let slot = |_: usize, _: &Unit<K>| match grid {
             // The gap below a grid row is part of its extent.
-            Some(grid) => Stack::column(0.0)
-                .with_layout(|layout| layout.padding_bottom = Some(LengthSpec::Px(grid.gap))),
+            Some(grid) => Stack::column(0.0).with_layout(|layout| {
+                layout.padding_bottom = Some(LengthSpec::Px(grid.gap));
+                if let Some(step) = grid.gap_theme {
+                    layout.theme.padding_bottom =
+                        Some(nana_ui_core::ThemeToken::Space(step).into());
+                }
+            }),
             None => Stack::column(0.0),
         };
         let items = &items.items;
@@ -883,9 +939,17 @@ fn grid_row<T: Clone, K, V: IntoView>(
         })
         .collect::<Vec<_>>();
     cells.extend((items.len()..columns).map(|_| widget(share()).into_any()));
-    widget(Stack::fill_row(grid.gap).align(AlignSpec::Start))
-        .children(cells)
-        .into_any()
+    widget(
+        Stack::fill_row(grid.gap)
+            .align(AlignSpec::Start)
+            .with_layout(|layout| {
+                if let Some(step) = grid.gap_theme {
+                    layout.theme.gap = Some(nana_ui_core::ThemeToken::Space(step).into());
+                }
+            }),
+    )
+    .children(cells)
+    .into_any()
 }
 
 /// Build one row's view into its placement slot, in a scope the row's roots
@@ -974,6 +1038,12 @@ where
             scroll,
             list,
             grid: self.grid,
+            theme: (self.measured || self.grid.is_some_and(|grid| grid.gap_theme.is_some())).then(
+                || {
+                    let theme = super::theme_signal();
+                    reactive::computed(move || theme.with(|theme| ThemeGeometry::read(theme)))
+                },
+            ),
             state: if self.measured {
                 VirtualListItems::measured()
             } else {

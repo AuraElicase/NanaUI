@@ -136,3 +136,37 @@ Vue 路径的 `@keyframes` 编译进同一条 Motion IR。`opacity` 和 `transfo
 可拖的 Tab 和列表：按下后移动超过 4px 才算拖。点击仍然只是选中。
 
 命令面板宽 680px。打开后，输入框必须拿到焦点。
+
+
+## Runtime theme expressions
+
+Compiled Rust views retain theme references through the shared Style Model. Use
+`gap: theme(space-md)`, `font-size: theme(type-body)`,
+`font-weight: theme(weight-semibold)`, `line-height: theme(line-tall)`,
+`border-width: theme(border-hairline)` and `border-radius: theme(radius-md)`.
+Spacing names are `xxs/xs/sm/md/lg/xl/xxl/xxxl/page-tight/page`; type names are
+`hint/meta/body/section/heading/title/display`. Line roles are `line/tall`.
+The existing radius and control tiers also accept `theme(radius-lg)` and
+`theme(control-small)`.
+
+Padding, margin, gap and border-width shorthands accept mixed literal and theme
+values. Dimensions, physical edges, individual border widths and typography also
+accept linear `calc()`, for example
+`min-height: calc(2 * theme(line-tall) + theme(space-xs) + 4px)`.
+Multiplication and division require a constant operand; percentages and viewport
+units continue to use the ordinary CSS length path. Literal declarations clear
+the corresponding theme binding, including conditional and container rules.
+
+Rust uses `nana_ui::theme::{ThemeExpr, ThemeToken, ThemeProperty}` through
+`NodeStyle::theme(property, expression)` or
+`Arc::make_mut(&mut style.layout).theme.padding_left = Some(expression)`.
+`ThemeExpr::token(ThemeToken::Space(SpacingStep::Md))` supports `scaled`, `plus`
+and `offset` for derived geometry. The expressions resolve on style writes and
+theme installs, after responsive composition, without string lookup during a
+frame. Palette-only changes do not invalidate layout or text shaping.
+
+For geometry derived outside layout, `view::theme_signal()` yields the installed
+`Arc<CompiledTheme>` after mounting and follows subsequent installs until its
+scope is disposed. Prefer ordinary theme expressions for styles. Virtual grids
+can use `.grid_theme(min_width, SpacingStep::Xxxl)` so column grouping, row spacing
+and virtual row extents follow the same installed spacing step.

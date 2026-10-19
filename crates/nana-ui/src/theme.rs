@@ -34,10 +34,11 @@ pub use nana_ui_core::{
     SemanticPalette, ShadowToken, SpacingStep, SpacingTokens, SquareSize, StateLayer, StatusRecipe,
     SurfaceMaterial, SurfacePadding, SurfaceRole, SurfaceSpec, SurfaceTokens, SwitchMetrics,
     TREE_METRICS, TextWeight, ThemeAppearance, ThemeChoice, ThemeCompileError, ThemeDefinition,
-    ThemeGeneration, ThemeId, ThemeIdentity, ThemeMetrics, ThemeRegistry, ThemeRegistryError,
-    ThemeResolution, ThemeSchemaVersion, ToastGlyphs, ToastIndicator, ToastMotion,
-    ToastProgressRecipe, ToastRecipe, TreeMetrics, TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE,
-    UI_METRICS, builtin_theme_arc, linear_scrim_alpha, space, type_scale,
+    ThemeExpr, ThemeGeneration, ThemeId, ThemeIdentity, ThemeLayout, ThemeMetrics, ThemeProperty,
+    ThemeRegistry, ThemeRegistryError, ThemeResolution, ThemeSchemaVersion, ThemeToken,
+    ToastGlyphs, ToastIndicator, ToastMotion, ToastProgressRecipe, ToastRecipe, TreeMetrics,
+    TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme_arc,
+    linear_scrim_alpha, space, type_scale,
 };
 
 /// Compatibility name for applications that used the pre-registry theme
