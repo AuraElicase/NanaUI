@@ -3304,6 +3304,9 @@ impl LogicalEdges {
 /// 可测布局意图（Style Model Layout 盒切片）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LayoutStyle {
+    /// Typed theme expressions, resolved by Runtime after cascade and responsive rules.
+    #[serde(default)]
+    pub theme: crate::shared::Shared<crate::theme::ThemeLayout>,
     /// Explicit authoring-space colors retained alongside compatibility RGBA fields.
     #[serde(default)]
     pub paint_colors: crate::style_model::PaintColorSlots,
@@ -3661,6 +3664,7 @@ pub struct LayoutStyle {
 impl Default for LayoutStyle {
     fn default() -> Self {
         Self {
+            theme: Default::default(),
             paint_colors: Default::default(),
             layout_isolation: false,
             direction: None,

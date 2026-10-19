@@ -26,6 +26,8 @@ pub struct Avatar {
     pub generation: u64,
     pub version: u64,
     pub size: f32,
+    /// Optional size intent resolved against the installed theme.
+    pub themed_size: Option<nana_ui_core::theme::ThemeExpr>,
     pub label: Arc<str>,
     pub pointer_events: bool,
     /// Level 0 by default (the host sizes the slot from `painted_extent`);
@@ -41,6 +43,7 @@ impl Avatar {
             generation: 0,
             version: 0,
             size: DEFAULT_SIZE,
+            themed_size: None,
             label: Arc::from(""),
             pointer_events: false,
             sampling: ImageSampling::Resample,
@@ -54,6 +57,13 @@ impl Avatar {
 
     pub fn size(mut self, size: f32) -> Self {
         self.size = sanitize_size(size);
+        self.themed_size = None;
+        self
+    }
+
+    /// Keep avatar geometry and circular clipping on the same theme expression.
+    pub fn size_theme(mut self, size: nana_ui_core::theme::ThemeExpr) -> Self {
+        self.themed_size = Some(size);
         self
     }
 
@@ -139,6 +149,9 @@ impl Avatar {
         layout.border_radius = Some(size * 0.5);
         layout.overflow_x = OverflowSpec::Hidden;
         layout.overflow_y = OverflowSpec::Hidden;
+        if let Some(size) = &self.themed_size {
+            apply_theme_size(layout, size, true);
+        }
         style
     }
 }
@@ -194,6 +207,23 @@ impl ComponentView for Avatar {
     }
 }
 
+/// The image, its placeholder, hit target and circular clip resolve one size.
+pub(crate) fn apply_theme_size(
+    layout: &mut nana_ui_core::LayoutStyle,
+    size: &nana_ui_core::theme::ThemeExpr,
+    circular: bool,
+) {
+    layout.theme.width = Some(size.clone());
+    layout.theme.height = Some(size.clone());
+    layout.theme.min_width = Some(size.clone());
+    layout.theme.min_height = Some(size.clone());
+    layout.theme.max_width = Some(size.clone());
+    layout.theme.max_height = Some(size.clone());
+    if circular {
+        layout.theme.border_radius = Some(size.clone().scaled(0.5));
+    }
+}
+
 fn sanitize_size(size: f32) -> f32 {
     if size.is_finite() && size > 0.0 {
         size
@@ -209,6 +239,47 @@ mod tests {
 
     fn document() -> DocumentId {
         DocumentId::new(1).unwrap()
+    }
+
+    #[test]
+    fn themed_avatar_and_hover_trigger_keep_geometry_and_circle_in_sync() {
+        use nana_ui_core::theme::{ThemeExpr, ThemeToken};
+        use nana_ui_core::{ControlSize, ThemeDefinition};
+        let mut context = AppContext::new();
+        let size = ThemeExpr::token(ThemeToken::Control(ControlSize::Small));
+        let root = context
+            .create_component(document(), crate::Stack::column(0.0))
+            .unwrap();
+        let avatar = context
+            .create_component(document(), Avatar::empty().size_theme(size.clone()))
+            .unwrap();
+        let hover = context
+            .create_component(
+                document(),
+                crate::HoverCard::new()
+                    .trigger_image("", "User")
+                    .trigger_size_theme(size),
+            )
+            .unwrap();
+        context.append_child(root, avatar).unwrap();
+        context.append_child(root, hover).unwrap();
+        for height in [28.0, 40.0] {
+            let mut definition = ThemeDefinition::NANA_DARK;
+            definition.tokens.metrics.compact_control_height = height;
+            context.set_theme_definition(&definition).unwrap();
+            context
+                .layout_document(document(), LayoutViewport::new(240.0, 240.0))
+                .unwrap();
+            for node in [avatar.stable_id(), hover.stable_id()] {
+                let bounds = context.world().layout_box(node).unwrap();
+                assert_eq!(bounds.width, height);
+                assert_eq!(bounds.height, height);
+                assert_eq!(
+                    context.world().layout_style(node).unwrap().border_radius,
+                    Some(height * 0.5)
+                );
+            }
+        }
     }
 
     #[test]

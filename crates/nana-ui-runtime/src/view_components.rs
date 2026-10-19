@@ -10,7 +10,12 @@ use crate::{
 };
 
 fn control_layout() -> Arc<nana_ui_core::LayoutStyle> {
+    let mut theme = nana_ui_core::ThemeLayout::default();
+    theme.control_typography(nana_ui_core::ControlSize::Medium);
+    theme.border_width =
+        Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
     Arc::new(nana_ui_core::LayoutStyle {
+        theme: theme.into(),
         // No `padding_left`/`padding_right` here: the control names its inset
         // step on its `NodeStyle` (`control_padding_x`), same as the two below.
         // No `min_height` here either: the control names its size step on its
@@ -126,6 +131,7 @@ fn text_field_style(multiline: bool) -> NodeStyle {
     layout.overflow_x = nana_ui_core::OverflowSpec::Hidden;
     layout.overflow_y = nana_ui_core::OverflowSpec::Hidden;
     if multiline {
+        layout.theme.line_height = None;
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Relative(1.45));
         layout.min_height = Some(nana_ui_core::LengthSpec::Px(
             nana_ui_core::ControlSize::Medium.height_in(nana_ui_core::UI_METRICS) * 3.0,
@@ -441,6 +447,8 @@ impl Text {
     pub fn font_size(mut self, size: f32) -> Self {
         let layout = Arc::make_mut(&mut self.style.layout);
         layout.font_size = Some(size);
+        layout.theme.font_size = None;
+        layout.theme.line_height = None;
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(
             nana_ui_core::ControlSize::nearest_text(size).line_height(),
         ));
@@ -449,7 +457,9 @@ impl Text {
 
     /// Font weight (400 regular, 500 medium, 600 semibold).
     pub fn font_weight(mut self, weight: u16) -> Self {
-        Arc::make_mut(&mut self.style.layout).font_weight = Some(weight);
+        let layout = Arc::make_mut(&mut self.style.layout);
+        layout.theme.font_weight = None;
+        layout.font_weight = Some(weight);
         self
     }
 
@@ -462,8 +472,9 @@ impl Text {
 
     /// Line box height, overriding what [`Self::font_size`] derived.
     pub fn line_height(mut self, line_height: f32) -> Self {
-        Arc::make_mut(&mut self.style.layout).line_height =
-            Some(nana_ui_core::LineHeightSpec::Absolute(line_height));
+        let layout = Arc::make_mut(&mut self.style.layout);
+        layout.theme.line_height = None;
+        layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(line_height));
         self
     }
 
@@ -594,6 +605,8 @@ impl Button {
     pub fn new(label: impl Into<String>) -> Self {
         let mut layout = (*control_layout()).clone();
         layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
+        layout.theme.font_weight =
+            Some(nana_ui_core::ThemeToken::Weight(nana_ui_core::TextWeight::Medium).into());
         layout.white_space_nowrap = true;
         // Declared, not solved: only a strip that solves its overflow reads
         // it (Issue #212).
@@ -710,6 +723,7 @@ impl Button {
         self.style.control_padding_x = Some(size.into());
         let layout = Arc::make_mut(&mut self.style.layout);
         layout.font_size = Some(size.text_size());
+        layout.theme.control_typography(size);
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(size.line_height()));
         self
     }
@@ -1543,6 +1557,9 @@ impl ListItem {
         layout.align_items = nana_ui_core::AlignSpec::Center;
         layout.gap = Some(nana_ui_core::LengthSpec::Px(nana_ui_core::space::MD));
         layout.font_size = Some(nana_ui_core::ControlSize::Small.text_size());
+        layout
+            .theme
+            .control_typography(nana_ui_core::ControlSize::Small);
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(
             nana_ui_core::ControlSize::Small.line_height(),
         ));
@@ -1660,6 +1677,7 @@ impl ListItem {
         self.style.control_padding_x = Some(size.into());
         let layout = Arc::make_mut(&mut self.style.layout);
         layout.font_size = Some(size.text_size());
+        layout.theme.control_typography(size);
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(size.line_height()));
         self
     }
@@ -2091,6 +2109,7 @@ impl TextInput {
         self.style.control_padding_x = Some(size.into());
         let layout = Arc::make_mut(&mut self.style.layout);
         layout.font_size = Some(size.text_size());
+        layout.theme.control_typography(size);
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(size.line_height()));
         self
     }
@@ -2338,6 +2357,7 @@ impl NumberInput {
         self.style.control_padding_x = Some(size.into());
         let layout = Arc::make_mut(&mut self.style.layout);
         layout.font_size = Some(size.text_size());
+        layout.theme.control_typography(size);
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(size.line_height()));
         self
     }

@@ -243,6 +243,7 @@ macro_rules! layout_style_fields {
 }
 
 layout_style_fields! {
+    theme: NONE,
     paint_colors: PAINT,
     layout_isolation: FLOW_STRUCTURE,
     direction: WRITING by same_direction,
