@@ -225,6 +225,8 @@ impl SettingsRow {
         // uniform width, which is none.
         layout.border_width = None;
         layout.border_bottom_width = divider.then_some(nana_ui_core::HAIRLINE);
+        layout.theme.border_bottom_width = divider
+            .then(|| nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
         layout.font_size = Some(nana_ui_core::type_scale::BODY);
         crate::theme_intent::font(layout, nana_ui_core::TypeRole::Body);
         layout.line_height = Some(LineHeightSpec::Absolute(nana_ui_core::type_scale::BODY));
@@ -364,6 +366,8 @@ fn hint_slot_style(hidden: bool) -> NodeStyle {
     // Its own line box: the row's is the label's, too tight for the lines of
     // a hint that wraps.
     layout.line_height = Some(LineHeightSpec::Absolute(nana_ui_core::type_scale::LINE));
+    layout.theme.line_height =
+        Some(nana_ui_core::ThemeToken::Line(nana_ui_core::LineRole::Line).into());
     layout.width = Some(LengthSpec::Fill);
     layout.flex_shrink = Some(1.0);
     layout.min_width = Some(LengthSpec::Px(0.0));
@@ -474,6 +478,7 @@ impl ComponentView for SettingsCard {
 
 const COLLAPSIBLE_HEADER_GAP: f32 = nana_ui_core::space::MD;
 const COLLAPSIBLE_BODY_GAP: f32 = nana_ui_core::space::XL;
+#[cfg(test)]
 const DISCLOSURE_ICON_SIZE: f32 = nana_ui_core::type_scale::LINE;
 
 /// Controlled collapse. Header is keyboard-activatable; values stay host-owned.
@@ -747,6 +752,9 @@ impl SettingsCollapsibleDivider {
         layout.width = Some(LengthSpec::Fill);
         layout.height = Some(LengthSpec::Px(nana_ui_core::HAIRLINE));
         layout.min_height = Some(LengthSpec::Px(nana_ui_core::HAIRLINE));
+        let extent = nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline);
+        layout.theme.height = Some(extent.into());
+        layout.theme.min_height = Some(extent.into());
         layout.hidden = self.hidden;
         style
     }
@@ -785,6 +793,10 @@ struct SettingsDisclosure {
 }
 
 impl ComponentView for SettingsDisclosure {
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn node_kind(&self) -> NodeKind {
         NodeKind::Element {
             tag: "settings-disclosure".into(),
@@ -794,7 +806,7 @@ impl ComponentView for SettingsDisclosure {
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let visual = StandardVisual::Icon {
             icon: disclosure_icon_kind(self.expanded),
-            size: DISCLOSURE_ICON_SIZE,
+            size: world.theme().typography().line,
             tooltip: None,
         };
         if world.standard_visual(id) != Some(visual.clone()) {
@@ -1235,6 +1247,11 @@ impl SettingsSidebarLeading {
         layout.height = Some(LengthSpec::Px(SETTINGS_SIDEBAR_ICON_SIZE));
         layout.min_width = Some(LengthSpec::Px(SETTINGS_SIDEBAR_ICON_SIZE));
         layout.min_height = Some(LengthSpec::Px(SETTINGS_SIDEBAR_ICON_SIZE));
+        let extent = nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Meta);
+        layout.theme.width = Some(extent.into());
+        layout.theme.height = Some(extent.into());
+        layout.theme.min_width = Some(extent.into());
+        layout.theme.min_height = Some(extent.into());
         layout.flex_grow = Some(0.0);
         layout.flex_shrink = Some(0.0);
         style
@@ -1242,6 +1259,10 @@ impl SettingsSidebarLeading {
 }
 
 impl ComponentView for SettingsSidebarLeading {
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn node_kind(&self) -> NodeKind {
         NodeKind::Element {
             tag: "settings-sidebar-leading".into(),
@@ -1259,7 +1280,7 @@ impl ComponentView for SettingsSidebarLeading {
         }
         let visual = self.icon.map(|icon| StandardVisual::Icon {
             icon,
-            size: SETTINGS_SIDEBAR_ICON_SIZE,
+            size: world.theme().typography().meta,
             tooltip: None,
         });
         if world.standard_visual(id) != visual {

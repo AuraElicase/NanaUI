@@ -676,6 +676,11 @@ impl SidebarRowIcon {
         layout.height = Some(LengthSpec::Px(ROW_ICON_SIZE));
         layout.min_width = Some(LengthSpec::Px(ROW_ICON_SIZE));
         layout.min_height = Some(LengthSpec::Px(ROW_ICON_SIZE));
+        let extent = nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Meta);
+        layout.theme.width = Some(extent.into());
+        layout.theme.height = Some(extent.into());
+        layout.theme.min_width = Some(extent.into());
+        layout.theme.min_height = Some(extent.into());
         layout.flex_grow = Some(0.0);
         layout.flex_shrink = Some(0.0);
         style
@@ -683,6 +688,10 @@ impl SidebarRowIcon {
 }
 
 impl ComponentView for SidebarRowIcon {
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn node_kind(&self) -> NodeKind {
         NodeKind::Element {
             tag: "sidebar-row-icon".into(),
@@ -700,7 +709,7 @@ impl ComponentView for SidebarRowIcon {
         }
         let visual = StandardVisual::Icon {
             icon: self.icon,
-            size: ROW_ICON_SIZE,
+            size: world.theme().typography().meta,
             tooltip: None,
         };
         if world.standard_visual(id) != Some(visual.clone()) {
@@ -1030,7 +1039,7 @@ impl SidebarSection {
         }
         let visual = StandardVisual::Icon {
             icon: self.disclosure_icon(),
-            size: SECTION_DISCLOSURE_SIZE,
+            size: world.theme().typography().meta,
             tooltip: None,
         };
         if world.standard_visual(id) != Some(visual.clone()) {
@@ -1192,6 +1201,11 @@ fn disclosure_host_style(visible: bool) -> NodeStyle {
     layout.height = Some(LengthSpec::Px(SECTION_DISCLOSURE_SIZE));
     layout.min_width = Some(LengthSpec::Px(SECTION_DISCLOSURE_SIZE));
     layout.min_height = Some(LengthSpec::Px(SECTION_DISCLOSURE_SIZE));
+    let extent = nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Meta);
+    layout.theme.width = Some(extent.into());
+    layout.theme.height = Some(extent.into());
+    layout.theme.min_width = Some(extent.into());
+    layout.theme.min_height = Some(extent.into());
     layout.flex_grow = Some(0.0);
     layout.flex_shrink = Some(0.0);
     layout.hidden = !visible;
@@ -1307,6 +1321,10 @@ impl ComponentView for SidebarSection {
     }
 
     fn wants_child_reproject() -> bool {
+        true
+    }
+
+    fn wants_metrics_reproject() -> bool {
         true
     }
 
@@ -1547,6 +1565,10 @@ impl ComponentView for SidebarFooterButton {
         ..crate::TypeBehavior::NONE
     };
 
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn node_kind(&self) -> NodeKind {
         NodeKind::Element {
             tag: "sidebar-footer-button".into(),
@@ -1567,7 +1589,7 @@ impl ComponentView for SidebarFooterButton {
         }
         let visual = StandardVisual::Icon {
             icon: self.icon,
-            size: self.size.icon_size(),
+            size: self.size.text_size_in(world.theme().typography()),
             tooltip: Some(TooltipVisual {
                 label: Arc::clone(&self.label),
                 config: TooltipConfig::default(),
