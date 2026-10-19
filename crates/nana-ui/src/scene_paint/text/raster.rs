@@ -382,9 +382,8 @@ impl GlyphRasterizer for SwashGlyphRasterizer {
             | GlyphRenderMode::Stroke { .. }
             | GlyphRenderMode::Blur { .. } => swash::zeno::Format::Alpha,
         };
-        render
-            .format(format)
-            .offset(subpixel_offset(key, snap_to_pixel));
+        let offset = subpixel_offset(key, snap_to_pixel);
+        render.format(format).offset(offset);
         if let GlyphRenderMode::Stroke { width_q, join } = key.mode {
             let mut stroke = swash::zeno::Stroke::new(f32::from(width_q) * 0.25);
             stroke.join(zeno_join(join));
@@ -421,10 +420,24 @@ impl GlyphRasterizer for SwashGlyphRasterizer {
             // each edge out by about the spread.
             embolden += f32::from(spread_q) * 0.5;
         }
-        if embolden > 0.0 {
-            render.embolden(embolden);
-        }
-        let image = render.render(&mut scaler, glyph_id)?;
+        // Colour sources take no embolden (swash skips it for them too).
+        let plain =
+            key.mode.is_derived() || !(scaler.has_color_outlines() || scaler.has_color_bitmaps());
+        let image = if embolden > 0.0 && plain && scaler.has_outlines() {
+            emboldened(
+                &mut scaler,
+                glyph_id,
+                embolden,
+                &Outlining {
+                    format,
+                    offset,
+                    transform,
+                    mode: key.mode,
+                },
+            )?
+        } else {
+            render.render(&mut scaler, glyph_id)?
+        };
         let width = image.placement.width;
         let height = image.placement.height;
         let pixels = (width as usize).saturating_mul(height as usize);
@@ -459,6 +472,93 @@ impl GlyphRasterizer for SwashGlyphRasterizer {
             _ => Some(image),
         }
     }
+}
+
+/// How [`emboldened`] draws the outline: what `swash::scale::Render` was
+/// configured with.
+struct Outlining {
+    format: swash::zeno::Format,
+    offset: swash::zeno::Vector,
+    transform: Option<swash::zeno::Transform>,
+    mode: GlyphRenderMode,
+}
+
+/// `glyph_id`'s plain outline with every edge moved out by `amount` raster
+/// px, which thickens a stem as much as `Render::embolden(amount)` does a
+/// correctly wound one (that grows it up and right by twice `amount`).
+///
+/// swash's embolden takes the outline's winding from all of its contours
+/// joined into one polygon (swash 0.2.10), and where that sign comes out
+/// wrong it pulls every edge *in*: in a fake-bold run Noto Sans SC's 传 and
+/// 仍, LXGW WenKai's た or Fusion Pixel's ほ came out with less ink than their
+/// regular weight.
+/// The fill with a round-joined stroke under it moves every edge out
+/// whatever the contours' order or direction. A stroked glyph is stroked
+/// that much wider instead: the fill drawn over it hides the inner half.
+fn emboldened(
+    scaler: &mut swash::scale::Scaler,
+    glyph_id: u16,
+    amount: f32,
+    how: &Outlining,
+) -> Option<swash::scale::image::Image> {
+    use swash::zeno::{Fill, Format, Join, Mask, Origin, Stroke, Style};
+    let mut outline = scaler.scale_outline(glyph_id)?;
+    if let Some(transform) = &how.transform {
+        outline.transform(transform);
+    }
+    // Sized before rendering, as swash does: `Mask::render` places a
+    // bottom-left origin mask before it knows the mask's height.
+    let mask = |style: Style| {
+        let mut data = Vec::new();
+        let placement = Mask::new(outline.path())
+            .format(how.format)
+            .origin(Origin::BottomLeft)
+            .style(style)
+            .offset(how.offset)
+            .render_offset(how.offset)
+            .inspect(|format, width, height| data.resize(format.buffer_size(width, height), 0))
+            .render_into(&mut data[..], None);
+        (data, placement)
+    };
+    let (data, placement) = if let GlyphRenderMode::Stroke { width_q, join } = how.mode {
+        let mut stroke = Stroke::new(f32::from(width_q) * 0.25 + 2.0 * amount);
+        stroke.join(zeno_join(join));
+        mask(stroke.into())
+    } else {
+        let mut stroke = Stroke::new(2.0 * amount);
+        stroke.join(Join::Round);
+        let (mut data, outer) = mask(stroke.into());
+        let (fill, inner) = mask(Style::Fill(Fill::NonZero));
+        let bpp = if how.format == Format::Alpha { 1 } else { 4 };
+        // Both masks are in the same space; the stroke's reaches past the
+        // fill's on every side, so the fill is copied in at an offset.
+        let (dx, dy) = (inner.left - outer.left, outer.top - inner.top);
+        let pitch = inner.width as usize * bpp;
+        for (row, line) in fill.chunks_exact(pitch.max(1)).enumerate() {
+            let y = dy + row as i32;
+            if y < 0 || y >= outer.height as i32 || dx < 0 {
+                continue;
+            }
+            let start = (y as usize * outer.width as usize + dx as usize) * bpp;
+            let Some(target) = data.get_mut(start..start + line.len()) else {
+                continue;
+            };
+            for (out, value) in target.iter_mut().zip(line) {
+                *out = (*out).max(*value);
+            }
+        }
+        (data, outer)
+    };
+    let mut image = swash::scale::image::Image::new();
+    image.data = data;
+    image.placement = placement;
+    image.source = swash::scale::Source::Outline;
+    image.content = if how.format == Format::Alpha {
+        swash::scale::image::Content::Mask
+    } else {
+        swash::scale::image::Content::SubpixelMask
+    };
+    Some(image)
 }
 
 /// `image`'s coverage under a Gaussian of CSS blur radius `radius` (twice its
@@ -679,6 +779,113 @@ mod tests {
 
     fn coverage(image: &GlyphImage) -> u64 {
         image.data.iter().map(|value| u64::from(*value)).sum()
+    }
+
+    /// The raster key of `ch` in `family` at 32px, as the process engine
+    /// shapes it, or `None` when it does not shape it with `face`.
+    fn glyph_key(
+        family: &str,
+        face: &str,
+        ch: &str,
+    ) -> Option<(SwashGlyphRasterizer, GlyphRasterKey)> {
+        let engine = crate::text_engine::nana_text_engine();
+        let layout = {
+            let mut engine = crate::text_engine::lock_engine(&engine);
+            let mut counters = nana_text::TextWorkCounters::default();
+            nana_text::TextEngine::layout(
+                &mut *engine,
+                nana_text::TextKind::Label,
+                &nana_text::TextSource::new(ch),
+                &nana_text::TextStyle {
+                    font_family: Some(family.into()),
+                    font_size_px: 32.0,
+                    ..nana_text::TextStyle::default()
+                },
+                &nana_text::TextConstraints::default(),
+                &mut counters,
+            )
+        };
+        let run = layout.runs.first()?;
+        let instance = run.instance.as_ref()?;
+        let described = crate::text_engine::lock_engine(&engine)
+            .fonts()
+            .describe(instance.font)?;
+        if &*described.post_script_name != face {
+            return None;
+        }
+        let mut rasterizer = SwashGlyphRasterizer::new(engine);
+        let (font, variation, synthesis) = rasterizer.intern_instance(instance);
+        let key = GlyphRasterKey {
+            font,
+            font_generation: 0,
+            variation,
+            glyph: run.glyphs.first()?.glyph_id,
+            size_bits: super::super::glyph::size_bits(32.0),
+            subpixel_x: Default::default(),
+            subpixel_y: Default::default(),
+            synthesis,
+            mode: GlyphRenderMode::Mask,
+        };
+        Some((rasterizer, key))
+    }
+
+    /// swash's own embolden took these glyphs' winding from all of their
+    /// contours joined into one polygon, got its sign wrong and pulled every
+    /// edge in: fake bold left them with under half the ink of the regular.
+    #[test]
+    fn fake_bold_only_ever_adds_ink() {
+        if let Some((mut rasterizer, key)) = glyph_key("Noto Sans SC", "NotoSansSC-Regular", " ") {
+            let key = GlyphRasterKey {
+                synthesis: key.synthesis.with(GlyphSynthesis::FAKE_BOLD),
+                ..key
+            };
+            let space = rasterizer.rasterize(&GlyphRasterRequest { key });
+            assert!(
+                space.is_some_and(|image| image.is_empty()),
+                "a space stays blank"
+            );
+        }
+        for ch in ["传", "仍", "ゴ", "O"] {
+            let Some((mut rasterizer, plain_key)) =
+                glyph_key("Noto Sans SC", "NotoSansSC-Regular", ch)
+            else {
+                return;
+            };
+            let plain = rasterizer
+                .rasterize(&GlyphRasterRequest { key: plain_key })
+                .expect("the regular glyph rasterizes");
+            let bold_key = GlyphRasterKey {
+                synthesis: plain_key.synthesis.with(GlyphSynthesis::FAKE_BOLD),
+                ..plain_key
+            };
+            let bold = rasterizer
+                .rasterize(&GlyphRasterRequest { key: bold_key })
+                .expect("the fake bold rasterizes");
+            assert!(
+                coverage(&bold) as f64 > coverage(&plain) as f64 * 1.2,
+                "{ch}: fake bold has {} of ink, the regular {}",
+                coverage(&bold),
+                coverage(&plain)
+            );
+            let at = |image: &GlyphImage, x: i32, y: i32| {
+                let (col, row) = (x - image.left, image.top - y);
+                if col < 0 || row < 0 || col >= image.width as i32 || row >= image.height as i32 {
+                    return 0;
+                }
+                image.data[(row as u32 * image.width + col as u32) as usize]
+            };
+            for row in 0..plain.height as i32 {
+                for col in 0..plain.width as i32 {
+                    let (x, y) = (plain.left + col, plain.top - row);
+                    if at(&plain, x, y) == 255 {
+                        assert!(
+                            at(&bold, x, y) >= 250,
+                            "{ch}: fake bold uncovers ({x}, {y}) of the regular glyph"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]
