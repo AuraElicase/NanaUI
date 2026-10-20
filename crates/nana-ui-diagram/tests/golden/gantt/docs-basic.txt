@@ -1,0 +1,37 @@
+size 741.3 207.8
+summary nodes=4 edges=0 groups=2
+shape rect 8 42.6 724.3 67.2 fill=SemanticColorMix{first:Subtle,second:None,weight:9500}
+shape rect 8 109.8 724.3 67.2 fill=SemanticColorMix{first:Subtle,second:None,weight:4000}
+shape path M92.3,42.6 L92.3,177 stroke=BorderSoft/hairline/Solid
+shape path M181.9,42.6 L181.9,177 stroke=BorderSoft/hairline/Solid
+shape path M271.5,42.6 L271.5,177 stroke=BorderSoft/hairline/Solid
+shape path M361.1,42.6 L361.1,177 stroke=BorderSoft/hairline/Solid
+shape path M489.1,42.6 L489.1,177 stroke=BorderSoft/hairline/Solid
+shape path M578.7,42.6 L578.7,177 stroke=BorderSoft/hairline/Solid
+shape path M668.3,42.6 L668.3,177 stroke=BorderSoft/hairline/Solid
+shape path M92.3,177 L732.3,177 stroke=Border/hairline/Solid
+shape path M92.3,177 L92.3,181 stroke=Border/hairline/Solid
+text 57.5 183 69.6 16.8 size=12 w=400 ink=Muted "2014-01-01"
+shape path M181.9,177 L181.9,181 stroke=Border/hairline/Solid
+text 147.1 183 69.6 16.8 size=12 w=400 ink=Muted "2014-01-08"
+shape path M271.5,177 L271.5,181 stroke=Border/hairline/Solid
+text 236.7 183 69.6 16.8 size=12 w=400 ink=Muted "2014-01-15"
+shape path M361.1,177 L361.1,181 stroke=Border/hairline/Solid
+text 326.3 183 69.6 16.8 size=12 w=400 ink=Muted "2014-01-22"
+shape path M489.1,177 L489.1,181 stroke=Border/hairline/Solid
+text 454.3 183 69.6 16.8 size=12 w=400 ink=Muted "2014-02-01"
+shape path M578.7,177 L578.7,181 stroke=Border/hairline/Solid
+text 543.9 183 69.6 16.8 size=12 w=400 ink=Muted "2014-02-08"
+shape path M668.3,177 L668.3,181 stroke=Border/hairline/Solid
+text 633.5 183 69.6 16.8 size=12 w=400 ink=Muted "2014-02-15"
+text 20 66.4 60.3 19.6 size=14 w=600 ink=Text "Section"
+text 20 133.6 60.3 19.6 size=14 w=600 ink=Text "Another"
+shape rect 92.3 46.6 384 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 259.9 49.6 48.7 19.6 size=14 w=400 ink=Text "A task"
+shape rect 476.3 80.2 256 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 555.5 83.2 97.4 19.6 size=14 w=400 ink=Text "Another task"
+shape rect 233.1 113.8 153.6 25.6 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 249 116.8 121.8 19.6 size=14 w=400 ink=Text "Task in Another"
+shape rect 386.7 147.4 307.2 25.6 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 491.5 150.4 97.4 19.6 size=14 w=400 ink=Text "another task"
+text 296.8 8 147.6 22.4 size=16 w=600 ink=Text "A Gantt Diagram"

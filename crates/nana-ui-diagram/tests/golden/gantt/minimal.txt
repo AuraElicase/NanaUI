@@ -1,0 +1,12 @@
+size 725.6 73.4
+summary nodes=1 edges=0 groups=0
+shape rect 42.8 9 640 33.6 fill=SemanticColorMix{first:Subtle,second:None,weight:9500}
+shape path M42.8,9 L42.8,42.6 stroke=BorderSoft/hairline/Solid
+shape path M682.8,9 L682.8,42.6 stroke=BorderSoft/hairline/Solid
+shape path M42.8,42.6 L682.8,42.6 stroke=Border/hairline/Solid
+shape path M42.8,42.6 L42.8,46.6 stroke=Border/hairline/Solid
+text 8 48.6 69.6 16.8 size=12 w=400 ink=Muted "2024-01-01"
+shape path M682.8,42.6 L682.8,46.6 stroke=Border/hairline/Solid
+text 648 48.6 69.6 16.8 size=12 w=400 ink=Muted "2024-01-02"
+shape rect 42.8 13 640 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 326.3 16 73.1 19.6 size=14 w=400 ink=Text "Solo task"
