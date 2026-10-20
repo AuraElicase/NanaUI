@@ -1,0 +1,14 @@
+size 122 246.6
+summary nodes=1 edges=0 groups=0
+shape path M9,219.3 L113,219.3 stroke=BorderSoft/hairline/Solid
+shape path M9,182.7 L113,182.7 stroke=BorderSoft/hairline/Solid
+shape path M9,146.1 L113,146.1 stroke=BorderSoft/hairline/Solid
+shape path M9,109.5 L113,109.5 stroke=BorderSoft/hairline/Solid
+shape path M9,72.9 L113,72.9 stroke=BorderSoft/hairline/Solid
+shape path M61,44.6 L61,237.6 stroke=Border/hairline/Dashed
+shape rect 9 9 104 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 36.6 17 48.7 19.6 size=14 w=400 ink=Text "Try it"
+shape ellipse 47.7 132.8 26.6 26.6 fill=SemanticColorMix{first:Muted,second:None,weight:1800} stroke=Muted/hairline/Solid
+shape ellipse 54.6 141.6 3.2 3.2 fill=Text
+shape ellipse 64.2 141.6 3.2 3.2 fill=Text
+shape path M56.2,151.2 L65.8,151.2 stroke=Text/1.6/Solid
