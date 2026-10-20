@@ -258,9 +258,8 @@ impl Parser<'_, '_> {
         }
         let mut label = None;
         let mut desc = None;
-        let id_part = if rest.starts_with('"') {
+        let id_part = if let Some(body) = rest.strip_prefix('"') {
             // `"Label" as id`
-            let body = &rest[1..];
             let Some(end) = body.find('"') else {
                 self.cx.warn(self.line, "an unclosed state label");
                 return Ok(());

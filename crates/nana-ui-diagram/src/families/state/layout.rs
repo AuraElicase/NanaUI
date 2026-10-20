@@ -61,7 +61,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
     // The direction each level is likely to run in, for fork bars.
     let mut cluster_dir = vec![model.direction; clusters.len()];
-    for i in 0..clusters.len() {
+    for (i, slot) in cluster_dir.iter_mut().enumerate() {
         let mut dir = None;
         let mut cur = Some(i);
         let mut guard = 0;
@@ -76,7 +76,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 break;
             }
         }
-        cluster_dir[i] = dir.unwrap_or(model.direction);
+        *slot = dir.unwrap_or(model.direction);
     }
     let dir_of = |cluster: Option<usize>| cluster.map_or(model.direction, |c| cluster_dir[c]);
 

@@ -9,7 +9,9 @@ use std::collections::HashMap;
 
 use super::{ActorLook, Boundary, Edge, EdgeKind, Model, Node, NodeKind, json};
 use crate::families::ParseCx;
-use crate::families::graphkit::{Styles, attributes, balanced, first_word, ident_len, statements};
+use crate::families::graphkit::{
+    Styles, attributes, balanced, first_word, ident_len, quoted_end, statements,
+};
 use crate::geom::Marker;
 use crate::kind;
 use crate::layout::Direction;
@@ -102,16 +104,6 @@ fn derived_id(label: &str) -> String {
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
         .collect()
-}
-
-/// The end of a quoted label starting at `s[0] == '"'`: past the closing
-/// quote, or past "`\"" for a markdown string.
-fn quoted_end(s: &str) -> Option<usize> {
-    if s.starts_with("\"`") {
-        s[2..].find("`\"").map(|e| e + 4)
-    } else {
-        s[1..].find('"').map(|e| e + 2)
-    }
 }
 
 /// Read a declaration that must span all of `s`.
@@ -580,7 +572,6 @@ impl Parser<'_, '_> {
                 business: d.business,
                 boundary: d.boundary,
                 style: self.styles.resolve(id, &d.classes),
-                classes: d.classes,
             });
         }
         let mut edges = Vec::with_capacity(kept.len());
@@ -654,7 +645,7 @@ mod tests {
         assert_eq!(node(&m, "Reset_password").label.text(), "Reset password");
         let checkout = node(&m, "Checkout");
         assert_eq!(checkout.label.lines.len(), 2);
-        assert_eq!(checkout.classes, vec!["critical".to_string()]);
+        assert!(checkout.style.is_empty(), "no classDef for `critical`");
     }
 
     #[test]
@@ -687,6 +678,6 @@ mod tests {
         let m = parse_src("usecase-beta\njson Payload@{\n  \"a\": 1,\n  \"b\": { \"c\": true }\n}:::data\nInspect --> Payload");
         let p = node(&m, "Payload");
         assert_eq!(p.kind, NodeKind::Json(vec![("a".into(), "1".into()), ("b.c".into(), "true".into())]));
-        assert_eq!(p.classes, vec!["data".to_string()]);
+        assert!(p.style.stroke.is_none());
     }
 }

@@ -45,7 +45,6 @@ pub(crate) struct Node {
     pub stereotype: Option<String>,
     pub business: bool,
     pub boundary: Option<usize>,
-    pub classes: Vec<String>,
     pub style: AuthorStyle,
 }
 
