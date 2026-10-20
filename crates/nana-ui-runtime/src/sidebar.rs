@@ -10,7 +10,8 @@ use crate::{
     InteractionState, InteractionStyle, MutationQueue, NodeKind, NodeStyle, OverlayHostState,
     SemanticPaint, StableNodeId, StandardVisual, TextContent, TooltipVisual, UiWorld,
     view_components::{
-        IconButton, List, ListItem, ListItemSlots, ScrollAxes, ScrollView, Text, project_common,
+        IconButton, List, ListItem, ListItemSlots, RowToolsPresence, RowToolsRest, ScrollAxes,
+        ScrollView, Text, place_row_tools, project_common,
     },
 };
 
@@ -367,7 +368,12 @@ pub struct SidebarRow {
     pub state: SidebarRowState,
     pub tone: SidebarRowTone,
     pub disclosure: Option<bool>,
-    pub hovered: bool,
+    /// How the tools sit while put away; see [`RowToolsRest`].
+    pub tools_rest: RowToolsRest,
+    /// The tools stay shown at rest too.
+    pub keep_tools: bool,
+    /// Kept by the framework from the pointer and keyboard focus.
+    pub tools_presence: RowToolsPresence,
     pub style: NodeStyle,
 }
 
@@ -383,7 +389,9 @@ impl SidebarRow {
             state: SidebarRowState::Idle,
             tone: SidebarRowTone::Default,
             disclosure: None,
-            hovered: false,
+            tools_rest: RowToolsRest::Yield,
+            keep_tools: false,
+            tools_presence: RowToolsPresence::default(),
             style: NodeStyle::default(),
         }
     }
@@ -395,6 +403,16 @@ impl SidebarRow {
 
     pub fn tools(mut self, tools: StableNodeId) -> Self {
         self.tools = Some(tools);
+        self
+    }
+
+    pub fn tools_rest(mut self, rest: RowToolsRest) -> Self {
+        self.tools_rest = rest;
+        self
+    }
+
+    pub fn keep_tools(mut self, keep: bool) -> Self {
+        self.keep_tools = keep;
         self
     }
 
@@ -523,11 +541,17 @@ impl SidebarRow {
         style
     }
 
-    /// Row tools stay out of the way until the pointer is on the row, so a long
-    /// label owns the full width at rest instead of being clipped by chrome the
-    /// user cannot reach yet.
+    fn tools_shown(&self) -> bool {
+        self.keep_tools || self.tools_presence.revealed()
+    }
+
+    /// Row tools stay out of the way until the pointer is on the row or
+    /// keyboard focus is inside it, so by default a long label owns the full
+    /// width at rest instead of being clipped by chrome the user cannot reach
+    /// yet. Reserved tools keep their place and take over the trailing slot.
     fn visible_tools(&self) -> Option<StableNodeId> {
-        self.tools.filter(|_| self.hovered)
+        self.tools
+            .filter(|_| self.tools_rest == RowToolsRest::Reserve || self.tools_shown())
     }
 
     fn projected_slots(&self) -> ListItemSlots {
@@ -546,9 +570,8 @@ impl SidebarRow {
             return;
         }
         let mut style = world.node_style(tools).cloned().unwrap_or_default();
-        let hidden = !self.hovered;
         let layout = Arc::make_mut(&mut style.layout);
-        let mut changed = false;
+        let mut changed = place_row_tools(layout, self.tools_shown(), self.tools_rest);
         if layout.flex_grow != Some(0.0) {
             layout.flex_grow = Some(0.0);
             changed = true;
@@ -571,19 +594,28 @@ impl SidebarRow {
             layout.margin_right = column_margin;
             changed = true;
         }
-        if layout.hidden != hidden {
-            layout.hidden = hidden;
-            changed = true;
-        }
         if changed {
             mutations.set_style(tools, style);
         }
     }
 }
 
+/// A view builds a row's tools before the row, so their node joins the world
+/// after its first projection; they are put away once it has.
+fn assemble_sidebar_row_tools(
+    cx: &mut AppContext,
+    row: Entity<SidebarRow>,
+) -> Result<bool, FrameworkError> {
+    if cx.read(row, |row| row.tools.is_some())? {
+        cx.reproject_component(row)?;
+    }
+    Ok(false)
+}
+
 impl ComponentView for SidebarRow {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         activation: Some(crate::AppContext::activate_sidebar_row),
+        slot_assembler: Some(assemble_sidebar_row_tools),
         ..crate::TypeBehavior::NONE
     };
 

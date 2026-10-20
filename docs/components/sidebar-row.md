@@ -46,7 +46,7 @@ widget(
 
 ## 语气和工具
 
-`.tone` 是 `SidebarRowTone`：`Default`、`Warning`、`Error`。`.tools(id)` 是行尾的工具节点。
+`.tone` 是 `SidebarRowTone`：`Default`、`Warning`、`Error`。`.tools(…)` 是行尾的工具，指针在这一行上，或键盘焦点在这一行或行内时显出，代替 trailing 槽；所以 Tab 先停在行上、再停到工具上。收起时默认退出布局，长标签用满整行；`.tools_rest(RowToolsRest::Reserve)` 改成保留宽度、只是不画，这时工具一直占着 trailing 的位置。`.keep_tools(true)` 平时也显示。规则和 [ListItem](list-item.md) 的行内工具相同。
 
 ## 激活
 
@@ -74,7 +74,7 @@ widget(
 
 | 插槽 | 说明 |
 | --- | --- |
-| `.tools` | 行尾的工具节点，参数是 `id` |
+| `.tools` | 行尾的工具，悬停或焦点在行内时显出。组件上参数是节点 `id`，视图里是子视图 |
 
 ## 参见
 

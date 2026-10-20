@@ -1066,6 +1066,28 @@ macro_rules! item_slots {
 
 item_slots!(ListItem, crate::SidebarRow);
 
+impl<K> El<ListItem, K> {
+    /// Row tools in the trailing slot: shown while the pointer is on the row
+    /// or keyboard focus is inside it, so Tab reaches them. Give it in place
+    /// of `.trailing`; [`ListItem::tools_rest`] says how they sit while put
+    /// away, and `keep_tools` keeps them shown at rest (a pin that is on).
+    pub fn tools(self, view: impl super::IntoView) -> Self {
+        self.child_slot(view, |mut item: ListItem, id| {
+            item.slots.trailing = Some(id);
+            item.trailing_tools = true;
+            item
+        })
+    }
+}
+
+impl<K> El<crate::SidebarRow, K> {
+    /// Row tools after the label, shown in place of the trailing slot while
+    /// the pointer is on the row or keyboard focus is inside it.
+    pub fn tools(self, view: impl super::IntoView) -> Self {
+        self.child_slot(view, crate::SidebarRow::tools)
+    }
+}
+
 impl<K> El<TextArea, K> {
     /// A real action inside the field's bottom trailing corner.
     pub fn trailing_action(self, view: impl IntoView) -> Self {

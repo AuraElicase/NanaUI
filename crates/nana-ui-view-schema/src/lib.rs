@@ -146,6 +146,7 @@ macro_rules! for_each_control {
                 disabled: bool = set,
                 role: ListItemRole = set,
                 has_popup: bool = set,
+                keep_tools: bool = set,
             }
             on { on_activate: Activate };
             Progress => progress(max: f64) for Progress {

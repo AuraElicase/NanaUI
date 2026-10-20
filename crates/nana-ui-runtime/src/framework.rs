@@ -73,13 +73,13 @@ use crate::{
     MutationQueue, NodeKind, NumberChanged, NumberInput, OverlayChanged, OverlayHost,
     PointerHoverChanged, Popover, PopoverClosed, PopoverToggled, Progress, ProgressCancelled,
     RangeAdjustment, RangeChanged, RangeDragging, RangeField, RangeInput, RovingFocusIntent,
-    ScrollAxes, ScrollChanged, ScrollLaidOut, ScrollMetrics, ScrollOffset, ScrollView,
-    ScrollViewportChanged, SearchDropdown, SearchDropdownEvent, SecondaryPress, SegmentedControl,
-    SegmentedOption, SegmentedSelectionRequested, Select, SettingsCollapsibleCard,
-    SidebarFooterButton, SidebarRow, SidebarSection, SizeChanged, StableNodeId, Switch, Table,
-    TableCell, TableRow, Tabs, TextArea, TextChanged, TextClamped, TextInput, TextInputState,
-    TextPresenter, TextSelection, ToggleChanged, Tooltip, TreeView, UiWorld, UiWorldError,
-    Workspace, XYPad, XYPadDragState, XYPadEvent,
+    RowToolsPresence, ScrollAxes, ScrollChanged, ScrollLaidOut, ScrollMetrics, ScrollOffset,
+    ScrollView, ScrollViewportChanged, SearchDropdown, SearchDropdownEvent, SecondaryPress,
+    SegmentedControl, SegmentedOption, SegmentedSelectionRequested, Select,
+    SettingsCollapsibleCard, SidebarFooterButton, SidebarRow, SidebarSection, SizeChanged,
+    StableNodeId, Switch, Table, TableCell, TableRow, Tabs, TextArea, TextChanged, TextClamped,
+    TextInput, TextInputState, TextPresenter, TextSelection, ToggleChanged, Tooltip, TreeView,
+    UiWorld, UiWorldError, Workspace, XYPad, XYPadDragState, XYPadEvent,
     component_registry::{
         ComponentBindKind, ComponentBindRequest, ComponentRegistry, ComponentTypeId,
         RegisterableComponent, SemanticSpec, alias_entry, registerable_entry, tag_entry,
@@ -2598,6 +2598,7 @@ impl AppContext {
                 if self
                     .event_handlers
                     .contains_key(&(id, TypeId::of::<FocusWithinChanged>()))
+                    || self.is_tools_row(id)
                 {
                     entered.push(id);
                 }
@@ -2643,6 +2644,16 @@ impl AppContext {
                     continue;
                 };
                 let emit = self.focus_withins.get(&view.as_ref().type_id()).cloned();
+                if self.is_tools_row(id) {
+                    outcome = outcome
+                        .and(self.sync_row_tools(Some(id), |row| row.focus_within = focused));
+                }
+                if !self
+                    .event_handlers
+                    .contains_key(&(id, TypeId::of::<FocusWithinChanged>()))
+                {
+                    continue;
+                }
                 if let Some(emit) = emit {
                     outcome = outcome.and(emit(self, id, FocusWithinChanged { focused }));
                 }
@@ -2653,35 +2664,58 @@ impl AppContext {
         outcome
     }
 
-    fn enclosing_sidebar_row(&self, id: StableNodeId) -> Option<Entity<SidebarRow>> {
+    /// A row whose tools the pointer and keyboard focus reveal: every
+    /// sidebar row, and a list item whose trailing slot holds tools.
+    fn is_tools_row(&self, id: StableNodeId) -> bool {
+        self.views.get(&id).is_some_and(|view| {
+            view.is::<SidebarRow>()
+                || view
+                    .downcast_ref::<ListItem>()
+                    .is_some_and(|item| item.trailing_tools)
+        })
+    }
+
+    fn enclosing_tools_row(&self, id: StableNodeId) -> Option<StableNodeId> {
         let mut current = Some(id);
         while let Some(id) = current {
-            if self
-                .views
-                .get(&id)
-                .is_some_and(|view| view.is::<SidebarRow>())
-            {
-                return Some(Entity::from_stable_id(id));
+            if self.is_tools_row(id) {
+                return Some(id);
             }
             current = self.world.parent_id(id);
         }
         None
     }
 
-    fn sync_sidebar_row_hover(
+    fn sync_row_tools(
         &mut self,
-        row: Option<Entity<SidebarRow>>,
-        hovered: bool,
+        row: Option<StableNodeId>,
+        set: impl Fn(&mut RowToolsPresence),
     ) -> Result<(), FrameworkError> {
         let Some(row) = row else {
             return Ok(());
         };
-        if self.read(row, |row| row.hovered == hovered)? {
+        let changed = |mut presence: RowToolsPresence| {
+            let before = presence;
+            set(&mut presence);
+            (presence != before).then_some(presence)
+        };
+        let Some(view) = self.views.get(&row) else {
             return Ok(());
+        };
+        if let Some(item) = view.downcast_ref::<ListItem>() {
+            if let Some(presence) = changed(item.tools_presence) {
+                self.update_component(Entity::<ListItem>::from_stable_id(row), |item, _| {
+                    item.tools_presence = presence;
+                })?;
+            }
+        } else if let Some(presence) = view
+            .downcast_ref::<SidebarRow>()
+            .and_then(|sidebar| changed(sidebar.tools_presence))
+        {
+            self.update_component(Entity::<SidebarRow>::from_stable_id(row), |row, _| {
+                row.tools_presence = presence;
+            })?;
         }
-        self.update_component(row, |row, _| {
-            row.hovered = hovered;
-        })?;
         Ok(())
     }
 
@@ -3032,12 +3066,12 @@ impl AppContext {
             }
             self.sync_sidebar_section_hover(target, target)?;
             self.sync_scroll_view_hover(previous, target)?;
-            let previous_row = previous.and_then(|id| self.enclosing_sidebar_row(id));
-            let next_row = target.and_then(|id| self.enclosing_sidebar_row(id));
-            if previous_row.map(Entity::stable_id) != next_row.map(Entity::stable_id) {
-                self.sync_sidebar_row_hover(previous_row, false)?;
+            let previous_row = previous.and_then(|id| self.enclosing_tools_row(id));
+            let next_row = target.and_then(|id| self.enclosing_tools_row(id));
+            if previous_row != next_row {
+                self.sync_row_tools(previous_row, |row| row.hovered = false)?;
             }
-            self.sync_sidebar_row_hover(next_row, true)?;
+            self.sync_row_tools(next_row, |row| row.hovered = true)?;
             self.sync_pointer_hover_listeners(previous, target)?;
         } else if let Some(target) = target {
             self.reposition_follow_cursor_tooltip(target)?;
