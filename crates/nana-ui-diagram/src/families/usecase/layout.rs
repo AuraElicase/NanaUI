@@ -7,12 +7,13 @@ use nana_ui_core::RadiusTier;
 
 use super::{ActorLook, EdgeKind, Model, NodeKind};
 use crate::families::LayoutCx;
-use crate::families::graphkit::{self, HEADER_FILL, ROW_RULE};
+use crate::families::graphkit::{self, HEADER_FILL, ROW_RULE, author_font, padded, verbatim};
 use crate::geom::PathData;
 use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::layout::{ClusterSpec, EdgeSpec, End, Graph, NodeSpec, RouteKind, layered};
+use crate::source::directives::AuthorStyle;
 use crate::style::{self, Paint};
-use crate::text::{FontSpec, LaidText, Label, Run};
+use crate::text::{FontSpec, LaidText};
 use crate::{DiagramError, DiagramScene};
 
 /// What sits inside or under a node's outline.
@@ -31,19 +32,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let wrap = cx.wrap_width("usecase.wrappingWidth");
     let pad = [m.node_pad_x, m.node_pad_y];
     let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
-    let note_pad = [m.node_pad_x * 0.6, m.node_pad_y * 0.7];
+    let note_pad = graphkit::note_pad(&m);
     let figure = [m.font_size * 2.0, m.font_size * 3.1];
     let fig_gap = m.font_size * 0.4;
     let row_pad = m.node_pad_y * 0.4;
     let col_gap = m.font_size * 0.9;
 
-    let plain = |text: &str, font: FontSpec| {
-        let label = Label {
-            lines: vec![vec![Run::plain(text.to_string())]],
-            markdown: false,
-        };
-        cx.text.lay(&label, font, Some(wrap))
-    };
+    let plain = |text: &str, font| cx.text.lay(&verbatim(text), font, Some(wrap));
 
     let mut graph = Graph {
         direction: model.direction,
@@ -51,11 +46,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     };
     let mut bodies = Vec::with_capacity(model.nodes.len());
     for node in &model.nodes {
-        let face = FontSpec {
-            weight: node.style.font_weight.unwrap_or(font.weight),
-            italic: node.style.italic.unwrap_or(false),
-            ..font
-        };
+        let face = author_font(font, &node.style);
         let stereotype = node.stereotype.as_ref().map(|s| plain(&format!("«{s}»"), small));
         let st_h = stereotype.as_ref().map_or(0.0, |s| s.height);
         let st_w = stereotype.as_ref().map_or(0.0, |s| s.width);
@@ -80,12 +71,12 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             }
             NodeKind::Rect => {
                 let label = cx.text.lay(&node.label, face, Some(wrap));
-                let size = [label.width.max(st_w) + 2.0 * pad[0], label.height + st_h + 2.0 * pad[1]];
+                let size = padded([label.width.max(st_w), label.height + st_h], pad);
                 (label, size)
             }
             NodeKind::Note => {
                 let label = cx.text.lay(&node.label, small, Some(wrap));
-                let size = [label.width + 2.0 * note_pad[0], label.height + 2.0 * note_pad[1]];
+                let size = padded(label.size(), note_pad);
                 (label, size)
             }
             NodeKind::Json(cells) => {
@@ -141,17 +132,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     let mut edge_labels = Vec::with_capacity(model.edges.len());
     for e in &model.edges {
-        let laid = e
-            .label
-            .as_ref()
-            .map(|l| cx.text.lay(l, small, Some(wrap)))
-            .filter(|l| !l.is_empty());
+        let laid = graphkit::edge_label(cx, e.label.as_ref(), wrap);
         graph.edges.push(EdgeSpec {
             from: End::Node(e.from),
             to: End::Node(e.to),
-            label: laid
-                .as_ref()
-                .map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]),
+            label: laid.as_ref().map(|l| padded(l.size(), chip_pad)),
             min_len: e.min_len,
             weight: 1,
         });
@@ -273,13 +258,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
 /// A boundary of `type: package`: a title tab on the top-left corner of
 /// the box.
-fn package(
-    out: &mut SceneBuilder,
-    rect: Rect,
-    title: &LaidText,
-    author: &crate::source::directives::AuthorStyle,
-    pad: [f32; 2],
-) {
+fn package(out: &mut SceneBuilder, rect: Rect, title: &LaidText, author: &AuthorStyle, pad: [f32; 2]) {
     let tab = Rect::new(
         rect.x,
         rect.y,
@@ -287,8 +266,7 @@ fn package(
         title.height + 2.0 * pad[1],
     );
     let body = Rect::new(rect.x, tab.bottom(), rect.w, (rect.h - tab.h).max(0.0));
-    let fill = author.fill.map_or(style::CLUSTER_FILL, Ink::Rgba);
-    let stroke = graphkit::line_stroke(style::cluster_stroke(), author);
+    let (fill, stroke) = graphkit::cluster_inks(author);
     let corner = Corner::Tier(RadiusTier::Xs);
     out.shape(Geom::Rect { rect: tab, corner }, Some(fill), Some(stroke));
     out.shape(Geom::Rect { rect: body, corner }, Some(fill), Some(stroke));
@@ -304,15 +282,12 @@ fn actor(out: &mut SceneBuilder, r: Rect, look: ActorLook, paint: &Paint, busine
     let neck = head.bottom();
     let hip = r.y + r.h * 0.62;
     let arms = neck + (hip - neck) * 0.3;
-    let stroke = Stroke {
+    let ink = graphkit::solid_ink(paint.stroke.ink);
+    let line_stroke = Stroke {
+        ink,
         dash: Dash::Solid,
         ..paint.stroke
     };
-    let ink = match paint.stroke.ink {
-        Ink::Rgba(_) => paint.stroke.ink,
-        _ => style::TEXT,
-    };
-    let line_stroke = Stroke { ink, ..stroke };
     match look {
         ActorLook::Normal => {
             out.shape(Geom::Ellipse(head), Some(paint.fill), Some(line_stroke));

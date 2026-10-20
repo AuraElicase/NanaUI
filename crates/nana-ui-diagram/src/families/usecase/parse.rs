@@ -9,11 +9,9 @@ use std::collections::HashMap;
 
 use super::{ActorLook, Boundary, Edge, EdgeKind, Model, Node, NodeKind, json};
 use crate::families::ParseCx;
-use crate::families::graphkit::{
-    Styles, attributes, balanced, first_word, ident_len, quoted_end, statements,
-};
+use crate::families::graphkit::{Styles, attributes, class_list, statements};
+use crate::families::kit::{self, balanced, first_word, ident_len, quoted_end, truncate};
 use crate::geom::Marker;
-use crate::kind;
 use crate::layout::Direction;
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
@@ -74,23 +72,14 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         notes: 0,
         line: 0,
     };
-    let mut header = false;
-    for (index, stmt) in statements(body) {
-        p.line = index;
-        if !header {
-            let Some((_, rest)) = kind::header(&stmt) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected `usecase-beta`"));
-            };
-            header = true;
-            if !rest.is_empty() {
-                p.statement(rest)?;
-            }
-            continue;
-        }
-        p.statement(&stmt)?;
+    let (header, rest) = kit::header(body)?;
+    p.line = header;
+    if !rest.is_empty() {
+        p.statement(rest)?;
     }
-    if !header {
-        return Err(DiagramError::Empty);
+    for (line, stmt) in statements(body, header) {
+        p.line = line;
+        p.statement(&stmt)?;
     }
     if p.open.is_some() {
         p.cx.warn(p.line, "a system boundary is not closed with `end`");
@@ -157,11 +146,7 @@ fn declaration(s: &str) -> Option<Decl> {
         rest = body[end + 2..].trim_start();
     }
     if let Some(classes) = rest.strip_prefix(":::") {
-        d.classes = classes
-            .split(',')
-            .map(|c| c.trim().to_string())
-            .filter(|c| !c.is_empty())
-            .collect();
+        d.classes = class_list(classes);
         rest = "";
     }
     rest.trim().is_empty().then_some(d)
@@ -222,15 +207,10 @@ fn relation(stmt: &str) -> Option<Rel> {
             id,
         });
     }
-    let mut start = None;
-    if r.starts_with("<--") {
-        start = Some(Marker::OpenArrow);
-        r = &r[1..];
-    } else if r.starts_with("o--") {
-        start = Some(Marker::Circle);
-        r = &r[1..];
-    } else if r.starts_with("x--") {
-        start = Some(Marker::Cross);
+    let start = [("<--", Marker::OpenArrow), ("o--", Marker::Circle), ("x--", Marker::Cross)]
+        .into_iter()
+        .find_map(|(head, marker)| r.starts_with(head).then_some(marker));
+    if start.is_some() {
         r = &r[1..];
     }
     let n = dash_run(r);
@@ -326,17 +306,8 @@ impl Parser<'_, '_> {
                 }
                 return Ok(());
             }
-            "classDef" => {
-                self.styles.class_def(rest);
-                return Ok(());
-            }
-            "class" => {
-                let (ids, classes) = first_word(rest);
-                self.styles.assign(ids, classes);
-                return Ok(());
-            }
-            "style" => {
-                self.styles.style(rest);
+            "classDef" | "class" | "style" => {
+                self.styles.statement(word, rest);
                 return Ok(());
             }
             "actor" => return self.declare(rest, true),
@@ -366,10 +337,7 @@ impl Parser<'_, '_> {
                 return Ok(());
             }
         }
-        let label = match &d.label {
-            Some(raw) => Some(self.cx.label(raw)?),
-            None => None,
-        };
+        let label = d.label.as_deref().map(|raw| self.cx.label(raw)).transpose()?;
         let boundary = self.open;
         let line = self.line;
         let mut look = ActorLook::Normal;
@@ -496,11 +464,7 @@ impl Parser<'_, '_> {
             self.cx.warn(self.line, "not a JSON object");
             return Ok(());
         };
-        let classes: Vec<String> = body[end + 1..]
-            .trim()
-            .strip_prefix(":::")
-            .map(|c| c.split(',').map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect())
-            .unwrap_or_default();
+        let classes = body[end + 1..].trim().strip_prefix(":::").map(class_list).unwrap_or_default();
         let id = rest[..len].to_string();
         let draft = self.draft(&id)?;
         draft.kind = Some(NodeKind::Json(rows));
@@ -520,14 +484,10 @@ impl Parser<'_, '_> {
     }
 
     fn relation(&mut self, rel: Rel) -> Result<(), DiagramError> {
-        let label = match rel.label.as_deref() {
-            Some(raw) => Some(self.cx.label(raw)?).filter(|l| !l.is_empty()),
-            None => None,
-        };
         let label = match rel.kind {
             EdgeKind::Include => Some(Label::plain("«include»")),
             EdgeKind::Extend => Some(Label::plain("«extend»")),
-            _ => label,
+            _ => rel.label.as_deref().map(|raw| self.cx.label(raw)).transpose()?.filter(|l| !l.is_empty()),
         };
         self.push_edge(rel.from, rel.to, Edge {
             from: 0,
@@ -599,28 +559,14 @@ impl Parser<'_, '_> {
     }
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     fn node<'m>(m: &'m Model, id: &str) -> &'m Node {

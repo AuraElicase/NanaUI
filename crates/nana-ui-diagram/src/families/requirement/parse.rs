@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 use super::{Block, BlockKind, Model, RelKind, Relation};
 use crate::families::ParseCx;
-use crate::families::graphkit::{Styles, first_name, first_word, split_classes, unquote};
-use crate::kind;
+use crate::families::graphkit::{Styles, split_classes};
+use crate::families::kit::{self, first_word, truncate, unquote};
 use crate::layout::Direction;
 use crate::{DiagramError, LimitKind};
 
@@ -36,27 +36,14 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         fields: 0,
         line: 0,
     };
-    let mut header = false;
-    for (index, raw) in body.lines().enumerate() {
-        p.line = index;
-        let line = raw.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if !header {
-            let Some((_, rest)) = kind::header(line) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected `requirementDiagram`"));
-            };
-            header = true;
-            if !rest.is_empty() {
-                p.statement(rest)?;
-            }
-            continue;
-        }
-        p.statement(line)?;
+    let (header, rest) = kit::header(body)?;
+    p.line = header;
+    if !rest.is_empty() {
+        p.statement(rest)?;
     }
-    if !header {
-        return Err(DiagramError::Empty);
+    for (line, stmt) in kit::statements(body, header) {
+        p.line = line;
+        p.statement(stmt)?;
     }
     if p.open.is_some() {
         p.cx.warn(p.line, "a block is not closed");
@@ -94,15 +81,11 @@ fn relation(stmt: &str) -> Option<(&str, &str, &str)> {
 impl Parser<'_, '_> {
     fn statement(&mut self, stmt: &str) -> Result<(), DiagramError> {
         if let Some(b) = self.open {
-            if stmt == "}" {
+            let body = stmt.strip_suffix('}');
+            if body.is_some() {
                 self.open = None;
-                return Ok(());
             }
-            if let Some(body) = stmt.strip_suffix('}') {
-                self.open = None;
-                return self.field(b, body);
-            }
-            return self.field(b, stmt);
+            return self.field(b, body.unwrap_or(stmt));
         }
         let (word, rest) = first_word(stmt);
         match word {
@@ -113,17 +96,8 @@ impl Parser<'_, '_> {
                 }
                 return Ok(());
             }
-            "classDef" => {
-                self.styles.class_def(rest);
-                return Ok(());
-            }
-            "class" => {
-                let (ids, classes) = first_name(rest);
-                self.styles.assign(ids, classes);
-                return Ok(());
-            }
-            "style" => {
-                self.styles.style(rest);
+            "classDef" | "class" | "style" => {
+                self.styles.statement(word, rest);
                 return Ok(());
             }
             _ => {}
@@ -258,28 +232,14 @@ fn name_of(raw: &str) -> (String, Vec<String>) {
     (unquote(name).trim().to_string(), classes)
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]

@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 use super::{Composite, Kind, Model, Note, Scope, State, Transition};
 use crate::families::ParseCx;
-use crate::families::graphkit::{Styles, first_word, ident_len, plain_colon, split_classes, unquote};
-use crate::kind;
+use crate::families::graphkit::{Styles, plain_colon, split_classes};
+use crate::families::kit::{self, first_word, ident_len, truncate, unquote};
 use crate::layout::Direction;
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
@@ -49,27 +49,14 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         direction: Direction::TB,
         line: 0,
     };
-    let mut header = false;
-    for (index, raw) in body.lines().enumerate() {
-        p.line = index;
-        let line = raw.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if !header {
-            let Some((_, rest)) = kind::header(line) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected `stateDiagram`"));
-            };
-            header = true;
-            if !rest.is_empty() {
-                p.statement(rest)?;
-            }
-            continue;
-        }
-        p.statement(line)?;
+    let (header, rest) = kit::header(body)?;
+    p.line = header;
+    if !rest.is_empty() {
+        p.statement(rest)?;
     }
-    if !header {
-        return Err(DiagramError::Empty);
+    for (line, stmt) in kit::statements(body, header) {
+        p.line = line;
+        p.statement(stmt)?;
     }
     if p.note.is_some() {
         p.cx.warn(p.line, "a note is not closed with `end note`");
@@ -182,17 +169,8 @@ impl Parser<'_, '_> {
                 }
                 return Ok(());
             }
-            "classDef" => {
-                self.styles.class_def(rest);
-                return Ok(());
-            }
-            "class" => {
-                let (ids, classes) = first_word(rest);
-                self.styles.assign(ids, classes);
-                return Ok(());
-            }
-            "style" => {
-                self.styles.style(rest);
+            "classDef" | "class" | "style" => {
+                self.styles.statement(word, rest);
                 return Ok(());
             }
             "hide" | "scale" | "click" => return Ok(()),
@@ -240,10 +218,7 @@ impl Parser<'_, '_> {
             return Ok(());
         };
         self.cx.limits.check_count(self.transitions.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
-        let label = match label.filter(|l| !l.is_empty()) {
-            Some(l) => Some(self.cx.label(l)?),
-            None => None,
-        };
+        let label = label.filter(|l| !l.is_empty()).map(|l| self.cx.label(l)).transpose()?;
         self.transitions.push(Transition { from, to, label });
         Ok(())
     }
@@ -432,28 +407,14 @@ fn find_outside_quotes(s: &str, pat: &str) -> Option<usize> {
     None
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]

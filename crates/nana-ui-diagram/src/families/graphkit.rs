@@ -8,22 +8,24 @@ use std::collections::HashMap;
 
 use nana_ui_core::{RadiusTier, SemanticColorMix, SemanticColorRole as R};
 
+use super::LayoutCx;
+use super::kit::{first_name, first_word, unquote};
+use crate::DiagramMetrics;
 use crate::geom::path::{dist, rounded_polyline};
 use crate::geom::{Marker, PathData, Shape};
-use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth};
+use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::source::directives::AuthorStyle;
 use crate::style::{self, Paint};
-use crate::text::LaidText;
-
-pub(crate) use super::kit::{balanced, first_name, first_word, ident_len, quoted_end, unquote};
+use crate::text::{FontSpec, Label, LaidText, Run};
 
 /// The header band of a compartment box.
 pub(crate) const HEADER_FILL: Ink = Ink::Role(R::Subtle);
 /// Lines between table rows.
 pub(crate) const ROW_RULE: Ink = Ink::Mix(SemanticColorMix::alpha(R::BorderSoft, 0.8));
 
-/// Whether braces in `s` (outside quotes) leave a block open.
-pub(crate) fn brace_depth(s: &str) -> i32 {
+/// The brace depth `s` leaves, outside quotes: above zero while a block
+/// is open.
+fn brace_depth(s: &str) -> i32 {
     let mut depth = 0i32;
     let mut quote = false;
     for c in s.chars() {
@@ -37,15 +39,15 @@ pub(crate) fn brace_depth(s: &str) -> i32 {
     depth
 }
 
-/// Source lines joined into statements: a statement runs on while a `{`
-/// block or a `` "`...`" `` markdown string is still open. Each comes with
-/// the index of its first line; blank lines are skipped.
-pub(crate) fn statements(body: &str) -> Vec<(usize, String)> {
+/// The lines after the header joined into statements: a statement runs on
+/// while a `{` block or a `` "`...`" `` markdown string is still open. Each
+/// comes with the index of its first line; blank lines are skipped.
+pub(crate) fn statements(body: &str, header: usize) -> Vec<(usize, String)> {
     let mut out: Vec<(usize, String)> = Vec::new();
     let mut open = false;
     let mut depth = 0i32;
     let mut ticks = 0usize;
-    for (index, raw) in body.lines().enumerate() {
+    for (index, raw) in body.lines().enumerate().skip(header + 1) {
         let line = raw.trim();
         if open {
             if let Some((_, text)) = out.last_mut() {
@@ -108,6 +110,19 @@ pub(crate) struct Styles {
 }
 
 impl Styles {
+    /// A `classDef`, `class` or `style` statement, by its keyword.
+    pub fn statement(&mut self, word: &str, rest: &str) {
+        match word {
+            "classDef" => self.class_def(rest),
+            "class" => {
+                let (ids, classes) = first_name(rest);
+                self.assign(ids, classes);
+            }
+            "style" => self.style(rest),
+            _ => {}
+        }
+    }
+
     /// `classDef a,b fill:#f00,...`.
     pub fn class_def(&mut self, rest: &str) {
         let (names, decls) = first_word(rest);
@@ -189,16 +204,52 @@ pub(crate) fn plain_colon(s: &str) -> Option<usize> {
 /// Split `name:::a,b` into the name and its classes.
 pub(crate) fn split_classes(s: &str) -> (&str, Vec<String>) {
     match s.find(":::") {
-        Some(i) => (
-            s[..i].trim(),
-            s[i + 3..]
-                .split(',')
-                .map(|c| c.trim().to_string())
-                .filter(|c| !c.is_empty())
-                .collect(),
-        ),
+        Some(i) => (s[..i].trim(), class_list(&s[i + 3..])),
         None => (s.trim(), Vec::new()),
     }
+}
+
+/// The names in a comma list of classes.
+pub(crate) fn class_list(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect()
+}
+
+/// A label taken as written: no markup, entities or line breaks, so `<T>`
+/// never reads as a tag.
+pub(crate) fn verbatim(text: impl Into<String>) -> Label {
+    Label {
+        lines: vec![vec![Run::plain(text)]],
+        markdown: false,
+    }
+}
+
+/// `base` with an author's font weight and italic.
+pub(crate) fn author_font(base: FontSpec, author: &AuthorStyle) -> FontSpec {
+    FontSpec {
+        weight: author.font_weight.unwrap_or(base.weight),
+        italic: author.italic.unwrap_or(base.italic),
+        ..base
+    }
+}
+
+/// `size` grown by `pad` on every side.
+pub(crate) fn padded(size: [f32; 2], pad: [f32; 2]) -> [f32; 2] {
+    [size[0] + 2.0 * pad[0], size[1] + 2.0 * pad[1]]
+}
+
+/// Padding inside a note box.
+pub(crate) fn note_pad(m: &DiagramMetrics) -> [f32; 2] {
+    [m.node_pad_x * 0.6, m.node_pad_y * 0.7]
+}
+
+/// An edge label in the small font, unless it lays out empty.
+pub(crate) fn edge_label(cx: &LayoutCx<'_>, label: Option<&Label>, wrap: f32) -> Option<LaidText> {
+    label
+        .map(|l| cx.text.lay(l, cx.small_font(), Some(wrap)))
+        .filter(|l| !l.is_empty())
 }
 
 /// Fill, stroke and text inks for a node body after an author's style.
@@ -211,26 +262,34 @@ pub(crate) fn note_paint(author: &AuthorStyle) -> Paint {
     Paint {
         fill: style::NOTE_FILL,
         stroke: Stroke::hairline(style::NOTE_STROKE),
-        text: style::TEXT,
-        weight: None,
-        italic: false,
+        ..Paint::node()
     }
     .with_author(author)
 }
 
-/// A line's stroke after an author's `style` / `linkStyle`.
+/// A line's stroke after an author's `style` / `linkStyle`: the stroke half
+/// of [`Paint::with_author`].
 pub(crate) fn line_stroke(base: Stroke, author: &AuthorStyle) -> Stroke {
-    let mut stroke = base;
-    if let Some(c) = author.stroke {
-        stroke.ink = Ink::Rgba(c);
+    Paint {
+        stroke: base,
+        ..Paint::node()
     }
-    if let Some(w) = author.stroke_width {
-        stroke.width = StrokeWidth::Px(w);
+    .with_author(author)
+    .stroke
+}
+
+/// Solid marks (dots, bars, figures): the author's colour, else the text ink.
+pub(crate) fn solid_ink(author: Ink) -> Ink {
+    match author {
+        Ink::Rgba(_) => author,
+        _ => style::TEXT,
     }
-    if let Some(d) = author.dashed {
-        stroke.dash = if d { Dash::Dashed } else { Dash::Solid };
-    }
-    stroke
+}
+
+/// A group's fill and outline after an author's style.
+pub(crate) fn cluster_inks(author: &AuthorStyle) -> (Ink, Stroke) {
+    let fill = author.fill.map_or(style::CLUSTER_FILL, Ink::Rgba);
+    (fill, line_stroke(style::cluster_stroke(), author))
 }
 
 /// A group box and its title.
@@ -240,8 +299,7 @@ pub(crate) fn cluster(
     title: Option<(&LaidText, Rect)>,
     author: &AuthorStyle,
 ) {
-    let fill = author.fill.map_or(style::CLUSTER_FILL, Ink::Rgba);
-    let stroke = line_stroke(style::cluster_stroke(), author);
+    let (fill, stroke) = cluster_inks(author);
     out.shape(
         Geom::Rect {
             rect,
@@ -260,16 +318,11 @@ pub(crate) fn cluster(
 
 /// Clusters drawn outermost first: indices sorted by nesting depth.
 pub(crate) fn outermost_first(parents: &[Option<usize>]) -> Vec<usize> {
-    let depth = |mut c: usize| {
-        let mut d = 0;
-        while let Some(p) = parents.get(c).copied().flatten() {
-            d += 1;
-            c = p;
-            if d > parents.len() {
-                break;
-            }
-        }
-        d
+    // Bounded so a parent cycle cannot hang.
+    let depth = |c: usize| {
+        std::iter::successors(Some(c), |&c| parents.get(c).copied().flatten())
+            .take(parents.len() + 2)
+            .count()
     };
     let mut order: Vec<usize> = (0..parents.len()).collect();
     order.sort_by_key(|&c| (depth(c), c));
@@ -369,13 +422,10 @@ pub(crate) fn end_label_origin(
         Rect::new(c[0] - size[0] / 2.0, c[1] - size[1] / 2.0, size[0], size[1])
     };
     let first = place(1.0);
-    let hit = |r: &Rect| avoid.iter().any(|a| a.intersects(r));
-    let rect = if hit(&first) {
-        let second = place(-1.0);
-        if hit(&second) { first } else { second }
-    } else {
-        first
-    };
+    let rect = [first, place(-1.0)]
+        .into_iter()
+        .find(|r| !avoid.iter().any(|a| a.intersects(r)))
+        .unwrap_or(first);
     Some([rect.x, rect.y])
 }
 
@@ -386,11 +436,7 @@ pub(crate) fn shape_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint
         out.shape(geom, Some(paint.fill), Some(paint.stroke));
     }
     if shape.solid() {
-        let ink = match paint.fill {
-            Ink::Rgba(_) => paint.fill,
-            _ => style::TEXT,
-        };
-        out.shape(shape.outline(rect), Some(ink), None);
+        out.shape(shape.outline(rect), Some(solid_ink(paint.fill)), None);
     } else if shape.has_body() {
         out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
     }
@@ -437,9 +483,7 @@ pub(crate) fn header_box(
 
 /// A horizontal hairline from `x0` to `x1`.
 pub(crate) fn divider(out: &mut SceneBuilder, x0: f32, x1: f32, y: f32, ink: Ink) {
-    let mut path = PathData::new();
-    path.move_to([x0, y]).line_to([x1, y]);
-    out.stroke(Geom::path(path), Stroke::hairline(ink));
+    line(out, [x0, y], [x1, y], Stroke::hairline(ink));
 }
 
 /// A straight hairline between two points.
@@ -477,6 +521,7 @@ pub(crate) fn note(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::families::kit::{balanced, ident_len};
 
     #[test]
     fn words_quotes_and_attributes() {
