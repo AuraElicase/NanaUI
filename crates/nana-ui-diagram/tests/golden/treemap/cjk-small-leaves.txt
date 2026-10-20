@@ -1,0 +1,29 @@
+size 656 446.4
+summary nodes=9 edges=0 groups=2
+shape rect 521.7 43.1 124.8 286.9 r=Sm fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 527.7 46.1 25.4 16.8 size=12 w=600 ink=Text "文档"
+text 619.6 46.1 20.9 16.8 size=12 w=400 ink=Muted "164"
+shape rect 526.2 67.4 115.8 188 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 570.1 143.2 28 19.6 size=14 w=400 ink=Text "报告"
+text 573.7 162.8 20.9 16.8 size=12 w=400 ink=Muted "120"
+shape rect 526.2 258.4 105 67 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 543.7 273.7 70 19.6 size=14 w=400 ink=Text "合同扫描件"
+text 571.8 293.3 13.9 16.8 size=12 w=400 ink=Muted "40"
+shape rect 634.2 258.4 7.8 49.5 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+shape rect 634.2 311 7.8 14.5 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+shape rect 9.5 43.1 509.2 393.8 r=Sm fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 15.5 46.1 25.4 16.8 size=12 w=600 ink=Text "媒体"
+text 491.8 46.1 20.9 16.8 size=12 w=400 ink=Muted "900"
+shape rect 304.8 67.4 209.5 287.5 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 395.5 193 28 19.6 size=14 w=400 ink=Text "照片"
+text 399.1 212.6 20.9 16.8 size=12 w=400 ink=Muted "300"
+shape rect 14 67.4 287.8 365 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 143.9 231.7 28 19.6 size=14 w=400 ink=Text "视频"
+text 147.4 251.3 20.9 16.8 size=12 w=400 ink=Muted "520"
+shape rect 304.8 357.9 209.5 74.5 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 395.5 377 28 19.6 size=14 w=400 ink=Text "音乐"
+text 402.5 396.6 13.9 16.8 size=12 w=400 ink=Muted "80"
+shape rect 521.7 333 123.7 103.9 r=Xs fill=series2.soft stroke=series2/hairline/Solid
+text 569.6 366.7 28 19.6 size=14 w=400 ink=Text "系统"
+text 576.6 386.3 13.9 16.8 size=12 w=400 ink=Muted "60"
+text 277.1 8 101.8 22.4 size=16 w=600 ink=Text "存储空间占用"

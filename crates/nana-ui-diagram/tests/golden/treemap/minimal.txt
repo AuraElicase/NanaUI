@@ -1,0 +1,5 @@
+size 656 412.8
+summary nodes=1 edges=0 groups=0
+shape rect 9.5 9.5 637 393.8 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 311.8 188.2 32.5 19.6 size=14 w=400 ink=Text "Only"
+text 324.5 207.8 7 16.8 size=12 w=400 ink=Muted "1"
