@@ -1,0 +1,60 @@
+size 632.6 336.4
+summary nodes=4 edges=3 groups=0
+shape path M201.1,179.1 L201.1,182.2 Q201.1,185.4 204.2,185.4 L481.6,185.4 Q489.6,185.4 489.6,193.4 L489.6,217.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M201.1,169.4 L205.3,179.1 L196.8,179.1 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M113.7,179.1 L113.7,182.2 Q113.7,185.4 116.9,185.4 L117.5,185.4 Q121.2,185.4 121.2,189.1 L121.2,225.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M113.7,169.4 L118,179.1 L109.5,179.1 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M187.1,179.1 L187.1,195.6 Q187.1,201.4 192.9,201.4 L192.9,201.4 Q198.6,201.4 198.6,207.2 L198.6,225.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M187.1,169.4 L191.3,179.1 L182.8,179.1 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M540.9,146.6 L540.9,217.4 stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Dashed
+shape rect 95 42.6 124.8 126.8 r=Sm fill=Surface
+clip rect 95 42.6 124.8 126.8 r=Sm
+shape rect 95 42.6 124.8 35.6 fill=Subtle
+unclip
+shape path M95,78.2 L219.8,78.2 stroke=BorderStrong/hairline/Solid
+shape rect 95 42.6 124.8 126.8 r=Sm stroke=BorderStrong/hairline/Solid
+text 131.6 50.6 51.6 19.6 size=14 w=600 ink=Text "Animal"
+shape path M95,123.8 L219.8,123.8 stroke=BorderStrong/hairline/Solid
+text 107 84.2 57.6 16.8 size=12 w=400 ink=Text "+int age"
+text 107 101 100.8 16.8 size=12 w=400 ink=Text "+String gender"
+text 107 129.8 79.2 16.8 size=12 w=400 ink=Text "+isMammal()"
+text 107 146.6 50.4 16.8 size=12 w=400 ink=Text "+mate()"
+shape rect 467.7 217.4 146.4 110 r=Sm fill=Surface
+clip rect 467.7 217.4 146.4 110 r=Sm
+shape rect 467.7 217.4 146.4 35.6 fill=Subtle
+unclip
+shape path M467.7,253 L614.1,253 stroke=BorderStrong/hairline/Solid
+shape rect 467.7 217.4 146.4 110 r=Sm stroke=BorderStrong/hairline/Solid
+text 523.7 225.4 34.4 19.6 size=14 w=600 ink=Text "Duck"
+shape path M467.7,281.8 L614.1,281.8 stroke=BorderStrong/hairline/Solid
+text 479.7 259 122.4 16.8 size=12 w=400 ink=Text "+String beakColor"
+text 479.7 287.8 50.4 16.8 size=12 w=400 ink=Text "+swim()"
+text 479.7 304.6 57.6 16.8 size=12 w=400 ink=Text "+quack()"
+shape rect 9 225.8 132 93.2 r=Sm fill=Surface
+clip rect 9 225.8 132 93.2 r=Sm
+shape rect 9 225.8 132 35.6 fill=Subtle
+unclip
+shape path M9,261.4 L141,261.4 stroke=BorderStrong/hairline/Solid
+shape rect 9 225.8 132 93.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 57.8 233.8 34.4 19.6 size=14 w=600 ink=Text "Fish"
+shape path M9,290.2 L141,290.2 stroke=BorderStrong/hairline/Solid
+text 21 267.4 108 16.8 size=12 w=400 ink=Text "-int sizeInFeet"
+text 21 296.2 64.8 16.8 size=12 w=400 ink=Text "-canEat()"
+shape rect 181 225.8 117.6 93.2 r=Sm fill=Surface
+clip rect 181 225.8 117.6 93.2 r=Sm
+shape rect 181 225.8 117.6 35.6 fill=Subtle
+unclip
+shape path M181,261.4 L298.6,261.4 stroke=BorderStrong/hairline/Solid
+shape rect 181 225.8 117.6 93.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 218.3 233.8 43 19.6 size=14 w=600 ink=Text "Zebra"
+shape path M181,290.2 L298.6,290.2 stroke=BorderStrong/hairline/Solid
+text 193 267.4 93.6 16.8 size=12 w=400 ink=Text "+bool is_wild"
+text 193 296.2 43.2 16.8 size=12 w=400 ink=Text "+run()"
+shape rect 259.8 90.6 158.4 30.8 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 269.4 97.6 139.2 16.8 size=12 w=400 ink=Text "From Duck till Zebra"
+shape rect 458.2 65.4 165.4 81.2 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 467.8 72.4 48.7 16.8 size=12 w=400 ink=Text "can fly"
+text 467.8 89.2 55.7 16.8 size=12 w=400 ink=Text "can swim"
+text 467.8 106 55.7 16.8 size=12 w=400 ink=Text "can dive"
+text 467.8 122.8 146.2 16.8 size=12 w=400 ink=Text "can help in debugging"
+text 247.4 8 137.7 22.4 size=16 w=600 ink=Text "Animal example"
