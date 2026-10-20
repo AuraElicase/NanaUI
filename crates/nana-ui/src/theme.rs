@@ -40,10 +40,6 @@ pub use nana_ui_core::{
     UI_METRICS, builtin_theme_arc, linear_scrim_alpha, space, type_scale,
 };
 
-/// Compatibility name for applications that used the pre-registry theme
-/// surface. It is intentionally an alias: a mode selects the built-in
-/// appearance while `ThemeId` remains the persisted identity.
-pub type ThemeMode = ThemeAppearance;
 /// Style-model names a host needs to name a node's paint rather than spend a
 /// number: the two-role mix behind `NodeStyle::surface_mix` / `outline_mix`,
 /// and the CSS-grade paint block reachable through `LayoutStyle::paint`,
@@ -52,9 +48,6 @@ pub use nana_ui_core::{
     BoxShadowSpec, CssGradient, GradientStop, LinearGradient, MaskImage, PaintStyle,
     RadialGradient, SemanticColorMix,
 };
-
-/// Linear RGBA color used by L3 token adapters. Same layout as [`SemanticColor`].
-pub type Color = SemanticColor;
 
 /// Identity of a built-in theme after the Scene host has applied its own
 /// Appearance policy on top.
@@ -86,7 +79,7 @@ pub struct ThemeTokens {
     /// Defaults to [`SemanticPalette::surface`], but stays independent so
     /// `titlebar_follows_sidebar=false` can keep the title bar opaque while the
     /// sidebar surface remains translucent.
-    pub titlebar: Color,
+    pub titlebar: SemanticColor,
 }
 
 impl ThemeTokens {
@@ -139,7 +132,7 @@ impl ThemeTokens {
         self
     }
 
-    pub const fn with_titlebar(mut self, titlebar: Color) -> Self {
+    pub const fn with_titlebar(mut self, titlebar: SemanticColor) -> Self {
         self.titlebar = titlebar;
         self
     }
@@ -246,18 +239,6 @@ pub trait ThemeAppearanceExt: Copy {
     fn palette(self) -> SemanticPalette;
     /// The built-in design system for this mode.
     fn definition(self) -> ThemeDefinition;
-}
-
-/// Compatibility extension retained for L3 consumers while they migrate from
-/// the old `ThemeMode` spelling to `ThemeAppearance`.
-pub trait ThemeModeExt: Copy {
-    fn definition(self) -> ThemeDefinition;
-}
-
-impl ThemeModeExt for ThemeAppearance {
-    fn definition(self) -> ThemeDefinition {
-        ThemeAppearanceExt::definition(self)
-    }
 }
 
 impl ThemeAppearanceExt for ThemeAppearance {

@@ -75,12 +75,12 @@ pub use packaged_resources::{ResourcePackOptions, SELF_CHECK_ENV};
 pub mod icons;
 pub mod layout;
 pub mod menu;
-pub mod notices;
 mod nana_text;
 #[cfg(feature = "hosted")]
 mod native_browser;
 #[cfg(feature = "gpu")]
 mod native_content;
+pub mod notices;
 mod text_engine;
 #[cfg(feature = "hosted")]
 mod web_surface;
@@ -368,10 +368,9 @@ pub use split_pane::{SplitAxis, SplitPaneAction, SplitPaneController};
 #[cfg(feature = "hosted")]
 pub use staged::{Launch, LaunchError, LaunchMessage, LaunchUpdate, Staged};
 pub use theme::{
-    Color, CompiledTheme, HAIRLINE, SemanticColor, SemanticPalette, ThemeAppearance,
-    ThemeAppearanceExt, ThemeChoice, ThemeId, ThemeMetrics, ThemeMode, ThemeModeExt, ThemeRegistry,
-    ThemeRegistryError, ThemeTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme_arc,
-    install_theme_tokens, space, type_scale,
+    CompiledTheme, HAIRLINE, SemanticColor, SemanticPalette, ThemeAppearance, ThemeAppearanceExt,
+    ThemeChoice, ThemeId, ThemeMetrics, ThemeRegistry, ThemeRegistryError, ThemeTokens,
+    UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme_arc, install_theme_tokens, space, type_scale,
 };
 #[cfg(feature = "bundled-fonts")]
 pub use theme::{UI_FONT_BOLD, UI_FONT_MEDIUM, UI_FONT_REGULAR, UI_FONT_SEMIBOLD, ui_font_sources};

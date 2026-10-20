@@ -179,7 +179,26 @@ impl AppContext {
             .node(parent)
             .ok_or(FrameworkError::MissingView(parent))?
             .document;
-        self.mount_view_in(document, Some(parent), view, true)
+        self.mount_view_in(document, Some(parent), None, view, true)
+    }
+
+    /// Like [`Self::mount_view`], with the view's roots placed before
+    /// `before`, a child of `parent`, instead of after the last child.
+    pub fn mount_view_before<M: Mount>(
+        &mut self,
+        parent: StableNodeId,
+        before: StableNodeId,
+        view: impl FnOnce() -> M,
+    ) -> Result<M::Output, FrameworkError> {
+        let document = self
+            .world
+            .node(parent)
+            .ok_or(FrameworkError::MissingView(parent))?
+            .document;
+        if self.world.node(before).and_then(|node| node.parent) != Some(parent) {
+            return Err(FrameworkError::InvalidInput);
+        }
+        self.mount_view_in(document, Some(parent), Some(before), view, true)
     }
 
     /// Like [`Self::mount_view`], with the view's roots as document roots.
@@ -188,7 +207,7 @@ impl AppContext {
         document: DocumentId,
         view: impl FnOnce() -> M,
     ) -> Result<M::Output, FrameworkError> {
-        self.mount_view_in(document, None, view, false)
+        self.mount_view_in(document, None, None, view, false)
     }
 
     /// Like [`Self::mount_view_root`], with the roots parked: in no tree
@@ -199,13 +218,14 @@ impl AppContext {
         document: DocumentId,
         view: impl FnOnce() -> M,
     ) -> Result<M::Output, FrameworkError> {
-        self.mount_view_in(document, None, view, true)
+        self.mount_view_in(document, None, None, view, true)
     }
 
     fn mount_view_in<M: Mount>(
         &mut self,
         document: DocumentId,
         parent: Option<StableNodeId>,
+        before: Option<StableNodeId>,
         view: impl FnOnce() -> M,
         park: bool,
     ) -> Result<M::Output, FrameworkError> {
@@ -238,7 +258,7 @@ impl AppContext {
         if let Some(parent) = parent {
             let mut insert = MutationQueue::new();
             for root in &roots {
-                insert.insert(parent, *root, None);
+                insert.insert(parent, *root, before);
             }
             if let Err(error) = self.commit_mutations(insert) {
                 rx::dispose_scope(scope);

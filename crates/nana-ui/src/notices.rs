@@ -26,7 +26,7 @@ use nana_ui_core::{Icon, ToastTone};
 use nana_ui_platform::WindowId;
 use nana_ui_runtime::{
     AccessibilityLive, AppContext, DocumentId, Entity, FrameworkError, LayoutBox, MutationQueue,
-    PanelInsets, PopoverAlignment, Stack, StableNodeId, Toast, ToastAction, ToastDismissed,
+    PanelInsets, PopoverAlignment, StableNodeId, Stack, Toast, ToastAction, ToastDismissed,
     ToastProgress, ToastStack,
 };
 
@@ -279,9 +279,13 @@ impl<K, A> NoticeHost<K, A> {
 
     /// The toasts it shows, by the serial of their notice.
     pub fn toasts(&self) -> impl Iterator<Item = (u64, Entity<Toast>, &str)> {
-        self.projected
-            .iter()
-            .map(|projection| (projection.serial, projection.toast, projection.notice.title.as_str()))
+        self.projected.iter().map(|projection| {
+            (
+                projection.serial,
+                projection.toast,
+                projection.notice.title.as_str(),
+            )
+        })
     }
 
     pub fn len(&self) -> usize {
@@ -292,7 +296,13 @@ impl<K, A> NoticeHost<K, A> {
         self.projected.is_empty()
     }
 
-    fn place(&mut self, cx: &mut AppContext, width: f32, height: f32, placement: NoticePlacement) -> bool {
+    fn place(
+        &mut self,
+        cx: &mut AppContext,
+        width: f32,
+        height: f32,
+        placement: NoticePlacement,
+    ) -> bool {
         if self.placed == Some((width, height, placement)) {
             return false;
         }
@@ -544,7 +554,13 @@ impl<K: PartialEq + Clone, A: Clone> NoticeCenter<K, A> {
 
     /// The task under `key` ended: its notice turns into `result` where it is
     /// (a one-off message from then on), or goes away without one.
-    pub fn settle(&mut self, source: NoticeSource, key: &K, result: Option<Notice<A>>, now: Instant) {
+    pub fn settle(
+        &mut self,
+        source: NoticeSource,
+        key: &K,
+        result: Option<Notice<A>>,
+        now: Instant,
+    ) {
         let id = NoticeId::Key(key.clone());
         let index = self.entries.iter().position(|entry| entry.id == id);
         match (index, result) {

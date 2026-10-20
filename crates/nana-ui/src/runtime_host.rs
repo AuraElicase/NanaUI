@@ -628,10 +628,11 @@ pub trait RuntimeProgram: Sized + 'static {
         builtin_theme_arc(ThemeAppearance::Dark)
     }
 
-    /// Legacy appearance hook retained for applications that still expose a
-    /// `ThemeMode`. New hosts should override `theme` with their registry
-    /// selection; this default keeps old implementations source-compatible.
-    fn theme_mode(&self) -> crate::ThemeMode {
+    /// Legacy appearance hook retained for applications that still pick a
+    /// built-in appearance. New hosts should override `theme` with their
+    /// registry selection; this default keeps old implementations
+    /// source-compatible.
+    fn theme_mode(&self) -> ThemeAppearance {
         ThemeAppearance::Dark
     }
 

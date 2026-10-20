@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use nana_ui::Color;
+use nana_ui::SemanticColor;
 use nana_ui::runtime::{GPU_VIEW_RENDERER, GpuViewPalette};
 use nana_ui::{
     DefaultGpuViewRenderer, GpuContext, GpuTextureDescriptor, GpuTextureFormat, GpuTextureRegion,
@@ -22,7 +22,11 @@ pub struct SnapshotGpu {
     pub renderers: SceneGpuRendererRegistry,
 }
 
-pub fn create_snapshot_gpu(gpu: &GpuContext, background: Color, accent: Color) -> SnapshotGpu {
+pub fn create_snapshot_gpu(
+    gpu: &GpuContext,
+    background: SemanticColor,
+    accent: SemanticColor,
+) -> SnapshotGpu {
     let texture = gpu
         .create_texture(&GpuTextureDescriptor {
             label: Some("nana-ui snapshot host texture"),
@@ -65,11 +69,11 @@ pub fn create_snapshot_gpu(gpu: &GpuContext, background: Color, accent: Color) -
     }
 }
 
-fn color_array(color: Color) -> [f32; 4] {
+fn color_array(color: SemanticColor) -> [f32; 4] {
     [color.r, color.g, color.b, color.a]
 }
 
-fn color_rgba8(color: Color) -> [u8; 4] {
+fn color_rgba8(color: SemanticColor) -> [u8; 4] {
     [
         (color.r.clamp(0.0, 1.0) * 255.0).round() as u8,
         (color.g.clamp(0.0, 1.0) * 255.0).round() as u8,
