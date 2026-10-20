@@ -52,7 +52,7 @@ list_item("设置").detail("外观").selected(current).on_activate(open)
 
 只在需要时出现的行尾工具（固定、关闭）写 `.tools(…)`，代替 `.trailing(…)`。指针在这一行上，或键盘焦点在这一行或行内时显出，所以 Tab 先停在行上、再停到工具上。`keep_tools` 为真时平时也显示（已打开的固定）。
 
-收起时怎么占位由组件的 `tools_rest` 决定：默认 `RowToolsRest::Yield` 退出布局，标签用满整行，显出时这一行重排；Shift+Tab 从下面回来时先落在行上，工具显出后再落到它。`RowToolsRest::Reserve` 保留宽度、只是不画，显出时不重排，工具一直在 Tab 顺序里。
+收起时怎么占位由组件的 `tools_rest` 决定：默认 `RowToolsRest::Yield` 退出布局，标签用满整行，显出时这一行重排；Shift+Tab 从下面回来时跳过工具、落在行上，要再按 Tab 才到工具。`RowToolsRest::Reserve` 保留宽度、只是不画，显出时不重排，工具一直在 Tab 顺序里。
 
 ```rust
 widget(ListItem::new("模型").tools_rest(RowToolsRest::Reserve))
