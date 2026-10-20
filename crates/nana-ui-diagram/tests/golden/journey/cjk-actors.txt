@@ -1,0 +1,65 @@
+size 985 357.4
+summary nodes=5 edges=0 groups=2
+shape rect 100 41.6 342 35.6 r=Sm fill=series0
+text 256.2 49.6 29.7 19.6 size=14 w=600 ink=series0.on "发现"
+shape rect 456 41.6 520 35.6 r=Sm fill=series1
+text 701.2 49.6 29.7 19.6 size=14 w=600 ink=series1.on "下单"
+shape path M100,330.1 L976,330.1 stroke=BorderSoft/hairline/Solid
+shape path M100,293.5 L976,293.5 stroke=BorderSoft/hairline/Solid
+shape path M100,256.9 L976,256.9 stroke=BorderSoft/hairline/Solid
+shape path M100,220.3 L976,220.3 stroke=BorderSoft/hairline/Solid
+shape path M100,183.7 L976,183.7 stroke=BorderSoft/hairline/Solid
+shape path M182,155.4 L182,348.4 stroke=Border/hairline/Dashed
+shape rect 100 87.2 164 68.2 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+shape ellipse 112 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+shape ellipse 123 95.2 8 8 fill=series1 stroke=Surface/1/Solid
+text 112 108.2 140 19.6 size=14 w=400 ink=Text "看到朋友分享的链接并"
+text 133 127.8 98 19.6 size=14 w=400 ink=Text "点开商品详情页"
+shape ellipse 168.7 207 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 175.6 215.8 3.2 3.2 fill=Text
+shape ellipse 185.2 215.8 3.2 3.2 fill=Text
+shape path M176.4,223.5 Q182,229.1 187.6,223.5 stroke=Text/1.6/Solid
+shape path M360,155.4 L360,348.4 stroke=Border/hairline/Dashed
+shape rect 278 87.2 164 68.2 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+shape ellipse 290 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 332 118 56 19.6 size=14 w=400 ink=Text "比较价格"
+shape ellipse 346.7 280.2 26.6 26.6 fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/hairline/Solid
+shape ellipse 353.6 289 3.2 3.2 fill=Text
+shape ellipse 363.2 289 3.2 3.2 fill=Text
+shape path M354.9,300.4 Q360,297 365.1,300.4 stroke=Text/1.6/Solid
+shape path M538,155.4 L538,348.4 stroke=Border/hairline/Dashed
+shape rect 456 87.2 164 68.2 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+shape ellipse 468 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+shape ellipse 479 95.2 8 8 fill=series2 stroke=Surface/1/Solid
+text 510 118 56 19.6 size=14 w=400 ink=Text "填写地址"
+shape ellipse 524.7 280.2 26.6 26.6 fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/hairline/Solid
+shape ellipse 531.6 289 3.2 3.2 fill=Text
+shape ellipse 541.2 289 3.2 3.2 fill=Text
+shape path M532.9,300.4 Q538,297 543.1,300.4 stroke=Text/1.6/Solid
+shape path M716,155.4 L716,348.4 stroke=Border/hairline/Dashed
+shape rect 634 87.2 164 68.2 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+shape ellipse 646 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+shape ellipse 657 95.2 8 8 fill=series2 stroke=Surface/1/Solid
+shape ellipse 668 95.2 8 8 fill=series3 stroke=Surface/1/Solid
+text 667 118 98 19.6 size=14 w=400 ink=Text "支付失败后重试"
+shape ellipse 702.7 316.8 26.6 26.6 fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/hairline/Solid
+shape ellipse 709.6 325.6 3.2 3.2 fill=Text
+shape ellipse 719.2 325.6 3.2 3.2 fill=Text
+shape path M710.1,338.1 Q716,331.2 721.9,338.1 stroke=Text/1.6/Solid
+shape path M894,155.4 L894,348.4 stroke=Border/hairline/Dashed
+shape rect 812 87.2 164 68.2 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+shape ellipse 824 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 852 118 84 19.6 size=14 w=400 ink=Text "收到确认短信"
+shape ellipse 880.7 170.4 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 887.6 179.2 3.2 3.2 fill=Text
+shape ellipse 897.2 179.2 3.2 3.2 fill=Text
+shape path M887.9,185.6 Q894,195.1 900.1,185.6 Z fill=Text
+shape ellipse 8 92 10 10 fill=series0
+text 24 87.2 28 19.6 size=14 w=400 ink=Text "用户"
+shape ellipse 8 117.6 10 10 fill=series1
+text 24 112.8 28 19.6 size=14 w=400 ink=Text "朋友"
+shape ellipse 8 143.2 10 10 fill=series2
+text 24 138.4 28 19.6 size=14 w=400 ink=Text "客服"
+shape ellipse 8 168.8 10 10 fill=series3
+text 24 164 56 19.6 size=14 w=400 ink=Text "支付网关"
+text 433.1 8 118.7 22.4 size=16 w=600 ink=Text "新用户首次下单"

@@ -1,0 +1,57 @@
+size 781.2 337.8
+summary nodes=5 edges=0 groups=2
+shape rect 68.4 41.6 416.7 35.6 r=Sm fill=series0
+text 233.7 49.6 86.1 19.6 size=14 w=600 ink=series0.on "Go to work"
+shape rect 499 41.6 273.1 35.6 r=Sm fill=series1
+text 605.5 49.6 60.3 19.6 size=14 w=600 ink=series1.on "Go home"
+shape path M68.4,310.5 L772.2,310.5 stroke=BorderSoft/hairline/Solid
+shape path M68.4,273.9 L772.2,273.9 stroke=BorderSoft/hairline/Solid
+shape path M68.4,237.3 L772.2,237.3 stroke=BorderSoft/hairline/Solid
+shape path M68.4,200.7 L772.2,200.7 stroke=BorderSoft/hairline/Solid
+shape path M68.4,164.1 L772.2,164.1 stroke=BorderSoft/hairline/Solid
+shape path M133.1,135.8 L133.1,328.8 stroke=Border/hairline/Dashed
+shape rect 68.4 87.2 129.6 48.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+shape ellipse 80.4 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 100.7 108.2 65 19.6 size=14 w=400 ink=Text "Make tea"
+shape ellipse 119.8 150.8 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 126.8 159.6 3.2 3.2 fill=Text
+shape ellipse 136.3 159.6 3.2 3.2 fill=Text
+shape path M127,166 Q133.1,175.5 139.3,166 Z fill=Text
+shape path M276.7,135.8 L276.7,328.8 stroke=Border/hairline/Dashed
+shape rect 211.9 87.2 129.6 48.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+shape ellipse 223.9 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 232 108.2 89.3 19.6 size=14 w=400 ink=Text "Go upstairs"
+shape ellipse 263.4 224 26.6 26.6 fill=SemanticColorMix{first:Muted,second:None,weight:1800} stroke=Muted/hairline/Solid
+shape ellipse 270.3 232.8 3.2 3.2 fill=Text
+shape ellipse 279.9 232.8 3.2 3.2 fill=Text
+shape path M271.9,242.4 L281.5,242.4 stroke=Text/1.6/Solid
+shape path M420.3,135.8 L420.3,328.8 stroke=Border/hairline/Dashed
+shape rect 355.5 87.2 129.6 48.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+shape ellipse 367.5 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+shape ellipse 378.5 95.2 8 8 fill=series1 stroke=Surface/1/Solid
+text 391.8 108.2 56.8 19.6 size=14 w=400 ink=Text "Do work"
+shape ellipse 407 297.2 26.6 26.6 fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/hairline/Solid
+shape ellipse 413.9 306 3.2 3.2 fill=Text
+shape ellipse 423.5 306 3.2 3.2 fill=Text
+shape path M414.4,318.5 Q420.3,311.6 426.1,318.5 stroke=Text/1.6/Solid
+shape path M563.8,135.8 L563.8,328.8 stroke=Border/hairline/Dashed
+shape rect 499 87.2 129.6 48.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+shape ellipse 511 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 511 108.2 105.6 19.6 size=14 w=400 ink=Text "Go downstairs"
+shape ellipse 550.5 150.8 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 557.4 159.6 3.2 3.2 fill=Text
+shape ellipse 567 159.6 3.2 3.2 fill=Text
+shape path M557.7,166 Q563.8,175.5 569.9,166 Z fill=Text
+shape path M707.4,135.8 L707.4,328.8 stroke=Border/hairline/Dashed
+shape rect 642.6 87.2 129.6 48.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+shape ellipse 654.6 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 674.9 108.2 65 19.6 size=14 w=400 ink=Text "Sit down"
+shape ellipse 694.1 150.8 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 701 159.6 3.2 3.2 fill=Text
+shape ellipse 710.6 159.6 3.2 3.2 fill=Text
+shape path M701.3,166 Q707.4,175.5 713.5,166 Z fill=Text
+shape ellipse 8 92 10 10 fill=series0
+text 24 87.2 16.2 19.6 size=14 w=400 ink=Text "Me"
+shape ellipse 8 117.6 10 10 fill=series1
+text 24 112.8 24.4 19.6 size=14 w=400 ink=Text "Cat"
+text 321.7 8 137.7 22.4 size=16 w=600 ink=Text "My working day"

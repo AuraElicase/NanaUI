@@ -1,0 +1,73 @@
+size 787.6 337.8
+summary nodes=6 edges=0 groups=3
+shape rect 84.6 41.6 222 35.6 r=Sm fill=series0
+text 165.5 49.6 60.3 19.6 size=14 w=600 ink=series0.on "Morning"
+shape rect 320.6 41.6 222 35.6 r=Sm fill=series1
+text 414.4 49.6 34.4 19.6 size=14 w=600 ink=series1.on "Work"
+shape rect 556.6 41.6 222 35.6 r=Sm fill=series2
+text 637.5 49.6 60.3 19.6 size=14 w=600 ink=series2.on "Evening"
+shape path M84.6,310.5 L778.6,310.5 stroke=BorderSoft/hairline/Solid
+shape path M84.6,273.9 L778.6,273.9 stroke=BorderSoft/hairline/Solid
+shape path M84.6,237.3 L778.6,237.3 stroke=BorderSoft/hairline/Solid
+shape path M84.6,200.7 L778.6,200.7 stroke=BorderSoft/hairline/Solid
+shape path M84.6,164.1 L778.6,164.1 stroke=BorderSoft/hairline/Solid
+shape path M136.6,135.8 L136.6,328.8 stroke=Border/hairline/Dashed
+shape rect 84.6 87.2 104 48.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+shape ellipse 96.6 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 108.2 108.2 56.8 19.6 size=14 w=400 ink=Text "Wake up"
+shape ellipse 123.3 224 26.6 26.6 fill=SemanticColorMix{first:Muted,second:None,weight:1800} stroke=Muted/hairline/Solid
+shape ellipse 130.2 232.8 3.2 3.2 fill=Text
+shape ellipse 139.8 232.8 3.2 3.2 fill=Text
+shape path M131.8,242.4 L141.4,242.4 stroke=Text/1.6/Solid
+shape path M254.6,135.8 L254.6,328.8 stroke=Border/hairline/Dashed
+shape rect 202.6 87.2 104 48.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+shape ellipse 214.6 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+shape ellipse 225.6 95.2 8 8 fill=series1 stroke=Surface/1/Solid
+text 230.2 108.2 48.7 19.6 size=14 w=400 ink=Text "Coffee"
+shape ellipse 241.3 150.8 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 248.2 159.6 3.2 3.2 fill=Text
+shape ellipse 257.8 159.6 3.2 3.2 fill=Text
+shape path M248.5,166 Q254.6,175.5 260.7,166 Z fill=Text
+shape path M372.6,135.8 L372.6,328.8 stroke=Border/hairline/Dashed
+shape rect 320.6 87.2 104 48.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+shape ellipse 332.6 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+shape ellipse 343.6 95.2 8 8 fill=series2 stroke=Surface/1/Solid
+shape ellipse 354.6 95.2 8 8 fill=series3 stroke=Surface/1/Solid
+text 344.2 108.2 56.8 19.6 size=14 w=400 ink=Text "Meeting"
+shape ellipse 359.3 260.6 26.6 26.6 fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/hairline/Solid
+shape ellipse 366.2 269.4 3.2 3.2 fill=Text
+shape ellipse 375.8 269.4 3.2 3.2 fill=Text
+shape path M367.5,280.8 Q372.6,277.4 377.7,280.8 stroke=Text/1.6/Solid
+shape path M490.6,135.8 L490.6,328.8 stroke=Border/hairline/Dashed
+shape rect 438.6 87.2 104 48.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+shape ellipse 450.6 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 474.4 108.2 32.5 19.6 size=14 w=400 ink=Text "Code"
+shape ellipse 477.3 150.8 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 484.2 159.6 3.2 3.2 fill=Text
+shape ellipse 493.8 159.6 3.2 3.2 fill=Text
+shape path M484.5,166 Q490.6,175.5 496.7,166 Z fill=Text
+shape path M608.6,135.8 L608.6,328.8 stroke=Border/hairline/Dashed
+shape rect 556.6 87.2 104 48.6 r=Sm fill=series2.soft stroke=series2/hairline/Solid
+shape ellipse 568.6 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 584.2 108.2 48.7 19.6 size=14 w=400 ink=Text "Dinner"
+shape ellipse 595.3 187.4 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 602.2 196.2 3.2 3.2 fill=Text
+shape ellipse 611.8 196.2 3.2 3.2 fill=Text
+shape path M603,203.9 Q608.6,209.5 614.2,203.9 stroke=Text/1.6/Solid
+shape path M726.6,135.8 L726.6,328.8 stroke=Border/hairline/Dashed
+shape rect 674.6 87.2 104 48.6 r=Sm fill=series2.soft stroke=series2/hairline/Solid
+shape ellipse 686.6 95.2 8 8 fill=series0 stroke=Surface/1/Solid
+text 710.4 108.2 32.5 19.6 size=14 w=400 ink=Text "Read"
+shape ellipse 713.3 150.8 26.6 26.6 fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+shape ellipse 720.2 159.6 3.2 3.2 fill=Text
+shape ellipse 729.8 159.6 3.2 3.2 fill=Text
+shape path M720.5,166 Q726.6,175.5 732.7,166 Z fill=Text
+shape ellipse 8 92 10 10 fill=series0
+text 24 87.2 16.2 19.6 size=14 w=400 ink=Text "Me"
+shape ellipse 8 117.6 10 10 fill=series1
+text 24 112.8 24.4 19.6 size=14 w=400 ink=Text "Cat"
+shape ellipse 8 143.2 10 10 fill=series2
+text 24 138.4 40.6 19.6 size=14 w=400 ink=Text "Alice"
+shape ellipse 8 168.8 10 10 fill=series3
+text 24 164 24.4 19.6 size=14 w=400 ink=Text "Bob"
+text 364.3 8 59 22.4 size=16 w=600 ink=Text "My day"
