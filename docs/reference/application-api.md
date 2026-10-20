@@ -191,6 +191,16 @@ device/surface 丢失后宿主调用 `RuntimeDocument::set_surface_generation`�
 - 启动画面：`Staged` 对宿主回答 `Deferred`；程序建好、且它自己的 `startup_takeover()` 是 `Immediate` 时，由 `Staged` 代它申请接管，宿主还没发票据就每 50 ms 再问一次，超过 `Launch::TAKEOVER_TIMEOUT`（默认 30 s）调用 `Launch::takeover_failed`（默认退出）。程序回答 `Deferred` 时自己去接管。
 - 关联函数 `gpu_backend_policy` / `startup_window_material_mode` 取最终程序的。
 
+### 无窗口运行整个程序（`HeadlessRuntime`）
+
+离屏验收要跑的是真实程序，不是摘出来的一份文档。`nana_ui::headless::HeadlessRuntime<P>` 用 `GpuContext` 和主窗口几何 `P::initialize`，再按 Scene 宿主的顺序驱动钩子；程序自己持有文档，宿主经 `with_document` 读写，不把文档搬进会话再搬回来。
+
+- `turn()` 是宿主的一轮：窗口请求、排队的消息（`update`）、到期的 `wake` 与动画帧，然后每个可见窗口一帧：`prepare_window_frame`、布局、`window_frame_presented`，有消息后再 `bind_window`。主窗口在第一帧后 bind 一次，相当于原生宿主里装上程序的那条消息。
+- `input(id, payload, text)` 经该窗口自己的输入源路由进文档，再交给 `input_event`；`accessibility_action`、`window_event`、`resize` 同理走钩子。`update`、`dispatch`、`wake` 给验收脚本补一条消息或唤醒。
+- 窗口：`WindowService::create_window` 与 `WindowCommand::Open` 建虚拟窗口并调 `initialize_window`，`set_visible`、`set_size` 改它并发对应事件，`Close` 关掉它和子窗口；其余命令只进 `take_window_commands()`。文件对话框立即按 `set_file_dialog` 设的答案回 `FileDialogCompleted`，用一次后恢复为取消。
+- `take_report()` 给出合并的重绘目标、是否要求退出，以及消息、wake、输入和窗口事件里要求重绘的次数（帧回调不计；`set_quiet_messages` 可排除逐帧到达的消息）。
+- 不画像素。`nana_ui_devtools::headless::HeadlessHost`（feature `headless-host`）在它之上加 painter 与回读：`screenshot(id, clear)` 先出一帧再画，等图片解码完，把学到的图片尺寸交回文档；另有 `accessibility`、`click`、`mouse`、`key`、`type_text`、`click_node`。
+
 `run_task` 的任务在宿主的工作线程上执行。任务 panic 时不交回消息：宿主记一条 `host.task_panicked` 故障，工作线程继续处理队列。等着结果的调用方要在任务里接住失败，交回一条失败消息。
 
 `ApplicationState` 透传下列钩子。`RuntimeApplication<State>` 原样转给 `RuntimeProgram`，所以透明叠加窗口、需要合成器路径的应用不必再手写一层 `RuntimeProgram`：
