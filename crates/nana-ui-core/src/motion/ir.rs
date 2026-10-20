@@ -166,6 +166,12 @@ pub enum MotionTo {
     Keyframes(Vec<Keyframe>),
 }
 
+impl From<MotionValue> for MotionTo {
+    fn from(value: MotionValue) -> Self {
+        Self::Value(value)
+    }
+}
+
 /// One keyframe stop. `offset` is in `0.0..=1.0`. Optional per-stop easing
 /// applies inside that interval; otherwise the track's easing curve is used.
 #[derive(Debug, Clone, Copy, PartialEq)]

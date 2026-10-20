@@ -483,6 +483,54 @@ impl AnimationSpec {
     }
 }
 
+impl AnimationId {
+    /// `target`'s own track for `property`: the one
+    /// [`NodeMotion::transition`] and the view layer's transitions run on.
+    /// A run started with it replaces theirs, and its events carry it.
+    pub fn for_node(target: StableNodeId, property: AnimatableProperty) -> Self {
+        user_animation_id(target, property)
+            .unwrap_or_else(|| AnimationId::new(target.get()).expect("node ids are nonzero"))
+    }
+}
+
+impl AnimationSpec {
+    /// One run of `target`'s `property` from `from` to `to`, `duration` long
+    /// from `now`, on the node's own track ([`AnimationId::for_node`]). It
+    /// replaces whatever that track was playing and starts at `from`, not at
+    /// the presented value; it shows `from` through a delay and holds `to`
+    /// once it ends (`fill: both`); linear until
+    /// [`with_curve`](Self::with_curve). The other `with_*` builders adjust
+    /// the rest, as on [`AnimationSpec::new`].
+    pub fn run(
+        target: StableNodeId,
+        property: AnimatableProperty,
+        from: MotionValue,
+        to: impl Into<MotionTo>,
+        now: Duration,
+        duration: Duration,
+    ) -> Self {
+        Self {
+            id: AnimationId::for_node(target, property),
+            target,
+            timing: MotionTiming::new(now, duration, crate::framework::COMPONENT_FRAME_INTERVAL),
+            playback: AnimationPlayback {
+                iteration_count: AnimationIteration::ONCE,
+                direction: AnimationDirection::Normal,
+                fill_mode: AnimationFillMode::Both,
+                play_state: AnimationPlayState::Running,
+                paused_at: None,
+            },
+            curve: MotionCurve::Easing(Easing::Linear),
+            property,
+            velocity: from.zero_velocity(),
+            from,
+            to: to.into(),
+            interrupt: MotionInterrupt::Replace,
+            layer: crate::MotionLayer::Runtime,
+        }
+    }
+}
+
 pub(crate) fn user_animation_id(
     target: StableNodeId,
     property: AnimatableProperty,
@@ -524,24 +572,9 @@ pub(crate) fn presence_spec(
     easing: Easing,
     fill_mode: AnimationFillMode,
 ) -> AnimationSpec {
-    let timing = MotionTiming::new(now, duration, crate::framework::COMPONENT_FRAME_INTERVAL);
-    let playback = AnimationPlayback {
-        iteration_count: AnimationIteration::ONCE,
-        direction: AnimationDirection::Normal,
-        fill_mode,
-        play_state: AnimationPlayState::Running,
-        paused_at: None,
-    };
-    let mut spec = user_spec(
-        target,
-        property,
-        to,
-        timing,
-        MotionCurve::Easing(easing),
-        playback,
-    );
-    spec.from = from;
-    spec.interrupt = MotionInterrupt::Replace;
+    let mut spec = AnimationSpec::run(target, property, from, to, now, duration)
+        .with_curve(MotionCurve::Easing(easing));
+    spec.playback.fill_mode = fill_mode;
     spec
 }
 
@@ -567,5 +600,55 @@ fn user_spec(
         velocity: to.zero_velocity(),
         interrupt: MotionInterrupt::Retarget,
         layer: crate::MotionLayer::Runtime,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A run is a one-shot on the node's own track: it starts where it is
+    /// told, replaces what the track played, holds both ends, and shares its
+    /// id with a transition of the same node and property.
+    #[test]
+    fn a_run_is_a_held_one_shot_on_the_nodes_own_track() {
+        let node = StableNodeId::new(7).unwrap();
+        let spec = AnimationSpec::run(
+            node,
+            AnimatableProperty::Opacity,
+            MotionValue::Scalar(0.25),
+            MotionValue::Scalar(1.0),
+            Duration::from_millis(100),
+            Duration::from_millis(200),
+        );
+        assert_eq!(
+            spec.id,
+            AnimationId::for_node(node, AnimatableProperty::Opacity)
+        );
+        assert_ne!(
+            spec.id,
+            AnimationId::for_node(node, AnimatableProperty::Transform)
+        );
+        assert_eq!(spec.from, MotionValue::Scalar(0.25));
+        assert_eq!(spec.to, MotionTo::Value(MotionValue::Scalar(1.0)));
+        assert_eq!(spec.interrupt, MotionInterrupt::Replace);
+        assert_eq!(spec.playback.fill_mode, AnimationFillMode::Both);
+        assert_eq!(spec.playback.iteration_count, AnimationIteration::ONCE);
+
+        let mut queue = MutationQueue::new();
+        queue
+            .node(node, Duration::ZERO)
+            .transition()
+            .opacity(0.0)
+            .start();
+        let ids: Vec<_> = queue
+            .as_slice()
+            .iter()
+            .filter_map(|mutation| match mutation {
+                crate::UiMutation::StartAnimation { animation } => Some(animation.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, [spec.id], "a transition runs on the same track");
     }
 }
