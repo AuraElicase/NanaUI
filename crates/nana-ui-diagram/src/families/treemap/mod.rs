@@ -9,9 +9,8 @@ use std::collections::HashMap;
 
 use nana_ui_core::{RadiusTier, SemanticColorRole as R};
 
-use super::{LayoutCx, ParseCx};
-use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke};
-use crate::kind;
+use super::{LayoutCx, ParseCx, kit};
+use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke, Tone};
 use crate::layout::squarify::squarify;
 use crate::layout::tree::{Outline, indent_width, preorder};
 use crate::source::directives::AuthorStyle;
@@ -41,29 +40,15 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let mut outline = Outline::new();
     let mut classes: Vec<(usize, String)> = Vec::new();
     let mut defs: HashMap<String, AuthorStyle> = HashMap::new();
-    let mut header_seen = false;
-    for (index, line) in body.lines().enumerate() {
+    let (header, _) = kit::header(body)?;
+    for (index, line) in body.lines().enumerate().skip(header + 1) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        if !header_seen {
-            if kind::header(trimmed).is_none() {
-                return Err(DiagramError::syntax(
-                    index as u32 + 1,
-                    1,
-                    "expected `treemap`",
-                ));
-            }
-            header_seen = true;
-            continue;
-        }
-        if let Some(title) = trimmed
-            .strip_prefix("title ")
-            .or_else(|| (trimmed == "title").then_some(""))
-        {
+        if let Some(title) = kit::keyword(trimmed, "title") {
             cx.limits.check_label(title)?;
-            cx.meta.title = Some(title.trim().trim_matches('"').to_string());
+            cx.meta.title = Some(title.trim_matches('"').to_string());
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix("classDef ") {
@@ -79,16 +64,13 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             continue;
         };
         let name = cx.label(name)?;
-        let value = match value {
-            Some(text) => match text.trim().parse::<f64>() {
-                Ok(v) if v.is_finite() && v >= 0.0 => Some(v),
-                _ => {
-                    cx.warn(index, format!("`{}` is not a value", text.trim()));
-                    None
-                }
-            },
-            None => None,
-        };
+        let value = value.and_then(|text| {
+            let v = kit::number(text).filter(|v| *v >= 0.0);
+            if v.is_none() {
+                cx.warn(index, format!("`{}` is not a value", text.trim()));
+            }
+            v
+        });
         let id = model.nodes.len();
         cx.limits
             .check_count(id + 1, cx.limits.nodes, LimitKind::Nodes)?;
@@ -119,9 +101,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             style: AuthorStyle::default(),
             children: Vec::new(),
         });
-    }
-    if !header_seen {
-        return Err(DiagramError::Empty);
     }
     for (id, class) in classes {
         if let Some(def) = defs.get(&class) {
@@ -241,14 +220,14 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let show_values = cx.config.get_bool("treemap.showValues").unwrap_or(true);
 
     // Colour branches: the first level with siblings.
-    let mut branch = vec![0u16; n];
+    let mut branch = vec![0; n];
     let colour_roots: Vec<usize> = match model.roots.as_slice() {
         [single] => model.nodes[*single].children.clone(),
         roots => roots.to_vec(),
     };
     for (b, &r) in colour_roots.iter().enumerate() {
         for (v, _) in preorder(&children, &[r]) {
-            branch[v] = b as u16;
+            branch[v] = b;
         }
     }
 
@@ -277,18 +256,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
         let shown_value = show_values.then(|| format_value(sums[v], &format));
         if node.children.is_empty() {
-            let base = Paint {
-                fill: Ink::Series {
-                    index: branch[v],
-                    tone: crate::ir::Tone::Soft,
-                },
-                stroke: Stroke::hairline(Ink::Series {
-                    index: branch[v],
-                    tone: crate::ir::Tone::Solid,
-                }),
+            let paint = Paint {
+                fill: style::series(branch[v], Tone::Soft),
+                stroke: Stroke::hairline(style::series(branch[v], Tone::Solid)),
                 ..Paint::node()
-            };
-            let paint = base.with_author(&node.style);
+            }
+            .with_author(&node.style);
             out.shape(
                 Geom::Rect {
                     rect,
@@ -321,17 +294,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 paint.text,
             );
             if let Some(t) = value {
-                let ink = if matches!(paint.fill, Ink::Rgba(_)) {
-                    paint.text
-                } else {
-                    style::MUTED
-                };
                 out.text(
                     &t,
                     [c[0] - t.width / 2.0, top + name.height],
                     t.width,
                     Align::Center,
-                    ink,
+                    value_ink(&paint),
                 );
             }
             continue;
@@ -368,18 +336,13 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     paint.text,
                 );
                 if let Some(t) = value.filter(|_| title.width + vw <= room) {
-                    let ink = if matches!(paint.fill, Ink::Rgba(_)) {
-                        paint.text
-                    } else {
-                        style::MUTED
-                    };
                     let vy = rect.y + (head_h - t.line_height) / 2.0;
                     out.text(
                         &t,
                         [rect.right() - 6.0 - t.width, vy],
                         t.width,
                         Align::Start,
-                        ink,
+                        value_ink(&paint),
                     );
                 }
             }
@@ -397,9 +360,17 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
     }
 
-    let content = area;
-    let content = cx.title_above(&mut out, content);
+    let content = cx.title_above(&mut out, area);
     Ok(out.finish(content, m.margin))
+}
+
+/// Values read muted, unless the author coloured the box.
+fn value_ink(paint: &Paint) -> Ink {
+    if matches!(paint.fill, Ink::Rgba(_)) {
+        paint.text
+    } else {
+        style::MUTED
+    }
 }
 
 pub(crate) fn summary(model: &Model) -> Summary {

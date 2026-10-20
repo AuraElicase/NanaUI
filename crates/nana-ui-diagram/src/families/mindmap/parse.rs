@@ -1,20 +1,22 @@
 //! The mind map grammar: one node per line, nesting by indentation, an
-//! optional id before the bracketed label, `::icon(...)` and `:::class`
-//! lines that decorate the node above them.
+//! optional id before the bracketed label and `::icon(...)` lines that
+//! decorate the node above them. `:::class` lines are accepted and ignored.
 
 use super::{Model, Node, NodeShape};
-use crate::families::ParseCx;
-use crate::kind;
+use crate::families::{ParseCx, kit};
 use crate::layout::tree::{Outline, indent_width};
 use crate::{DiagramError, LimitKind};
 
 pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
+    let (header, rest) = kit::header(body)?;
+    if !rest.is_empty() {
+        cx.warn(header, "text after `mindmap` is ignored");
+    }
+    let lines: Vec<&str> = body.lines().collect();
     let mut nodes: Vec<Node> = Vec::new();
     let mut outline = Outline::new();
     let mut root_indent = 0;
-    let mut header_seen = false;
-    let lines: Vec<&str> = body.lines().collect();
-    let mut next = 0;
+    let mut next = header + 1;
     while next < lines.len() {
         let index = next;
         let line = lines[index];
@@ -36,20 +38,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             }
             trimmed = joined.as_str();
         }
-        if !header_seen {
-            let Some((_, rest)) = kind::header(trimmed) else {
-                return Err(DiagramError::syntax(
-                    index as u32 + 1,
-                    1,
-                    "expected `mindmap`",
-                ));
-            };
-            header_seen = true;
-            if !rest.is_empty() {
-                cx.warn(index, "text after `mindmap` is ignored");
-            }
-            continue;
-        }
         if let Some(icon) = trimmed.strip_prefix("::icon(") {
             match nodes.last_mut() {
                 Some(node) => node.icon = Some(icon.trim_end_matches(')').trim().to_string()),
@@ -57,12 +45,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             }
             continue;
         }
-        if let Some(classes) = trimmed.strip_prefix(":::") {
-            match nodes.last_mut() {
-                Some(node) => node
-                    .classes
-                    .extend(classes.split_whitespace().map(str::to_string)),
-                None => cx.warn(index, "a class needs a node above it"),
+        // Mind maps have no `classDef`, so classes style nothing.
+        if trimmed.starts_with(":::") {
+            if nodes.is_empty() {
+                cx.warn(index, "a class needs a node above it");
             }
             continue;
         }
@@ -83,15 +69,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             label,
             shape,
             icon: None,
-            classes: Vec::new(),
             children: Vec::new(),
         });
         if let Some(p) = parent {
             nodes[p].children.push(id);
         }
-    }
-    if !header_seen {
-        return Err(DiagramError::Empty);
     }
     Ok(Model { nodes })
 }
@@ -116,9 +98,7 @@ fn node_text(text: &str) -> (&str, NodeShape) {
         ("[", "]", NodeShape::Square),
     ];
     for (start, end, shape) in forms {
-        if rest.len() >= start.len() + end.len()
-            && let Some(inner) = rest.strip_prefix(start).and_then(|r| r.strip_suffix(end))
-        {
+        if let Some(inner) = rest.strip_prefix(start).and_then(|r| r.strip_suffix(end)) {
             return (inner, shape);
         }
     }

@@ -39,9 +39,6 @@ pub(crate) struct Node {
     pub shape: NodeShape,
     /// `::icon(...)`: drawn as a placeholder glyph.
     pub icon: Option<String>,
-    /// `:::a b`: kept for diagnostics; mind maps have no `classDef`.
-    #[allow(dead_code)]
-    pub classes: Vec<String>,
     pub children: Vec<usize>,
 }
 

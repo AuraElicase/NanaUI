@@ -1,15 +1,16 @@
 //! Mind map drawing: measure, split the first-level branches between the
 //! two sides, place each side as a tidy tree and draw curves under nodes.
 
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::{PI, SQRT_2, TAU};
 
 use super::{Model, NodeShape};
 use crate::families::LayoutCx;
 use crate::geom::{PathData, Shape};
-use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
-use crate::layout::tree::{TidyGaps, TidyNode, tidy};
+use crate::ir::{Align, Corner, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::layout::tree::{TidyGaps, TidyNode, preorder, tidy};
 use crate::text::{FontSpec, LaidText};
-use crate::{DiagramError, DiagramScene, style};
+use crate::style::{self, series};
+use crate::{DiagramError, DiagramScene};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side {
@@ -29,6 +30,16 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let icon = m.small_size;
     let icon_gap = m.small_size * 0.4;
     let pad = [m.node_pad_x * 0.75, m.node_pad_y * 0.8];
+    // The icon and its gap to the label, if the node has one.
+    let icon_room = |has_icon: bool, laid: &LaidText| {
+        if !has_icon {
+            0.0
+        } else if laid.is_empty() {
+            icon
+        } else {
+            icon + icon_gap
+        }
+    };
 
     // Measure and size.
     let mut labels: Vec<LaidText> = Vec::with_capacity(model.nodes.len());
@@ -38,7 +49,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let laid = cx.text.lay(&node.label, face, Some(wrap));
         let mut inner = laid.size();
         if node.icon.is_some() {
-            inner[0] += icon + if laid.is_empty() { 0.0 } else { icon_gap };
+            inner[0] += icon_room(true, &laid);
             inner[1] = inner[1].max(icon);
         }
         inner[0] = inner[0].max(m.font_size);
@@ -49,12 +60,12 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Balance the first-level branches between the two sides by weight
     // (leaf extent), keeping their order: the right side takes them top to
     // bottom, the left side continues bottom to top.
-    let children = children_of(model);
+    let children: Vec<Vec<usize>> = model.nodes.iter().map(|n| n.children.clone()).collect();
     let root = &model.nodes[0];
     let weights: Vec<f32> = root
         .children
         .iter()
-        .map(|&c| subtree_weight(model, &children, &sizes, c))
+        .map(|&c| subtree_weight(&children, &sizes, c))
         .collect();
     let total: f32 = weights.iter().sum();
     let mut split = root.children.len();
@@ -92,10 +103,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let root_gap = m.rank_sep * 1.1;
     let mut rects = vec![root_rect; model.nodes.len()];
     let mut sides = vec![Side::Right; model.nodes.len()];
-    let mut branch = vec![0u16; model.nodes.len()];
+    let mut branch = vec![0; model.nodes.len()];
     for (b, &c) in root.children.iter().enumerate() {
-        for (node, _) in crate::layout::tree::preorder(&children, &[c]) {
-            branch[node] = b as u16;
+        for (node, _) in preorder(&children, &[c]) {
+            branch[node] = b;
         }
     }
     for (side, roots) in [(Side::Right, &right), (Side::Left, &left)] {
@@ -103,7 +114,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             continue;
         }
         let places = tidy(&tidy_nodes, roots, gaps);
-        for (node, _) in crate::layout::tree::preorder(&children, roots) {
+        for (node, _) in preorder(&children, roots) {
             let p = places[node];
             let [w, h] = sizes[node];
             let x = match side {
@@ -160,7 +171,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 let y = rect.bottom();
                 let mut line = PathData::new();
                 line.move_to([rect.x, y]).line_to([rect.right(), y]);
-                let width = if depth_one(model, i) {
+                let width = if root.children.contains(&i) {
                     StrokeWidth::Thick
                 } else {
                     StrokeWidth::Hairline
@@ -173,12 +184,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             _ => out.shape(outline(shape, rect), Some(fill), stroke),
         }
         let laid = &labels[i];
-        let content_w = laid.width
-            + if node.icon.is_some() {
-                icon + if laid.is_empty() { 0.0 } else { icon_gap }
-            } else {
-                0.0
-            };
+        let content_w = laid.width + icon_room(node.icon.is_some(), laid);
         let c = rect.center();
         let mut x = c[0] - content_w / 2.0;
         if node.icon.is_some() {
@@ -215,14 +221,6 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     Ok(out.finish(content, m.margin))
 }
 
-fn children_of(model: &Model) -> Vec<Vec<usize>> {
-    model.nodes.iter().map(|n| n.children.clone()).collect()
-}
-
-fn depth_one(model: &Model, i: usize) -> bool {
-    model.nodes[0].children.contains(&i)
-}
-
 /// The root has no bare form: undecorated, it is a rounded box.
 fn shape_of(model: &Model, i: usize) -> NodeShape {
     match model.nodes[i].shape {
@@ -231,15 +229,11 @@ fn shape_of(model: &Model, i: usize) -> NodeShape {
     }
 }
 
-fn series(index: u16, tone: Tone) -> Ink {
-    Ink::Series { index, tone }
-}
-
 /// The breadth a subtree needs, counted over its leaves.
-fn subtree_weight(model: &Model, children: &[Vec<usize>], sizes: &[[f32; 2]], root: usize) -> f32 {
-    crate::layout::tree::preorder(children, &[root])
+fn subtree_weight(children: &[Vec<usize>], sizes: &[[f32; 2]], root: usize) -> f32 {
+    preorder(children, &[root])
         .into_iter()
-        .filter(|&(n, _)| model.nodes[n].children.is_empty())
+        .filter(|&(n, _)| children[n].is_empty())
         .map(|(n, _)| sizes[n][1] + 8.0)
         .sum()
 }
@@ -255,15 +249,14 @@ fn shape_size(shape: NodeShape, inner: [f32; 2], pad: [f32; 2]) -> [f32; 2] {
         NodeShape::Hexagon => Shape::Hexagon.size(inner, pad),
         // The label box fits the inner ellipse; spikes and bumps go
         // outside it.
-        NodeShape::Bang => {
-            let a = (w / 2.0 + px * 0.5) * std::f32::consts::SQRT_2;
-            let b = (h / 2.0 + py * 0.5) * std::f32::consts::SQRT_2;
-            [2.0 * a / BANG_INNER, 2.0 * b / BANG_INNER]
-        }
-        NodeShape::Cloud => {
-            let a = (w / 2.0 + px * 0.5) * std::f32::consts::SQRT_2;
-            let b = (h / 2.0 + py * 0.5) * std::f32::consts::SQRT_2;
-            [2.0 * a * CLOUD_PUFF, 2.0 * b * CLOUD_PUFF]
+        NodeShape::Bang | NodeShape::Cloud => {
+            let a = (w / 2.0 + px * 0.5) * SQRT_2;
+            let b = (h / 2.0 + py * 0.5) * SQRT_2;
+            if shape == NodeShape::Bang {
+                [2.0 * a / BANG_INNER, 2.0 * b / BANG_INNER]
+            } else {
+                [2.0 * a * CLOUD_PUFF, 2.0 * b * CLOUD_PUFF]
+            }
         }
     }
 }

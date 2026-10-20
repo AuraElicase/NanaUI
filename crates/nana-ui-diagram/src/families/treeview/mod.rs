@@ -5,15 +5,14 @@ use std::collections::HashMap;
 
 use nana_ui_core::{RadiusTier, SemanticColorMix, SemanticColorRole as R};
 
-use super::{LayoutCx, ParseCx};
+use super::{LayoutCx, ParseCx, graphkit, kit};
 use crate::geom::PathData;
 use crate::geom::path::rounded_polyline;
 use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth};
-use crate::kind;
 use crate::layout::tree::{Outline, preorder};
 use crate::source::directives::AuthorStyle;
 use crate::style::{self, Paint};
-use crate::text::{FontSpec, Label};
+use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
 pub(crate) const NATIVE: bool = true;
@@ -38,24 +37,7 @@ pub(crate) struct Model {
 
 /// Characters a `tree`-style prefix is drawn with.
 fn is_prefix(c: char) -> bool {
-    c.is_whitespace()
-        || matches!(
-            c,
-            '│' | '├'
-                | '└'
-                | '─'
-                | '┃'
-                | '┣'
-                | '┗'
-                | '━'
-                | '┬'
-                | '┼'
-                | '╰'
-                | '╭'
-                | '|'
-                | '`'
-                | '+'
-        )
+    c.is_whitespace() || "│├└─┃┣┗━┬┼╰╭|`+".contains(c)
 }
 
 /// The prefix width and the item text. ASCII trees (`|-- a`, `` `-- b ``)
@@ -81,23 +63,9 @@ fn split_prefix(line: &str) -> (usize, &str) {
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
     let mut model = Model::default();
     let mut outline = Outline::new();
-    let mut header_seen = false;
-    for (index, line) in body.lines().enumerate() {
+    let (header, _) = kit::header(body)?;
+    for (index, line) in body.lines().enumerate().skip(header + 1) {
         let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if !header_seen {
-            if kind::header(trimmed).is_none() {
-                return Err(DiagramError::syntax(
-                    index as u32 + 1,
-                    1,
-                    "expected `treeView-beta`",
-                ));
-            }
-            header_seen = true;
-            continue;
-        }
         if let Some(rest) = trimmed.strip_prefix("classDef ") {
             let rest = rest.trim().trim_end_matches(';');
             match rest.split_once(char::is_whitespace) {
@@ -172,9 +140,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             children: Vec::new(),
         });
     }
-    if !header_seen {
-        return Err(DiagramError::Empty);
-    }
     Ok(model)
 }
 
@@ -209,8 +174,9 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         depth: usize,
         y: f32,
         h: f32,
-        label: crate::text::LaidText,
+        label: LaidText,
         text_x: f32,
+        folder: bool,
     }
     let mut laid_rows = Vec::with_capacity(rows.len());
     let mut y = 0.0;
@@ -233,6 +199,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             h,
             label,
             text_x,
+            folder,
         });
         y += h + row_gap;
     }
@@ -262,9 +229,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     rail,
                 );
             } else {
-                let mut tick = PathData::new();
-                tick.move_to([x, cy]).line_to([end, cy]);
-                out.stroke(Geom::path(tick), rail);
+                graphkit::line(&mut out, [x, cy], [end, cy], rail);
             }
         }
     }
@@ -272,19 +237,18 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let highlight = Ink::Mix(SemanticColorMix::alpha(R::Highlight, 0.28));
     for row in &laid_rows {
         let n = &model.nodes[row.node];
-        let folder = n.folder || !n.children.is_empty();
-        let author = n
-            .classes
-            .iter()
-            .filter_map(|c| model.class_defs.get(c))
-            .fold(AuthorStyle::default(), |acc, s| acc.merged(s));
         let x = row.depth as f32 * indent;
         if show_icons || n.icon.is_some() {
             let cy = row.y + row.label.line_height / 2.0;
-            draw_icon(&mut out, Rect::new(x, cy - icon / 2.0, icon, icon), folder);
+            draw_icon(&mut out, Rect::new(x, cy - icon / 2.0, icon, icon), row.folder);
         }
         let mut ink = style::TEXT;
         if !n.classes.is_empty() {
+            let author = n
+                .classes
+                .iter()
+                .filter_map(|c| model.class_defs.get(c))
+                .fold(AuthorStyle::default(), |acc, s| acc.merged(s));
             let paint = Paint {
                 fill: highlight,
                 ..Paint::node()

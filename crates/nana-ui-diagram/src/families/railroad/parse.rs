@@ -7,8 +7,7 @@
 //! at the next `;` or the next `name =`.
 
 use super::{Expr, Model, Notation, Rule};
-use crate::families::ParseCx;
-use crate::kind;
+use crate::families::{ParseCx, kit};
 use crate::{DiagramError, LimitKind};
 
 /// How deeply groups and calls may nest.
@@ -37,18 +36,9 @@ const PUNCT: &[&str] = &[
 ];
 
 pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
+    let (header, _) = kit::header(body)?;
     let mut lines: Vec<&str> = body.lines().collect();
-    let Some(header) = lines.iter().position(|l| !l.trim().is_empty()) else {
-        return Err(DiagramError::Empty);
-    };
     let head = lines[header].trim();
-    if kind::header(head).is_none() {
-        return Err(DiagramError::syntax(
-            header as u32 + 1,
-            1,
-            "expected a railroad header",
-        ));
-    }
     let notation = if head.starts_with("railroad-abnf") {
         Notation::Abnf
     } else if head.starts_with("railroad-peg") {
@@ -58,12 +48,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     };
     lines[header] = "";
     for line in lines.iter_mut() {
-        let t = line.trim();
-        if let Some(rest) = t.strip_prefix("title")
-            && (rest.is_empty() || rest.starts_with(char::is_whitespace))
-            && !rest.trim_start().starts_with(['=', ':', '<'])
+        if let Some(rest) = kit::keyword(line.trim(), "title")
+            && !rest.starts_with(['=', ':', '<'])
         {
-            let title = rest.trim().trim_matches(['"', '\'']);
+            let title = rest.trim_matches(['"', '\'']);
             cx.limits.check_label(title)?;
             cx.meta.title = Some(title.to_string()).filter(|t| !t.is_empty());
             *line = "";
@@ -258,11 +246,7 @@ fn is_define(tok: Option<&Token>) -> bool {
 }
 
 fn zero_or_more(item: Expr, separator: Option<Expr>) -> Expr {
-    Expr::Optional(Box::new(Expr::OneOrMore {
-        item: Box::new(item),
-        separator: separator.map(Box::new),
-        note: None,
-    }))
+    Expr::Optional(Box::new(one_or_more(item, separator, None)))
 }
 
 fn one_or_more(item: Expr, separator: Option<Expr>, note: Option<String>) -> Expr {
@@ -660,9 +644,9 @@ impl Parser<'_, '_> {
             }
         };
         let expr = match expr {
-            Expr::Sequence(mut items) if items.len() <= 1 => items.pop().unwrap_or(Expr::Skip),
-            Expr::Choice(items) if items.is_empty() => Expr::Skip,
-            Expr::Choice(mut items) if items.len() == 1 => items.pop().unwrap_or(Expr::Skip),
+            Expr::Sequence(mut items) | Expr::Choice(mut items) if items.len() <= 1 => {
+                items.pop().unwrap_or(Expr::Skip)
+            }
             other => other,
         };
         self.count(expr)
@@ -710,21 +694,11 @@ impl Function {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn rules(src: &str) -> Vec<Rule> {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model.rules
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap().rules
     }
 
     #[test]
