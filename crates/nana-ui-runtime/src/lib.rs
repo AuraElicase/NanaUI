@@ -68,6 +68,7 @@ mod layout_result;
 pub use layout_engine::plan_stats;
 mod browser_view;
 mod menus;
+pub mod fold;
 mod motion_api;
 mod mutation;
 mod native_content;
@@ -318,7 +319,9 @@ pub use menus::{
     ActionMenuItem, AnchoredActionMenu, ContextMenu, ContextMenuEvent, ContextMenuItem,
     resolve_anchored_origin,
 };
-pub use motion_api::{FlipBuilder, NodeMotion, SpringBuilder, TimelineBuilder, TransitionBuilder};
+pub use motion_api::{
+    FlipBuilder, FoldBuilder, NodeMotion, SpringBuilder, TimelineBuilder, TransitionBuilder,
+};
 pub use mutation::{MutationQueue, UiMutation};
 /// The chart model: options, layout and the GPU mark contract.
 #[cfg(feature = "charts")]

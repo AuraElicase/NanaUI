@@ -66,6 +66,23 @@ impl<'a> NodeMotion<'a> {
         }
     }
 
+    /// One side of a [fold](crate::fold): its opacity and transform run from
+    /// `from` to `to` on one timing, each on its own curve, replacing what
+    /// the node's own tracks were playing and holding both ends.
+    pub fn fold(self, from: crate::fold::Pose, to: crate::fold::Pose) -> FoldBuilder<'a> {
+        FoldBuilder {
+            queue: self.queue,
+            target: self.id,
+            now: self.now,
+            from,
+            to,
+            duration: nana_ui_core::motion::OVERLAY_FADE,
+            fade: STANDARD_EASING,
+            travel: STANDARD_EASING,
+            started: false,
+        }
+    }
+
     /// Explicit FLIP: layout is already Last. Presentation translate plays to identity.
     pub fn flip(
         self,
@@ -448,6 +465,82 @@ impl FlipBuilder<'_> {
 }
 
 impl Drop for FlipBuilder<'_> {
+    fn drop(&mut self) {
+        self.commit();
+    }
+}
+
+/// The default theme's settling curve, until a fold names its own.
+const STANDARD_EASING: Easing =
+    nana_ui_core::MotionTokens::DEFAULT.easing(nana_ui_core::EasingRole::Standard);
+
+/// `node.fold(from, to).duration(d).fade(e).travel(e)`.
+pub struct FoldBuilder<'a> {
+    queue: &'a mut MutationQueue,
+    target: StableNodeId,
+    now: Duration,
+    from: crate::fold::Pose,
+    to: crate::fold::Pose,
+    duration: Duration,
+    fade: Easing,
+    travel: Easing,
+    started: bool,
+}
+
+impl FoldBuilder<'_> {
+    pub fn duration(mut self, duration: Duration) -> Self {
+        self.duration = duration;
+        self
+    }
+
+    /// The opacity's curve.
+    pub fn fade(mut self, easing: Easing) -> Self {
+        self.fade = easing;
+        self
+    }
+
+    /// The transform's curve.
+    pub fn travel(mut self, easing: Easing) -> Self {
+        self.travel = easing;
+        self
+    }
+
+    /// One curve for both.
+    pub fn ease(self, easing: Easing) -> Self {
+        self.fade(easing).travel(easing)
+    }
+
+    pub fn start(mut self) {
+        self.commit();
+    }
+
+    fn commit(&mut self) {
+        if self.started {
+            return;
+        }
+        self.started = true;
+        let run = |property, from, to, easing| {
+            AnimationSpec::run(self.target, property, from, to, self.now, self.duration)
+                .with_curve(MotionCurve::Easing(easing))
+        };
+        let opacity = run(
+            AnimatableProperty::Opacity,
+            MotionValue::Scalar(self.from.opacity),
+            MotionValue::Scalar(self.to.opacity),
+            self.fade,
+        );
+        let transform = run(
+            AnimatableProperty::Transform,
+            MotionValue::Transform(self.from.transform),
+            MotionValue::Transform(self.to.transform),
+            self.travel,
+        );
+        self.queue.start_animation(opacity);
+        self.queue.start_animation(transform);
+    }
+}
+
+impl Drop for FoldBuilder<'_> {
     fn drop(&mut self) {
         self.commit();
     }
