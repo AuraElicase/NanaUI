@@ -159,8 +159,6 @@ impl std::fmt::Debug for VideoGpuBridge {
 
 #[cfg(feature = "hosted")]
 impl VideoGpuBridge {
-    const VIDEO_TEXTURE_ID_BIT: u64 = 1 << 62;
-
     pub(crate) fn new(gpu: nana_ui::GpuContext, textures: nana_ui::HostTextureRegistry) -> Self {
         Self {
             store: crate::canvas_gpu::HostTextureSlotStore::new(gpu, textures),
@@ -194,7 +192,6 @@ impl VideoGpuBridge {
                     // Must match `tree::video_host_texture_slot` (`video:{id}`)
                     // so Scene samples this node in document order.
                     slot: &format!("video:{}", id.0),
-                    texture_id: Self::VIDEO_TEXTURE_ID_BIT | id.0,
                     width: upload.width,
                     height: upload.height,
                     version: upload.version,

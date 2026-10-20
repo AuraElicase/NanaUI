@@ -678,7 +678,7 @@ fn media_controls_and_theme_roles_bind_from_a_template() {
     let state = std::cell::Cell::new(None);
     let mounted = cx
         .mount_view(parent.stable_id(), || {
-            let cover: Signal<std::sync::Arc<str>> = signal("".into());
+            let cover: Signal<nana_ui_runtime::TextureSlotName> = signal("".into());
             let liked = signal(false);
             let likes = signal(0u32);
             state.set(Some((cover, liked, likes)));

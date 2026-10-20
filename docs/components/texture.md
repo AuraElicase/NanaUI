@@ -4,7 +4,7 @@
 
 ## 基本用法
 
-用来放视频帧和预览，不加载网页。字段是 `resource: Arc<str>`、`generation: u64`、`version: u64`、`opacity: f32`、`corner_radius: f32`。没有事件，也没有 `model`。`resource` 是宿主纹理登记的槽名，十进制 id 也可以，只要宿主用这个键登记过。
+用来放视频帧和预览，不加载网页。字段是 `resource: TextureSlotName`、`opacity: f32`、`corner_radius: f32`。没有事件，也没有 `model`。`resource` 是宿主纹理登记的槽名，十进制 id 也可以，只要宿主用这个键登记过。
 
 :::api
 
@@ -28,9 +28,7 @@ texture().resource(frame).corner_radius(8_f32)
 
 ## 换图
 
-`generation` 只在换掉采样视图时变。`version` 在每次内容失效时变。晚到的帧要推进其中一个，画面才会更新。组件上是 `replace_view` 和 `invalidate_content`。
-
-`generation` 在高 32 位，`version` 在低 32 位。换视图只动 generation，刷新像素只动 version。
+换图只在宿主那边做：往同一个槽重新登记纹理（新像素、换了视图、设备重建后重新上传），所有显示这个槽的视图下一帧就采样到新纹理，不用动组件。组件上没有修订号，所以同一个槽可以同时给几个视图用。
 
 默认只采样第 0 层，宿主按 `painted_extent` 准备尺寸。有 mip 链时，`.sampling(ImageSampling::Mipmap)` 改三线性。
 
@@ -50,9 +48,7 @@ texture().resource(frame).corner_radius(8_f32)
 
 | 属性 | 类型 | 说明 |
 | --- | --- | --- |
-| `resource` | `Arc<str>` | 宿主纹理登记的槽名，十进制 id 也可以，只要宿主用这个键登记过。空的不挂场景节点，避免空白身份被拒绝 |
-| `generation` | `u64` | 只在换掉采样视图时变。在高 32 位。换视图只动它 |
-| `version` | `u64` | 每次内容失效时变。在低 32 位。刷新像素只动它 |
+| `resource` | `TextureSlotName` | 宿主纹理登记的槽名，十进制 id 也可以，只要宿主用这个键登记过。空的不挂场景节点，避免空白身份被拒绝 |
 | `opacity` | `f32` | 不写时是完全不透明。投影时夹到 0 到 1，非有限值按 1 |
 | `corner_radius` | `f32` | 四角同一个半径。模板里 `corner_radius=8` 展开成 `8_f32`。非有限或负数按 0 |
 

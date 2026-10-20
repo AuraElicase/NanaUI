@@ -2988,7 +2988,7 @@ fn host_texture_wrapped_with_an_srgb_view_is_decoded_when_sampled() {
     let registry = HostTextureRegistry::new();
     registry.register(
         "layer",
-        crate::HostTexture::new(1, 1, &wrapped),
+        crate::HostTexture::new(&wrapped),
         4,
         4,
         crate::HostTextureAlphaMode::Opaque,
@@ -4749,16 +4749,12 @@ fn hosted_preview_scene(device: &wgpu::Device) -> (UiScene, HostTextureRegistry)
         context.world().extract_nodes(&work.render_extraction),
         work.render_removals,
     );
-    let texture = crate::HostTexture::new(
-        1,
-        1,
-        &crate::test_gpu::wrap_view(&test_target(
-            device,
-            wgpu::TextureFormat::Rgba8Unorm,
-            64,
-            48,
-        )),
-    );
+    let texture = crate::HostTexture::new(&crate::test_gpu::wrap_view(&test_target(
+        device,
+        wgpu::TextureFormat::Rgba8Unorm,
+        64,
+        48,
+    )));
     let registry = HostTextureRegistry::new();
     registry.register(
         "preview",
@@ -5870,7 +5866,7 @@ fn register_into(
 ) {
     registry.register(
         resource,
-        crate::HostTexture::new(1, 1, &crate::test_gpu::wrap_view(view)),
+        crate::HostTexture::new(&crate::test_gpu::wrap_view(view)),
         width,
         height,
         crate::HostTextureAlphaMode::Premultiplied,
@@ -13053,7 +13049,7 @@ fn frames_targets_and_host_textures_from_another_device_are_refused() {
         .unwrap();
     registry.register(
         "preview",
-        crate::HostTexture::new(1, 1, &stale),
+        crate::HostTexture::new(&stale),
         4,
         4,
         crate::HostTextureAlphaMode::Opaque,

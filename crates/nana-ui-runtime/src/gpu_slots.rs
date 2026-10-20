@@ -32,6 +32,104 @@ pub const GPU_VIEW_RENDERER: &str = "gpu-view";
 /// string is `"nana.host-texture"`, never `"gpu-texture-view"`.
 pub const GPU_TEXTURE_VIEW_RENDERER: &str = HOST_TEXTURE_RENDERER;
 
+/// Name of a host texture registry slot: what a [`GpuTextureView`],
+/// [`crate::Thumbnail`], [`crate::Avatar`], [`crate::Video`] or
+/// [`crate::ImageViewer`] samples, and what the host registers a texture
+/// under. An empty name samples nothing.
+///
+/// Which texture a slot holds, and when it changed, is the registry's alone:
+/// views carry no revision of their own, so re-registering a slot (new pixels,
+/// a replaced view, a rebuilt device) reaches every view of it without the
+/// host touching them.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct TextureSlotName(Arc<str>);
+
+impl TextureSlotName {
+    pub fn new(name: impl Into<Arc<str>>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Whether this names no slot (empty or whitespace only).
+    pub fn is_empty(&self) -> bool {
+        self.0.trim().is_empty()
+    }
+
+    /// The Scene `resource` string of a host-texture node.
+    pub fn to_resource(&self) -> Arc<str> {
+        Arc::clone(&self.0)
+    }
+}
+
+impl std::fmt::Debug for TextureSlotName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&*self.0, f)
+    }
+}
+
+impl std::fmt::Display for TextureSlotName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for TextureSlotName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::borrow::Borrow<str> for TextureSlotName {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&str> for TextureSlotName {
+    fn from(name: &str) -> Self {
+        Self(name.into())
+    }
+}
+
+impl From<String> for TextureSlotName {
+    fn from(name: String) -> Self {
+        Self(name.into())
+    }
+}
+
+impl From<&String> for TextureSlotName {
+    fn from(name: &String) -> Self {
+        Self(name.as_str().into())
+    }
+}
+
+impl From<Arc<str>> for TextureSlotName {
+    fn from(name: Arc<str>) -> Self {
+        Self(name)
+    }
+}
+
+impl From<&TextureSlotName> for TextureSlotName {
+    fn from(name: &TextureSlotName) -> Self {
+        name.clone()
+    }
+}
+
+impl PartialEq<str> for TextureSlotName {
+    fn eq(&self, other: &str) -> bool {
+        &*self.0 == other
+    }
+}
+
+impl PartialEq<&str> for TextureSlotName {
+    fn eq(&self, other: &&str) -> bool {
+        &*self.0 == *other
+    }
+}
+
 /// Packs identity and content counters for [`CustomRenderNode::revision`].
 ///
 /// `generation` occupies the high 32 bits and changes when the host replaces
@@ -189,11 +287,9 @@ impl GpuView {
 /// Displays a host-owned texture inside a layout region.
 ///
 /// Product default. `resource` is the host texture registry slot (the same
-/// string registered for `"nana.host-texture"`). Decimal IDs such as `"42"`
-/// are valid if the host registers that key. `generation` changes only when the
-/// sampled view is replaced. `version` changes for every content invalidation.
-/// Presentation fields stay on this view so CustomRenderNode can keep a
-/// backend-neutral id/revision contract. Pointer events default to off;
+/// name registered for `"nana.host-texture"`). The registry decides which
+/// texture that is: re-registering the slot is all a host does to show new
+/// pixels, so the view itself has no revision. Pointer events default to off;
 /// [`Self::with_pointer_events`] opts a specific instance into hit-testing.
 ///
 /// Not a page loader. Runtime [`crate::BrowserView`] is the separate native
@@ -201,15 +297,13 @@ impl GpuView {
 /// is not a `GpuTextureView` alias. See `docs/reference/window.md` and `docs/reference/gpu.md`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuTextureView {
-    pub resource: Arc<str>,
+    pub resource: TextureSlotName,
     /// Accessible name announced for the rendered content.  Host textures
     /// have no intrinsic text, so applications should provide this for any
     /// image that conveys information to assistive technology.
     pub label: Option<Arc<str>>,
     /// Optional additional context announced with [`Self::label`].
     pub description: Option<Arc<str>>,
-    pub generation: u64,
-    pub version: u64,
     pub opacity: f32,
     pub corner_radius: f32,
     pub fit: nana_ui_core::ContentFit,
@@ -262,13 +356,11 @@ impl GpuTextureView {
         Some(uv.map(|v| (v - 0.5) / zoom + 0.5))
     }
 
-    pub fn new(resource: impl Into<Arc<str>>) -> Self {
+    pub fn new(resource: impl Into<TextureSlotName>) -> Self {
         Self {
             resource: resource.into(),
             label: None,
             description: None,
-            generation: 0,
-            version: 0,
             opacity: 1.0,
             corner_radius: 0.0,
             fit: nana_ui_core::ContentFit::Fill,
@@ -360,39 +452,19 @@ impl GpuTextureView {
         self.fit(nana_ui_core::ContentFit::Contain)
     }
 
-    /// Marks the current view as containing new host-rendered content.
-    pub fn invalidate_content(&mut self) -> u64 {
-        self.version = self.version.saturating_add(1);
-        self.version
-    }
-
-    /// Records that the host replaced the sampled view. Does not touch
-    /// [`Self::version`].
-    pub fn replace_view(&mut self, generation: u64) -> u64 {
-        self.generation = generation;
-        self.generation
-    }
-
-    pub const fn revision(&self) -> u64 {
-        pack_gpu_revision(self.generation, self.version)
-    }
-
     /// Host-texture Scene node. Empty identities are omitted so the world
-    /// does not reject a blank `resource`.
+    /// does not reject a blank `resource`. Its revision is always 0: the
+    /// painter resolves the slot in the registry every frame.
     pub fn custom_render(&self) -> Option<CustomRenderNode> {
-        if self.resource.trim().is_empty() {
+        if self.resource.is_empty() {
             return None;
         }
         Some(
-            CustomRenderNode::new(
-                GPU_TEXTURE_VIEW_RENDERER,
-                Arc::clone(&self.resource),
-                self.revision(),
-            )
-            .with_fit(self.fit)
-            .with_checkerboard(self.checkerboard)
-            .with_zoom(self.zoom)
-            .with_sampling(self.sampling),
+            CustomRenderNode::new(GPU_TEXTURE_VIEW_RENDERER, self.resource.to_resource(), 0)
+                .with_fit(self.fit)
+                .with_checkerboard(self.checkerboard)
+                .with_zoom(self.zoom)
+                .with_sampling(self.sampling),
         )
     }
 
@@ -532,12 +604,6 @@ impl RegisterableComponent for GpuTextureView {
         }) {
             view.pointer_events = true;
         }
-        if let Some(generation) = spec.attr("generation").and_then(|raw| raw.parse().ok()) {
-            view.replace_view(generation);
-        }
-        if let Some(version) = spec.attr("version").and_then(|raw| raw.parse().ok()) {
-            view.version = version;
-        }
         view
     }
 }
@@ -666,31 +732,18 @@ mod tests {
     }
 
     #[test]
-    fn generation_and_version_bumps_are_independent() {
-        let mut texture = GpuTextureView::new("preview");
+    fn gpu_view_generation_and_version_bumps_are_independent() {
         let mut view = GpuView::new(11).mode(GpuViewMode::Standalone);
-        assert_eq!(texture.generation, 0);
-        assert_eq!(texture.version, 0);
         assert_eq!(view.generation, 0);
         assert_eq!(view.version, 0);
 
-        assert_eq!(texture.invalidate_content(), 1);
         assert_eq!(view.invalidate_content(), 1);
-        assert_eq!(texture.generation, 0);
         assert_eq!(view.generation, 0);
-        assert_eq!(texture.version, 1);
         assert_eq!(view.version, 1);
 
-        assert_eq!(texture.replace_view(4), 4);
         assert_eq!(view.replace_view(4), 4);
-        assert_eq!(texture.generation, 4);
         assert_eq!(view.generation, 4);
-        assert_eq!(texture.version, 1);
         assert_eq!(view.version, 1);
-
-        assert_eq!(texture.invalidate_content(), 2);
-        assert_eq!(texture.generation, 4);
-        assert_eq!(texture.version, 2);
     }
 
     #[test]
@@ -716,12 +769,9 @@ mod tests {
 
     #[test]
     fn texture_view_uses_host_texture_renderer_and_registry_resource() {
-        let mut texture = GpuTextureView::new("preview-slot")
+        let texture = GpuTextureView::new("preview-slot")
             .with_opacity(0.5)
             .with_corner_radius(8.0);
-        texture.replace_view(3);
-        texture.invalidate_content();
-        texture.invalidate_content();
 
         let node = texture.custom_render().expect("non-empty host slot");
         assert_eq!(node.renderer.as_ref(), "nana.host-texture");
@@ -729,9 +779,10 @@ mod tests {
         assert_eq!(node.renderer.as_ref(), crate::HOST_TEXTURE_RENDERER);
         assert_ne!(node.renderer.as_ref(), "gpu-texture-view");
         assert_eq!(node.resource.as_ref(), "preview-slot");
-        assert_eq!(node.revision, pack_gpu_revision(3, 2));
-        assert_eq!(unpack_gpu_revision(node.revision), (3, 2));
-        assert_eq!(node.revision, (3 << 32) | 2);
+        assert_eq!(
+            node.revision, 0,
+            "the registry, not the view, versions a slot"
+        );
         assert_eq!(node.fit, nana_ui_core::ContentFit::Fill);
         assert_eq!(
             GpuTextureView::new("preview-slot")
@@ -745,7 +796,7 @@ mod tests {
         let decimal = GpuTextureView::new("42").custom_render().unwrap();
         assert_eq!(decimal.renderer.as_ref(), "nana.host-texture");
         assert_eq!(decimal.resource.as_ref(), "42");
-        assert_eq!(decimal.revision, pack_gpu_revision(0, 0));
+        assert_eq!(decimal.revision, 0);
 
         assert!(GpuTextureView::new("").custom_render().is_none());
         assert!(GpuTextureView::new("   ").custom_render().is_none());

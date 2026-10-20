@@ -233,12 +233,28 @@ impl RetiredIds {
 }
 
 /// Stable document/window ownership boundary.
+///
+/// An application takes one per document from [`Self::allocate`]; a fixed
+/// number through [`Self::new`] is for tests and fixtures that name their
+/// documents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DocumentId(u64);
+
+/// First id [`DocumentId::allocate`] hands out: above any number a test or
+/// fixture writes by hand, and low enough that a Vue document's node handles
+/// (`(id - 1) * 2^32 + local`) stay exact in a JavaScript number.
+const FIRST_ALLOCATED_DOCUMENT: u64 = 1 << 16;
+static NEXT_DOCUMENT: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(FIRST_ALLOCATED_DOCUMENT);
 
 impl DocumentId {
     pub const fn new(value: u64) -> Option<Self> {
         if value == 0 { None } else { Some(Self(value)) }
+    }
+
+    /// An id no other call in this process returns.
+    pub fn allocate() -> Self {
+        Self(NEXT_DOCUMENT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     }
 
     pub const fn get(self) -> u64 {

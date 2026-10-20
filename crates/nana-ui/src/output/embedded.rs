@@ -5,7 +5,6 @@
 //! a registry slot cannot return storage that an in-flight parent still uses.
 
 use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use nana_gpu::{DeviceGeneration, FrameContext, GpuContext, GpuError, GpuSubmission, GpuTexture};
@@ -17,8 +16,6 @@ use crate::{
     AlphaEncoding, HostTexture, HostTextureAlphaMode, HostTextureBinding, HostTextureRegistry,
     ScenePresentationColorSpace, ScenePresentationProfile,
 };
-
-static NEXT_EMBEDDED_TEXTURE_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Handle to the parent's authoritative presentation/input geometry.
 ///
@@ -220,8 +217,6 @@ impl EmbeddedSurfaceNode {
             .map_err(|_| EmbeddedMetadataError::StaleFrame)?
             .clone();
         let host_texture = HostTexture::new_retained(
-            NEXT_EMBEDDED_TEXTURE_ID.fetch_add(1, Ordering::Relaxed),
-            metadata.content_revision,
             &texture,
             Arc::new(frame.clone()),
             frame.provenance().clone(),

@@ -148,7 +148,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 `Avatar` 是圆形 Cover-fit `HostTexture` 槽（`nana.avatar` / `<nana-avatar>`，采样 `nana.host-texture`）。默认不参与命中。不可焦点。空 `resource`、宿主清空、加载失败都走 Subtle 占位。**不**自绘产品字母。加载失败由宿主把 `resource` 清成空。不改缺槽拒绝帧的 GPU 合同。有 `label` 时 AccessKit 为 Image 且有名。无名则为 Image 无 name。无点击事件。与 `Thumbnail` 的区分见 rustdoc（Cover、圆形、固定边长）。
 
-`HoverCard::trigger_image` 与 `Avatar` / `Thumbnail` 一样走 generation / version。`replace_view(generation)` / `invalidate_content()` 推进 Scene revision。宿主纹理晚到时，画面才会从占位换成实图。
+`HoverCard::trigger_image` 与 `Avatar` / `Thumbnail` 一样只给槽名。宿主纹理晚到或换掉时，往槽里重新登记即可，组件不用改。
 
 ### OverlayVisibility
 

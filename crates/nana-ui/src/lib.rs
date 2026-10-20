@@ -309,6 +309,7 @@ pub use nana_ui_platform::{
 pub use nana_ui_runtime::{
     AccessibilityActionRequest, AccessibilityNode, AccessibilityRole, AccessibilityUpdate,
 };
+pub use nana_ui_runtime::{DocumentId, TextureSlotName};
 pub use nana_ui_runtime::{
     HeadlessInput, InputBindError, InputCounters, InputRouteError, InputRouteOutcome, RoutedEvent,
 };

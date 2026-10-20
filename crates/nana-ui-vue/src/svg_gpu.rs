@@ -7,8 +7,6 @@ use nana_ui::{GpuContext, HostTextureBinding, HostTextureRegistry};
 use crate::canvas_gpu::{HostTextureSlotStore, HostTextureUpload};
 use crate::svg_raster::SvgHostUpload;
 
-const SVG_TEXTURE_ID_BIT: u64 = 1 << 62;
-
 #[derive(Clone)]
 pub(crate) struct SvgGpuBridge {
     store: HostTextureSlotStore<String>,
@@ -47,7 +45,6 @@ impl SvgGpuBridge {
                 upload.slot.clone(),
                 HostTextureUpload {
                     slot: &upload.slot,
-                    texture_id: SVG_TEXTURE_ID_BIT | upload.node,
                     width: upload.raster.width,
                     height: upload.raster.height,
                     version: upload.version,

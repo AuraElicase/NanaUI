@@ -248,8 +248,6 @@ fn cyclic_retained_output_preserves_real_direct_pixels_for_shared_and_separate_r
         // Opaque white is invariant under the ordinary HostTexture linear
         // sampling contract. The binding retains exact producer ancestry.
         let texture = crate::HostTexture::new_retained(
-            242,
-            retained.content_revision(),
             retained.texture().unwrap(),
             std::sync::Arc::new(retained.clone()),
             retained.provenance().clone(),

@@ -5597,7 +5597,7 @@ mod tests {
         let registry = HostTextureRegistry::new();
         registry.register(
             slot,
-            HostTexture::new(1, 1, &crate::test_gpu::texture(1, 1)),
+            HostTexture::new(&crate::test_gpu::texture(1, 1)),
             8,
             8,
             HostTextureAlphaMode::Premultiplied,

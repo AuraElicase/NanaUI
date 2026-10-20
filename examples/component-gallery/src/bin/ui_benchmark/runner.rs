@@ -74,7 +74,7 @@ pub fn run() -> BenchmarkReport {
     let host_textures = HostTextureRegistry::new();
     host_textures.register(
         "gallery.thumb",
-        HostTexture::new(1, 0, &thumbnail),
+        HostTexture::new(&thumbnail),
         32,
         32,
         HostTextureAlphaMode::Opaque,

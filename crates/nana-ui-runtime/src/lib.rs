@@ -272,7 +272,8 @@ pub use framework::{EditableHooks, TypeBehavior, TypeHooks};
 pub use glyph_cache::GlyphCache;
 pub use gpu_slots::{
     GPU_TEXTURE_VIEW_RENDERER, GPU_VIEW_RENDERER, GpuTextureView, GpuView, GpuViewMode,
-    GpuViewPalette, HOST_TEXTURE_RENDERER, gpu_view_params, pack_gpu_revision, unpack_gpu_revision,
+    GpuViewPalette, HOST_TEXTURE_RENDERER, TextureSlotName, gpu_view_params, pack_gpu_revision,
+    unpack_gpu_revision,
 };
 #[cfg(feature = "graph-canvas")]
 pub use graph_canvas::{
