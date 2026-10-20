@@ -47,6 +47,8 @@ import "@nanaui/nanavue-components/controls.css";
 
 通知角用 [ToastStack](../components/toast-stack.md)。`push_toast` 装配并放进最新的一条，先量高度、再按 `max_visible` 和高度决定显示哪些，其余排队；`remove_toast` 让在屏上的那条在原位播完退场再拿掉，其余收拢；`clear_toasts` 全部拿掉。`ToastStack::place_in` 与 `Toast::place_in` 同一个预留合同，多一个 `max_height`。栈本身不命中，空隙落到下面的舞台。应用把栈放在模态层之上（模态卡片的 `z_index` 是 1000）时，模态打开期间栈里的提示照常可按，不算点在模态外面，焦点和 Tab 留在模态里。
 
+多窗口应用的通知用 `nana_ui::notices`。`NoticeCenter<K, A>` 只有一份，持有全部通知：带业务键 `K` 的按键原位替换，无键消息在 `repeat_window` 内同文不重复。总数超过 `max` 时，先让位普通消息，运行中的任务和它的结果不丢。每条记住来源窗口（`NoticeSource`），创建时落在聚焦窗口，否则依次是主窗、`set_visible` 给的优先窗口、最近活动的窗口。来源隐藏或关闭就迁走，优先回主窗；没有可见窗口时暂存，不计时。迁移会重建 Toast，旧窗口的回调失效，已播报过的内容不再读一遍。每个窗口挂一个 `NoticeHost`（内部是一个 `ToastStack`），每帧调用 `sync(cx, host, window, width, height, placement)` 投影，投影有变化才返回 true。动作和关闭经 `drain()` 带着来源返回。`set_shown_elsewhere(keys)` 暂停这些键的投影，留给别处原位显示。
+
 `Spinner` 自己转。挂载后由 Motion IR 无限 timeline 驱动旋转相位。宿主不逐帧喂 phase。停用改为卸载或停放该节点。
 
 `Panel` 是非模态任务面板。挂到独立 `OverlayHost` 的直接子节点。通过同一份 `activate_overlay` / `dismiss_overlay` 管理显示和退出动画。面板使用 Card 表面和具名 Region 无障碍语义。只有卡面命中。外部舞台和普通 Tab 顺序保持可用。不能用 Menu 或 Dialog 冒充非模态面板。可见标题、返回/关闭按钮和内容由应用装配为普通子节点。长内容使用 `ScrollView`。关闭按钮调用 `dismiss_overlay`。不直接删除节点。
