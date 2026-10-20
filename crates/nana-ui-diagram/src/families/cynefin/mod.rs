@@ -11,7 +11,6 @@ use crate::ir::{Dash, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::text::{LaidText, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-pub(crate) const NATIVE: bool = true;
 
 /// The confusion ellipse shows at most this many items.
 const CONFUSION_ITEMS: usize = 3;

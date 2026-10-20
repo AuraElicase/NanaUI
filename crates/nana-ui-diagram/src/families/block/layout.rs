@@ -2,8 +2,8 @@
 //! (composite blocks nest their own), stretch blocks to their cells and
 //! connect linked blocks orthogonally.
 
-use super::{Heads, Kind, Model, draw_node, link_stroke};
-use crate::families::flowchart::LineKind;
+use super::{Heads, Kind, Model};
+use crate::families::flowchart::{LineKind, link_stroke};
 use crate::families::{LayoutCx, graphkit};
 use crate::geom::{PathData, Shape};
 use crate::ir::{Align, Geom, Rect, SceneBuilder};
@@ -83,7 +83,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let routes = grid::connect_all(&geo.rects, &links, &leaves, geo.gap);
     let marker = cx.marker_size();
     let small = cx.small_font();
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
     let mut chips = Vec::new();
     let mut taken = Vec::new();
     for (e, edge) in model.edges.iter().enumerate() {
@@ -115,7 +115,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let paint = &paints[i];
         match block.kind {
             Kind::Node(shape) => {
-                draw_node(&mut out, shape, rect, paint);
+                graphkit::shape_node(&mut out, shape, rect, paint);
                 if let Some(laid) = &geo.labels[i] {
                     let lr = shape.label_rect(rect, laid.size());
                     let ink = if shape.label_outside() { style::TEXT } else { paint.text };

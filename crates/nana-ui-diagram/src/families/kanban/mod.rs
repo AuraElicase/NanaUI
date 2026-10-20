@@ -13,7 +13,6 @@ use crate::layout::tree::indent_width;
 use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Priority {

@@ -36,7 +36,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let horizontal = model.flow == Flow::LeftRight;
     let r = 7.0 * k;
     let gap = 6.0 * k;
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
 
     // Lanes: branches sorted by order, ties by creation.
     let mut lanes: Vec<usize> = (0..model.branches.len()).collect();

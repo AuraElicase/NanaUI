@@ -34,7 +34,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let pad_x = m.node_pad_x * 0.75;
     let pad_y = m.node_pad_y * 0.8;
     let row_pad = m.node_pad_y * 0.6;
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
     let note_pad = graphkit::note_pad(&m);
 
     let lay_member = |mem: &Member| cx.text.lay(&verbatim(mem.text.as_str()), member_font.italic(mem.is_abstract), None);

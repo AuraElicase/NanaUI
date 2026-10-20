@@ -30,7 +30,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let wrap = cx.wrap_width("agentflow.wrappingWidth");
     let pad = [m.node_pad_x, m.node_pad_y];
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
     let title_font = FontSpec::new(m.small_size).weight(m.strong_weight);
 
     // The outermost collapsed flow hiding each flow (itself included),

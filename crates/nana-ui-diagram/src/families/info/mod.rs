@@ -5,7 +5,6 @@ use crate::ir::{Align, Rect, SceneBuilder};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary, style};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Model;

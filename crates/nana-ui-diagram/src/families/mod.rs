@@ -1,6 +1,6 @@
-//! One module per diagram type. Each exposes the same four items —
-//! `NATIVE`, `Model`, `parse`, `layout` and `summary` — so a family's work
-//! stays inside its own directory.
+//! One module per diagram type. Each exposes the same items — `Model`,
+//! `parse`, `layout` and `summary` — so a family's work stays inside its own
+//! directory.
 
 use crate::ir::{Align, Rect, SceneBuilder};
 use crate::layout::Spacing;
@@ -42,12 +42,6 @@ macro_rules! families {
             }
         }
 
-        /// Whether a type has its native implementation.
-        pub const fn native(kind: DiagramKind) -> bool {
-            match kind {
-                $(DiagramKind::$kind => $module::NATIVE,)*
-            }
-        }
     };
 }
 
@@ -181,6 +175,14 @@ impl<'a> LayoutCx<'a> {
             port_gap: m.edge_sep,
             self_loop: m.node_sep * 0.6,
         }
+    }
+
+    /// Padding inside an edge-label chip.
+    pub fn chip_pad(&self) -> [f32; 2] {
+        [
+            self.metrics.small_size * 0.45,
+            self.metrics.small_size * 0.15,
+        ]
     }
 
     /// Head length for line-end markers.

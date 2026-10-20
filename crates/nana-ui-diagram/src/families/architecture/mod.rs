@@ -10,7 +10,6 @@ use crate::layout::grid::Side;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Group {

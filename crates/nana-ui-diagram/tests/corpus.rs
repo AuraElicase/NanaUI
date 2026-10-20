@@ -1,4 +1,4 @@
-//! Invariants every native diagram keeps, whatever its type.
+//! Invariants every diagram keeps, whatever its type.
 
 mod common;
 
@@ -28,7 +28,7 @@ fn points(item: &Item) -> Vec<[f32; 2]> {
 
 #[test]
 fn every_fixture_is_finite_inside_its_canvas_and_deterministic() {
-    for (family, name, source) in common::native_fixtures() {
+    for (family, name, source) in common::fixtures() {
         let render_once = || {
             render(
                 &source,
@@ -77,7 +77,7 @@ fn every_fixture_is_finite_inside_its_canvas_and_deterministic() {
 
 #[test]
 fn flowchart_nodes_never_overlap_and_text_stays_inside_its_box() {
-    for (family, name, source) in common::native_fixtures()
+    for (family, name, source) in common::fixtures()
         .into_iter()
         .filter(|(f, ..)| f == "flowchart")
     {

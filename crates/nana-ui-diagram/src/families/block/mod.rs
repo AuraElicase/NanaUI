@@ -6,15 +6,12 @@ mod layout;
 mod parse;
 
 use super::flowchart::LineKind;
-use super::{LayoutCx, ParseCx, graphkit};
+use super::{LayoutCx, ParseCx};
 use crate::geom::{Marker, Shape};
-use crate::ir::{Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::source::directives::AuthorStyle;
-use crate::style::{self, Paint};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 /// Which way a block arrow points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -90,44 +87,4 @@ pub(crate) fn summary(model: &Model) -> Summary {
     }
 }
 
-/// A node body in one of the shared shapes, with its decorations, painted
-/// with the shared role table after the author's style. Swimlanes draw
-/// their steps with it too.
-pub(crate) fn draw_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint: &Paint) {
-    let (behind, over) = shape.decorations(rect);
-    for geom in behind {
-        out.shape(geom, Some(paint.fill), Some(paint.stroke));
-    }
-    if shape.solid() {
-        let ink = match paint.fill {
-            Ink::Rgba(_) => paint.fill,
-            _ => style::TEXT,
-        };
-        out.shape(shape.outline(rect), Some(ink), None);
-    } else if shape == Shape::FramedCircle {
-        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
-        out.shape(Geom::Ellipse(rect.inset(4.0, 4.0)), Some(style::TEXT), None);
-        return;
-    } else if shape.has_body() {
-        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
-    }
-    let line = Stroke {
-        dash: Dash::Solid,
-        ..paint.stroke
-    };
-    for path in over {
-        out.stroke(Geom::path(path), line);
-    }
-}
 
-/// The stroke of a flowchart-style link after its line kind and the
-/// author's `linkStyle`.
-pub(crate) fn link_stroke(line: LineKind, author: &AuthorStyle) -> Stroke {
-    let mut base = style::edge_stroke();
-    match line {
-        LineKind::Thick => base.width = crate::ir::StrokeWidth::Thick,
-        LineKind::Dotted => base = base.dash(Dash::Dotted),
-        _ => {}
-    }
-    graphkit::line_stroke(base, author)
-}

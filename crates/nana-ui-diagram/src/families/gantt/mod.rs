@@ -13,7 +13,6 @@ use super::{LayoutCx, ParseCx};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Task {

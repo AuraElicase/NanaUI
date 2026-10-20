@@ -12,7 +12,6 @@ use super::{LayoutCx, ParseCx};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 /// The node outlines a mind map names with its brackets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

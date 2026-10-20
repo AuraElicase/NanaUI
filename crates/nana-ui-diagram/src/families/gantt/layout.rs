@@ -112,7 +112,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let gap = 6.0 * k;
 
     // Vertical strips from the top: vert labels, top axis, rows, bottom axis.
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
     let mut vert_chips: Vec<(usize, LaidText, f32, usize)> = Vec::new();
     let mut levels: Vec<f32> = Vec::new();
     for &i in &verts {

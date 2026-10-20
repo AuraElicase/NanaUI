@@ -12,7 +12,6 @@ use super::kit::{self, first_name, first_word, unquote};
 use super::{LayoutCx, ParseCx};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommitKind {

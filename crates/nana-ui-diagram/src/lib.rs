@@ -24,7 +24,6 @@ pub mod text;
 mod families;
 
 pub use error::{DiagramError, LimitKind, Warning};
-pub use families::native;
 pub use ir::dump::dump;
 pub use ir::{
     Align, Cap, Corner, Dash, DiagramScene, Geom, Ink, Item, Join, Link, Rect, Stroke, StrokeWidth,

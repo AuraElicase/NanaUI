@@ -217,7 +217,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let contains = |outer: &Rect, inner: &Rect| outer.x <= inner.x && outer.y <= inner.y && outer.right() >= inner.right() && outer.bottom() >= inner.bottom();
     let mut used = Used::new();
     let marker = cx.marker_size();
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
     let mut chips = Vec::new();
     let mut taken = Vec::new();
     for e in &model.edges {
