@@ -397,7 +397,7 @@ where
             site,
             ..
         } = self;
-        if let Some(container) = container(stack, key, style, site).place(vb) {
+        if let Some(container) = container(stack.structural(), key, style, site).place(vb) {
             EachBinding::new(items, key_fn, row_fn, transition).mount(vb, container, site);
         }
     }
@@ -788,7 +788,7 @@ fn build_switch<K: Clone + PartialEq + Send + 'static>(
         layout.flex_basis = Some(nana_ui_core::LengthSpec::Px(0.0));
         layout.min_height = Some(nana_ui_core::LengthSpec::Px(0.0));
     }
-    let Some(container) = container(column, node_key, style, site).place(vb) else {
+    let Some(container) = container(column.structural(), node_key, style, site).place(vb) else {
         return;
     };
     let id = container.stable_id();

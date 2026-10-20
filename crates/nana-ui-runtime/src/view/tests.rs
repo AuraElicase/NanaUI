@@ -3409,48 +3409,145 @@ fn keys_in_a_switched_branch_resolve_by_path_inside_a_virtual_row() {
 }
 
 /// A settings group puts an inset divider between rows, and a hidden row
-/// takes its divider with it; keycaps and a chord name their roles.
+/// takes its divider with it, the first row too; keycaps and a chord name
+/// their roles.
 #[test]
 fn a_settings_group_divides_its_rows_and_hides_a_hidden_rows_divider() {
     let (mut cx, _, parent) = setup();
     let shown = std::cell::Cell::new(None);
     let view = cx
         .mount_view(parent, || {
+            let first = signal(true);
             let second = signal(true);
-            shown.set(Some(second));
+            shown.set(Some((first, second)));
             settings_group(
                 Some("Group".into()),
                 vec![
-                    group_row(text("first")),
+                    group_row(text("first")).visible(first),
                     group_row(text("second")).visible(second),
                     group_row(chord("Ctrl+B")),
                 ],
             )
         })
         .unwrap();
-    let second = shown.get().unwrap();
+    let (first, second) = shown.get().unwrap();
     let root = view.roots()[0];
     let [title, card] = children(&cx, root)[..] else {
         panic!("title and card");
     };
     assert_eq!(children(&cx, title).len(), 1);
-    let rows = children(&cx, card);
-    assert_eq!(rows.len(), 3);
-    assert_eq!(
-        children(&cx, rows[0]).len(),
-        1,
-        "the first row has no divider"
-    );
-    assert_eq!(children(&cx, rows[1]).len(), 2, "a divider, then the row");
-    let hidden = |cx: &AppContext, id| cx.world().node_style(id).unwrap().layout.hidden;
-    assert!(!hidden(&cx, rows[1]));
-    second.set(false);
-    cx.flush_reactive().unwrap();
-    assert!(hidden(&cx, rows[1]), "the row goes with its divider");
     let painter = cx.world().node_style(card).unwrap().painter.clone();
     assert!(painter.is_some(), "the card is a raised surface");
-    let chord = children(&cx, rows[2])[1];
+    let [group] = children(&cx, card)[..] else {
+        panic!("one group in the card");
+    };
+    let members = children(&cx, group);
+    assert_eq!(members.len(), 5, "three rows with a divider between each");
+    let hidden = |cx: &AppContext, id| cx.world().node_style(id).unwrap().layout.hidden;
+    let dividers = |cx: &AppContext| [hidden(cx, members[1]), hidden(cx, members[3])];
+    assert_eq!(dividers(&cx), [false, false]);
+
+    second.set(false);
+    cx.flush_reactive().unwrap();
+    assert!(hidden(&cx, members[2]));
+    assert_eq!(dividers(&cx), [true, false], "one divider between two rows");
+
+    first.set(false);
+    cx.flush_reactive().unwrap();
+    assert_eq!(dividers(&cx), [true, true], "no divider above the only row");
+
+    second.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        dividers(&cx),
+        [true, false],
+        "none above the first shown row"
+    );
+
+    let chord = children(&cx, members[4])[0];
     assert_eq!(children(&cx, chord).len(), 3, "two keys and the joiner");
+}
+
+/// A settings group marks its first and last shown row, whichever rows are
+/// shown, reading through a keyed list and a conditional block to their
+/// rows; other content takes a place without being marked.
+#[test]
+fn a_settings_group_marks_its_shown_edges() {
+    let (mut cx, document, parent) = setup();
+    let state = std::cell::Cell::new(None);
+    cx.mount_view(parent, || {
+        let lead = signal(true);
+        let items = signal(vec![1u32, 2]);
+        let tail = signal(true);
+        state.set(Some((lead, items, tail)));
+        widget(crate::SettingsGroup::new()).children((
+            // Its label moves with its visibility, so the row is written
+            // (and out of reach) when the group looks.
+            settings_row(move || std::sync::Arc::<str>::from(if lead.get() { "lead" } else { "" }))
+                .visible(lead),
+            each(
+                items,
+                |item| *item,
+                |item| settings_row(format!("item {item}")),
+            ),
+            text("note"),
+            when(tail, || settings_row("tail")),
+        ))
+    })
+    .unwrap();
+    let (lead, items, tail) = state.get().unwrap();
+    // Shown rows in document order: label, first, last.
+    let edges = |cx: &AppContext| -> Vec<(String, bool, bool)> {
+        cx.world()
+            .document_order(document)
+            .into_iter()
+            .filter(|id| cx.world().node_style(*id).is_some_and(|s| !s.layout.hidden))
+            .filter_map(|id| {
+                cx.read(Entity::<crate::SettingsRow>::from_stable_id(id), |row| {
+                    (row.label.to_string(), row.first_in_group, row.last_in_group)
+                })
+                .ok()
+            })
+            .collect()
+    };
+    let row = |label: &str, first, last| (label.to_owned(), first, last);
+    assert_eq!(
+        edges(&cx),
+        [
+            row("lead", true, false),
+            row("item 1", false, false),
+            row("item 2", false, false),
+            row("tail", false, true),
+        ]
+    );
+
+    lead.set(false);
+    tail.set(false);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        edges(&cx),
+        [row("item 1", true, false), row("item 2", false, false)],
+        "the note after the list is the last shown member"
+    );
+
+    items.set(vec![2]);
+    tail.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        edges(&cx),
+        [row("item 2", true, false), row("tail", false, true)]
+    );
+
+    lead.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        edges(&cx),
+        [
+            row("lead", true, false),
+            row("item 2", false, false),
+            row("tail", false, true),
+        ]
+    );
 }
 
 /// A `Stack` takes a theme-relative wash and outline, and a fully round
@@ -5209,4 +5306,46 @@ fn composer_action_slot_is_retained_replaces_content_and_stays_hidden_after_remo
             .iter()
             .any(|node| node.id == replacement.stable_id())
     );
+}
+
+/// A row the flush shows is out of date in the views until the flush has
+/// installed it; the group marks it after that, not before, so the flush
+/// does not project the row back hidden.
+#[test]
+fn a_settings_group_marks_a_row_its_flush_shows() {
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let group = cx
+        .create_component(document, crate::SettingsGroup::new())
+        .unwrap()
+        .stable_id();
+    let state = std::cell::Cell::new(None);
+    cx.mount_view(group, || {
+        let remote = signal(false);
+        state.set(Some(remote));
+        (settings_row("a"), settings_row("b").visible(remote))
+    })
+    .unwrap();
+    let remote = state.get().unwrap();
+    // Hidden, first, last, for each row.
+    let rows = |cx: &AppContext| -> Vec<(bool, bool, bool)> {
+        children(cx, group)
+            .into_iter()
+            .map(|id| {
+                let row = Entity::<crate::SettingsRow>::from_stable_id(id);
+                let view = cx
+                    .read(row, |row| (row.first_in_group, row.last_in_group))
+                    .unwrap();
+                let hidden = cx.world().node_style(id).unwrap().layout.hidden;
+                (hidden, view.0, view.1)
+            })
+            .collect()
+    };
+    assert_eq!(rows(&cx), [(false, true, true), (true, false, false)]);
+    remote.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(rows(&cx), [(false, true, false), (false, false, true)]);
+    remote.set(false);
+    cx.flush_reactive().unwrap();
+    assert_eq!(rows(&cx), [(false, true, true), (true, false, true)]);
 }

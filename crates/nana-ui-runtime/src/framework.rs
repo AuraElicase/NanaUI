@@ -2139,10 +2139,17 @@ impl AppContext {
         owner: StableNodeId,
         node: Option<StableNodeId>,
     ) {
+        self.watch_child_structures(owner, node.as_slice());
+    }
+
+    /// [`Self::watch_child_structure`] for several nodes at once: `owner`
+    /// reprojects when the children of any of `nodes` change, and stops
+    /// watching the nodes it watched before that are not in `nodes`.
+    pub(crate) fn watch_child_structures(&mut self, owner: StableNodeId, nodes: &[StableNodeId]) {
         self.child_structure_owners
-            .retain(|watched, watcher| *watcher != owner || Some(*watched) == node);
-        if let Some(node) = node {
-            self.child_structure_owners.insert(node, owner);
+            .retain(|watched, watcher| *watcher != owner || nodes.contains(watched));
+        for node in nodes {
+            self.child_structure_owners.insert(*node, owner);
         }
     }
 

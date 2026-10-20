@@ -131,7 +131,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 - `kbd(key)`、`kbd_glyph(icon)`、`chord("Ctrl+B")`、`chord_with(keys, draw_key)`：键帽和组合键，键帽由 `KeycapPainter` 画（表面、边框、强边框色的底边，随明暗模式）。
 - `tag(text)` / `tag_frame()`：不可交互的标签；要能选、能关的用 `Chip`。
 - `callout(icon, tone, text)`：按 `StatusTone` 着色的提示条，图标由调用方给。
-- `settings_group(title, rows)` + `group_row(view).visible(cond)`：标题在上、卡片在下，行间是缩进细线，隐藏的行带走它的分隔线；卡片由 `RaisedSurfacePainter` 画（细边框，亮色下一道短阴影）。
+- `settings_group(title, rows)` + `group_row(view).visible(cond)`：标题在上、卡片在下，行间是缩进细线，隐藏的行带走它的分隔线，第一行也一样（行和分隔线放在 `SettingsGroup` 里，分隔线只在两个显示的行之间显示）；卡片由 `RaisedSurfacePainter` 画（细边框，亮色下一道短阴影）。
 - `tone_role(tone)`：状态色调对应的颜色角色。
 
 `Avatar` 的空槽仍是 Subtle 占位，不画首字母；需要首字母的应用自己叠一层。
