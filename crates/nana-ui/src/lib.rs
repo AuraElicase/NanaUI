@@ -75,6 +75,7 @@ pub use packaged_resources::{ResourcePackOptions, SELF_CHECK_ENV};
 pub mod icons;
 pub mod layout;
 pub mod menu;
+pub mod notices;
 mod nana_text;
 #[cfg(feature = "hosted")]
 mod native_browser;
