@@ -1,0 +1,50 @@
+size 1010.8 470.4
+summary nodes=6 edges=7 groups=4
+clip rect 9 42.6 992.8 418.8 r=Md
+shape rect 9 42.6 74.9 99.2 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 141.8 992.8 116.6 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 141.8 74.9 116.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 258.4 74.9 93.7 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 352.1 992.8 109.3 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 352.1 74.9 109.3 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,141.8 L1001.8,141.8 stroke=Border/hairline/Solid
+shape path M9,258.4 L1001.8,258.4 stroke=Border/hairline/Solid
+shape path M9,352.1 L1001.8,352.1 stroke=Border/hairline/Solid
+shape path M83.9,42.6 L83.9,461.4 stroke=Border/hairline/Solid
+unclip
+shape rect 9 42.6 992.8 418.8 r=Md stroke=Border/hairline/Solid
+text 33.7 83.8 25.4 16.8 size=12 w=600 ink=Muted "员工"
+text 21 191.7 50.9 16.8 size=12 w=600 ink=Muted "部门经理"
+text 33.7 296.8 25.4 16.8 size=12 w=600 ink=Muted "财务"
+shape path M225.7,92.2 L241.7,92.2 Q249.7,92.2 249.7,100.2 L249.7,192.1 Q249.7,200.1 257.7,200.1 L267,200.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M273.7,200.1 L265.3,203.6 L266.8,200.1 L265.3,196.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M426.9,200.1 L521.8,200.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M528.5,200.1 L520.1,203.6 L521.6,200.1 L520.1,196.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M588.5,188.2 L611.5,188.2 Q619.5,188.2 619.5,180.2 L619.5,115.1 Q619.5,110 624.6,110 L629.8,110 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape path M636.5,110 L628.1,113.5 L629.6,110 L628.1,106.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M636.5,74.4 L522.5,74.4 Q514.5,74.4 514.5,82.4 L514.5,169.1 Q514.5,177.1 506.5,177.1 L387.6,177.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M380.9,177.1 L389.3,173.6 L387.8,177.1 L389.3,180.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M380.9,223.1 L444.3,223.1 Q452.3,223.1 452.3,231.1 L452.3,313.3 Q452.3,321.3 460.3,321.3 L699.8,321.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M706.5,321.3 L698.1,324.9 L699.6,321.3 L698.1,317.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M588.5,212 L597.5,212 Q605.5,212 605.5,220 L605.5,281.1 Q605.5,289.1 613.5,289.1 L699.8,289.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M706.5,289.1 L698.1,292.7 L699.6,289.1 L698.1,285.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M794.5,305.2 L880.5,305.2 Q888.5,305.2 888.5,313.2 L888.5,398.7 Q888.5,406.7 896.5,406.7 L912.5,406.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 477.7 189.9 22.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 483.1 191.7 12 16.8 size=12 w=400 ink=Muted "是"
+shape rect 440.9 262 22.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 446.3 263.8 12 16.8 size=12 w=400 ink=Muted "否"
+shape rect 103.9 72.4 121.8 39.6 r=Full fill=Surface stroke=BorderStrong/hairline/Solid
+text 129.8 82.4 70 19.6 size=14 w=400 ink=Text "提交报销单"
+shape rect 636.5 62.6 228 59.2 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 652.5 72.6 196 19.6 size=14 w=400 ink=Text "补充发票与说明，金额较大时需"
+text 701.5 92.2 98 19.6 size=14 w=400 ink=Text "要附上审批邮件"
+shape path M350.3,161.8 L426.9,200.1 L350.3,238.4 L273.7,200.1 Z fill=rgba(245,215,110,1) stroke=rgba(181,139,0,1)/hairline/Solid
+text 301.3 190.3 98 19.6 size=14 w=400 ink=rgba(28.1,28.1,30.6,1) "金额是否超标？"
+shape rect 528.5 180.3 60 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 544.5 190.3 28 19.6 size=14 w=400 ink=Text "复核"
+shape path M706.5,285.4 C706.5,281.6 726.2,278.4 750.5,278.4 C774.8,278.4 794.5,281.6 794.5,285.4 L794.5,325 C794.5,328.9 774.8,332.1 750.5,332.1 C726.2,332.1 706.5,328.9 706.5,325 Z fill=Surface stroke=rgba(34,187,102,1)/2/Solid
+shape path M706.5,285.4 C706.5,289.3 726.2,292.5 750.5,292.5 C774.8,292.5 794.5,289.3 794.5,285.4 stroke=rgba(34,187,102,1)/2/Solid
+text 722.5 299 56 19.6 size=14 w=400 ink=Text "付款记录"
+shape ellipse 912.5 372.1 69.3 69.3 fill=Surface stroke=BorderStrong/hairline/Solid
+text 919.1 396.9 56 19.6 size=14 w=400 ink=Text "外部审计"
+text 471.5 8 67.8 22.4 size=16 w=600 ink=Text "报销流程"

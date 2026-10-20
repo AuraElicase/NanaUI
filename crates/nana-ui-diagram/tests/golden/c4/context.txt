@@ -1,0 +1,114 @@
+size 950.6 1351.2
+summary nodes=12 edges=4 groups=4
+shape rect 9 42.6 932.6 1299.6 r=Md stroke=Muted/hairline/Dashed
+text 25 54.6 111.9 19.6 size=14 w=600 ink=Text "BankBoundary0"
+text 25 77.8 83.5 16.8 size=12 w=400 ink=Muted "[Enterprise]"
+shape rect 25 531.4 900.6 794.8 r=Md stroke=Muted/hairline/Dashed
+text 41 543.4 103.3 19.6 size=14 w=600 ink=Text "BankBoundary"
+text 41 566.6 83.5 16.8 size=12 w=400 ink=Muted "[Enterprise]"
+shape rect 41 832.2 868.6 198 r=Md stroke=Muted/hairline/Dashed
+text 57 844.2 111.9 19.6 size=14 w=600 ink=Text "BankBoundary2"
+text 57 867.4 55.7 16.8 size=12 w=400 ink=Muted "[System]"
+shape rect 41 1092.6 868.6 217.6 r=Md stroke=Muted/hairline/Dashed
+text 57 1104.6 111.9 19.6 size=14 w=600 ink=Text "BankBoundary3"
+text 57 1127.8 69.6 16.8 size=12 w=400 ink=Muted "[boundary]"
+shape path M238.9,183.4 L339.1,183.4 Q347.1,183.4 347.1,191.4 L347.1,340.7 Q347.1,348.7 355.1,348.7 L371.6,348.7 stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M378.3,348.7 L369.9,352.2 L371.4,348.7 L369.9,345.2 Z fill=rgba(0,0,255,1) stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M232.2,183.4 L240.6,179.9 L239.1,183.4 L240.6,186.9 Z fill=rgba(0,0,255,1) stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M371.6,438.9 L286.2,438.9 Q278.2,438.9 278.2,446.9 L278.2,676.6 Q278.2,684.6 270.2,684.6 L253.7,684.6 stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M247,684.6 L255.4,681.1 L253.9,684.6 L255.4,688.1 Z fill=rgba(0,0,255,1) stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M378.3,438.9 L369.9,442.4 L371.4,438.9 L369.9,435.4 Z fill=rgba(0,0,255,1) stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M512.3,469 L512.3,592.7 stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M512.3,599.4 L508.8,591 L512.3,592.5 L515.9,591 Z fill=rgba(0,0,255,1) stroke=rgba(0,0,255,1)/hairline/Solid
+shape path M431.6,599.4 L431.6,483 Q431.6,475 423.6,475 L320.7,475 Q312.7,475 312.7,467 L312.7,270.2 Q312.7,262.2 304.7,262.2 L136.1,262.2 L136.1,261.6 stroke=rgba(255,0,0,1)/hairline/Solid
+shape path M136.1,256.2 L139.7,264.6 L136.1,263.1 L132.6,264.6 Z fill=rgba(255,0,0,1) stroke=rgba(255,0,0,1)/hairline/Solid
+shape rect 40.1 110.6 192.1 145.6 r=Md fill=rgba(128,128,128,1) stroke=rgba(255,0,0,1)/hairline/Solid
+shape ellipse 130.3 120.6 11.8 11.8 fill=rgba(255,0,0,1)
+shape rect 124.4 134 23.5 14.6 r=8.7 fill=rgba(255,0,0,1)
+text 101.3 152.2 69.6 16.8 size=12 w=400 ink=rgba(255,0,0,1) "<<person>>"
+text 58.7 172.6 154.9 19.6 size=14 w=600 ink=rgba(255,0,0,1) "Banking Customer A"
+text 56.1 195.8 160.1 16.8 size=12 w=400 ink=rgba(255,0,0,1) "A customer of the bank,"
+text 73.5 212.6 125.3 16.8 size=12 w=400 ink=rgba(255,0,0,1) "with personal bank"
+text 104.8 229.4 62.6 16.8 size=12 w=400 ink=rgba(255,0,0,1) "accounts."
+shape rect 378.3 110.6 199 145.6 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape ellipse 472 147.6 11.8 11.8 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+shape rect 466.1 161 23.5 14.6 r=8.7 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+text 443.1 179.2 69.6 16.8 size=12 w=400 ink=Muted "<<person>>"
+text 400.4 199.6 154.9 19.6 size=14 w=600 ink=Text "Banking Customer B"
+shape rect 723.5 110.6 186.9 145.6 r=Md fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape ellipse 811.1 137.4 11.8 11.8 fill=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}
+shape rect 805.2 150.8 23.5 14.6 r=8.7 fill=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}
+text 750.9 169 132.2 16.8 size=12 w=400 ink=Muted "<<external_person>>"
+text 739.5 189.4 154.9 19.6 size=14 w=600 ink=Text "Banking Customer C"
+text 803.1 212.6 27.8 16.8 size=12 w=400 ink=Text "desc"
+shape rect 40.1 318.6 192.1 150.4 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape ellipse 130.3 331 11.8 11.8 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+shape rect 124.4 344.4 23.5 14.6 r=8.7 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+text 101.3 362.6 69.6 16.8 size=12 w=400 ink=Muted "<<person>>"
+text 58.7 383 154.9 19.6 size=14 w=600 ink=Text "Banking Customer D"
+text 56.1 406.2 160.1 16.8 size=12 w=400 ink=Text "A customer of the bank,"
+text 73.5 423 125.3 16.8 size=12 w=400 ink=Text "with personal bank"
+text 104.8 439.8 62.6 16.8 size=12 w=400 ink=Text "accounts."
+shape rect 378.3 318.6 199 150.4 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 443.1 328.6 69.6 16.8 size=12 w=400 ink=Muted "<<system>>"
+text 409 349 137.7 19.6 size=14 w=600 ink=Text "Internet Banking"
+text 452 368.6 51.6 19.6 size=14 w=600 ink=Text "System"
+text 394.3 391.8 167 16.8 size=12 w=400 ink=Text "Allows customers to view"
+text 397.8 408.6 160.1 16.8 size=12 w=400 ink=Text "information about their"
+text 397.8 425.4 160.1 16.8 size=12 w=400 ink=Text "bank accounts, and make"
+text 446.5 442.2 62.6 16.8 size=12 w=400 ink=Text "payments."
+shape path M41,609.4 C41,603.9 87.1,599.4 144,599.4 C200.9,599.4 247,603.9 247,609.4 L247,759.8 C247,765.3 200.9,769.8 144,769.8 C87.1,769.8 41,765.3 41,759.8 Z fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape path M41,609.4 C41,614.9 87.1,619.4 144,619.4 C200.9,619.4 247,614.9 247,609.4 stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 67.4 624.4 153.1 16.8 size=12 w=400 ink=Muted "<<external_system_db>>"
+text 70.8 644.8 146.3 19.6 size=14 w=600 ink=Text "Mainframe Banking"
+text 118.2 664.4 51.6 19.6 size=14 w=600 ink=Text "System"
+text 67.4 687.6 153.1 16.8 size=12 w=400 ink=Text "Stores all of the core"
+text 57 704.4 174 16.8 size=12 w=400 ink=Text "banking information about"
+text 74.4 721.2 139.2 16.8 size=12 w=400 ink=Text "customers, accounts,"
+text 81.4 738 125.3 16.8 size=12 w=400 ink=Text "transactions, etc."
+shape rect 228.3 900.2 169.7 114 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 278.3 937.2 69.6 16.8 size=12 w=400 ink=Muted "<<system>>"
+text 244.3 957.6 137.7 19.6 size=14 w=600 ink=Text "Banking System A"
+shape rect 544.1 900.2 178.2 114 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 598.4 910.2 69.6 16.8 size=12 w=400 ink=Muted "<<system>>"
+text 564.4 930.6 137.7 19.6 size=14 w=600 ink=Text "Banking System B"
+text 560.1 953.8 146.2 16.8 size=12 w=400 ink=Text "A system of the bank,"
+text 570.6 970.6 125.3 16.8 size=12 w=400 ink=Text "with personal bank"
+text 563.6 987.4 139.2 16.8 size=12 w=400 ink=Text "accounts. next line."
+shape rect 393.2 599.4 192.1 170.4 r=Md fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 423.1 646 132.2 16.8 size=12 w=400 ink=Muted "<<external_system>>"
+text 433.3 666.4 111.9 19.6 size=14 w=600 ink=Text "E-mail system"
+text 412.6 689.6 153.1 16.8 size=12 w=400 ink=Text "The internal Microsoft"
+text 409.2 706.4 160.1 16.8 size=12 w=400 ink=Text "Exchange e-mail system."
+shape path M731.4,609.4 C731.4,603.9 771.3,599.4 820.5,599.4 C869.7,599.4 909.6,603.9 909.6,609.4 L909.6,759.8 C909.6,765.3 869.7,769.8 820.5,769.8 C771.3,769.8 731.4,765.3 731.4,759.8 Z fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape path M731.4,609.4 C731.4,614.9 771.3,619.4 820.5,619.4 C869.7,619.4 909.6,614.9 909.6,609.4 stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 775.2 632.8 90.5 16.8 size=12 w=400 ink=Muted "<<system_db>>"
+text 751.6 653.2 137.7 19.6 size=14 w=600 ink=Text "Banking System D"
+text 786.1 672.8 68.9 19.6 size=14 w=600 ink=Text "Database"
+text 747.4 696 146.2 16.8 size=12 w=400 ink=Text "A system of the bank,"
+text 757.8 712.8 125.3 16.8 size=12 w=400 ink=Text "with personal bank"
+text 789.2 729.6 62.6 16.8 size=12 w=400 ink=Text "accounts."
+shape path M194.1,1160.6 L376.3,1160.6 C381.8,1160.6 386.3,1190.5 386.3,1227.4 C386.3,1264.3 381.8,1294.2 376.3,1294.2 L194.1,1294.2 C188.6,1294.2 184.1,1264.3 184.1,1227.4 C184.1,1190.5 188.6,1160.6 194.1,1160.6 Z fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape path M376.3,1160.6 C370.8,1160.6 366.3,1190.5 366.3,1227.4 C366.3,1264.3 370.8,1294.2 376.3,1294.2 stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 224.5 1187.4 111.4 16.8 size=12 w=400 ink=Muted "<<system_queue>>"
+text 211.3 1207.8 137.7 19.6 size=14 w=600 ink=Text "Banking System F"
+text 258.7 1227.4 43 19.6 size=14 w=600 ink=Text "Queue"
+text 207.1 1250.6 146.2 16.8 size=12 w=400 ink=Text "A system of the bank."
+shape path M542.4,1160.6 L756.4,1160.6 C762,1160.6 766.4,1190.5 766.4,1227.4 C766.4,1264.3 762,1294.2 756.4,1294.2 L542.4,1294.2 C536.9,1294.2 532.4,1264.3 532.4,1227.4 C532.4,1190.5 536.9,1160.6 542.4,1160.6 Z fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape path M756.4,1160.6 C750.9,1160.6 746.4,1190.5 746.4,1227.4 C746.4,1264.3 750.9,1294.2 756.4,1294.2 stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 557.4 1170.6 174 16.8 size=12 w=400 ink=Muted "<<external_system_queue>>"
+text 575.6 1191 137.7 19.6 size=14 w=600 ink=Text "Banking System G"
+text 622.9 1210.6 43 19.6 size=14 w=600 ink=Text "Queue"
+text 571.4 1233.8 146.2 16.8 size=12 w=400 ink=Text "A system of the bank,"
+text 581.8 1250.6 125.3 16.8 size=12 w=400 ink=Text "with personal bank"
+text 613.1 1267.4 62.6 16.8 size=12 w=400 ink=Text "accounts."
+shape rect 327.8 255.2 38.6 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 333.2 257.6 27.8 16.8 size=12 w=400 ink=rgba(0,0,255,1) "Uses"
+shape rect 258.9 551 38.6 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 264.3 553.4 27.8 16.8 size=12 w=400 ink=rgba(0,0,255,1) "Uses"
+shape rect 461.7 515 101.3 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 467.1 517.4 90.5 16.8 size=12 w=400 ink=rgba(0,0,255,1) "Sends e-mails"
+text 491.5 534.2 41.8 16.8 size=12 w=400 ink=Muted "[SMTP]"
+shape rect 251.6 357.8 122.2 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 257 360.2 111.4 16.8 size=12 w=400 ink=rgba(255,0,0,1) "Sends e-mails to"
+text 229.4 8 491.8 22.4 size=16 w=600 ink=Text "System Context diagram for Internet Banking System"

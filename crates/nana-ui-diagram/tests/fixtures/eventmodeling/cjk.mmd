@@ -1,0 +1,17 @@
+---
+title: 下单流程
+---
+eventmodeling
+
+timeframe 10 ui 购物车页面
+timeframe 20 command 提交订单 `json`{ "金额": 128 }
+timeframe 30 event 订单已创建 [[订单]]
+timeframe 40 readmodel 订单列表
+timeframe 50 processor 库存处理器
+timeframe 60 command 扣减库存
+resetframe 70 event 仓储.库存已扣减 ->> 60
+
+data 订单 `jsobj`{
+  编号: string
+  金额: number
+}

@@ -58,11 +58,11 @@
 | requirement | `requirementDiagram`、`requirement` | 原生 |
 | usecase | `usecase-beta` | 原生 |
 | agentflow | `agentflow-beta` | 原生 |
-| block | `block-beta`、`block` | 迁移中 |
-| architecture | `architecture-beta`、`architecture` | 迁移中 |
-| c4 | `C4Context`、`C4Container`、`C4Component`、`C4Dynamic`、`C4Deployment` | 迁移中 |
-| swimlane | `swimlane-beta` | 迁移中 |
-| eventmodeling | `eventmodeling` | 迁移中 |
+| block | `block-beta`、`block` | 原生 |
+| architecture | `architecture-beta`、`architecture` | 原生 |
+| c4 | `C4Context`、`C4Container`、`C4Component`、`C4Dynamic`、`C4Deployment` | 原生 |
+| swimlane | `swimlane-beta` | 原生 |
+| eventmodeling | `eventmodeling` | 原生 |
 | mindmap | `mindmap` | 原生 |
 | treeView | `treeView-beta` | 原生 |
 | treemap | `treemap-beta`、`treemap` | 原生 |

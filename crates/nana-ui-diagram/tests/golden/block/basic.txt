@@ -1,0 +1,29 @@
+size 322.6 289.8
+summary nodes=11 edges=1 groups=1
+shape rect 9 217.2 184.4 63.6 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape path M193.4,58.2 L200.4,58.2 Q207.4,58.2 207.4,51.2 L207.4,40.4 Q207.4,32.4 215.4,32.4 L251.5,32.4 Q259.5,32.4 259.5,40.4 L259.5,54.6 Q259.5,58.2 263.1,58.2 L266.8,58.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M273.5,58.2 L265.1,61.7 L266.6,58.2 L265.1,54.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 38.4 184.4 39.6 r=Xs fill=rgba(255,153,102,1) stroke=rgba(153,0,0,1)/hairline/Solid
+text 97.1 48.4 8.1 19.6 size=14 w=400 ink=rgba(28.1,28.1,30.6,1) "a"
+shape rect 213.4 38.4 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 229.4 48.4 8.1 19.6 size=14 w=400 ink=Text "b"
+shape rect 273.5 38.4 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 289.5 48.4 8.1 19.6 size=14 w=400 ink=Text "c"
+shape rect 9 98 244.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 115 108 32.5 19.6 size=14 w=400 ink=Text "Wide"
+shape rect 273.5 98 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 289.5 108 8.1 19.6 size=14 w=400 ink=Text "e"
+shape rect 9 157.6 184.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 97.1 167.6 8.1 19.6 size=14 w=400 ink=Text "f"
+shape rect 213.4 157.6 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 229.4 167.6 8.1 19.6 size=14 w=400 ink=Text "g"
+shape rect 273.5 157.6 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 289.5 167.6 8.1 19.6 size=14 w=400 ink=Text "h"
+shape rect 21 229.2 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 37 239.2 8.1 19.6 size=14 w=400 ink=Text "x"
+shape rect 81.1 229.2 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 97.1 239.2 8.1 19.6 size=14 w=400 ink=Text "y"
+shape rect 141.2 229.2 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 157.2 239.2 8.1 19.6 size=14 w=400 ink=Text "z"
+shape rect 214.1 9 38.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 219.5 10.8 27.8 16.8 size=12 w=400 ink=Muted "link"

@@ -1,0 +1,110 @@
+size 1270.7 556.8
+summary nodes=8 edges=8 groups=1
+shape rect 9 309.8 1252.7 238 r=Md stroke=Muted/hairline/Dashed
+text 25 321.8 129.1 19.6 size=14 w=600 ink=Text "API Application"
+text 25 345 76.6 16.8 size=12 w=400 ink=Muted "[Container]"
+shape path M217.1,501 L221,501 Q224.8,501 224.8,504.9 L224.8,529.8 Q224.8,537.8 232.8,537.8 L625.6,537.8 Q633.6,537.8 633.6,529.8 L633.6,462.8 Q633.6,454.8 641.6,454.8 L694.8,454.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M701.5,454.8 L693.1,458.3 L694.6,454.8 L693.1,451.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M562.3,454.8 L625.6,454.8 Q633.6,454.8 633.6,446.8 L633.6,379.8 Q633.6,371.8 641.6,371.8 L903.7,371.8 Q911.7,371.8 911.7,379.8 L911.7,446.8 Q911.7,454.8 919.7,454.8 L1033,454.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1039.7,454.8 L1031.3,458.3 L1032.8,454.8 L1031.3,451.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M804.5,377.8 L804.5,254.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M804.5,247.4 L808,255.8 L804.5,254.2 L801,255.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1147.9,377.8 L1147.9,254.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1147.9,247.4 L1151.5,255.8 L1147.9,254.3 L1144.4,255.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M121,377.8 L121,372.8 Q121,367.8 126,367.8 L152.1,367.8 Q160.1,367.8 160.1,359.8 L160.1,261.4 Q160.1,253.4 152.1,253.4 L117.6,253.4 L117.6,252.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M117.6,247.4 L121.1,255.8 L117.6,254.3 L114,255.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M220.6,145 L317.1,145 Q325.1,145 325.1,153 L325.1,446.8 Q325.1,454.8 333.1,454.8 L349.6,454.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M356.3,454.8 L347.9,458.3 L349.4,454.8 L347.9,451.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M359.8,145 L355,145 Q350.3,145 350.3,149.7 L350.3,400.6 Q350.3,408.6 342.3,408.6 L223.8,408.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M217.1,408.6 L225.5,405.1 L224,408.6 L225.5,412.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M461,247.4 L461,371.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M461,377.8 L457.5,369.4 L461,370.9 L464.5,369.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 14.6 42.6 206 204.8 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 72.3 69.6 90.5 16.8 size=12 w=400 ink=Muted "<<container>>"
+text 70.2 90 94.7 19.6 size=14 w=600 ink=Text "Single Page"
+text 70.2 109.6 94.7 19.6 size=14 w=600 ink=Text "Application"
+text 34 132.8 167 16.8 size=12 w=400 ink=Muted "[javascript and angular]"
+text 30.6 153.2 174 16.8 size=12 w=400 ink=Text "Provides all the internet"
+text 34 170 167 16.8 size=12 w=400 ink=Text "banking functionality to"
+text 37.5 186.8 160.1 16.8 size=12 w=400 ink=Text "customers via their web"
+text 89.7 203.6 55.7 16.8 size=12 w=400 ink=Text "browser."
+shape rect 359.8 42.6 206 204.8 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 417.5 71 90.5 16.8 size=12 w=400 ink=Muted "<<container>>"
+text 419.7 91.4 86.1 19.6 size=14 w=600 ink=Text "Mobile App"
+text 431.4 114.6 62.6 16.8 size=12 w=400 ink=Muted "[Xamarin]"
+text 375.8 135 174 16.8 size=12 w=400 ink=Text "Provides a limited subset"
+text 382.7 151.8 160.1 16.8 size=12 w=400 ink=Text "to the internet banking"
+text 407.1 168.6 111.4 16.8 size=12 w=400 ink=Text "functionality to"
+text 396.6 185.4 132.2 16.8 size=12 w=400 ink=Text "customers via their"
+text 414 202.2 97.4 16.8 size=12 w=400 ink=Text "mobile device."
+shape path M705,52.6 C705,47.1 751.1,42.6 808,42.6 C864.8,42.6 911,47.1 911,52.6 L911,237.4 C911,242.9 864.8,247.4 808,247.4 C751.1,247.4 705,242.9 705,237.4 Z fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape path M705,52.6 C705,58.1 751.1,62.6 808,62.6 C864.8,62.6 911,58.1 911,52.6 stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 752.3 67.6 111.4 16.8 size=12 w=400 ink=Muted "<<container_db>>"
+text 773.5 88 68.9 19.6 size=14 w=600 ink=Text "Database"
+text 738.4 111.2 139.2 16.8 size=12 w=400 ink=Muted "[Relational Database"
+text 783.6 128 48.7 16.8 size=12 w=400 ink=Muted "Schema]"
+text 724.4 148.4 167 16.8 size=12 w=400 ink=Text "Stores user registration"
+text 741.8 165.2 132.2 16.8 size=12 w=400 ink=Text "information, hashed"
+text 759.2 182 97.4 16.8 size=12 w=400 ink=Text "authentication"
+text 721 198.8 174 16.8 size=12 w=400 ink=Text "credentials, access logs,"
+text 794 215.6 27.8 16.8 size=12 w=400 ink=Text "etc."
+shape rect 1050.2 42.6 206 204.8 r=Md fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 1087 79.8 132.2 16.8 size=12 w=400 ink=Muted "<<external_system>>"
+text 1080 100.2 146.3 19.6 size=14 w=600 ink=Text "Mainframe Banking"
+text 1127.3 119.8 51.6 19.6 size=14 w=600 ink=Text "System"
+text 1076.6 143 153.1 16.8 size=12 w=400 ink=Text "Stores all of the core"
+text 1066.2 159.8 174 16.8 size=12 w=400 ink=Text "banking information about"
+text 1083.6 176.6 139.2 16.8 size=12 w=400 ink=Text "customers, accounts,"
+text 1090.5 193.4 125.3 16.8 size=12 w=400 ink=Text "transactions, etc."
+shape rect 25 377.8 192.1 154 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 75.8 397.6 90.5 16.8 size=12 w=400 ink=Muted "<<component>>"
+text 43.6 418 154.9 19.6 size=14 w=600 ink=Text "Sign In Controller"
+text 48 441.2 146.2 16.8 size=12 w=400 ink=Muted "[MVC Rest Controller]"
+text 41 461.6 160.1 16.8 size=12 w=400 ink=Text "Allows users to sign in"
+text 41 478.4 160.1 16.8 size=12 w=400 ink=Text "to the internet banking"
+text 100.2 495.2 41.8 16.8 size=12 w=400 ink=Text "system"
+shape rect 356.3 377.8 206 154 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 414 387.8 90.5 16.8 size=12 w=400 ink=Muted "<<component>>"
+text 390.4 408.2 137.7 19.6 size=14 w=600 ink=Text "Accounts Summary"
+text 416.2 427.8 86.1 19.6 size=14 w=600 ink=Text "Controller"
+text 386.2 451 146.2 16.8 size=12 w=400 ink=Muted "[MVC Rest Controller]"
+text 372.3 471.4 174 16.8 size=12 w=400 ink=Text "Provides customers with a"
+text 386.2 488.2 146.2 16.8 size=12 w=400 ink=Text "summary of their bank"
+text 431.4 505 55.7 16.8 size=12 w=400 ink=Text "accounts"
+shape rect 701.5 377.8 199 154 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 755.8 397.6 90.5 16.8 size=12 w=400 ink=Muted "<<component>>"
+text 723.5 418 154.9 19.6 size=14 w=600 ink=Text "Security Component"
+text 755.8 441.2 90.5 16.8 size=12 w=400 ink=Muted "[Spring Bean]"
+text 724.4 461.6 153.1 16.8 size=12 w=400 ink=Text "Provides functionality"
+text 724.4 478.4 153.1 16.8 size=12 w=400 ink=Text "related to singing in,"
+text 717.5 495.2 167 16.8 size=12 w=400 ink=Text "changing passwords, etc."
+shape rect 1039.7 377.8 206 154 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 1097.5 396.2 90.5 16.8 size=12 w=400 ink=Muted "<<component>>"
+text 1069.6 416.6 146.3 19.6 size=14 w=600 ink=Text "Mainframe Banking"
+text 1086.8 436.2 111.9 19.6 size=14 w=600 ink=Text "System Facade"
+text 1097.5 459.4 90.5 16.8 size=12 w=400 ink=Muted "[Spring Bean]"
+text 1083.6 479.8 118.3 16.8 size=12 w=400 ink=Text "A facade onto the"
+text 1055.7 496.6 174 16.8 size=12 w=400 ink=Text "mainframe banking system."
+shape rect 614.3 485.5 38.6 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 619.7 487.9 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+shape rect 956.4 444 38.6 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 961.8 446.4 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+shape rect 746.9 293.4 115.2 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 752.3 295.8 104.4 16.8 size=12 w=400 ink=Muted "Read & write to"
+text 783.6 312.6 41.8 16.8 size=12 w=400 ink=Muted "[JDBC]"
+shape rect 1104.3 293.4 87.4 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 1134 295.8 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+text 1109.7 312.6 76.6 16.8 size=12 w=400 ink=Muted "[XML/HTTPS]"
+shape rect 112.9 274.2 94.3 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 146.2 276.6 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+text 118.3 293.4 83.5 16.8 size=12 w=400 ink=Muted "[JSON/HTTPS]"
+shape rect 277.9 280.7 94.3 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 311.2 283.1 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+text 283.3 299.9 83.5 16.8 size=12 w=400 ink=Muted "[JSON/HTTPS]"
+shape rect 236.5 389.4 94.3 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 269.8 391.8 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+text 241.9 408.6 83.5 16.8 size=12 w=400 ink=Muted "[JSON/HTTPS]"
+shape rect 413.9 293.4 94.3 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 447.1 295.8 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+text 419.3 312.6 83.5 16.8 size=12 w=400 ink=Muted "[JSON/HTTPS]"
+text 325.5 8 619.7 22.4 size=16 w=600 ink=Text "Component diagram for Internet Banking System - API Application"

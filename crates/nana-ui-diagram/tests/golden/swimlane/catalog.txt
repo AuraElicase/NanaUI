@@ -1,0 +1,33 @@
+size 745.2 256.8
+summary nodes=5 edges=4 groups=3
+clip rect 9 9 727.2 238.8 r=Md
+shape rect 9 9 90.4 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 88.6 727.2 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 88.6 90.4 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 168.2 90.4 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,88.6 L736.2,88.6 stroke=Border/hairline/Solid
+shape path M9,168.2 L736.2,168.2 stroke=Border/hairline/Solid
+shape path M99.4,9 L99.4,247.8 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 727.2 238.8 r=Md stroke=Border/hairline/Solid
+text 24.7 40.4 59 16.8 size=12 w=600 ink=Muted "Customer"
+text 21 120 66.4 16.8 size=12 w=600 ink=Muted "Warehouse"
+text 28.4 199.6 51.6 16.8 size=12 w=600 ink=Muted "Finance"
+shape path M265.1,48.8 L306.4,48.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M313.1,48.8 L304.7,52.3 L306.2,48.8 L304.7,45.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M369.4,36.9 L392.4,36.9 Q400.4,36.9 400.4,44.9 L400.4,120.4 Q400.4,128.4 408.4,128.4 L422.9,128.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M429.6,128.4 L421.2,131.9 L422.7,128.4 L421.2,124.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M542.8,128.4 L596.3,128.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M603,128.4 L594.6,131.9 L596.1,128.4 L594.6,124.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M369.4,60.7 L378.4,60.7 Q386.4,60.7 386.4,68.7 L386.4,200 Q386.4,208 394.4,208 L410.7,208 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M417.4,208 L409,211.5 L410.6,208 L409,204.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 119.4 29 145.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 135.4 39 113.7 19.6 size=14 w=400 ink=Text "Browse catalog"
+shape rect 313.1 29 56.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 329.1 39 24.4 19.6 size=14 w=400 ink=Text "Pay"
+shape rect 429.6 108.6 113.2 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 445.6 118.6 81.2 19.6 size=14 w=400 ink=Text "Pick items"
+shape rect 603 108.6 113.2 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 619 118.6 81.2 19.6 size=14 w=400 ink=Text "Ship order"
+shape rect 417.4 188.2 137.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 433.4 198.2 105.6 19.6 size=14 w=400 ink=Text "Raise invoice"

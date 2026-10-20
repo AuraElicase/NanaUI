@@ -1,0 +1,43 @@
+size 591.2 603.6
+summary nodes=6 edges=6 groups=3
+clip rect 9 9 573.2 585.6 r=Md
+shape rect 9 9 209.9 40.8 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 218.9 9 185.7 585.6 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 218.9 9 185.7 40.8 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 404.6 9 177.6 40.8 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M218.9,9 L218.9,594.6 stroke=Border/hairline/Solid
+shape path M404.6,9 L404.6,594.6 stroke=Border/hairline/Solid
+shape path M9,49.8 L582.2,49.8 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 573.2 585.6 r=Md stroke=Border/hairline/Solid
+text 91.8 21 44.3 16.8 size=12 w=600 ink=Muted "Intake"
+text 289.6 21 44.3 16.8 size=12 w=600 ink=Muted "Review"
+text 463.9 21 59 16.8 size=12 w=600 ink=Muted "Delivery"
+shape path M63.8,109.4 L63.8,132.4 Q63.8,140.4 71.8,140.4 L104.8,140.4 Q110,140.4 110,145.5 L110,150.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M110,157.4 L106.4,149 L110,150.5 L113.5,149 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M110,197 L110,213 Q110,221 118,221 L303.8,221 Q311.8,221 311.8,229 L311.8,238.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M311.8,245 L308.2,236.6 L311.8,238.1 L315.3,236.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M311.8,284.6 L311.8,291.6 Q311.8,298.6 318.8,298.6 L334.9,298.6 Q342.9,298.6 342.9,306.6 L342.9,355.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M342.9,362.6 L339.4,354.2 L342.9,355.7 L346.5,354.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M311.8,399 L311.8,415.2 Q311.8,423.2 319.8,423.2 L485.4,423.2 Q493.4,423.2 493.4,431.2 L493.4,440.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M493.4,447.4 L489.9,439 L493.4,440.5 L496.9,439 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M493.4,487 L493.4,528.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M493.4,535 L489.9,526.6 L493.4,528.1 L496.9,526.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M280.6,362.6 L280.6,330.8 Q280.6,322.8 272.6,322.8 L212.9,322.8 Q204.9,322.8 204.9,314.8 L204.9,134.4 Q204.9,126.4 196.9,126.4 L161.2,126.4 Q156.1,126.4 156.1,121.3 L156.1,116.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M156.1,109.4 L159.6,117.8 L156.1,116.3 L152.6,117.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 386.7 413 31.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 392.1 414.8 20.9 16.8 size=12 w=400 ink=Muted "Yes"
+shape rect 230.4 312.6 24.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 235.8 314.4 13.9 16.8 size=12 w=400 ink=Muted "No"
+shape rect 33.1 69.8 153.8 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 49.1 79.8 121.8 19.6 size=14 w=400 ink=Text "Collect request"
+shape rect 29 157.4 161.9 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 45 167.4 129.9 19.6 size=14 w=400 ink=Text "Validate details"
+shape rect 238.9 245 145.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 254.9 255 113.7 19.6 size=14 w=400 ink=Text "Review request"
+shape path M311.8,347 L363.7,373 L311.8,399 L259.8,373 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 287.4 363.2 48.7 19.6 size=14 w=400 ink=Text "Ready?"
+shape rect 424.6 447.4 137.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 440.6 457.4 105.6 19.6 size=14 w=400 ink=Text "Schedule work"
+shape rect 424.6 535 137.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 440.6 545 105.6 19.6 size=14 w=400 ink=Text "Complete work"

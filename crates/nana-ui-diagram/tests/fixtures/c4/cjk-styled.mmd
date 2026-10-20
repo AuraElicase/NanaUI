@@ -1,0 +1,16 @@
+C4Context
+  title 电商平台 系统上下文
+  Person(user, "顾客", "在网上下单购买商品的普通用户")
+  Person_Ext(partner, "合作商家")
+  System(shop, "电商平台", "负责商品展示、下单与支付流程的核心系统")
+  SystemQueue(mq, "消息总线")
+  System_Ext(pay, "第三方支付", "处理所有银行卡与钱包支付")
+  SystemDb_Ext(erp, "仓储 ERP")
+  Rel(user, shop, "浏览并下单", "HTTPS")
+  BiRel(shop, pay, "发起支付 / 回调")
+  Rel(shop, mq, "发布订单事件")
+  Rel(mq, erp, "同步库存")
+  Rel(partner, shop, "上架商品")
+  UpdateElementStyle(partner, $bgColor="#2b6", $fontColor="white", $borderColor="#185")
+  UpdateRelStyle(shop, pay, $lineColor="#c33", $textColor="#c33")
+  UpdateLayoutConfig($c4ShapeInRow="3")
