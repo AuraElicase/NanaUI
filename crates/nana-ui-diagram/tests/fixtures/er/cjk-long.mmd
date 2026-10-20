@@ -1,0 +1,13 @@
+erDiagram
+    用户 {
+        bigint 编号 PK "自增主键"
+        varchar(64) 昵称 "用户可以随时修改，长度不超过六十四个字符，并且不能包含表情符号"
+        datetime 注册时间
+    }
+    订单 {
+        bigint 编号 PK
+        bigint 用户编号 FK
+    }
+    用户 ||--o{ 订单 : 下单
+    订单 }o--o{ 商品 : 包含
+    商品
