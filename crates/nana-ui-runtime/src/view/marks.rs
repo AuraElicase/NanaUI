@@ -263,38 +263,28 @@ impl GroupRow {
     }
 }
 
-/// The inset hairline between two rows of a group.
+/// The inset hairline between two rows of a group. The group shows it only
+/// between two shown rows.
 fn group_divider() -> AnyView {
     // Inset like the rows' own copy: the settings row's horizontal inset.
-    let inset = nana_ui_core::space::XXXL;
-    widget(
-        Stack::row(0.0)
-            .height(LengthSpec::Px(1.0))
-            .width(LengthSpec::Fill)
-            .surface(SemanticColorRole::BorderSoft)
-            .with_layout(move |l| {
-                l.flex_shrink = Some(0.0);
-                l.margin_left = Some(LengthSpec::Px(inset));
-                l.margin_right = Some(LengthSpec::Px(inset));
-            }),
-    )
-    .into_any()
+    widget(crate::Divider::horizontal().inset(nana_ui_core::space::XXXL)).into_any()
 }
 
 /// A settings group: `title` (when there is one) above a raised card whose
-/// rows are separated by inset hairlines.
+/// rows are separated by inset hairlines. A hidden row takes its hairline
+/// with it, whichever row it is.
 pub fn settings_group(title: Option<String>, rows: Vec<GroupRow>) -> AnyView {
-    let rows: Vec<AnyView> = rows
-        .into_iter()
-        .enumerate()
-        .map(|(i, GroupRow { view, visible })| {
-            let row = widget(Stack::column(0.0)).children(((i > 0).then(group_divider), view));
-            match visible {
-                Some(visible) => row.visible(visible).into_any(),
-                None => row.into_any(),
-            }
-        })
-        .collect();
+    let mut members: Vec<AnyView> = Vec::new();
+    for (i, GroupRow { view, visible }) in rows.into_iter().enumerate() {
+        if i > 0 {
+            members.push(group_divider());
+        }
+        let row = widget(Stack::column(0.0)).children(view);
+        members.push(match visible {
+            Some(visible) => row.visible(visible).into_any(),
+            None => row.into_any(),
+        });
+    }
     let mut group = Stack::column(0.0);
     if title.is_some() {
         group = group.gap_step(SpacingStep::Md);
@@ -317,7 +307,7 @@ pub fn settings_group(title: Option<String>, rows: Vec<GroupRow>) -> AnyView {
                     .radius(RadiusTier::Lg)
                     .painter(RaisedSurfacePainter(RadiusTier::Lg)),
             )
-            .children(rows),
+            .children(widget(crate::SettingsGroup::new()).children(members)),
         ))
         .into_any()
 }

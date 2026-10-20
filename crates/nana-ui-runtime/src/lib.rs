@@ -402,8 +402,8 @@ pub use selection::{
 };
 pub use settings::{
     AboutMetadata, AboutSection, AboutSectionAssembly, AppearanceSection,
-    AppearanceSectionAssembly, SettingsBack, SettingsCard, SettingsCollapsibleCard, SettingsPage,
-    SettingsPageAssembly, SettingsRow, SettingsSidebar, SettingsSidebarAssembly,
+    AppearanceSectionAssembly, SettingsBack, SettingsCard, SettingsCollapsibleCard, SettingsGroup,
+    SettingsPage, SettingsPageAssembly, SettingsRow, SettingsSidebar, SettingsSidebarAssembly,
     SettingsTabSelected, apply_appearance_event,
 };
 pub use shell::{AppShell, AppTitleBar, AppTitleBarControls, DesktopShell, WindowChromeAction};

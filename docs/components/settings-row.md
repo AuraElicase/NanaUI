@@ -39,6 +39,8 @@ settings_row("静音").control(switch("").checked(false))
 
 `.divided(true)` 在行下画一条发丝线，一组的最后一行不要画，组自己的边已经收尾。`.first_in_group` 和 `.last_in_group` 标出组的两端。`.loose` 加大间距。
 
+哪一行是两端，取决于此刻显示了哪些行。把行放进 `SettingsGroup`（`widget(SettingsGroup::new()).children(..)`）由它来定：成员的显示或隐藏一变，分组就把第一个、最后一个显示的成员找出来，写到直接放在组里的 `SettingsRow` 的 `first_in_group` / `last_in_group` 上，组里的行不要再自己绑这两个字段。其他成员（徽章、数值、一排按钮）也占位置，只是不被写。带 key 的列表和 `when` / `dynamic` 自己的容器会被看穿，里面的每一行都算成员。组里的 `Divider` 是分隔线：只在两个显示的成员之间显示。
+
 ## 控件名字
 
 `.control(view)` 把控件放在文案后面。控件自己有非空名字时用它自己的，例如 `switch("静音")`；名字是空的，例如 `switch("")`、分段、滑块、下拉，就用行标签。装配通过 `set_labelled_by` 关联两者。行标签改了，控件的无障碍节点跟着重新投影。

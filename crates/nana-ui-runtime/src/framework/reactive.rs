@@ -36,6 +36,9 @@ pub(crate) struct ReactiveHost {
     flips: Vec<PendingFlip>,
     /// Properties of a node that animate when its bindings change them.
     implicit: HashMap<StableNodeId, Box<[crate::view::Implicit]>, crate::BuildIdHasher>,
+    /// Settings groups to mark once the flush has installed every node it
+    /// patched ([`AppContext::defer_settings_group`]).
+    settings_groups: Vec<StableNodeId>,
 }
 
 struct Leaving {
@@ -63,6 +66,7 @@ impl Default for ReactiveHost {
             leaving: HashMap::default(),
             flips: Vec::new(),
             implicit: HashMap::default(),
+            settings_groups: Vec::new(),
         }
     }
 }
@@ -341,6 +345,7 @@ impl AppContext {
         let started = Instant::now();
         let outcome = self.flush_reactive_rounds();
         self.reactive.flushing = false;
+        let outcome = outcome.and(self.mark_deferred_settings_groups());
         nana_diagnostics::metric!(nana_diagnostics::framework::runtime::REACTIVE_FLUSHES);
         nana_diagnostics::metric!(
             nana_diagnostics::framework::runtime::REACTIVE_FLUSH_NS,
@@ -405,6 +410,33 @@ impl AppContext {
         rx::record_flush(patched, commits);
         self.reactive.queue = queue;
         self.reactive.patches = patches;
+        outcome
+    }
+
+    /// Whether a settings group must wait to mark its rows: during a flush a
+    /// row's view can lag the world until the patched views are installed,
+    /// and writing it then would project the lag back. Queues `group` for
+    /// the end of the flush when it must.
+    pub(crate) fn defer_settings_group(&mut self, group: StableNodeId) -> bool {
+        if !self.reactive.flushing {
+            return false;
+        }
+        if !self.reactive.settings_groups.contains(&group) {
+            self.reactive.settings_groups.push(group);
+        }
+        true
+    }
+
+    fn mark_deferred_settings_groups(&mut self) -> Result<(), FrameworkError> {
+        let mut outcome = Ok(());
+        for group in std::mem::take(&mut self.reactive.settings_groups) {
+            if self.world.contains(group) {
+                outcome = outcome.and(crate::settings::mark_settings_group(
+                    self,
+                    Entity::from_stable_id(group),
+                ));
+            }
+        }
         outcome
     }
 

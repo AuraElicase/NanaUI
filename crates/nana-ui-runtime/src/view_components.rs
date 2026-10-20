@@ -5243,6 +5243,10 @@ impl ComponentView for List {
 pub struct Stack {
     style: NodeStyle,
     hittable: bool,
+    /// The container a keyed list or a conditional block puts its rows in:
+    /// layout only, so a [`crate::SettingsGroup`] reads through it to the
+    /// rows themselves.
+    structural: bool,
 }
 
 impl Stack {
@@ -5261,6 +5265,7 @@ impl Stack {
         Self {
             style,
             hittable: false,
+            structural: false,
         }
     }
 
@@ -5273,6 +5278,7 @@ impl Stack {
         Self {
             style,
             hittable: true,
+            structural: false,
         }
     }
 
@@ -5522,6 +5528,16 @@ impl Stack {
     ) -> Self {
         self.style = self.style.padding_step(x, y);
         self
+    }
+
+    /// Marks the container of a keyed list or conditional block.
+    pub(crate) fn structural(mut self) -> Self {
+        self.structural = true;
+        self
+    }
+
+    pub(crate) fn is_structural(&self) -> bool {
+        self.structural
     }
 
     /// Vue / CSS 布局盒：参与命中。Rust 预设默认可点关闭。
