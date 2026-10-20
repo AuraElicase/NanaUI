@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use super::pie::kit;
+use super::kit;
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
 use crate::ir::{Align, Geom, Ink, Rect, SceneBuilder, Tone};
@@ -62,14 +62,14 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             if let Some(&i) = ids.get(name) {
                 return Ok(i);
             }
-            kit::check(cx.limits, model.nodes.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
+            cx.limits.check_count(model.nodes.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
             ids.insert(name.to_string(), model.nodes.len());
             model.nodes.push(name.to_string());
             Ok(model.nodes.len() - 1)
         };
         let source = id(s, &mut model)?;
         let target = id(t, &mut model)?;
-        kit::check(cx.limits, model.links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
+        cx.limits.check_count(model.links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
         model.links.push(Link { source, target, value });
     }
     // Flows must run one way: drop the links that close a cycle.

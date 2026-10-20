@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use super::pie::kit::{self, keyword, split_top};
+use super::kit::{self, keyword, split_top};
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
 use crate::ir::{Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
@@ -121,7 +121,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 current = Some(existing);
                 continue;
             }
-            kit::check(cx.limits, model.areas.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits.check_count(model.areas.len() + 1, cx.limits.elements, LimitKind::Elements)?;
             model.areas.push(Area {
                 id: ids.join(","),
                 label,
@@ -138,7 +138,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let (ids, label, _) = area_head(cx, def)?;
             let id = ids.first().cloned().unwrap_or_default();
             notes += 1;
-            kit::check(cx.limits, notes, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits.check_count(notes, cx.limits.elements, LimitKind::Elements)?;
             let label = label.unwrap_or_else(|| Label::plain(&id));
             model.areas[area].notes.push(Note { id, label });
         } else if let Some(def) = keyword(stmt, "style") {

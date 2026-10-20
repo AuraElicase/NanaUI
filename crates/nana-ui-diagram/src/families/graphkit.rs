@@ -1,7 +1,8 @@
 //! Pieces the layered box-and-line families (class, state, ER,
-//! requirement, use case, agent flow) share: statement words, `@{ ... }`
-//! attributes, author classes and styles, group boxes, edges with end
-//! labels and outlined node shapes.
+//! requirement, use case, agent flow) share: multi-line statements,
+//! `@{ ... }` attributes, author classes and styles, group boxes, edges with
+//! end labels and outlined node shapes. Plain text helpers live in
+//! [`super::kit`].
 
 use std::collections::HashMap;
 
@@ -14,82 +15,12 @@ use crate::source::directives::AuthorStyle;
 use crate::style::{self, Paint};
 use crate::text::LaidText;
 
+pub(crate) use super::kit::{balanced, first_name, first_word, ident_len, quoted_end, unquote};
+
 /// The header band of a compartment box.
 pub(crate) const HEADER_FILL: Ink = Ink::Role(R::Subtle);
 /// Lines between table rows.
 pub(crate) const ROW_RULE: Ink = Ink::Mix(SemanticColorMix::alpha(R::BorderSoft, 0.8));
-
-/// The first whitespace-separated word and the rest, trimmed.
-pub(crate) fn first_word(s: &str) -> (&str, &str) {
-    let s = s.trim_start();
-    match s.find(char::is_whitespace) {
-        Some(i) => (&s[..i], s[i..].trim_start()),
-        None => (s, ""),
-    }
-}
-
-/// The first word, or a whole `"quoted words"` run without its quotes,
-/// and the rest.
-pub(crate) fn first_name(s: &str) -> (&str, &str) {
-    let s = s.trim_start();
-    if let Some(body) = s.strip_prefix('"')
-        && let Some(end) = body.find('"')
-    {
-        return (&body[..end], body[end + 1..].trim_start());
-    }
-    first_word(s)
-}
-
-/// The end of a quoted label at the start of `s`: past the closing `"`,
-/// or past `` `" `` for a markdown string.
-pub(crate) fn quoted_end(s: &str) -> Option<usize> {
-    if let Some(body) = s.strip_prefix("\"`") {
-        body.find("`\"").map(|e| e + 4)
-    } else {
-        s.strip_prefix('"')?.find('"').map(|e| e + 2)
-    }
-}
-
-/// `"text"` without its quotes; anything else trimmed.
-pub(crate) fn unquote(s: &str) -> &str {
-    let s = s.trim();
-    if s.len() >= 2
-        && ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')))
-    {
-        &s[1..s.len() - 1]
-    } else {
-        s
-    }
-}
-
-/// Byte length of the identifier at the start of `s`: letters, digits,
-/// `_` and any of `extra`.
-pub(crate) fn ident_len(s: &str, extra: &str) -> usize {
-    s.char_indices()
-        .find(|&(_, c)| !(c.is_alphanumeric() || c == '_' || extra.contains(c)))
-        .map_or(s.len(), |(i, _)| i)
-}
-
-/// The byte index of the `close` that balances the `open` at index 0,
-/// skipping quoted text.
-pub(crate) fn balanced(s: &str, open: char, close: char) -> Option<usize> {
-    let mut depth = 0i32;
-    let mut quote = false;
-    for (i, c) in s.char_indices() {
-        match c {
-            '"' => quote = !quote,
-            c if c == open && !quote => depth += 1,
-            c if c == close && !quote => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(i);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
 
 /// Whether braces in `s` (outside quotes) leave a block open.
 pub(crate) fn brace_depth(s: &str) -> i32 {

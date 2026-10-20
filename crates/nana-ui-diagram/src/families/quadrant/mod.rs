@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use super::pie::kit::{self, keyword};
+use super::kit::{self, keyword};
 use super::{LayoutCx, ParseCx};
 use crate::ir::{Align, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::geom::PathData;
@@ -102,7 +102,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let (name, decls) = def.split_once(char::is_whitespace).unwrap_or((def, ""));
             classes.insert(name.to_string(), PointStyle::parse(decls));
         } else if let Some((point, names)) = point(cx, stmt)? {
-            kit::check(cx.limits, pending.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits.check_count(pending.len() + 1, cx.limits.elements, LimitKind::Elements)?;
             pending.push((point, names));
         } else {
             cx.warn(line, format!("unreadable quadrant statement `{stmt}`"));

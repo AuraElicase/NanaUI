@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use super::{Annotation, Component, Link, LinkKind, Marked, Model, Sourcing, Stage};
 use crate::families::ParseCx;
-use crate::families::pie::kit::{self, keyword};
+use crate::families::kit::{self, keyword};
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
 
@@ -30,7 +30,7 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let mut elements = 0usize;
     for (line, stmt) in kit::statements(body, header) {
         elements += 1;
-        kit::check(cx.limits, elements, cx.limits.elements, LimitKind::Elements)?;
+        cx.limits.check_count(elements, cx.limits.elements, LimitKind::Elements)?;
         if stmt == "}" {
             if pipeline.take().is_none() {
                 cx.warn(line, "`}` without a pipeline");
@@ -134,7 +134,7 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         } else if let Some((from, x, y)) = trend(stmt) {
             trends.push((line, from, x, y));
         } else if let Some(link) = link(stmt, line) {
-            kit::check(cx.limits, links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
+            cx.limits.check_count(links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
             links.push(link);
         } else {
             cx.warn(line, format!("unreadable wardley statement `{stmt}`"));
@@ -195,7 +195,7 @@ fn add(
         cx.warn(line, format!("`{name}` is already on the map"));
         return Ok(());
     }
-    kit::check(cx.limits, model.components.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
+    cx.limits.check_count(model.components.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
     let label = cx.label(name)?;
     let mut component = Component {
         name: name.to_string(),
