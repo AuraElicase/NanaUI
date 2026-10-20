@@ -1,0 +1,4 @@
+size 128.5 54.4
+summary nodes=1 edges=0 groups=0
+shape rect 8 8 112.5 38.4 r=Md fill=Accent
+text 20 16 88.5 22.4 size=16 w=600 ink=AccentText "Only root"
