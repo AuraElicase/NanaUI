@@ -1,0 +1,51 @@
+size 1234 224.6
+summary nodes=15 edges=14 groups=0
+shape path M677.8,87.6 C724.3,87.6 724.3,101.4 770.8,101.4 stroke=series0/thick/Solid
+shape path M677.8,87.6 C631.3,87.6 631.3,151.3 584.8,151.3 stroke=series1/thick/Solid
+shape path M677.8,87.6 C631.3,87.6 631.3,51.4 584.8,51.4 stroke=series2/thick/Solid
+shape path M833.7,101.4 C855.3,101.4 855.3,81.6 876.9,81.6 stroke=series0/hairline/Solid
+shape path M833.7,101.4 C855.3,101.4 855.3,121.2 876.9,121.2 stroke=series0/hairline/Solid
+shape path M996.6,121.2 C1018.4,121.2 1018.4,140.8 1040.3,140.8 stroke=series0/hairline/Solid
+shape path M513.9,151.3 C492.3,151.3 492.3,136.4 470.7,136.4 stroke=series1/hairline/Solid
+shape path M513.9,151.3 C492.3,151.3 492.3,176 470.7,176 stroke=series1/hairline/Solid
+shape path M294.2,176 C272.6,176 272.6,176 251,176 stroke=series1/hairline/Solid
+shape path M212.5,176 C190.9,176 190.9,136.4 169.3,136.4 stroke=series1/hairline/Solid
+shape path M212.5,176 C190.9,176 190.9,176 169.3,176 stroke=series1/hairline/Solid
+shape path M212.5,176 C190.9,176 190.9,215.6 169.3,215.6 stroke=series1/hairline/Solid
+shape path M538.2,51.4 C504.5,51.4 504.5,31.6 470.7,31.6 stroke=series2/hairline/Solid
+shape path M538.2,51.4 C504.5,51.4 504.5,71.2 470.7,71.2 stroke=series2/hairline/Solid
+shape ellipse 637.6 47.3 80.4 80.4 fill=Accent
+text 643.4 76.4 68.9 22.4 size=16 w=600 ink=AccentText "mindmap"
+shape path M770.8,101.4 L833.7,101.4 stroke=series0/thick/Solid
+text 773.8 77.8 56.8 19.6 size=14 w=400 ink=Text "Origins"
+shape path M876.9,81.6 L997.1,81.6 stroke=series0/hairline/Solid
+shape rect 881.1 63 9.6 9.6 r=Xs stroke=series0/hairline/Solid
+shape ellipse 883.7 65.6 4.3 4.3 fill=series0
+text 896.7 58 97.4 19.6 size=14 w=400 ink=Text "Long history"
+shape path M876.9,121.2 L996.6,121.2 stroke=series0/hairline/Solid
+text 879.9 97.6 113.7 19.6 size=14 w=400 ink=Text "Popularisation"
+shape path M1040.3,140.8 L1225,140.8 stroke=series0/hairline/Solid
+text 1071.7 78 121.8 19.6 size=14 w=400 ink=Text "British popular"
+text 1043.3 97.6 178.6 19.6 size=14 w=400 ink=Text "psychology author Tony"
+text 1112.3 117.2 40.6 19.6 size=14 w=400 ink=Text "Buzan"
+shape path M513.9,151.3 L584.8,151.3 stroke=series1/thick/Solid
+text 516.9 127.7 65 19.6 size=14 w=400 ink=Text "Research"
+shape path M334.8,136.4 L470.7,136.4 stroke=series1/hairline/Solid
+text 337.8 93.2 129.9 19.6 size=14 w=400 ink=Text "On effectiveness"
+text 354 112.8 97.4 19.6 size=14 w=400 ink=Text "and features"
+shape path M294.2,176 L470.7,176 stroke=series1/hairline/Solid
+text 297.2 152.4 170.5 19.6 size=14 w=400 ink=Text "On Automatic creation"
+shape path M212.5,176 L251,176 stroke=series1/hairline/Solid
+text 215.5 152.4 32.5 19.6 size=14 w=400 ink=Text "Uses"
+shape path M9,136.4 L169.3,136.4 stroke=series1/hairline/Solid
+text 12 112.8 154.3 19.6 size=14 w=400 ink=Text "Creative techniques"
+shape path M17.1,176 L169.3,176 stroke=series1/hairline/Solid
+text 20.1 152.4 146.2 19.6 size=14 w=400 ink=Text "Strategic planning"
+shape path M33.4,215.6 L169.3,215.6 stroke=series1/hairline/Solid
+text 36.4 192 129.9 19.6 size=14 w=400 ink=Text "Argument mapping"
+shape path M538.2,51.4 L584.8,51.4 stroke=series2/thick/Solid
+text 541.2 27.8 40.6 19.6 size=14 w=400 ink=Text "Tools"
+shape path M359.1,31.6 L470.7,31.6 stroke=series2/hairline/Solid
+text 362.1 8 105.6 19.6 size=14 w=400 ink=Text "Pen and paper"
+shape path M407.8,71.2 L470.7,71.2 stroke=series2/hairline/Solid
+text 410.8 47.6 56.8 19.6 size=14 w=400 ink=Text "Mermaid"

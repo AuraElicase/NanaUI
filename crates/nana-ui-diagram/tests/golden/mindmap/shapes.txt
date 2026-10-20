@@ -1,0 +1,30 @@
+size 420.5 234.5
+summary nodes=9 edges=8 groups=0
+shape path M226.8,114 C278.7,114 278.7,26.8 330.7,26.8 stroke=series0/thick/Solid
+shape path M226.8,114 C278.7,114 278.7,74.4 330.7,74.4 stroke=series1/thick/Solid
+shape path M226.8,114 C278.7,114 278.7,134.5 330.7,134.5 stroke=series2/thick/Solid
+shape path M226.8,114 C278.7,114 278.7,201.1 330.7,201.1 stroke=series3/thick/Solid
+shape path M226.8,114 C174.8,114 174.8,183.6 122.9,183.6 stroke=series4/thick/Solid
+shape path M226.8,114 C174.8,114 174.8,131.5 122.9,131.5 stroke=series5/thick/Solid
+shape path M226.8,114 C174.8,114 174.8,101.7 122.9,101.7 stroke=series6/thick/Solid
+shape path M226.8,114 C174.8,114 174.8,44.3 122.9,44.3 stroke=series7/thick/Solid
+shape path M185.3,94.8 L268.3,94.8 L277.9,114 L268.3,133.2 L185.3,133.2 L175.7,114 Z fill=Accent
+text 197.3 102.8 59 22.4 size=16 w=600 ink=AccentText "Shapes"
+shape rect 330.7 9 72.7 35.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 342.7 17 48.7 19.6 size=14 w=400 ink=Text "Square"
+shape rect 330.7 56.6 80.8 35.6 r=Md fill=series1.soft stroke=series1/hairline/Solid
+text 342.7 64.6 56.8 19.6 size=14 w=400 ink=Text "Rounded"
+shape ellipse 330.7 104.2 60.5 60.5 fill=series2.soft stroke=series2/hairline/Solid
+text 336.6 124.7 48.7 19.6 size=14 w=400 ink=Text "Circle"
+shape path M370,176.7 L377,182.1 L387.1,179.1 L389.6,185.9 L400.8,185.9 L398.4,192.6 L408.3,195.7 L401.5,201.1 L408.3,206.5 L398.4,209.6 L400.8,216.3 L389.6,216.4 L387.1,223.1 L377,220.1 L370,225.5 L363,220.1 L353,223.1 L350.4,216.4 L339.3,216.3 L341.7,209.6 L331.7,206.5 L338.6,201.1 L331.7,195.7 L341.7,192.6 L339.3,185.9 L350.4,185.9 L353,179.1 L363,182.1 Z fill=series3.soft stroke=series3/hairline/Solid
+text 353.8 191.3 32.5 19.6 size=14 w=400 ink=Text "Bang"
+shape path M117.7,183.6 Q127.5,191.6 110.6,195.1 Q109.5,204.6 92,202.1 Q80.5,209.5 69,202.1 Q51.4,204.6 50.4,195.1 Q33.5,191.6 43.3,183.6 Q33.5,175.6 50.4,172.1 Q51.4,162.6 69,165 Q80.5,157.6 92,165 Q109.5,162.6 110.6,172.1 Q127.5,175.6 117.7,183.6 Z fill=series4.soft stroke=series4/hairline/Solid
+text 60.2 173.8 40.6 19.6 size=14 w=400 ink=Text "Cloud"
+shape path M33.1,113.7 L114,113.7 L122.9,131.5 L114,149.3 L33.1,149.3 L24.2,131.5 Z fill=series5.soft stroke=series5/hairline/Solid
+text 45.1 121.7 56.8 19.6 size=14 w=400 ink=Text "Hexagon"
+shape path M11.3,101.7 L122.9,101.7 stroke=series6/thick/Solid
+text 14.3 78.1 105.6 19.6 size=14 w=400 ink=Text "Plain default"
+shape rect 9 26.5 113.9 35.6 r=Xs fill=series7.soft stroke=series7/hairline/Solid
+shape rect 22.2 39.5 9.6 9.6 r=Xs stroke=series7/hairline/Solid
+shape ellipse 24.8 42.2 4.3 4.3 fill=series7
+text 37.8 34.5 73.1 19.6 size=14 w=400 ink=Text "With icon"

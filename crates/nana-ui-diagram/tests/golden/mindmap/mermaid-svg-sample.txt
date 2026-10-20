@@ -1,0 +1,56 @@
+size 840.7 244.6
+summary nodes=17 edges=16 groups=0
+shape path M509.6,129.7 C565.7,129.7 565.7,91 621.7,91 stroke=series0/thick/Solid
+shape path M509.6,129.7 C565.7,129.7 565.7,196 621.7,196 stroke=series1/thick/Solid
+shape path M509.6,129.7 C453.6,129.7 453.6,176.2 397.6,176.2 stroke=series2/thick/Solid
+shape path M509.6,129.7 C453.6,129.7 453.6,110.8 397.6,110.8 stroke=series3/thick/Solid
+shape path M692.7,91 C714.3,91 714.3,31.6 735.9,31.6 stroke=series0/hairline/Solid
+shape path M692.7,91 C714.3,91 714.3,71.2 735.9,71.2 stroke=series0/hairline/Solid
+shape path M692.7,91 C714.3,91 714.3,110.8 735.9,110.8 stroke=series0/hairline/Solid
+shape path M692.7,91 C714.3,91 714.3,150.4 735.9,150.4 stroke=series0/hairline/Solid
+shape path M692.7,196 C714.3,196 714.3,196 735.9,196 stroke=series1/hairline/Solid
+shape path M342.9,176.2 C321.3,176.2 321.3,176.2 299.7,176.2 stroke=series2/hairline/Solid
+shape path M228.7,176.2 C207.1,176.2 207.1,116.8 185.5,116.8 stroke=series2/hairline/Solid
+shape path M228.7,176.2 C207.1,176.2 207.1,156.4 185.5,156.4 stroke=series2/hairline/Solid
+shape path M228.7,176.2 C207.1,176.2 207.1,196 185.5,196 stroke=series2/hairline/Solid
+shape path M228.7,176.2 C207.1,176.2 207.1,235.6 185.5,235.6 stroke=series2/hairline/Solid
+shape path M351,110.8 C325.3,110.8 325.3,91 299.7,91 stroke=series3/hairline/Solid
+shape path M351,110.8 C325.3,110.8 325.3,130.6 299.7,130.6 stroke=series3/hairline/Solid
+shape ellipse 450.4 70.5 118.5 118.5 fill=Accent
+text 455.5 118.5 108.2 22.4 size=16 w=600 ink=AccentText "mermaid-svg"
+shape path M621.7,91 L692.7,91 stroke=series0/thick/Solid
+text 624.7 67.4 65 19.6 size=14 w=400 ink=Text "Diagrams"
+shape path M735.9,31.6 L766.2,31.6 stroke=series0/hairline/Solid
+text 738.9 8 24.4 19.6 size=14 w=400 ink=Text "Pie"
+shape path M735.9,71.2 L814.9,71.2 stroke=series0/hairline/Solid
+text 738.9 47.6 73.1 19.6 size=14 w=400 ink=Text "Flowchart"
+shape path M735.9,110.8 L831.7,110.8 stroke=series0/hairline/Solid
+shape rect 740.1 92.2 9.6 9.6 r=Xs stroke=series0/hairline/Solid
+shape ellipse 742.7 94.8 4.3 4.3 fill=series0
+text 755.7 87.2 73.1 19.6 size=14 w=400 ink=Text "Mind maps"
+shape path M735.9,150.4 L799.3,150.4 stroke=series0/hairline/Solid
+shape rect 740.1 131.8 9.6 9.6 r=Xs stroke=series0/hairline/Solid
+shape ellipse 742.7 134.4 4.3 4.3 fill=series0
+text 755.7 126.8 40.6 19.6 size=14 w=400 ink=Text "Gantt"
+shape path M621.7,196 L692.7,196 stroke=series1/thick/Solid
+text 624.7 172.4 65 19.6 size=14 w=400 ink=Text "Backends"
+shape path M735.9,196 L766.2,196 stroke=series1/hairline/Solid
+text 738.9 172.4 24.4 19.6 size=14 w=400 ink=Text "SVG"
+shape path M342.9,176.2 L397.6,176.2 stroke=series2/thick/Solid
+text 345.9 152.6 48.7 19.6 size=14 w=400 ink=Text "Layout"
+shape path M228.7,176.2 L299.7,176.2 stroke=series2/hairline/Solid
+text 231.7 152.6 65 19.6 size=14 w=400 ink=Text "Sugiyama"
+shape path M74,116.8 L185.5,116.8 stroke=series2/hairline/Solid
+text 77 93.2 105.6 19.6 size=14 w=400 ink=Text "Cycle removal"
+shape path M114.6,156.4 L185.5,156.4 stroke=series2/hairline/Solid
+text 117.6 132.8 65 19.6 size=14 w=400 ink=Text "Layering"
+shape path M33.4,196 L185.5,196 stroke=series2/hairline/Solid
+text 36.4 172.4 146.2 19.6 size=14 w=400 ink=Text "Crossing reduction"
+shape path M9,235.6 L185.5,235.6 stroke=series2/hairline/Solid
+text 12 212 170.5 19.6 size=14 w=400 ink=Text "Coordinate assignment"
+shape path M351,110.8 L397.6,110.8 stroke=series3/thick/Solid
+text 354 87.2 40.6 19.6 size=14 w=400 ink=Text "Tools"
+shape path M269.3,91 L299.7,91 stroke=series3/hairline/Solid
+text 272.3 67.4 24.4 19.6 size=14 w=400 ink=Text "CLI"
+shape path M236.8,130.6 L299.7,130.6 stroke=series3/hairline/Solid
+text 239.8 107 56.8 19.6 size=14 w=400 ink=Text "Library"
