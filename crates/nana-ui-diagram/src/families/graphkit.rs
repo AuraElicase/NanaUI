@@ -29,6 +29,18 @@ pub(crate) fn first_word(s: &str) -> (&str, &str) {
     }
 }
 
+/// The first word, or a whole `"quoted words"` run without its quotes,
+/// and the rest.
+pub(crate) fn first_name(s: &str) -> (&str, &str) {
+    let s = s.trim_start();
+    if let Some(body) = s.strip_prefix('"')
+        && let Some(end) = body.find('"')
+    {
+        return (&body[..end], body[end + 1..].trim_start());
+    }
+    first_word(s)
+}
+
 /// `"text"` without its quotes; anything else trimmed.
 pub(crate) fn unquote(s: &str) -> &str {
     let s = s.trim();
@@ -145,8 +157,14 @@ impl Styles {
 
     /// `style id decls`.
     pub fn style(&mut self, rest: &str) {
-        let (ids, decls) = first_word(rest);
-        for id in ids.split(',').map(str::trim).filter(|n| !n.is_empty()) {
+        let quoted = rest.trim_start().starts_with('"');
+        let (ids, decls) = first_name(rest);
+        let ids: Vec<&str> = if quoted {
+            vec![ids]
+        } else {
+            ids.split(',').collect()
+        };
+        for id in ids.into_iter().map(str::trim).filter(|n| !n.is_empty()) {
             self.direct.push((id.to_string(), decls.to_string()));
         }
     }
