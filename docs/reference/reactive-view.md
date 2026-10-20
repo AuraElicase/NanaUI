@@ -475,8 +475,8 @@ fn todos() -> impl IntoView {
 | `<Button>"加一"</Button>`、`<Checkbox>` | `button("加一")`、`checkbox(…)` |
 | `<Slider min=0 max=1 step=0.05/>`、`<TextInput/>` | `slider(0_f64, 1_f64, 0.05_f64)`、`text_input()` |
 | `<Widget of={component}>…</Widget>` | `widget(component).children((…))` |
-| `<TodoRow todo={t} list={list}/>`（其他标签） | `todo_row(t, list)`：标签名转成 snake_case，属性值按书写顺序作为参数，子节点作为最后一个参数 |
-| `<kit::EmptyState title={t}/>`（带路径的标签） | `kit::empty_state(t)`：带路径的标签一律调用函数，即使最后一段和内置标签同名。不带路径时，内置标签优先：宏看不到作用域里的函数，同名的自定义组件会被内置控件遮蔽，属性对得上时不报错。自定义组件和内置标签重名时写成带路径的形式（同模块里用 `self::`） |
+| `<TodoRow list={list} todo={t}/>`（其他标签） | `todo_row::Props::__new().list(list).todo(t).__build()`，即 `todo_row(t, list)`：标签名转成 snake_case，找带 `#[component]` 的同名函数；属性按名字交给同名参数，顺序随意，子节点交给 `children`，只写名字的属性是 `true`，`#[prop(default)]` / `#[prop(default = 表达式)]` 的参数可以不写（见下文"组件属性"） |
+| `<kit::EmptyState title={t}/>`（带路径的标签） | `kit::empty_state::Props::__new().title(t).__build()`：带路径的标签一律调用函数，即使最后一段和内置标签同名。不带路径时，内置标签优先：宏看不到作用域里的函数，同名的自定义组件会被内置控件遮蔽，属性对得上时不报错。自定义组件和内置标签重名时写成带路径的形式（同模块里用 `self::`） |
 | `name="x"`、`name=3`、`name={x}`、`name={a.b}` | 原样传入：常量，或者信号本身 |
 | `name={其他表达式}` | `move \|\| 表达式`：读到的信号变了就重算 |
 | `name={\|\| …}` | 闭包原样传入 |
@@ -491,6 +491,29 @@ fn todos() -> impl IntoView {
 | `<template #navigation>…</template>`（具名 slot） | `.navigation(…)`：元素上同名的方法，`#title-trailing` 是 `.title_trailing(…)`；`#default` 就是普通子节点 |
 
 多于 12 个子节点时。宏会嵌套成多层 tuple。写错的地方会被准确指出。例如：未闭合的标签、`</Row>` 关了 `<Column>`、`v-else` 前面没有 `v-if`、`v-for` 没写 `key`、未知指令、`v-if` 和 `v-for` 写在同一个元素上。`tests/view_macro.rs` 把同一个页面用模板和手写函数调用各写一遍。挂载后的保留树逐节点相同。改完信号 flush 之后也相同。
+
+### 组件属性
+
+模板里的组件是带 `#[component]`（`nana_ui::runtime::view::component`）的函数。宏展开时看不到函数的定义，`#[component]` 在函数旁边生成一个按名字收参数的构建器，挂在和函数同名的隐藏模块上（`todo_row::Props`）。`use` 进函数时模块也一起进来。函数本身不变，Rust 里照常按顺序传齐参数。
+
+```rust
+#[component]
+fn switch_row(
+    label: &'static str,
+    #[prop(default = "")] hint: &'static str,
+    checked: impl IntoProp<bool>,
+    #[prop(default = false)] disabled: impl IntoProp<bool>,
+    on: fn(bool) -> Action,
+) -> impl IntoView { /* … */ }
+
+view! { <SwitchRow on={Action::Mute} label="静音" checked={muted} /> }
+```
+
+- 每个属性的 setter 收参数自己的类型（`impl Trait` 参数收满足同样约束的值），所以字面量和闭包的类型推断和直接调用一样。
+- 默认值写在函数旁边，名字在函数所在的模块里解析。`#[prop(default)]` 是 `Default::default()`。`impl Trait` 参数的默认值写成表达式，例如 `#[prop(default = || true)] shown: impl Fn() -> bool`。类型用到函数自己泛型参数的属性不能有默认值。
+- 漏了必填属性报 `` `<SwitchRow>` needs `on` ``，指在标签上。写了没有的属性是 `no method named …`，指在属性上。同一个属性写两次、`children` 既写属性又写子节点，都是模板错误。没标 `#[component]` 的函数当标签用时，编译器说找不到同名的模块。
+- 参数要拿所有权或是 `'static` 的值：模板建一次就把它们交出去。参数不能叫 `key`（组件标签上的 `key` 落在第一个根节点上），也不能以 `__` 开头。
+- `.vue` 同一批编译的视图仍由 `.vue` 编译器按 prop 名排好参数，直接调用函数；`.vue` 模板里的 Rust 函数组件和 `view!` 一样要 `#[component]`。
 
 在宏里能静态区分的只有三类：常量（字面量）、直接值或信号（路径、字段）、闭包（其他表达式）。"静态依赖"那一类需要知道哪个标识符是信号。只有能看到整段脚本的 [`.vue` 方言](#高级用法vue-方言)编译器才能做到。
 
@@ -540,7 +563,7 @@ pub mod views {
 - 同一批编译的组件之间按 prop 名匹配参数。不按书写顺序：`@remove` 对应 `on_remove` 回调。子节点对应最后一个名为 `children` 的 prop。缺少的参数、多余的参数都是编译错误。
 - 具名插槽：子组件声明 `header: impl IntoView` 这样的视图参数。模板里用 `<slot name="header"/>` 放置（`<slot/>` 放 `children`）。父组件写 `<template #header>…</template>`。`#default` 等于其余子节点。插槽内容是按值传入的视图。只能放一次。也没有后备内容。
 - `ref="name"` 把元素的节点 id 写进脚本里的 `let name = node_ref();`。`on_mount(move |cx| …)` 在视图进树之后执行。可以拿它聚焦、读布局。`labelled-by="name"` 让控件用这个节点的文字当无障碍名字（`aria-labelledby`）。
-- 组件上的 `key` 落在组件的第一个根节点上（`keyed`）。不在这一批里的标签。按 `view!` 的规则调用同名的 Rust 函数。
+- 组件上的 `key` 落在组件的第一个根节点上（`keyed`）。不在这一批里的标签。按 `view!` 的规则调用同名的 `#[component]` Rust 函数（按属性名传参，见[组件属性](#组件属性)）。
 - `<T id="files" :count="n" />` 是 `t(..)`。参数和 `{{ }}` 插值一样分类：单独的信号读成 `n.get()` 并声明为依赖。只读常量的消息写成 `Fixed(..)`，只写一次。`count="3"` 是字符串参数，数字写 `:count="3"`。`locale="ar"` 在构建时检查。`:locale="sig"` 和其他属性一样是绑定。
 - 内置标签总是建内置的那个。同一批里和它同名的视图（例如 `T.vue`）仍是 Rust 能调用的函数（`views::t(..)`），但在模板里写它的标签是编译错误，不会悄悄换成内置的。
 - `<style>`（写不写 `scoped` 都一样。总是只作用于本组件）在构建时编译。见下文"样式表"。模板里仍然要遵守 Rust 的所有权规则。例如同一个值既要传给组件又要被事件闭包使用时。得写 `todo.clone()`。

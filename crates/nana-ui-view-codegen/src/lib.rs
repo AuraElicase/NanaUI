@@ -640,6 +640,11 @@ pub fn format_parts(parts: &[TextPart], span: Span) -> TokenStream {
     quote_spanned!(span=> ::std::format!(#format, #(#args),*))
 }
 
+/// The directive the `.vue` compiler puts on a tag of a view in its own
+/// batch: the attributes are already that view's arguments in order. No
+/// template can write it.
+pub const POSITIONAL: &str = "\u{0}positional";
+
 /// The function a component tag calls, as an identifier: `TodoRow` →
 /// `todo_row`, a keyword such as `Dyn` → `r#dyn`.
 pub fn function_ident(tag: &str, span: Span) -> Ident {
@@ -1673,12 +1678,17 @@ impl Gen<'_> {
         )
     }
 
-    /// `<TodoRow todo={t} />` → `todo_row(t)`; attribute values are the
-    /// arguments in order, children the last argument.
+    /// `<TodoRow todo={t} done />` → `todo_row::Props::__new().todo(t)
+    /// .done(true).__build()`: each attribute sets the property of its name
+    /// on the builder `#[component]` gave the function, the children set
+    /// `children`. A view of the same `.vue` batch, whose arguments the
+    /// compiler already put in order ([`POSITIONAL`]), is called directly.
     fn component(&self, element: &Element) -> syn::Result<TokenStream> {
         let span = element.name.span();
         let function = function_ident(&element.name.to_string(), span);
+        let positional = element.directive(POSITIONAL).is_some();
         let mut args = Vec::new();
+        let mut given: Vec<String> = Vec::new();
         let mut key = None;
         for attr in &element.attrs {
             match &attr.name {
@@ -1687,12 +1697,30 @@ impl Gen<'_> {
                 AttrName::Plain(name) if name == "key" => {
                     key = Some(raw(&attr.value, name.span())?)
                 }
-                AttrName::Plain(name) => args.push(match &attr.value {
-                    AttrValue::View(nodes) => self.nodes(nodes)?,
-                    value => raw(value, name.span())?,
-                }),
+                AttrName::Plain(name) => {
+                    let value = match &attr.value {
+                        AttrValue::View(nodes) => self.nodes(nodes)?,
+                        // `<Row compact/>`: a bare attribute is `true`.
+                        AttrValue::None if !positional => quote_spanned!(name.span()=> true),
+                        value => raw(value, name.span())?,
+                    };
+                    if positional {
+                        args.push(value);
+                        continue;
+                    }
+                    let property = name.to_string();
+                    if given.contains(&property) {
+                        return Err(syn::Error::new(
+                            name.span(),
+                            format!("`{property}` is given twice"),
+                        ));
+                    }
+                    given.push(property);
+                    args.push(quote_spanned!(name.span()=> .#name(#value)));
+                }
                 AttrName::Directive(directive, _)
                     if matches!(directive.as_str(), "if" | "else-if" | "else" | "for")
+                        || directive == POSITIONAL
                         || directive.starts_with("slot:")
                         || directive.split('.').next() == Some("virtual") => {}
                 _ => {
@@ -1704,14 +1732,26 @@ impl Gen<'_> {
             }
         }
         if !element.children.is_empty() {
-            args.push(self.nodes(&element.children)?);
+            let children = self.nodes(&element.children)?;
+            if positional {
+                args.push(children);
+            } else {
+                if given.iter().any(|name| name == "children") {
+                    return Err(syn::Error::new(
+                        span,
+                        "`children` is given twice: as an attribute and as the content",
+                    ));
+                }
+                args.push(quote_spanned!(span=> .children(#children)));
+            }
         }
         let module = &element.module;
-        let call = slot_calls(
-            self,
-            element,
-            quote_spanned!(span=> #(#module::)* #function(#(#args),*)),
-        )?;
+        let call = if positional {
+            quote_spanned!(span=> #(#module::)* #function(#(#args),*))
+        } else {
+            quote_spanned!(span=> #(#module::)* #function::Props::__new() #(#args)* .__build())
+        };
+        let call = slot_calls(self, element, call)?;
         let krate = self.krate;
         Ok(match key {
             Some(key) => quote_spanned!(span=> #krate::view::keyed(#key, #call)),

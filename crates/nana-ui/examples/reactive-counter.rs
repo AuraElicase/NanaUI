@@ -30,6 +30,7 @@ fn counter() -> impl IntoView {
     }
 }
 
+#[view::component]
 fn todo_row(todo: Todo, list: Signal<Vec<Todo>>) -> impl IntoView {
     let id = todo.id;
     view! {

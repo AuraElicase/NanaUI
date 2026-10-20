@@ -18,6 +18,11 @@
 //! read the signal; the owning [`crate::AppContext`] flushes them after
 //! input and before a frame, merging every changed node into one commit.
 
+#[doc(hidden)]
+pub mod __component {
+    pub use super::component::{Set, Unset};
+}
+mod component;
 mod composites;
 mod controls;
 mod each_virtual;
@@ -172,6 +177,15 @@ pub use crate::stylesheet;
 #[cfg(feature = "view-macro")]
 pub use nana_ui_view_macros::Store;
 
+/// `#[component]` (feature `view-macro`) on a function a template calls by
+/// tag: `<SwitchRow label="…" on={…}/>` then passes each attribute to the
+/// parameter of that name, in any order, and may leave out a parameter
+/// marked `#[prop(default)]` or `#[prop(default = expression)]`. The
+/// function itself does not change; Rust still calls it with every argument
+/// in order. See `docs/reference/reactive-view.md`.
+#[cfg(feature = "view-macro")]
+pub use nana_ui_view_macros::component;
+
 /// A Vue-shaped template over this module (feature `view-macro`):
 ///
 /// ```ignore
@@ -190,8 +204,9 @@ pub use nana_ui_view_macros::Store;
 /// It expands to the function calls it names and adds nothing at run time:
 /// a literal is a constant, `{path}` is passed as is (a signal or a value),
 /// any other `{expression}` becomes `move || expression`. Unknown tags call
-/// the snake-cased function with the attribute values in order and the
-/// children last. See `docs/reference/reactive-view.md`.
+/// the snake-cased [`component`] function, passing each attribute to the
+/// parameter of its name and the children as `children`. See
+/// `docs/reference/reactive-view.md`.
 #[cfg(feature = "view-macro")]
 #[macro_export]
 macro_rules! view {
