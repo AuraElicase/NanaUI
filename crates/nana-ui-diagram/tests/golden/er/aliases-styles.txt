@@ -1,0 +1,48 @@
+size 630.5 129.2
+summary nodes=4 edges=3 groups=0
+shape path M148.4,64.6 L228.1,64.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M222.2,68.1 L222.2,61.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 212.6 61.9 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M154.3,61.1 L154.3,68.1 M158.5,61.1 L158.5,68.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M388.2,43.5 L394.2,43.5 Q400.2,43.5 400.2,37.5 L400.2,34.8 Q400.2,26.8 408.2,26.8 L537.5,26.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M529.1,26.8 L537.5,31.4 M529.1,26.8 L537.5,22.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 521.2 24.1 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M394.1,39.9 L394.1,47 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 398.3 40.8 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M388.2,85.7 L394.2,85.7 Q400.2,85.7 400.2,91.7 L400.2,94.4 Q400.2,102.4 408.2,102.4 L537.5,102.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M531.6,105.9 L531.6,98.9 M527.4,105.9 L527.4,98.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M396.6,85.7 L388.2,81.2 M396.6,85.7 L388.2,90.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 399.1 83.1 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 172.4 54.4 31.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 177.8 56.2 20.9 16.8 size=12 w=400 ink=Muted "has"
+shape rect 440 16.6 45.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 445.4 18.4 34.8 16.8 size=12 w=400 ink=Muted "opens"
+shape rect 412.2 92.2 101.3 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 417.6 94 90.5 16.8 size=12 w=400 ink=Muted "subscribes to"
+shape rect 9 22 139.4 85.2 r=Sm fill=Surface
+clip rect 9 22 139.4 85.2 r=Sm
+shape rect 9 22 139.4 35.6 fill=Subtle
+unclip
+shape path M9,57.6 L148.4,57.6 stroke=rgba(37,99,235,1)/hairline/Solid
+shape rect 9 22 139.4 85.2 r=Sm stroke=rgba(37,99,235,1)/2/Solid
+text 52.9 30 51.6 19.6 size=14 w=600 ink=Text "Person"
+text 20.2 61.6 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 74.6 61.6 62.6 16.8 size=12 w=400 ink=Text "firstName"
+shape path M9,82.4 L148.4,82.4 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 86.4 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 74.6 86.4 55.7 16.8 size=12 w=400 ink=Text "lastName"
+shape rect 228.1 34.4 160.1 60.4 r=Sm fill=Surface
+clip rect 228.1 34.4 160.1 60.4 r=Sm
+shape rect 228.1 34.4 160.1 35.6 fill=Subtle
+unclip
+shape path M228.1,70 L388.2,70 stroke=BorderStrong/hairline/Solid
+shape rect 228.1 34.4 160.1 60.4 r=Sm stroke=BorderStrong/hairline/Solid
+text 239.3 42.4 137.7 19.6 size=14 w=600 ink=Text "Customer Account"
+text 239.3 74 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 293.6 74 34.8 16.8 size=12 w=400 ink=Text "email"
+shape rect 537.5 9 84 35.6 r=Sm fill=Surface
+shape rect 537.5 9 84 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 549.4 17 60.3 19.6 size=14 w=600 ink=Text "Session"
+shape rect 537.5 84.6 84 35.6 r=Sm fill=rgba(253,230,138,1)
+shape rect 537.5 84.6 84 35.6 r=Sm stroke=rgba(180,83,9,1)/hairline/Solid
+text 562.3 92.6 34.4 19.6 size=14 w=600 ink=rgba(0,0,0,1) "plan"
