@@ -1,0 +1,14 @@
+block-beta
+  columns 2
+  block:outer:2
+    columns 3
+    a["A label that is long enough to wrap across more than one line in the block"] b c
+    block:inner:3
+      x y
+    end
+  end
+  p q
+  a --> p
+  x ==> q
+  b --- c
+  q -- "back" --> a

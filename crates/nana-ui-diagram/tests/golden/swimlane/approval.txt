@@ -1,0 +1,45 @@
+size 1614.3 281.3
+summary nodes=6 edges=6 groups=3
+clip rect 9 9 1596.3 263.3 r=Md
+shape rect 9 9 90.4 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 88.6 1596.3 104.1 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 88.6 90.4 104.1 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 192.7 90.4 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,88.6 L1605.3,88.6 stroke=Border/hairline/Solid
+shape path M9,192.7 L1605.3,192.7 stroke=Border/hairline/Solid
+shape path M99.4,9 L99.4,272.3 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 1596.3 263.3 r=Md stroke=Border/hairline/Solid
+text 21 40.4 66.4 16.8 size=12 w=600 ink=Muted "Applicant"
+text 24.7 132.3 59 16.8 size=12 w=600 ink=Muted "Reviewer"
+text 32.1 224.1 44.3 16.8 size=12 w=600 ink=Muted "System"
+shape path M297.6,60.7 L378.6,60.7 Q386.6,60.7 386.6,68.7 L386.6,132.7 Q386.6,140.7 394.6,140.7 L468.8,140.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M475.6,140.7 L467.2,144.2 L468.7,140.7 L467.2,137.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M653.7,140.7 L660.7,140.7 Q667.7,140.7 667.7,147.7 L667.7,151.9 Q667.7,159.9 675.7,159.9 L828.8,159.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M835.5,159.9 L827.1,163.4 L828.6,159.9 L827.1,156.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M925.3,140.7 L964.5,140.7 Q972.5,140.7 972.5,148.7 L972.5,224.5 Q972.5,232.5 980.5,232.5 L1013,232.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1019.8,232.5 L1011.4,236.1 L1012.9,232.5 L1011.4,229 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1165.4,232.5 L1206.7,232.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1213.4,232.5 L1205,236.1 L1206.6,232.5 L1205,229 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1391.6,232.5 L1407.6,232.5 Q1415.6,232.5 1415.6,224.5 L1415.6,56.8 Q1415.6,48.8 1423.6,48.8 L1432.9,48.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1439.6,48.8 L1431.2,52.3 L1432.7,48.8 L1431.2,45.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M835.5,121.4 L740.4,121.4 Q732.4,121.4 732.4,113.4 L732.4,44.9 Q732.4,36.9 724.4,36.9 L304.3,36.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M297.6,36.9 L306,33.4 L304.4,36.9 L306,40.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 311.6 90.5 150 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 317 92.3 139.2 16.8 size=12 w=400 ink=Muted "Application received"
+shape rect 939.3 176.4 66.5 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 944.7 178.2 55.7 16.8 size=12 w=400 ink=Muted "Approved"
+shape rect 681.7 69 101.3 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 687.1 70.8 90.5 16.8 size=12 w=400 ink=Muted "Needs changes"
+shape rect 119.4 29 178.2 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 135.4 39 146.2 19.6 size=14 w=400 ink=Text "Submit application"
+shape rect 1439.6 29 145.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 1455.6 39 113.7 19.6 size=14 w=400 ink=Text "Sign agreement"
+shape rect 475.6 120.9 178.2 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 491.6 130.9 146.2 19.6 size=14 w=400 ink=Text "Screen application"
+shape path M861.1,108.6 L925.3,140.7 L861.1,172.7 L797,140.7 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 824.6 130.9 73.1 19.6 size=14 w=400 ink=Text "Approved?"
+shape rect 1019.8 212.7 145.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 1035.8 222.7 113.7 19.6 size=14 w=400 ink=Text "Create account"
+shape rect 1213.4 212.7 178.2 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 1229.4 222.7 146.2 19.6 size=14 w=400 ink=Text "Send welcome email"

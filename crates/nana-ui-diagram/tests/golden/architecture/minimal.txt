@@ -1,0 +1,4 @@
+size 115 57.6
+summary nodes=1 edges=0 groups=0
+shape rect 9 9 97 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 19 65 19.6 size=14 w=400 ink=Text "Only one"
