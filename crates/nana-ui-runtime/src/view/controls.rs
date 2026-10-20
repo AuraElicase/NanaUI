@@ -19,7 +19,7 @@ use crate::{
     RangeChanged, RangeField, RangeInput, RangeSpanChanged, RangeSpanField, RangeSpanInput,
     RangeSpanOrientation, RangeSpanThumb, ScrollView, Select, SelectChanged, SelectOption, Spinner,
     StableNodeId, Stack, StatusBadge, Switch, Text, TextArea, TextChanged, TextInput,
-    TextSubmitted, Thumbnail, ToggleChanged,
+    TextSubmitted, TextureSlotName, Thumbnail, ToggleChanged,
 };
 use crate::{
     AppTitleBar, Breadcrumb, Dialog, Drawer, FormField, GpuView, IconGlyph, InteractiveCard,
@@ -313,7 +313,7 @@ macro_rules! controls {
         $target.selected.as_ref() != Some($value) || $target.focus.as_ref() != Some($value)
     };
     (@write resource $target:ident, $value:ident, $field:ident) => {{
-        $target.state = if $value.trim().is_empty() {
+        $target.state = if $value.is_empty() {
             ThumbnailState::Empty
         } else {
             ThumbnailState::Ready
@@ -821,6 +821,12 @@ impl FieldText for String {
 impl FieldText for Arc<str> {
     fn parse(text: &str) -> Result<Self, String> {
         Ok(Arc::from(text))
+    }
+}
+
+impl FieldText for TextureSlotName {
+    fn parse(text: &str) -> Result<Self, String> {
+        Ok(Self::from(text))
     }
 }
 

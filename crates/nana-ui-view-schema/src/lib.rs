@@ -161,24 +161,18 @@ macro_rules! for_each_control {
             };
             Divider => divider() for Divider {};
             Thumbnail => thumbnail() for Thumbnail {
-                resource: Arc<str> = resource,
-                generation: u64 = set,
-                version: u64 = set,
+                resource: TextureSlotName = resource,
                 aspect: f32 = set,
                 label: Arc<str> = set,
                 decorative: bool = set,
             };
             Avatar => avatar(size: f32) for Avatar {
-                resource: Arc<str> = set,
-                generation: u64 = set,
-                version: u64 = set,
+                resource: TextureSlotName = set,
                 size: f32 = set,
                 label: Arc<str> = set,
             };
             Texture => texture() for GpuTextureView {
-                resource: Arc<str> = set,
-                generation: u64 = set,
-                version: u64 = set,
+                resource: TextureSlotName = set,
                 opacity: f32 = set,
                 corner_radius: f32 = set,
             };

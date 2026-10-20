@@ -17,6 +17,7 @@ use crate::gpu_view::{RenderSlot, intersect_physical, slot_for_bounds};
 use crate::painted_demand::SharedPaintedDemand;
 use crate::scene_paint::url_texture_cache::UrlTextureCache;
 use crate::scene_paint::{pack_linear, pack_paint_color};
+use nana_ui_runtime::TextureSlotName;
 
 const SOURCE: &str = r#"
 @group(0) @binding(0)
@@ -365,7 +366,11 @@ static NEXT_HOST_TEXTURE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 /// replaces the underlying texture. `generation` changes only when the
 /// texture is replaced, while `version` changes for every content
 /// invalidation.
-/// [`Self::id`] is a painter cache key, not the [`HostTextureRegistry`] slot.
+///
+/// Registering a handle under a [`HostTextureRegistry`] slot is all a host
+/// does to show it: every view of that slot samples whatever the slot holds
+/// at paint time, so a re-registration (new pixels, a rebuilt device) needs no
+/// view update.
 #[derive(Debug, Clone)]
 pub struct HostTexture {
     state: Arc<HostTextureState>,
@@ -373,7 +378,6 @@ pub struct HostTexture {
 
 #[derive(Debug)]
 struct HostTextureState {
-    id: u64,
     instance_identity: u64,
     version: AtomicU64,
     texture: VersionedResource<HostTextureResource>,
@@ -448,14 +452,13 @@ impl<T: Clone> VersionedResource<T> {
 impl HostTexture {
     /// Sample `texture`. It must have been created with
     /// [`GpuTextureUsages::SAMPLED`](nana_gpu::GpuTextureUsages::SAMPLED).
-    pub fn new(id: u64, generation: u64, texture: &GpuTexture) -> Self {
+    pub fn new(texture: &GpuTexture) -> Self {
         Self {
             state: Arc::new(HostTextureState {
-                id,
                 instance_identity: next_host_texture_instance_id(),
-                version: AtomicU64::new(generation),
+                version: AtomicU64::new(0),
                 texture: VersionedResource::new(
-                    generation,
+                    0,
                     HostTextureResource {
                         texture: texture.clone(),
                         lifetime: None,
@@ -466,15 +469,14 @@ impl HostTexture {
         }
     }
 
-    /// Painter pipeline cache key. Not the registry slot string used by
-    /// [`GpuTextureView`](nana_ui_runtime::GpuTextureView) / `"nana.host-texture"`.
+    /// Process-unique identity of this handle, allocated on creation. Clones
+    /// share it; a new handle for the same slot gets a new one. It is the
+    /// painter's cache key, not the registry slot name that views sample.
     pub fn id(&self) -> u64 {
-        self.state.id
+        self.state.instance_identity
     }
 
-    /// Identity of this shared handle, distinct from its caller-assigned cache id.
-    /// Clones share an identity; replacing a registry binding with a new handle
-    /// changes it even when the caller reuses the same id and initial version.
+    /// Same as [`Self::id`].
     pub fn instance_identity(&self) -> u64 {
         self.state.instance_identity
     }
@@ -537,13 +539,11 @@ impl HostTexture {
     }
 
     pub(crate) fn new_retained(
-        id: u64,
-        generation: u64,
         texture: &GpuTexture,
         lifetime: HostTextureLifetime,
         provenance: crate::output::OutputProvenance,
     ) -> Self {
-        let handle = Self::new(id, generation, texture);
+        let handle = Self::new(texture);
         {
             let mut state = handle
                 .state
@@ -563,7 +563,6 @@ impl HostTexture {
         (
             Self {
                 state: Arc::new(HostTextureState {
-                    id: self.state.id,
                     instance_identity: self.state.instance_identity,
                     version: AtomicU64::new(self.version()),
                     texture: VersionedResource::new(generation, resource),
@@ -608,7 +607,7 @@ impl HostTextureAlphaMode {
 /// JS-visible metadata plus the host-owned WGPU view used by `<nana-gpu>`.
 #[derive(Debug, Clone)]
 pub struct HostTextureBinding {
-    pub slot: String,
+    pub slot: TextureSlotName,
     pub texture: HostTexture,
     pub width: u32,
     pub height: u32,
@@ -629,7 +628,7 @@ impl HostTextureBinding {
 /// remains with the hosted renderer.
 #[derive(Debug, Clone, Default)]
 pub struct HostTextureRegistry {
-    bindings: Arc<RwLock<HashMap<String, RegisteredHostTextureBinding>>>,
+    bindings: Arc<RwLock<HashMap<TextureSlotName, RegisteredHostTextureBinding>>>,
     /// 每个 slot 当前的绘制需求(见 [`crate::painted_demand`])。与
     /// `bindings` 分开放:画家每次全新 prepare 写这里,而 `bindings` 在同一段
     /// 时间里正被读,合用一把锁会互相挡。
@@ -739,10 +738,10 @@ impl Drop for TextureSubscription {
 #[derive(Debug, Clone)]
 pub struct TextureSlot {
     registry: HostTextureRegistry,
-    name: Arc<str>,
+    name: TextureSlotName,
 }
 impl TextureSlot {
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &TextureSlotName {
         &self.name
     }
     pub fn invalidate(&self) -> Option<u64> {
@@ -756,7 +755,7 @@ impl TextureSlot {
         alpha: HostTextureAlphaMode,
     ) -> HostTextureBinding {
         self.registry
-            .register(self.name.to_string(), texture, width, height, alpha)
+            .register(self.name.clone(), texture, width, height, alpha)
     }
     pub fn remove(&self) -> Option<HostTextureBinding> {
         self.registry.remove(&self.name)
@@ -776,8 +775,8 @@ impl HostTextureRegistry {
     /// 同一个 slot 被多个节点共享时,纹理只有一份,按最大的消费者准备,
     /// 较小的消费者靠 mip 与过滤缩小;结果与绘制顺序无关。复用上一帧的
     /// 绘制不改这里。尺寸为 0 的一边表示节点在树上但没有可见面积。
-    pub fn painted_extent(&self, slot: &str) -> Option<[u32; 2]> {
-        self.painted.read().ok()?.extent(slot)
+    pub fn painted_extent(&self, slot: impl AsRef<str>) -> Option<[u32; 2]> {
+        self.painted.read().ok()?.extent(slot.as_ref())
     }
 
     /// 绘制需求的修订号。任何 slot 的 [`Self::painted_extent`] 变化时递增。
@@ -839,7 +838,7 @@ impl HostTextureRegistry {
         Arc::ptr_eq(&self.painted, &other.painted)
     }
 
-    pub fn slot(&self, name: impl Into<Arc<str>>) -> TextureSlot {
+    pub fn slot(&self, name: impl Into<TextureSlotName>) -> TextureSlot {
         TextureSlot {
             registry: self.clone(),
             name: name.into(),
@@ -863,7 +862,7 @@ impl HostTextureRegistry {
 
     pub fn register(
         &self,
-        slot: impl Into<String>,
+        slot: impl Into<TextureSlotName>,
         texture: HostTexture,
         width: u32,
         height: u32,
@@ -886,11 +885,12 @@ impl HostTextureRegistry {
         bindings.insert(slot, RegisteredHostTextureBinding::new(binding.clone()));
         self.revision.fetch_add(1, Ordering::AcqRel);
         drop(bindings);
-        self.notify(&binding.slot);
+        self.notify(binding.slot.as_str());
         binding
     }
 
-    pub fn get(&self, slot: &str) -> Option<HostTextureBinding> {
+    pub fn get(&self, slot: impl AsRef<str>) -> Option<HostTextureBinding> {
+        let slot = slot.as_ref();
         self.bindings
             .read()
             .ok()
@@ -916,7 +916,7 @@ impl HostTextureRegistry {
             return false;
         }
         let binding = HostTextureBinding {
-            slot: slot.to_owned(),
+            slot: TextureSlotName::from(slot),
             texture,
             width: width.max(1),
             height: height.max(1),
@@ -925,7 +925,10 @@ impl HostTextureRegistry {
         if current.matches(&binding) {
             return true;
         }
-        bindings.insert(slot.to_owned(), RegisteredHostTextureBinding::new(binding));
+        bindings.insert(
+            binding.slot.clone(),
+            RegisteredHostTextureBinding::new(binding),
+        );
         self.revision.fetch_add(1, Ordering::AcqRel);
         drop(bindings);
         self.notify(slot);
@@ -958,7 +961,7 @@ impl HostTextureRegistry {
             if let Some(dependency) = dependency {
                 provenance.push(dependency);
             }
-            frozen.insert(slot.to_owned(), entry);
+            frozen.insert(TextureSlotName::from(slot), entry);
         }
         (
             Self {
@@ -972,7 +975,8 @@ impl HostTextureRegistry {
         )
     }
 
-    pub fn remove(&self, slot: &str) -> Option<HostTextureBinding> {
+    pub fn remove(&self, slot: impl AsRef<str>) -> Option<HostTextureBinding> {
+        let slot = slot.as_ref();
         // 连同绘制需求一起丢掉:slot 被重新登记时,在它第一次被画之前读到
         // 旧尺寸比读到 `None` 更难排查。
         if let Ok(mut painted) = self.painted.write() {
@@ -1019,7 +1023,8 @@ impl HostTextureRegistry {
 
     /// Marks a slot's content as changed while retaining its texture view.
     /// Consumers can compare [`Self::revision`] to schedule the next frame.
-    pub fn invalidate(&self, slot: &str) -> Option<u64> {
+    pub fn invalidate(&self, slot: impl AsRef<str>) -> Option<u64> {
+        let slot = slot.as_ref();
         let mut bindings = self.bindings.write().ok()?;
         let binding = bindings.get_mut(slot)?;
         let version = binding.binding.texture.invalidate();
@@ -2064,8 +2069,8 @@ mod tests {
     }
 
     #[test]
-    fn replacing_a_dropped_handle_with_the_same_public_identity_always_rebinds() {
-        let old = HostTexture::new(7, 3, &test_texture());
+    fn a_replacement_handle_is_a_new_cache_identity_and_always_rebinds() {
+        let old = HostTexture::new(&test_texture());
         let old_snapshot = old.snapshot();
         let old_fingerprint = TextureFingerprint {
             instance_identity: old_snapshot.instance_identity,
@@ -2073,17 +2078,17 @@ mod tests {
         };
         drop(old);
 
-        let replacement = HostTexture::new(7, 3, &test_texture());
+        let replacement = HostTexture::new(&test_texture());
         let replacement_snapshot = replacement.snapshot();
-        assert_ne!(
-            old_snapshot.instance_identity,
+        assert_ne!(old_snapshot.id, replacement_snapshot.id);
+        assert_eq!(
+            replacement_snapshot.id,
             replacement_snapshot.instance_identity
         );
-        assert_eq!(old_snapshot.id, replacement_snapshot.id);
         assert_eq!(old_snapshot.generation, replacement_snapshot.generation);
 
         let presentation = PresentationIdentity::Scene { node: 9, slot: 2 };
-        assert_eq!(
+        assert_ne!(
             TextureKey::new(presentation, old_snapshot.id),
             TextureKey::new(presentation, replacement_snapshot.id)
         );
@@ -2112,12 +2117,12 @@ mod tests {
 
     #[test]
     fn replacing_a_host_view_advances_generation_and_version_together() {
-        let texture = HostTexture::new(7, 3, &test_texture());
+        let texture = HostTexture::new(&test_texture());
 
-        assert_eq!(texture.replace_texture(&test_texture()), 4);
+        assert_eq!(texture.replace_texture(&test_texture()), 1);
         let snapshot = texture.snapshot();
-        assert_eq!(snapshot.generation, 4);
-        assert_eq!(texture.version(), 4);
+        assert_eq!(snapshot.generation, 1);
+        assert_eq!(texture.version(), 1);
     }
 
     #[test]
@@ -2131,7 +2136,7 @@ mod tests {
 
     #[test]
     fn alpha_mode_is_per_binding_and_exact_reregistration_is_a_noop() {
-        let texture = test_host_texture(7, 3);
+        let texture = test_host_texture();
         let registry = HostTextureRegistry::new();
         let premultiplied = registry.register(
             "premultiplied",
@@ -2215,7 +2220,7 @@ mod tests {
 
     #[test]
     fn layer_uniform_carries_checkerboard_and_zoom() {
-        let texture = test_host_texture(7, 3);
+        let texture = test_host_texture();
         let registry = HostTextureRegistry::new();
         let binding = registry.register(
             "editor",
@@ -2250,7 +2255,7 @@ mod tests {
 
     #[test]
     fn layer_uniform_defaults_keep_plain_texture() {
-        let texture = test_host_texture(7, 3);
+        let texture = test_host_texture();
         let registry = HostTextureRegistry::new();
         let binding = registry.register(
             "plain",
@@ -2282,7 +2287,7 @@ mod tests {
 
     #[test]
     fn layer_uniform_packs_linear_mask_stops() {
-        let texture = test_host_texture(7, 3);
+        let texture = test_host_texture();
         let registry = HostTextureRegistry::new();
         let binding = registry.register(
             "masked",
@@ -2328,7 +2333,7 @@ mod tests {
 
     #[test]
     fn layer_uniform_takes_mask_alpha_from_the_explicit_stop_color() {
-        let texture = test_host_texture(7, 3);
+        let texture = test_host_texture();
         let registry = HostTextureRegistry::new();
         let binding = registry.register(
             "masked-oklch",
@@ -2367,7 +2372,7 @@ mod tests {
 
     #[test]
     fn layer_uniform_packs_url_mask_kind_only_when_loaded() {
-        let texture = test_host_texture(7, 3);
+        let texture = test_host_texture();
         let registry = HostTextureRegistry::new();
         let binding = registry.register(
             "masked-url",
@@ -2409,8 +2414,8 @@ mod tests {
     fn video_host_texture_slot_prunes_released_bindings() {
         let (_, queue) = test_device();
         let registry = HostTextureRegistry::new();
-        let first = HostTexture::new(1, 1, &test_texture());
-        let second = HostTexture::new(2, 1, &test_texture());
+        let first = HostTexture::new(&test_texture());
+        let second = HostTexture::new(&test_texture());
         registry.register(
             "video:1",
             first,
@@ -2441,7 +2446,7 @@ mod tests {
     fn video_host_texture_resize_advances_generation_on_same_device() {
         let (_, queue) = test_device();
         let registry = HostTextureRegistry::new();
-        let texture = HostTexture::new(7, 3, &test_texture());
+        let texture = HostTexture::new(&test_texture());
         let binding = registry.register(
             "video:7",
             texture.clone(),
@@ -2449,9 +2454,9 @@ mod tests {
             18,
             HostTextureAlphaMode::Premultiplied,
         );
-        assert_eq!(binding.texture.generation(), 3);
+        assert_eq!(binding.texture.generation(), 0);
         let next_generation = texture.replace_texture(&test_texture());
-        assert_eq!(next_generation, 4);
+        assert_eq!(next_generation, 1);
         registry.register(
             "video:7",
             texture,
@@ -2460,13 +2465,13 @@ mod tests {
             HostTextureAlphaMode::Premultiplied,
         );
         let replaced = registry.get("video:7").expect("video slot remains");
-        assert_eq!(replaced.texture.generation(), 4);
+        assert_eq!(replaced.texture.generation(), 1);
         assert_eq!((replaced.width, replaced.height), (64, 36));
         let _ = queue;
     }
 
-    fn test_host_texture(id: u64, generation: u64) -> HostTexture {
-        HostTexture::new(id, generation, &test_texture())
+    fn test_host_texture() -> HostTexture {
+        HostTexture::new(&test_texture())
     }
 
     fn test_texture() -> nana_gpu::GpuTexture {

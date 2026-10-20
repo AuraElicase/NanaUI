@@ -41,7 +41,7 @@ pub fn create_snapshot_gpu(gpu: &GpuContext, background: Color, accent: Color) -
         TEXTURE_SIZE * 4,
     )
     .expect("snapshot host texture upload");
-    let host_texture = HostTexture::new(1, 0, &texture);
+    let host_texture = HostTexture::new(&texture);
     let textures = HostTextureRegistry::new();
     textures.register(
         SNAPSHOT_GPU_SLOT,

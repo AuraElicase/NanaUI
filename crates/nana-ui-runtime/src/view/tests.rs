@@ -4713,7 +4713,7 @@ mod control_fields {
                 let message = signal(String::new());
                 let level = signal(f64::NAN);
                 let label = signal(Arc::<str>::from("更多"));
-                let slot = signal(Arc::<str>::from(""));
+                let slot = signal(crate::TextureSlotName::from(""));
                 state.set(Some((number, tab, message, level, label, slot)));
                 column().children((
                     number_input().value(number),

@@ -80,7 +80,7 @@ let texture = gpu.create_texture(&GpuTextureDescriptor {
 })?;
 self.textures.register(
     "preview",
-    HostTexture::new(1, 1, &texture),
+    HostTexture::new(&texture),
     width,
     height,
     HostTextureAlphaMode::Opaque,
@@ -104,7 +104,7 @@ fn window_frame_presented(&mut self, _id: WindowId, _context: &RuntimeProgramCon
 fn rebuild_gpu(&mut self, context: &RuntimeProgramContext<Self::Message>) {}
 ```
 
-- **代际与修订号编码**：`HostTexture` 的 64 位 `revision` 高 32 位为 `generation`（仅在替换纹理对象或改变尺寸时递增，NanaUI 据此重建绑定而不拆布局），低 32 位为内容 `version`（每次内容更新递增）。若 `HostTexture::device_generation()` 与当前 painter 的设备代际不符，整帧会以 `ScenePaintError::StaleHostTexture` 拒绝。
+- **槽位是唯一身份**：视图只记槽名（`TextureSlotName`），每帧绘制时按槽名取注册表里当前的绑定。`HostTexture::new` 自己分配 id；往同一个槽登记一个新句柄、`replace_texture` 换纹理对象（`generation` 递增）或 `invalidate` 刷新内容（`version` 递增），宿主都会重绘用到这个槽的窗口，不用改 Runtime 节点。设备重建时宿主先清空注册表，再调 `rebuild_gpu`；程序在新设备上重新登记即可。若 `HostTexture::device_generation()` 与当前 painter 的设备代际不符，整帧会以 `ScenePaintError::StaleHostTexture` 拒绝。
 - **线性工作空间要求**：进入 Scene 的 `HostTexture` 采样结果必须处于预乘线性 scRGB 空间——普通不透明/直通 alpha 的 sRGB 图片可使用 `*_SRGB` 纹理格式交由硬件采样器解码；带半透明的预乘内容请使用线性 `UNORM` 或浮点格式，勿将 gamma 空间预乘字节误标为 `SRGB`。
 
 ### GPU 合同与 wgpu 逃生口

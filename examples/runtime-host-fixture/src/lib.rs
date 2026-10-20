@@ -32,7 +32,6 @@ struct PreviewGpu {
 
 pub struct Fixture {
     documents: HashMap<WindowId, RuntimeDocument>,
-    next_document: u64,
     dock: Entity<Dock>,
     #[allow(dead_code)]
     name: Entity<TextInput>,
@@ -40,6 +39,8 @@ pub struct Fixture {
     open_tool: Entity<Button>,
     #[allow(dead_code)]
     float_preview: Entity<Button>,
+    /// Read by the tests; the host texture slot alone drives what it shows.
+    #[cfg_attr(not(test), allow(dead_code))]
     preview: Entity<GpuTextureView>,
     textures: HostTextureRegistry,
     preview_gpu: Option<PreviewGpu>,
@@ -108,7 +109,6 @@ impl Fixture {
 
         Ok(Self {
             documents: HashMap::from([(WindowId::PRIMARY, document)]),
-            next_document: 2,
             dock,
             name,
             open_tool,
@@ -119,12 +119,6 @@ impl Fixture {
             pending_open,
             pending_float,
         })
-    }
-
-    fn alloc_document(&mut self) -> DocumentId {
-        let id = self.next_document;
-        self.next_document += 1;
-        DocumentId::new(id).expect("fixture document id")
     }
 
     fn on_window_event(
@@ -185,9 +179,8 @@ impl Fixture {
     }
 
     fn open_tool_window(&mut self) -> Result<RuntimeProgramUpdate, FrameworkError> {
-        if !self.documents.contains_key(&TOOL) {
-            let document_id = self.alloc_document();
-            self.documents.insert(TOOL, tool_document(document_id)?);
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.documents.entry(TOOL) {
+            entry.insert(tool_document(DocumentId::allocate())?);
         }
         Ok(RuntimeProgramUpdate {
             redraw: RuntimeRedraw::All,
@@ -219,10 +212,8 @@ impl Fixture {
             return Ok(RuntimeProgramUpdate::default());
         };
         let window_id = dock_workspace_window_id(&surface.id);
-        if !self.documents.contains_key(&window_id) {
-            let document_id = self.alloc_document();
-            self.documents
-                .insert(window_id, floating_preview_document(document_id)?);
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.documents.entry(window_id) {
+            entry.insert(floating_preview_document(DocumentId::allocate())?);
         }
         Ok(runtime_dock_window_update(
             [DockWorkspaceEvent::OpenFloating(surface)],
@@ -239,15 +230,6 @@ impl Fixture {
             PREVIEW_EXTENT,
             HostTextureAlphaMode::Opaque,
         );
-        let generation = preview.host.generation();
-        if let Some(document) = self.documents.get_mut(&WindowId::PRIMARY) {
-            let _ = document
-                .context_mut()
-                .update_component(self.preview, |view, _| {
-                    view.replace_view(generation);
-                    view.invalidate_content();
-                });
-        }
         self.preview_gpu = Some(preview);
     }
 
@@ -425,7 +407,7 @@ fn create_preview_gpu(gpu: &nana_ui::GpuContext) -> PreviewGpu {
         })
         .expect("fixture preview texture");
     PreviewGpu {
-        host: HostTexture::new(1, 1, &texture),
+        host: HostTexture::new(&texture),
         texture,
     }
 }

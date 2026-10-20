@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use nana_ui_core::{ContentFit, ImageSampling, LengthSpec, OverflowSpec, SemanticColorRole};
 
-use crate::gpu_slots::{HOST_TEXTURE_RENDERER, pack_gpu_revision};
+use crate::gpu_slots::{HOST_TEXTURE_RENDERER, TextureSlotName};
 use crate::view_components::project_common;
 use crate::{
     AccessibilityRole, AccessibilityState, ComponentView, CustomRenderNode, InteractionState,
@@ -20,11 +20,9 @@ pub const DEFAULT_SIZE: f32 = nana_ui_core::ControlSize::Medium.height_in(nana_u
 /// Circular image control (`nana.avatar`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Avatar {
-    pub resource: Arc<str>,
-    /// Host texture generation and in-place content version. Together they form
-    /// the Scene revision, so a slot filled after mount is actually re-sampled.
-    pub generation: u64,
-    pub version: u64,
+    /// The registry slot shown. Re-registering it is all a host does to show
+    /// new pixels; the control carries no revision of its own.
+    pub resource: TextureSlotName,
     pub size: f32,
     pub label: Arc<str>,
     pub pointer_events: bool,
@@ -35,11 +33,9 @@ pub struct Avatar {
 }
 
 impl Avatar {
-    pub fn new(resource: impl Into<Arc<str>>) -> Self {
+    pub fn new(resource: impl Into<TextureSlotName>) -> Self {
         Self {
             resource: resource.into(),
-            generation: 0,
-            version: 0,
             size: DEFAULT_SIZE,
             label: Arc::from(""),
             pointer_events: false,
@@ -78,49 +74,21 @@ impl Avatar {
         self
     }
 
-    /// Records that the host refreshed the slot's pixels in place.
-    ///
-    /// The packed [`Self::revision`] is the Scene's conflict key for a
-    /// host-texture slot: every view of one slot in a frame must report the
-    /// same revision, or `UiScene::frame_graph` rejects the frame with
-    /// `ConflictingExternalResource` and nothing paints. A control that
-    /// reported a fixed revision could therefore never share a slot with a
-    /// view the host had re-bound.
-    pub fn invalidate_content(&mut self) -> u64 {
-        self.version = self.version.saturating_add(1);
-        self.version
-    }
-
-    /// Records that the host replaced the underlying view. Does not touch
-    /// [`Self::version`].
-    pub fn replace_view(&mut self, generation: u64) -> u64 {
-        self.generation = generation;
-        self.generation
-    }
-
-    pub const fn revision(&self) -> u64 {
-        pack_gpu_revision(self.generation, self.version)
-    }
-
     pub fn custom_render(&self) -> Option<CustomRenderNode> {
-        if self.resource.trim().is_empty() {
+        if self.resource.is_empty() {
             return None;
         }
         Some(
-            CustomRenderNode::new(
-                HOST_TEXTURE_RENDERER,
-                Arc::clone(&self.resource),
-                self.revision(),
-            )
-            .with_fit(ContentFit::Cover)
-            .with_sampling(self.sampling),
+            CustomRenderNode::new(HOST_TEXTURE_RENDERER, self.resource.to_resource(), 0)
+                .with_fit(ContentFit::Cover)
+                .with_sampling(self.sampling),
         )
     }
 
     fn effective_style(&self) -> NodeStyle {
         let size = sanitize_size(self.size);
         let mut style = self.style.clone();
-        if self.resource.trim().is_empty() {
+        if self.resource.is_empty() {
             style.background = Some(SemanticColorRole::Subtle);
         } else {
             style.background = None;
@@ -286,22 +254,12 @@ mod tests {
         }
     }
 
-    /// The revision must move with the binding: it is the Scene's conflict key
-    /// for a slot, so a fixed one makes this control unable to share a slot
-    /// with any re-bound view. Pixel evidence for that is in
-    /// `nana-ui-devtools/tests/host_texture_paint.rs`.
+    /// Every view of one slot shares revision 0, so this control can share a
+    /// slot with any other view; which texture it is lives in the registry.
+    /// Pixel evidence is in `nana-ui-devtools/tests/host_texture_paint.rs`.
     #[test]
-    fn late_host_texture_moves_the_scene_revision() {
-        let mut control = Avatar::new("cover:a");
-        let first = control.custom_render().expect("ready slot").revision;
-
-        control.replace_view(1);
-        let replaced = control.custom_render().expect("ready slot").revision;
-        assert_ne!(first, replaced, "a replaced view is a new revision");
-
-        control.invalidate_content();
-        let refreshed = control.custom_render().expect("ready slot").revision;
-        assert_ne!(replaced, refreshed, "in-place pixels are a new revision");
-        assert_eq!(refreshed, pack_gpu_revision(1, 1));
+    fn host_texture_node_carries_no_revision() {
+        let control = Avatar::new("cover:a");
+        assert_eq!(control.custom_render().expect("ready slot").revision, 0);
     }
 }

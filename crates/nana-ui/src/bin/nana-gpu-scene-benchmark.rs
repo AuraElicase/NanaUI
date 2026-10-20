@@ -1350,7 +1350,7 @@ impl HostSlotContent {
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let host = HostTexture::new(1, 1, &__framework::texture_from_wgpu(gpu, texture.clone()));
+        let host = HostTexture::new(&__framework::texture_from_wgpu(gpu, texture.clone()));
         Self {
             pipeline,
             bind_group,

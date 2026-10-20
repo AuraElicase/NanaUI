@@ -971,11 +971,10 @@ impl JsWebGpuRuntime {
             };
             self.textures.register(
                 slot,
-                HostTexture::new(
-                    id.0,
-                    state.generation,
-                    &crate::gpu_backend::texture(&gpu, (*state.textures[&id].texture).clone()),
-                ),
+                HostTexture::new(&crate::gpu_backend::texture(
+                    &gpu,
+                    (*state.textures[&id].texture).clone(),
+                )),
                 width,
                 height,
                 alpha_mode,

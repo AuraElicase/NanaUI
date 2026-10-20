@@ -14,7 +14,7 @@ use nana_ui_core::{
     SemanticColorRole,
 };
 
-use crate::gpu_slots::{HOST_TEXTURE_RENDERER, pack_gpu_revision};
+use crate::gpu_slots::{HOST_TEXTURE_RENDERER, TextureSlotName};
 use crate::popover::{MENU_OVERLAY_Z_INDEX, trigger_button_style};
 use crate::view_components::project_common;
 use crate::{
@@ -37,13 +37,9 @@ pub struct HoverCard {
     /// glyph or an avatar.
     pub trigger: Arc<str>,
     pub trigger_icon: Option<Icon>,
-    /// Host-texture resource for an avatar trigger. The circular chrome comes
-    /// from the style; an empty resource renders the neutral placeholder.
-    pub trigger_image: Option<Arc<str>>,
-    /// Host texture generation and in-place content version. Together they
-    /// form the Scene revision, matching [`crate::Avatar`] / [`crate::Thumbnail`].
-    pub generation: u64,
-    pub version: u64,
+    /// Host-texture slot for an avatar trigger. The circular chrome comes
+    /// from the style; an empty slot renders the neutral placeholder.
+    pub trigger_image: Option<TextureSlotName>,
     pub trigger_size: f32,
     pub open: bool,
     pub placement: PopoverPlacement,
@@ -63,8 +59,6 @@ impl HoverCard {
             trigger: Arc::from(""),
             trigger_icon: None,
             trigger_image: None,
-            generation: 0,
-            version: 0,
             trigger_size: crate::avatar::DEFAULT_SIZE,
             open: false,
             placement: PopoverPlacement::Right,
@@ -95,7 +89,7 @@ impl HoverCard {
     /// accessible name.
     pub fn trigger_image(
         mut self,
-        resource: impl Into<Arc<str>>,
+        resource: impl Into<TextureSlotName>,
         label: impl Into<Arc<str>>,
     ) -> Self {
         self.trigger = label.into();
@@ -150,32 +144,20 @@ impl HoverCard {
         self
     }
 
-    /// Records that the host refreshed the trigger slot's pixels in place.
-    pub fn invalidate_content(&mut self) -> u64 {
-        self.version = self.version.saturating_add(1);
-        self.version
-    }
-
-    /// Records that the host replaced the underlying trigger view.
-    pub fn replace_view(&mut self, generation: u64) -> u64 {
-        self.generation = generation;
-        self.generation
-    }
-
-    pub const fn revision(&self) -> u64 {
-        pack_gpu_revision(self.generation, self.version)
-    }
-
     /// Image trigger resource without the placeholder check, mirroring
     /// [`crate::Avatar::custom_render`].
     fn custom_render(&self) -> Option<CustomRenderNode> {
-        let resource = self.trigger_image.as_deref()?.trim();
+        let resource = self.trigger_image.as_ref()?;
         if resource.is_empty() {
             return None;
         }
         Some(
-            CustomRenderNode::new(HOST_TEXTURE_RENDERER, Arc::from(resource), self.revision())
-                .with_fit(ContentFit::Cover),
+            CustomRenderNode::new(
+                HOST_TEXTURE_RENDERER,
+                Arc::from(resource.as_str().trim()),
+                0,
+            )
+            .with_fit(ContentFit::Cover),
         )
     }
 
@@ -282,7 +264,10 @@ impl ComponentView for HoverCard {
             open: self.open,
             trigger: trigger.clone(),
             trigger_icon: self.trigger_icon,
-            trigger_image: self.trigger_image.clone(),
+            trigger_image: self
+                .trigger_image
+                .as_ref()
+                .map(TextureSlotName::to_resource),
             gap: self.gap,
             overlay: Some(TriggeredMenuOverlay {
                 placement: self.placement,
@@ -1172,17 +1157,8 @@ mod tests {
     }
 
     #[test]
-    fn late_host_texture_moves_the_trigger_revision() {
-        let mut card = HoverCard::new().trigger_image("user.avatar", "账户");
-        let first = card.custom_render().expect("ready slot").revision;
-
-        card.replace_view(1);
-        let replaced = card.custom_render().expect("ready slot").revision;
-        assert_ne!(first, replaced, "a replaced view is a new revision");
-
-        card.invalidate_content();
-        let refreshed = card.custom_render().expect("ready slot").revision;
-        assert_ne!(replaced, refreshed, "in-place pixels are a new revision");
-        assert_eq!(refreshed, pack_gpu_revision(1, 1));
+    fn trigger_texture_node_carries_no_revision() {
+        let card = HoverCard::new().trigger_image("user.avatar", "账户");
+        assert_eq!(card.custom_render().expect("ready slot").revision, 0);
     }
 }

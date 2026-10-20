@@ -1,10 +1,7 @@
 //! Consumer half of [`nana_frame_exchange`]: shows the latest exchanged frame
 //! in a stable [`TextureSlot`] while respecting the host's present ordering.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::Arc;
 
 use nana_diagnostics::{event, framework::gpu, metric};
 use nana_frame_exchange::{
@@ -17,10 +14,6 @@ use nana_gpu::{
 };
 
 use crate::gpu_texture::{HostTexture, HostTextureAlphaMode, TextureSlot};
-
-// Painter caches key host textures by id; keep binding ids clear of the small
-// ids applications assign by hand.
-static NEXT_TEXTURE_ID: AtomicU64 = AtomicU64::new(1 << 63);
 
 /// Binds exchanged frames to one [`TextureSlot`].
 ///
@@ -70,11 +63,7 @@ impl<E: Copy + Eq + Send + Sync + 'static, M: Send + Sync + 'static> FrameBindin
                 usage: GpuTextureUsages::SAMPLED,
             })
             .expect("a 1x1 sampled RGBA8 texture is valid on every device");
-        let texture = HostTexture::new(
-            NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed),
-            0,
-            &placeholder,
-        );
+        let texture = HostTexture::new(&placeholder);
         slot.replace(texture.clone(), 1, 1, alpha);
         Self {
             device_generation: gpu.generation(),
@@ -308,6 +297,7 @@ mod tests {
     use crate::gpu_texture::HostTextureRegistry;
     use nana_frame_exchange::{CopyOutcome, DEFAULT_CAPACITY, FrameExchange};
     use nana_gpu::__framework;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[test]
     fn payload_is_the_bound_frames_data_until_the_next_present() {

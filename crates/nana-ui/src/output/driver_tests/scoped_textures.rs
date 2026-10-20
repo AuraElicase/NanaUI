@@ -22,7 +22,7 @@ fn textured_scene(slot: &str) -> Arc<UiScene> {
     document.shared_scene()
 }
 
-fn texture(id: u64) -> HostTexture {
+fn texture() -> HostTexture {
     let texture = test_gpu::context()
         .create_texture(&GpuTextureDescriptor {
             label: Some("scoped retained texture invalidation"),
@@ -32,7 +32,7 @@ fn texture(id: u64) -> HostTexture {
             usage: GpuTextureUsages::SAMPLED | GpuTextureUsages::RENDER_TARGET,
         })
         .unwrap();
-    HostTexture::new(id, 1, &texture)
+    HostTexture::new(&texture)
 }
 
 fn draw(
@@ -60,14 +60,8 @@ fn draw(
 #[test]
 fn unrelated_child_updates_leave_an_independent_static_parent_idle() {
     let registry = HostTextureRegistry::new();
-    for (slot, id) in [("a", 1), ("b", 2)] {
-        registry.register(
-            slot,
-            texture(id),
-            64,
-            48,
-            HostTextureAlphaMode::Premultiplied,
-        );
+    for slot in ["a", "b"] {
+        registry.register(slot, texture(), 64, 48, HostTextureAlphaMode::Premultiplied);
     }
     let a_scene = textured_scene("a");
     let b_scene = textured_scene("b");
@@ -108,7 +102,7 @@ fn unrelated_child_updates_leave_an_independent_static_parent_idle() {
 #[test]
 fn direct_host_texture_version_changes_invalidate_a_referenced_binding() {
     let registry = HostTextureRegistry::new();
-    let resource = texture(1);
+    let resource = texture();
     registry.register(
         "a",
         resource.clone(),
@@ -166,13 +160,13 @@ fn prepared_binding_identity_detects_insert_remove_and_replacement() {
         };
         match mutation {
             0 | 1 => {
-                registry.register("a", texture(1), 64, 48, HostTextureAlphaMode::Premultiplied);
+                registry.register("a", texture(), 64, 48, HostTextureAlphaMode::Premultiplied);
             }
             2 => {
                 registry.remove("a").unwrap();
             }
             _ => {
-                registry.register("a", texture(2), 64, 48, HostTextureAlphaMode::Opaque);
+                registry.register("a", texture(), 64, 48, HostTextureAlphaMode::Opaque);
             }
         }
         assert_eq!(
@@ -199,7 +193,7 @@ fn unrelated_replacement_between_prepare_and_record_keeps_the_plan_valid() {
     };
     let gpu = test_gpu::context();
     let registry = HostTextureRegistry::new();
-    registry.register("a", texture(1), 64, 48, HostTextureAlphaMode::Premultiplied);
+    registry.register("a", texture(), 64, 48, HostTextureAlphaMode::Premultiplied);
     let scene = textured_scene("a");
     let mut surface = ExternalSurface::new(
         &gpu,
@@ -223,7 +217,7 @@ fn unrelated_replacement_between_prepare_and_record_keeps_the_plan_valid() {
     };
     registry.register(
         "unrelated",
-        texture(2),
+        texture(),
         64,
         48,
         HostTextureAlphaMode::Premultiplied,
