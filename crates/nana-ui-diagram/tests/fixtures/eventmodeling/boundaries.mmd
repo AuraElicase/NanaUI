@@ -1,0 +1,10 @@
+eventmodeling
+
+tf 01 ui StockScreen
+tf 02 cmd ReceiveDelivery
+tf 03 evt DeliveryReceived
+
+rf 04 evt Supplier.PriceChanged
+tf 05 pcr RepricingProcessor
+tf 06 cmd UpdatePrice
+tf 07 evt Catalogue.PriceUpdated

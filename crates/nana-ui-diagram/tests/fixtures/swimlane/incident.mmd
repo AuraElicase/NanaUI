@@ -1,0 +1,12 @@
+swimlane-beta LR
+  subgraph Monitoring
+    alert[Alert fires]
+  end
+  subgraph OnCall
+    ack[Acknowledge]
+    mitigate[Mitigate]
+  end
+  subgraph Team
+    review[Write the review]
+  end
+  alert --> ack --> mitigate --> review

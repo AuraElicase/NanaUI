@@ -1,0 +1,16 @@
+swimlane-beta LR
+  subgraph Requester
+    need[Raise a need]
+    use[Use the equipment]
+  end
+  subgraph Procurement
+    quote[Collect quotes]
+    order[Place the order]
+  end
+  subgraph Budget
+    approve[Approve spend]
+  end
+  need --> quote
+  quote -->|Over limit| approve --> order
+  quote -->|Within limit| order
+  order --> use
