@@ -6,7 +6,7 @@ mod layout;
 mod parse;
 
 use super::flowchart::LineKind;
-use super::{LayoutCx, ParseCx};
+use super::{LayoutCx, ParseCx, graphkit};
 use crate::geom::{Marker, Shape};
 use crate::ir::{Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::source::directives::AuthorStyle;
@@ -123,20 +123,11 @@ pub(crate) fn draw_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint:
 /// The stroke of a flowchart-style link after its line kind and the
 /// author's `linkStyle`.
 pub(crate) fn link_stroke(line: LineKind, author: &AuthorStyle) -> Stroke {
-    let mut stroke = style::edge_stroke();
+    let mut base = style::edge_stroke();
     match line {
-        LineKind::Thick => stroke.width = crate::ir::StrokeWidth::Thick,
-        LineKind::Dotted => stroke = stroke.dash(Dash::Dotted),
+        LineKind::Thick => base.width = crate::ir::StrokeWidth::Thick,
+        LineKind::Dotted => base = base.dash(Dash::Dotted),
         _ => {}
     }
-    if let Some(c) = author.stroke {
-        stroke.ink = Ink::Rgba(c);
-    }
-    if let Some(w) = author.stroke_width {
-        stroke.width = crate::ir::StrokeWidth::Px(w);
-    }
-    if let Some(d) = author.dashed {
-        stroke.dash = if d { Dash::Dashed } else { Dash::Solid };
-    }
-    stroke
+    graphkit::line_stroke(base, author)
 }

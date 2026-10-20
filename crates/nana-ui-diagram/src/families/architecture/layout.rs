@@ -6,10 +6,9 @@
 //! in the way.
 
 use super::{Model, Service};
-use crate::families::LayoutCx;
-use crate::geom::path::rounded_polyline;
-use crate::geom::{Marker, PathData, Shape};
-use crate::ir::{Align, Corner, Geom, Rect, SceneBuilder, Stroke};
+use crate::families::{LayoutCx, graphkit};
+use crate::geom::{Marker, Shape};
+use crate::ir::{Align, Geom, Rect, SceneBuilder, Stroke};
 use crate::layout::grid::{self, GridItem, GridSpec, Side, Used};
 use crate::style;
 use crate::text::{FontSpec, LaidText};
@@ -143,17 +142,6 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         cells.push(grid::constrained_cells(list.len(), &constraints));
     }
 
-    // Sizes bottom-up: deeper groups first.
-    let depth = |mut g: usize| {
-        let mut d = 0;
-        while let Some(p) = model.groups[g].parent {
-            d += 1;
-            g = p;
-        }
-        d
-    };
-    let mut order: Vec<usize> = (0..model.groups.len()).collect();
-    order.sort_by_key(|&g| (std::cmp::Reverse(depth(g)), g));
     let mut group_size = vec![[0.0f32; 2]; model.groups.len()];
     let size_of = |mem: Member, group_size: &[[f32; 2]]| match mem {
         Member::Service(s) => cards[s].size,
@@ -169,7 +157,8 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         row_gap: gap,
         min_size: min,
     };
-    for &g in &order {
+    // Sizes bottom-up: a group is always declared after its parent.
+    for g in (0..model.groups.len()).rev() {
         let inner = grid::solve(&spec(g + 1, &group_size, [0.0, 0.0]));
         let head = header(g);
         group_size[g] = [inner.size[0].max(head[0]) + 2.0 * pad, inner.size[1] + head[1] + pad * 0.5 + 2.0 * pad];
@@ -202,12 +191,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     let mut out = SceneBuilder::new();
 
-    // Groups, outermost first.
-    let mut by_depth: Vec<usize> = (0..model.groups.len()).collect();
-    by_depth.sort_by_key(|&g| (depth(g), g));
-    for &g in &by_depth {
+    let parents: Vec<Option<usize>> = model.groups.iter().map(|g| g.parent).collect();
+    for g in graphkit::outermost_first(&parents) {
         let rect = group_rect[g];
-        out.shape(Geom::Rect { rect, corner: Corner::Tier(style::CLUSTER_CORNER) }, Some(style::CLUSTER_FILL), Some(style::cluster_stroke()));
+        graphkit::cluster(&mut out, rect, None, &Default::default());
         let (title, icon) = &group_titles[g];
         let head = header(g);
         let top = rect.y + pad * 0.75;
@@ -257,14 +244,14 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if points.len() < 2 {
             continue;
         }
-        let radius = m.bend_radius;
-        out.edge(
+        graphkit::edge(
+            &mut out,
             &points,
-            move |p| rounded_polyline(p, radius),
             style::edge_stroke(),
             e.start_arrow.then_some(Marker::Arrow),
             e.end_arrow.then_some(Marker::Arrow),
             marker,
+            m.bend_radius,
         );
         if let Some(label) = &e.label {
             let laid = cx.text.lay(label, small, Some(wrap));
@@ -329,14 +316,14 @@ fn draw_glyph(out: &mut SceneBuilder, icon: Option<&str>, r: Rect) {
         "internet" => {
             out.shape(Geom::Ellipse(inner), Some(style::NODE_FILL), Some(stroke));
             let c = inner.center();
-            out.stroke(Geom::path(PathData::polyline(&[[inner.x, c[1]], [inner.right(), c[1]]])), stroke);
+            graphkit::line(out, [inner.x, c[1]], [inner.right(), c[1]], stroke);
             out.stroke(Geom::Ellipse(Rect::centered(c, [inner.w * 0.4, inner.h])), stroke);
         }
         "server" => {
             out.shape(Geom::rounded(inner, RadiusTier::Xs), Some(style::NODE_FILL), Some(stroke));
             for t in [0.36, 0.64] {
                 let y = inner.y + inner.h * t;
-                out.stroke(Geom::path(PathData::polyline(&[[inner.x, y], [inner.right(), y]])), stroke);
+                graphkit::line(out, [inner.x, y], [inner.right(), y], stroke);
             }
         }
         "cloud" => {

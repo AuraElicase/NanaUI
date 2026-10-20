@@ -7,7 +7,7 @@
 //! over the tracks it covers. A grid given a minimum size grows every
 //! track evenly, so a nested grid can fill the cell its parent gave it.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::ir::Rect;
 
@@ -81,12 +81,8 @@ fn span_extent(tracks: &[(f32, f32)], start: usize, count: usize) -> (f32, f32) 
 }
 
 /// Solve one axis: `cells` are `(start, span, size)`.
-fn tracks(
-    count: usize,
-    cells: &[(usize, usize, f32)],
-    gap: f32,
-    min_total: f32,
-) -> Vec<(f32, f32)> {
+fn tracks(cells: &[(usize, usize, f32)], gap: f32, min_total: f32) -> Vec<(f32, f32)> {
+    let count = cells.iter().map(|c| c.0 + c.1).max().unwrap_or(0);
     let mut widths = vec![0.0f32; count];
     for &(start, span, size) in cells {
         if span <= 1 && start < count {
@@ -129,30 +125,18 @@ fn tracks(
 
 /// Size every track and place every item.
 pub fn solve(spec: &GridSpec) -> GridLayout {
-    let ncols = spec
-        .items
-        .iter()
-        .map(|i| i.col + i.cols.max(1))
-        .max()
-        .unwrap_or(0);
-    let nrows = spec
-        .items
-        .iter()
-        .map(|i| i.row + i.rows.max(1))
-        .max()
-        .unwrap_or(0);
-    let xs: Vec<(usize, usize, f32)> = spec
+    let xs: Vec<_> = spec
         .items
         .iter()
         .map(|i| (i.col, i.cols.max(1), i.size[0]))
         .collect();
-    let ys: Vec<(usize, usize, f32)> = spec
+    let ys: Vec<_> = spec
         .items
         .iter()
         .map(|i| (i.row, i.rows.max(1), i.size[1]))
         .collect();
-    let cols = tracks(ncols, &xs, spec.col_gap, spec.min_size[0]);
-    let rows = tracks(nrows, &ys, spec.row_gap, spec.min_size[1]);
+    let cols = tracks(&xs, spec.col_gap, spec.min_size[0]);
+    let rows = tracks(&ys, spec.row_gap, spec.min_size[1]);
     let extent = |t: &[(f32, f32)]| t.last().map_or(0.0, |&(a, w)| a + w);
     let mut layout = GridLayout {
         size: [
@@ -161,12 +145,13 @@ pub fn solve(spec: &GridSpec) -> GridLayout {
         ],
         cols,
         rows,
-        cells: Vec::with_capacity(spec.items.len()),
+        cells: Vec::new(),
     };
-    for item in &spec.items {
-        let cell = layout.area(item.col, item.row, item.cols, item.rows);
-        layout.cells.push(cell);
-    }
+    layout.cells = spec
+        .items
+        .iter()
+        .map(|i| layout.area(i.col, i.row, i.cols, i.rows))
+        .collect();
     layout
 }
 
@@ -208,7 +193,6 @@ pub fn constrained_cells(
         adjacency[b].push((a, -dx, -dy));
     }
     let mut pos: Vec<Option<(i32, i32)>> = vec![None; count];
-    let mut taken: HashMap<(i32, i32), usize> = HashMap::new();
     let mut offset_x = 0i32;
     for start in 0..count {
         if pos[start].is_some() {
@@ -216,13 +200,10 @@ pub fn constrained_cells(
         }
         // Place this component around the origin, then shift it right of
         // everything placed before.
-        let mut local: Vec<usize> = Vec::new();
-        let mut local_taken: HashMap<(i32, i32), usize> = HashMap::new();
-        let mut queue = VecDeque::new();
+        let mut local = vec![start];
+        let mut taken = HashSet::from([(0, 0)]);
+        let mut queue = VecDeque::from([start]);
         pos[start] = Some((0, 0));
-        local_taken.insert((0, 0), start);
-        local.push(start);
-        queue.push_back(start);
         while let Some(a) = queue.pop_front() {
             let Some((ax, ay)) = pos[a] else { continue };
             for &(b, dx, dy) in &adjacency[a] {
@@ -236,51 +217,39 @@ pub fn constrained_cells(
                 };
                 let mut cell = (ax + sx, ay + sy);
                 let mut guard = 0;
-                while local_taken.contains_key(&cell) && guard < count + 4 {
+                while taken.contains(&cell) && guard < count + 4 {
                     cell = (cell.0 + sx, cell.1 + sy);
                     guard += 1;
                 }
-                if local_taken.contains_key(&cell) {
+                if taken.contains(&cell) {
                     // A crowded ray: take the first free cell on its row.
                     let mut x = cell.0;
-                    while local_taken.contains_key(&(x, cell.1)) {
+                    while taken.contains(&(x, cell.1)) {
                         x += 1;
                     }
                     cell = (x, cell.1);
                 }
                 pos[b] = Some(cell);
-                local_taken.insert(cell, b);
+                taken.insert(cell);
                 local.push(b);
                 queue.push_back(b);
             }
         }
-        let min_x = local
-            .iter()
-            .filter_map(|&i| pos[i])
-            .map(|p| p.0)
-            .min()
-            .unwrap_or(0);
-        let max_x = local
-            .iter()
-            .filter_map(|&i| pos[i])
-            .map(|p| p.0)
-            .max()
-            .unwrap_or(0);
+        let xs = local.iter().filter_map(|&i| pos[i]).map(|p| p.0);
+        let (min_x, max_x) = xs.fold((i32::MAX, i32::MIN), |(lo, hi), x| (lo.min(x), hi.max(x)));
         for &i in &local {
             if let Some((x, y)) = pos[i] {
-                let cell = (x - min_x + offset_x, y);
-                pos[i] = Some(cell);
-                taken.insert(cell, i);
+                pos[i] = Some((x - min_x + offset_x, y));
             }
         }
         offset_x += max_x - min_x + 1;
     }
+    // Components already start at column 0; rows may still be negative.
     let min_y = pos.iter().flatten().map(|p| p.1).min().unwrap_or(0);
-    let min_x = pos.iter().flatten().map(|p| p.0).min().unwrap_or(0);
     pos.into_iter()
         .map(|p| {
             let (x, y) = p.unwrap_or((0, 0));
-            ((x - min_x) as usize, (y - min_y) as usize)
+            (x as usize, (y - min_y) as usize)
         })
         .collect()
 }
@@ -290,11 +259,7 @@ pub fn constrained_cells(
 pub fn label_point(points: &[[f32; 2]]) -> [f32; 2] {
     points
         .windows(2)
-        .max_by(|a, b| {
-            let la = (a[0][0] - a[1][0]).abs() + (a[0][1] - a[1][1]).abs();
-            let lb = (b[0][0] - b[1][0]).abs() + (b[0][1] - b[1][1]).abs();
-            la.total_cmp(&lb)
-        })
+        .max_by(|a, b| manhattan(a[0], a[1]).total_cmp(&manhattan(b[0], b[1])))
         .map(|w| [(w[0][0] + w[1][0]) / 2.0, (w[0][1] + w[1][1]) / 2.0])
         .or_else(|| points.first().copied())
         .unwrap_or_default()
@@ -309,30 +274,19 @@ pub fn place_label(
     obstacles: &[Rect],
     taken: &mut Vec<Rect>,
 ) -> [f32; 2] {
-    let fallback = label_point(points);
     // Candidates stay within a label's size of the route, so only boxes
     // near it can clash: filter once, then compare candidates to those.
-    let reach = Rect::new(
-        points.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min) - size[0] - 4.0,
-        points.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min) - size[1] - 4.0,
-        0.0,
-        0.0,
+    let (lo, hi) = points.iter().fold(
+        ([f32::INFINITY; 2], [f32::NEG_INFINITY; 2]),
+        |(lo, hi), p| {
+            (
+                [lo[0].min(p[0]), lo[1].min(p[1])],
+                [hi[0].max(p[0]), hi[1].max(p[1])],
+            )
+        },
     );
-    let far = [
-        points
-            .iter()
-            .map(|p| p[0])
-            .fold(f32::NEG_INFINITY, f32::max)
-            + size[0]
-            + 4.0,
-        points
-            .iter()
-            .map(|p| p[1])
-            .fold(f32::NEG_INFINITY, f32::max)
-            + size[1]
-            + 4.0,
-    ];
-    let reach = Rect::new(reach.x, reach.y, far[0] - reach.x, far[1] - reach.y);
+    let (x, y) = (lo[0] - size[0] - 4.0, lo[1] - size[1] - 4.0);
+    let reach = Rect::new(x, y, hi[0] + size[0] + 4.0 - x, hi[1] + size[1] + 4.0 - y);
     let nearby: Vec<Rect> = obstacles
         .iter()
         .chain(taken.iter())
@@ -349,25 +303,21 @@ pub fn place_label(
             })
             .sum()
     };
-    let total: f32 = points
-        .windows(2)
-        .map(|w| (w[0][0] - w[1][0]).abs() + (w[0][1] - w[1][1]).abs())
-        .sum();
+    let total = length(points);
     let mut best: Option<(f32, [f32; 2])> = None;
     for w in points.windows(2) {
         let (a, b) = (w[0], w[1]);
-        let len = (a[0] - b[0]).abs() + (a[1] - b[1]).abs();
+        let len = manhattan(a, b);
         if len < 1.0 {
             continue;
         }
-        let vertical = (a[0] - b[0]).abs() < 0.01;
+        let side = if (a[0] - b[0]).abs() < 0.01 {
+            [size[0] / 2.0 + 3.0, 0.0]
+        } else {
+            [0.0, size[1] / 2.0 + 3.0]
+        };
         for (k, t) in [0.5f32, 0.35, 0.65, 0.2, 0.8].into_iter().enumerate() {
             let on = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-            let side = if vertical {
-                [size[0] / 2.0 + 3.0, 0.0]
-            } else {
-                [0.0, size[1] / 2.0 + 3.0]
-            };
             for (j, c) in [
                 on,
                 [on[0] + side[0], on[1] + side[1]],
@@ -387,7 +337,7 @@ pub fn place_label(
             }
         }
     }
-    let at = best.map_or(fallback, |(_, c)| c);
+    let at = best.map_or_else(|| label_point(points), |(_, c)| c);
     taken.push(Rect::centered(at, size));
     at
 }
@@ -402,12 +352,12 @@ pub enum Side {
 }
 
 impl Side {
-    pub fn parse(c: &str) -> Option<Self> {
-        Some(match c.trim() {
-            "T" | "t" => Self::Top,
-            "B" | "b" => Self::Bottom,
-            "L" | "l" => Self::Left,
-            "R" | "r" => Self::Right,
+    pub fn parse(c: char) -> Option<Self> {
+        Some(match c.to_ascii_uppercase() {
+            'T' => Self::Top,
+            'B' => Self::Bottom,
+            'L' => Self::Left,
+            'R' => Self::Right,
             _ => return None,
         })
     }
@@ -490,16 +440,13 @@ pub fn blocked(points: &[[f32; 2]], obstacles: &[Rect]) -> f32 {
     cost
 }
 
-fn length(points: &[[f32; 2]]) -> f32 {
-    points
-        .windows(2)
-        .map(|w| (w[0][0] - w[1][0]).abs() + (w[0][1] - w[1][1]).abs())
-        .sum()
+fn manhattan(a: [f32; 2], b: [f32; 2]) -> f32 {
+    (a[0] - b[0]).abs() + (a[1] - b[1]).abs()
 }
 
-/// A connector end on a shared side: connector, whether it is the start,
-/// sort key.
-type SideEnd = (usize, bool, f32);
+fn length(points: &[[f32; 2]]) -> f32 {
+    points.windows(2).map(|w| manhattan(w[0], w[1])).sum()
+}
 
 /// One connector between two placed boxes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -521,48 +468,29 @@ pub fn connect_all(
     obstacles: &[Rect],
     gap: f32,
 ) -> Vec<Vec<[f32; 2]>> {
-    // Sides first.
-    let mut sides: Vec<Option<(Side, Side)>> = Vec::with_capacity(links.len());
-    for l in links {
-        let (Some(&a), Some(&b)) = (boxes.get(l.from), boxes.get(l.to)) else {
-            sides.push(None);
-            continue;
-        };
-        sides.push(facing(a, b));
-    }
+    let sides: Vec<Option<(Side, Side)>> = links
+        .iter()
+        .map(|l| facing(*boxes.get(l.from)?, *boxes.get(l.to)?))
+        .collect();
     // Spread the ends that share a side, ordered by where the other end
-    // lies so neighbours do not cross.
-    let mut groups: HashMap<(usize, Side), Vec<SideEnd>> = HashMap::new();
+    // lies so neighbours do not cross. Entries are (connector, which end,
+    // sort key).
+    let mut groups: HashMap<(usize, Side), Vec<_>> = HashMap::new();
     for (i, l) in links.iter().enumerate() {
         let Some((sa, sb)) = sides[i] else { continue };
         let ca = boxes[l.from].center();
         let cb = boxes[l.to].center();
         let key_a = if sa.horizontal() { cb[1] } else { cb[0] };
         let key_b = if sb.horizontal() { ca[1] } else { ca[0] };
-        groups
-            .entry((l.from, sa))
-            .or_default()
-            .push((i, true, key_a));
-        groups
-            .entry((l.to, sb))
-            .or_default()
-            .push((i, false, key_b));
+        groups.entry((l.from, sa)).or_default().push((i, 0, key_a));
+        groups.entry((l.to, sb)).or_default().push((i, 1, key_b));
     }
-    let mut ends: Vec<[Option<f32>; 2]> = vec![[None, None]; links.len()];
-    let mut keys: Vec<&(usize, Side)> = groups.keys().collect();
-    keys.sort_by_key(|k| (k.0, k.1 as u8));
-    for key in keys {
-        let list = &groups[key];
-        let mut list = list.clone();
+    // Each end sits in exactly one group, so the group order does not matter.
+    let mut ends = vec![[0.5f32; 2]; links.len()];
+    for list in groups.values_mut() {
         list.sort_by(|a, b| a.2.total_cmp(&b.2).then(a.0.cmp(&b.0)));
-        let n = list.len();
-        for (k, &(i, start, _)) in list.iter().enumerate() {
-            let t = if n == 1 {
-                0.5
-            } else {
-                0.2 + 0.6 * k as f32 / (n - 1) as f32
-            };
-            ends[i][usize::from(!start)] = Some(t);
+        for (k, &(i, end, _)) in list.iter().enumerate() {
+            ends[i][end] = spread(k, list.len());
         }
     }
     let mut out = Vec::with_capacity(links.len());
@@ -577,12 +505,7 @@ pub fn connect_all(
         // the search local keeps big diagrams linear in their size.
         let span = a.union(&b);
         let reach = gap * 4.0 + span.w.max(span.h) * 0.25;
-        let near = Rect::new(
-            span.x - reach,
-            span.y - reach,
-            span.w + 2.0 * reach,
-            span.h + 2.0 * reach,
-        );
+        let near = span.inset(-reach, -reach);
         let obstacles: Vec<Rect> = obstacles
             .iter()
             .copied()
@@ -594,10 +517,8 @@ pub fn connect_all(
                     && !o.contains(b.center())
             })
             .collect();
-        let ta = ends[i][0].unwrap_or(0.5);
-        let tb = ends[i][1].unwrap_or(0.5);
-        let p0 = sa.point(a, ta);
-        let p3 = sb.point(b, tb);
+        let p0 = sa.point(a, ends[i][0]);
+        let p3 = sb.point(b, ends[i][1]);
         let horizontal = sa.horizontal();
         // A shared span lets the connector run straight.
         let (lo, hi) = if horizontal {
@@ -664,6 +585,15 @@ pub fn connect_all(
         out.push(best);
     }
     out
+}
+
+/// Where the `k`th of `n` ends sharing a side sits along it (0..1).
+pub(crate) fn spread(k: usize, n: usize) -> f32 {
+    if n == 1 {
+        0.5
+    } else {
+        0.2 + 0.6 * k as f32 / (n - 1) as f32
+    }
 }
 
 /// Segments earlier routes took, so later ones prefer a parallel line.
@@ -757,17 +687,7 @@ pub fn route_around(
         return None;
     }
     let margin = (gap * 0.3).clamp(2.0, 6.0);
-    let inflated: Vec<Rect> = walls
-        .iter()
-        .map(|w| {
-            Rect::new(
-                w.x - margin,
-                w.y - margin,
-                w.w + 2.0 * margin,
-                w.h + 2.0 * margin,
-            )
-        })
-        .collect();
+    let inflated: Vec<Rect> = walls.iter().map(|w| w.inset(-margin, -margin)).collect();
     let na = sa.normal();
     let nb = sb.normal();
     let s = [p0[0] + na[0] * margin, p0[1] + na[1] * margin];
@@ -816,7 +736,6 @@ pub fn route_around(
     let start_dir = dir_of(na);
     let end_dir = dir_of([-nb[0], -nb[1]]);
     let bend = gap * 1.5;
-    let reuse = 2.0;
     let mut dist = vec![f32::INFINITY; nx * ny * 4];
     let mut prev = vec![usize::MAX; nx * ny * 4];
     let mut heap = std::collections::BinaryHeap::new();
@@ -860,7 +779,7 @@ pub fn route_around(
             if nd != d {
                 step += bend;
             }
-            step += used.overlap(a, b) * reuse;
+            step += used.overlap(a, b) * 2.0;
             if (ni, nj) == (ti, tj) && nd != end_dir {
                 step += bend;
             }
@@ -956,56 +875,34 @@ pub fn port_route(a: Rect, sa: Side, b: Rect, sb: Side, stub: f32) -> Vec<[f32; 
     let nb = sb.normal();
     let s0 = [p0[0] + na[0] * stub, p0[1] + na[1] * stub];
     let s3 = [p3[0] + nb[0] * stub, p3[1] + nb[1] * stub];
+    // `k` is the axis the source leaves along, `j` the other one.
+    let k = usize::from(!sa.horizontal());
+    let j = 1 - k;
+    let with = |mut p: [f32; 2], axis: usize, v: f32| {
+        p[axis] = v;
+        p
+    };
     let mut pts = vec![p0];
-    match (sa.horizontal(), sb.horizontal()) {
-        (true, true) => {
-            // Straight when the ends already line up and face each other.
-            let facing = (p3[0] - p0[0]) * na[0] > 0.0 && (p0[0] - p3[0]) * nb[0] > 0.0;
-            if facing && (p0[1] - p3[1]).abs() < 0.5 {
-                pts.push(p3);
-                return pts;
-            }
-            let mx = if facing {
-                (p0[0] + p3[0]) / 2.0
-            } else if na[0] > 0.0 {
-                s0[0].max(s3[0])
-            } else {
-                s0[0].min(s3[0])
-            };
-            pts.extend([[mx, p0[1]], [mx, p3[1]]]);
+    if sa.horizontal() == sb.horizontal() {
+        // Straight when the ends already line up and face each other.
+        let facing = (p3[k] - p0[k]) * na[k] > 0.0 && (p0[k] - p3[k]) * nb[k] > 0.0;
+        if facing && (p0[j] - p3[j]).abs() < 0.5 {
+            pts.push(p3);
+            return pts;
         }
-        (false, false) => {
-            let facing = (p3[1] - p0[1]) * na[1] > 0.0 && (p0[1] - p3[1]) * nb[1] > 0.0;
-            if facing && (p0[0] - p3[0]).abs() < 0.5 {
-                pts.push(p3);
-                return pts;
-            }
-            let my = if facing {
-                (p0[1] + p3[1]) / 2.0
-            } else if na[1] > 0.0 {
-                s0[1].max(s3[1])
-            } else {
-                s0[1].min(s3[1])
-            };
-            pts.extend([[p0[0], my], [p3[0], my]]);
-        }
-        (true, false) => {
-            // Out sideways, then down or up into the target.
-            let ok = (p3[0] - p0[0]) * na[0] >= 0.0 && (p0[1] - p3[1]) * nb[1] >= 0.0;
-            if ok {
-                pts.push([p3[0], p0[1]]);
-            } else {
-                pts.extend([s0, [s0[0], s3[1]], s3]);
-            }
-        }
-        (false, true) => {
-            let ok = (p3[1] - p0[1]) * na[1] >= 0.0 && (p0[0] - p3[0]) * nb[0] >= 0.0;
-            if ok {
-                pts.push([p0[0], p3[1]]);
-            } else {
-                pts.extend([s0, [s3[0], s0[1]], s3]);
-            }
-        }
+        let mid = if facing {
+            (p0[k] + p3[k]) / 2.0
+        } else if na[k] > 0.0 {
+            s0[k].max(s3[k])
+        } else {
+            s0[k].min(s3[k])
+        };
+        pts.extend([with(p0, k, mid), with(p3, k, mid)]);
+    } else if (p3[k] - p0[k]) * na[k] >= 0.0 && (p0[j] - p3[j]) * nb[j] >= 0.0 {
+        // Out along `k`, then across into the target.
+        pts.push(with(p0, k, p3[k]));
+    } else {
+        pts.extend([s0, with(s0, j, s3[j]), s3]);
     }
     pts.push(p3);
     simplify(&pts)

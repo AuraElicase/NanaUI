@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use super::{Boundary, BoundaryKind, Colors, ElemKind, Element, End, Model, Rel, Variant};
 use crate::families::ParseCx;
-use crate::kind;
+use crate::families::kit::{self, balanced, keyword, split_top, truncate, unquote};
 use crate::source::color;
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
@@ -30,40 +30,19 @@ impl Args {
 
 /// Split `a, "b, c", $d="e"` into arguments.
 fn arguments(text: &str) -> Args {
-    let mut parts = Vec::new();
-    let mut quote = false;
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, c) in text.char_indices() {
-        match c {
-            '"' => quote = !quote,
-            '(' if !quote => depth += 1,
-            ')' if !quote => depth -= 1,
-            ',' if !quote && depth <= 0 => {
-                parts.push(&text[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(&text[start..]);
     let mut args = Args {
         positional: Vec::new(),
         named: HashMap::new(),
     };
-    let unquote = |s: &str| {
-        let s = s.trim();
-        s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s).to_string()
-    };
-    for part in parts {
+    for part in split_top(text, ',') {
         let part = part.trim();
         if let Some(named) = part.strip_prefix('$')
             && let Some((key, value)) = named.split_once('=')
         {
-            args.named.insert(key.trim().to_ascii_lowercase(), unquote(value));
+            args.named.insert(key.trim().to_ascii_lowercase(), unquote(value).to_string());
             continue;
         }
-        args.positional.push(unquote(part));
+        args.positional.push(unquote(part).to_string());
     }
     if args.positional.len() == 1 && args.positional[0].is_empty() {
         args.positional.clear();
@@ -76,23 +55,11 @@ fn call(stmt: &str) -> Option<(&str, &str, &str)> {
     let name_end = stmt.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))?;
     let name = &stmt[..name_end];
     let rest = stmt[name_end..].trim_start();
-    let body = rest.strip_prefix('(')?;
-    let mut quote = false;
-    let mut depth = 1;
-    for (i, c) in body.char_indices() {
-        match c {
-            '"' => quote = !quote,
-            '(' if !quote => depth += 1,
-            ')' if !quote => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some((name, &body[..i], body[i + 1..].trim()));
-                }
-            }
-            _ => {}
-        }
+    if !rest.starts_with('(') {
+        return None;
     }
-    None
+    let close = balanced(rest, '(', ')')?;
+    Some((name, &rest[1..close], rest[close + 1..].trim()))
 }
 
 fn element_kind(name: &str) -> Option<(ElemKind, Variant, bool)> {
@@ -162,19 +129,8 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let mut rels: Vec<PendingRel> = Vec::new();
     let mut element_styles: Vec<(String, Colors)> = Vec::new();
     let mut rel_styles: Vec<RelStyle> = Vec::new();
-    let mut header = false;
-    for (line_no, raw) in body.lines().enumerate() {
-        let mut stmt = raw.trim();
-        if stmt.is_empty() {
-            continue;
-        }
-        if !header {
-            if kind::header(stmt).is_none() {
-                return Err(DiagramError::syntax(line_no as u32 + 1, 1, "expected a C4 header"));
-            }
-            header = true;
-            continue;
-        }
+    let (header, _) = kit::header(body)?;
+    for (line_no, mut stmt) in kit::statements(body, header) {
         // Closing braces, possibly several, possibly before a statement.
         while let Some(rest) = stmt.strip_prefix('}') {
             if stack.pop().is_none() {
@@ -193,8 +149,8 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             continue;
         }
         opened = None;
-        if let Some(title) = stmt.strip_prefix("title").filter(|r| r.starts_with(char::is_whitespace)) {
-            cx.meta.title = Some(title.trim().to_string());
+        if let Some(title) = keyword(stmt, "title").filter(|t| !t.is_empty()) {
+            cx.meta.title = Some(title.to_string());
             continue;
         }
         let Some((name, inner, tail)) = call(stmt) else {
@@ -222,7 +178,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let descr = descr.map(|t| cx.label(t)).transpose()?;
             aliases.insert(alias.to_string(), End::Element(model.elements.len()));
             model.elements.push(Element {
-                alias: alias.to_string(),
                 label,
                 kind,
                 variant,
@@ -260,7 +215,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let index = model.boundaries.len();
             aliases.insert(alias.to_string(), End::Boundary(index));
             model.boundaries.push(Boundary {
-                alias: alias.to_string(),
                 label: cx.label(label)?,
                 kind,
                 type_text,
@@ -321,9 +275,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             _ => cx.warn(line_no, format!("`{name}` is not supported")),
         }
     }
-    if !header {
-        return Err(DiagramError::Empty);
-    }
     for rel in rels {
         let (Some(&from), Some(&to)) = (aliases.get(&rel.from), aliases.get(&rel.to)) else {
             cx.warn(rel.line, format!("a relationship to an unknown alias `{}` / `{}`", truncate(&rel.from), truncate(&rel.to)));
@@ -362,28 +313,15 @@ fn merge(into: &mut Colors, c: Colors) {
     into.border = c.border.or(into.border);
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
+    use crate::Meta;
 
     fn parse_src(src: &str) -> (Model, Meta) {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        (model, cx.meta)
+        let (model, warnings, meta) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        (model.unwrap(), meta)
     }
 
     #[test]
