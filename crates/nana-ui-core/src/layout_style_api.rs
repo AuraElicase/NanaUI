@@ -213,6 +213,48 @@ impl LayoutStyle {
     }
 }
 
+/// In-place placement shorthands for the `&mut LayoutStyle` an L3
+/// `with_layout` closure or `NodeStyle::layout_mut` edit hands out.
+/// Each writes the fields a CSS author would write for the same intent, so
+/// nothing downstream sees a new kind of value.
+impl LayoutStyle {
+    /// `position: absolute; inset: <px>` — out of flow, every edge `px` inside
+    /// the containing block.
+    pub fn set_absolute_inset(&mut self, px: f32) -> &mut Self {
+        let edge = Some(LengthSpec::Px(px));
+        self.position = PositionSpec::Absolute;
+        self.offset_top = edge;
+        self.offset_right = edge;
+        self.offset_bottom = edge;
+        self.offset_left = edge;
+        self
+    }
+
+    /// `position: absolute; inset: 0` — covers the containing block.
+    pub fn set_absolute_fill(&mut self) -> &mut Self {
+        self.set_absolute_inset(0.0)
+    }
+
+    /// `width`, `min-width` and `max-width` all `px`: a column that neither
+    /// grows nor shrinks with its content or its flex line.
+    pub fn set_fixed_width(&mut self, px: f32) -> &mut Self {
+        let width = Some(LengthSpec::Px(px));
+        self.width = width;
+        self.min_width = width;
+        self.max_width = width;
+        self
+    }
+
+    /// `height`, `min-height` and `max-height` all `px`.
+    pub fn set_fixed_height(&mut self, px: f32) -> &mut Self {
+        let height = Some(LengthSpec::Px(px));
+        self.height = height;
+        self.min_height = height;
+        self.max_height = height;
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,6 +267,27 @@ mod tests {
         WhiteSpaceSpec,
     };
     use crate::style_model::PaintColor;
+
+    #[test]
+    fn placement_shorthands_write_css_fields() {
+        let mut layout = LayoutStyle::default();
+        layout.set_absolute_inset(4.0).set_fixed_height(36.0);
+        assert_eq!(layout.position, PositionSpec::Absolute);
+        for edge in [
+            layout.offset_top,
+            layout.offset_right,
+            layout.offset_bottom,
+            layout.offset_left,
+        ] {
+            assert_eq!(edge, Some(LengthSpec::Px(4.0)));
+        }
+        for height in [layout.height, layout.min_height, layout.max_height] {
+            assert_eq!(height, Some(LengthSpec::Px(36.0)));
+        }
+        layout.set_absolute_fill().set_fixed_width(12.0);
+        assert_eq!(layout.offset_left, Some(LengthSpec::Px(0.0)));
+        assert_eq!(layout.max_width, Some(LengthSpec::Px(12.0)));
+    }
 
     #[test]
     fn layout_style_builders_cover_declared_fields() {

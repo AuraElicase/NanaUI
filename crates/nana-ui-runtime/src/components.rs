@@ -2129,6 +2129,12 @@ impl NodeStyle {
         }
     }
 
+    /// The layout to edit in place, copied first if another style shares it
+    /// (`Arc::make_mut`), so the shared default is never written through.
+    pub fn layout_mut(&mut self) -> &mut LayoutStyle {
+        Arc::make_mut(&mut self.layout)
+    }
+
     /// 挂上节点自绘。见 [`crate::Painter`]。
     pub fn painter(mut self, painter: impl Into<crate::NodePainter>) -> Self {
         self.painter = Some(painter.into());
@@ -3233,6 +3239,57 @@ impl ScrollMetrics {
 }
 
 impl LayoutBox {
+    /// The x of the right edge.
+    pub fn right(self) -> f32 {
+        self.x + self.width
+    }
+
+    /// The y of the bottom edge.
+    pub fn bottom(self) -> f32 {
+        self.y + self.height
+    }
+
+    /// The smallest box that covers both.
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        Self {
+            x,
+            y,
+            width: self.right().max(other.right()) - x,
+            height: self.bottom().max(other.bottom()) - y,
+        }
+    }
+
+    /// The overlap of both, `None` where they do not share an area.
+    pub fn intersection(self, other: Self) -> Option<Self> {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let width = self.right().min(other.right()) - x;
+        let height = self.bottom().min(other.bottom()) - y;
+        (width > 0.0 && height > 0.0).then_some(Self {
+            x,
+            y,
+            width,
+            height,
+        })
+    }
+
+    /// Every edge moved `amount` inward (outward when negative); a side
+    /// that would cross its opposite collapses to zero at the box's middle.
+    #[must_use]
+    pub fn inset(self, amount: f32) -> Self {
+        let width = (self.width - 2.0 * amount).max(0.0);
+        let height = (self.height - 2.0 * amount).max(0.0);
+        Self {
+            x: self.x + (self.width - width) * 0.5,
+            y: self.y + (self.height - height) * 0.5,
+            width,
+            height,
+        }
+    }
+
     pub fn contains(self, x: f32, y: f32) -> bool {
         self.width > 0.0
             && self.height > 0.0
@@ -4490,6 +4547,62 @@ impl StandardVisual {
 #[cfg(test)]
 mod tests {
     use super::{TextAffinity, TextInputState, TextSelection};
+
+    #[test]
+    fn layout_box_geometry() {
+        use super::LayoutBox;
+        let a = LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        let b = LayoutBox {
+            x: 5.0,
+            y: -5.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        assert_eq!(
+            a.union(b),
+            LayoutBox {
+                x: 0.0,
+                y: -5.0,
+                width: 15.0,
+                height: 15.0
+            }
+        );
+        assert_eq!(
+            a.intersection(b),
+            Some(LayoutBox {
+                x: 5.0,
+                y: 0.0,
+                width: 5.0,
+                height: 5.0
+            })
+        );
+        let far = LayoutBox { x: 10.0, ..a };
+        assert_eq!(a.intersection(far), None);
+        assert_eq!(
+            a.inset(2.0),
+            LayoutBox {
+                x: 2.0,
+                y: 2.0,
+                width: 6.0,
+                height: 6.0
+            }
+        );
+        assert_eq!(
+            a.inset(8.0),
+            LayoutBox {
+                x: 5.0,
+                y: 5.0,
+                width: 0.0,
+                height: 0.0
+            }
+        );
+        assert_eq!((a.right(), b.bottom()), (10.0, 5.0));
+    }
 
     #[test]
     fn affinity_is_part_of_where_a_caret_is() {

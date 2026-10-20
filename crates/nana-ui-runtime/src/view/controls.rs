@@ -640,10 +640,12 @@ impl<K> El<EmptyState, K> {
 ///   testing (what `.visible(..)` binds);
 /// - [`fields::Localized`]: the message a text says (what [`t`] binds);
 /// - [`fields::HiddenWhenEmpty`]: any of those fields, with the node hidden
-///   while the value is empty (`.prop::<_, HiddenWhenEmpty<fields::text::value>>(title)`).
+///   while the value is empty (`.prop::<_, HiddenWhenEmpty<fields::text::value>>(title)`);
+/// - [`fields::FromString`] / [`fields::FromOptionalString`]: an `Arc<str>`
+///   field bound from the `String` a store holds.
 pub mod fields {
     pub use super::generated::*;
-    pub use super::{Blank, HiddenWhenEmpty};
+    pub use super::{Blank, FromOptionalString, FromString, HiddenWhenEmpty};
     pub use super::{Localized, Visible};
 
     /// [`crate::ActionMenu`] fields (not a template tag: its items are its
@@ -707,6 +709,39 @@ impl FieldWrite<EmptyState, String> for generated::empty_state::message {
 
     fn differs(target: &EmptyState, message: &String) -> bool {
         target.message.as_deref().unwrap_or("") != message.as_str()
+    }
+}
+
+/// The `Arc<str>` field `W` writes, bound from a `String`. It compares before
+/// converting, so an unchanged value costs no allocation.
+pub struct FromString<W>(std::marker::PhantomData<W>);
+
+impl<C, W: FieldWrite<C, Arc<str>>> FieldWrite<C, String> for FromString<W> {
+    const FIELD: &'static str = W::FIELD;
+
+    fn write(target: &mut C, value: String) {
+        W::write(target, value.into());
+    }
+
+    fn differs(target: &C, value: &String) -> bool {
+        W::differs(target, &Arc::from(value.as_str()))
+    }
+}
+
+/// [`FromString`] for an optional text field.
+pub struct FromOptionalString<W>(std::marker::PhantomData<W>);
+
+impl<C, W: FieldWrite<C, Option<Arc<str>>>> FieldWrite<C, Option<String>>
+    for FromOptionalString<W>
+{
+    const FIELD: &'static str = W::FIELD;
+
+    fn write(target: &mut C, value: Option<String>) {
+        W::write(target, value.map(Arc::from));
+    }
+
+    fn differs(target: &C, value: &Option<String>) -> bool {
+        W::differs(target, &value.as_deref().map(Arc::from))
     }
 }
 

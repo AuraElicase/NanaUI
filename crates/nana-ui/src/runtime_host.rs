@@ -281,6 +281,24 @@ impl RuntimeRedraw {
             _ => Self::Windows(windows),
         }
     }
+
+    /// Every window either set asks to redraw: `All` absorbs the other side,
+    /// `None` adds nothing, and window lists are joined without duplicates.
+    #[must_use]
+    pub fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::All, _) | (_, Self::All) => Self::All,
+            (Self::None, redraw) | (redraw, Self::None) => redraw,
+            (left, right) => {
+                let into_windows = |redraw| match redraw {
+                    Self::Window(id) => vec![id],
+                    Self::Windows(ids) => ids,
+                    _ => Vec::new(),
+                };
+                Self::for_windows(into_windows(left).into_iter().chain(into_windows(right)))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -315,23 +333,13 @@ impl RuntimeProgramUpdate {
         }
     }
 
-    pub(crate) fn merge(mut self, other: Self) -> Self {
+    /// Both updates as one: their redraws joined ([`RuntimeRedraw::merge`]),
+    /// `other`'s window commands after this one's, and an exit if either asks.
+    #[must_use]
+    pub fn merge(mut self, other: Self) -> Self {
         self.exit |= other.exit;
         self.window_commands.extend(other.window_commands);
-        self.redraw = match (self.redraw, other.redraw) {
-            (RuntimeRedraw::All, _) | (_, RuntimeRedraw::All) => RuntimeRedraw::All,
-            (RuntimeRedraw::None, redraw) | (redraw, RuntimeRedraw::None) => redraw,
-            (left, right) => {
-                let into_windows = |redraw| match redraw {
-                    RuntimeRedraw::Window(id) => vec![id],
-                    RuntimeRedraw::Windows(ids) => ids,
-                    _ => Vec::new(),
-                };
-                RuntimeRedraw::for_windows(
-                    into_windows(left).into_iter().chain(into_windows(right)),
-                )
-            }
-        };
+        self.redraw = self.redraw.merge(other.redraw);
         self
     }
 }
@@ -1023,6 +1031,29 @@ mod tests {
         super::PENDING_HOST_STORE.with(|slot| {
             assert!(slot.borrow().is_none());
         });
+    }
+
+    #[test]
+    fn redraw_merge_joins_windows_and_lets_all_absorb() {
+        use super::RuntimeRedraw;
+        use nana_ui_platform::WindowId;
+        let (a, b) = (WindowId(1), WindowId(2));
+        assert_eq!(
+            RuntimeRedraw::None.merge(RuntimeRedraw::Window(a)),
+            RuntimeRedraw::Window(a)
+        );
+        assert_eq!(
+            RuntimeRedraw::Window(a).merge(RuntimeRedraw::Window(a)),
+            RuntimeRedraw::Window(a)
+        );
+        assert_eq!(
+            RuntimeRedraw::Window(b).merge(RuntimeRedraw::Windows(vec![a, b])),
+            RuntimeRedraw::Windows(vec![a, b])
+        );
+        assert_eq!(
+            RuntimeRedraw::Window(a).merge(RuntimeRedraw::All),
+            RuntimeRedraw::All
+        );
     }
 
     #[test]
