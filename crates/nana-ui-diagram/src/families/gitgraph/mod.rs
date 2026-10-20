@@ -12,7 +12,6 @@ use super::kit::{self, first_name, first_word, unquote};
 use super::{LayoutCx, ParseCx};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommitKind {
     Normal,
@@ -74,7 +73,9 @@ fn options(text: &str) -> Result<Vec<(String, String)>, String> {
     let mut out = Vec::new();
     let mut rest = text.trim();
     while !rest.is_empty() {
-        let colon = rest.find(':').ok_or_else(|| format!("expected `key: value` at `{rest}`"))?;
+        let colon = rest
+            .find(':')
+            .ok_or_else(|| format!("expected `key: value` at `{rest}`"))?;
         let key = rest[..colon].trim();
         if key.is_empty() || key.contains(char::is_whitespace) {
             return Err(format!("expected an option name at `{rest}`"));
@@ -141,7 +142,12 @@ impl State<'_> {
         Ok(())
     }
 
-    fn statement(&mut self, word: &str, rest: &str, limits: &crate::Limits) -> Result<Option<String>, String> {
+    fn statement(
+        &mut self,
+        word: &str,
+        rest: &str,
+        limits: &crate::Limits,
+    ) -> Result<Option<String>, String> {
         match word {
             "commit" => {
                 let mut id = None;
@@ -200,11 +206,14 @@ impl State<'_> {
                 if other == self.current {
                     return Err("cannot merge a branch into itself".into());
                 }
-                let (Some(ours), Some(theirs)) = (self.heads[self.current], self.heads[other]) else {
+                let (Some(ours), Some(theirs)) = (self.heads[self.current], self.heads[other])
+                else {
                     return Err(format!("cannot merge `{name}`: a branch has no commits"));
                 };
                 if ours == theirs {
-                    return Err(format!("cannot merge `{name}`: both branches point at the same commit"));
+                    return Err(format!(
+                        "cannot merge `{name}`: both branches point at the same commit"
+                    ));
                 }
                 let mut id = None;
                 let mut kind = CommitKind::Merge;
@@ -232,14 +241,22 @@ impl State<'_> {
                     }
                 }
                 let source = source.ok_or("`cherry-pick` needs `id:`")?;
-                let &from = self.ids.get(&source).ok_or_else(|| format!("unknown commit `{source}`"))?;
+                let &from = self
+                    .ids
+                    .get(&source)
+                    .ok_or_else(|| format!("unknown commit `{source}`"))?;
                 let picked = &self.model.commits[from];
                 if picked.branch == self.current {
                     return Err("cannot cherry-pick a commit from the same branch".into());
                 }
                 if picked.kind == CommitKind::Merge || picked.parents.len() > 1 {
-                    let parent = parent.as_deref().ok_or("cherry-picking a merge needs `parent:`")?;
-                    let ok = picked.parents.iter().any(|&p| self.model.commits[p].id == parent);
+                    let parent = parent
+                        .as_deref()
+                        .ok_or("cherry-picking a merge needs `parent:`")?;
+                    let ok = picked
+                        .parents
+                        .iter()
+                        .any(|&p| self.model.commits[p].id == parent);
                     if !ok {
                         return Err(format!("`{parent}` is not a parent of `{source}`"));
                     }
@@ -273,8 +290,15 @@ fn commit_type(value: &str) -> Result<CommitKind, String> {
 
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
     let config = cx.config;
-    let main = config.get("gitGraph.mainBranchName").map(unquote).filter(|n| !n.is_empty()).unwrap_or("main").to_string();
-    let main_order = config.get_f32("gitGraph.mainBranchOrder").map_or(0.0, f64::from);
+    let main = config
+        .get("gitGraph.mainBranchName")
+        .map(unquote)
+        .filter(|n| !n.is_empty())
+        .unwrap_or("main")
+        .to_string();
+    let main_order = config
+        .get_f32("gitGraph.mainBranchOrder")
+        .map_or(0.0, f64::from);
     let mut model = Model {
         show_branches: config.get_bool("gitGraph.showBranches").unwrap_or(true),
         show_labels: config.get_bool("gitGraph.showCommitLabel").unwrap_or(true),
@@ -312,7 +336,9 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             cx.meta.title = Some(rest.to_string());
             continue;
         }
-        cx.limits.check_label(rest).map_err(|_| DiagramError::TooLarge(LimitKind::LabelChars))?;
+        cx.limits
+            .check_label(rest)
+            .map_err(|_| DiagramError::TooLarge(LimitKind::LabelChars))?;
         match state.statement(word, rest, cx.limits) {
             Ok(None) => {}
             Ok(Some(warning)) => cx.warn(index, warning),
@@ -355,11 +381,14 @@ mod tests {
     #[test]
     fn options_read_quoted_and_bare_values() {
         let o = options(r#"id: "a b" type: HIGHLIGHT tag:"v1""#).unwrap();
-        assert_eq!(o, vec![
-            ("id".into(), "a b".into()),
-            ("type".into(), "HIGHLIGHT".into()),
-            ("tag".into(), "v1".into())
-        ]);
+        assert_eq!(
+            o,
+            vec![
+                ("id".into(), "a b".into()),
+                ("type".into(), "HIGHLIGHT".into()),
+                ("tag".into(), "v1".into())
+            ]
+        );
         assert!(options("id").is_err());
         assert_ne!(auto_id(0), auto_id(1));
     }
@@ -379,7 +408,13 @@ mod history_tests {
             "gitGraph\n commit\n branch b\n checkout main\n merge b",
             "gitGraph\n commit id: \"a\"\n cherry-pick id: \"a\"",
         ] {
-            assert!(matches!(parse(source, &Limits::DEFAULT), Err(DiagramError::Syntax { .. })), "{source}");
+            assert!(
+                matches!(
+                    parse(source, &Limits::DEFAULT),
+                    Err(DiagramError::Syntax { .. })
+                ),
+                "{source}"
+            );
         }
     }
 }

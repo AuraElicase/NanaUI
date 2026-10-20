@@ -58,15 +58,22 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let mut settings = Settings::default();
     // Mermaid's `gantt.*` configuration; statements below override it.
     let config = cx.config;
-    if let Some(f) = config.get("gantt.axisFormat").filter(|f| !f.trim().is_empty()) {
+    if let Some(f) = config
+        .get("gantt.axisFormat")
+        .filter(|f| !f.trim().is_empty())
+    {
         model.axis_format = Some(f.trim().to_string());
     }
-    model.tick_interval = config.get("gantt.tickInterval").and_then(time::parse_tick_interval);
+    model.tick_interval = config
+        .get("gantt.tickInterval")
+        .and_then(time::parse_tick_interval);
     if let Some(d) = config.get("gantt.weekday").and_then(time::weekday_named) {
         model.week_start = d;
     }
     model.top_axis = config.get_bool("gantt.topAxis").unwrap_or(false);
-    model.compact = config.get("gantt.displayMode").is_some_and(|m| m.trim() == "compact");
+    model.compact = config
+        .get("gantt.displayMode")
+        .is_some_and(|m| m.trim() == "compact");
     let mut raws: Vec<Raw> = Vec::new();
     let (header, _) = kit::header(body)?;
     for (index, line) in kit::statements(body, header) {
@@ -124,7 +131,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
     }
 
-    let fmt = settings.date_format.clone().unwrap_or_else(|| "YYYY-MM-DD".into());
+    let fmt = settings
+        .date_format
+        .clone()
+        .unwrap_or_else(|| "YYYY-MM-DD".into());
     model.excludes = excludes(&settings, &fmt);
     if let Some((line, value)) = &settings.today {
         // Only a date draws the line; `off` and style declarations do not.
@@ -153,7 +163,12 @@ fn click(rest: &str) -> Option<(Vec<String>, String)> {
     } else {
         after.split_whitespace().next()?
     };
-    let ids = ids.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect();
+    let ids = ids
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
     (!url.is_empty()).then(|| (ids, url.to_string()))
 }
 
@@ -220,7 +235,11 @@ fn excludes(settings: &Settings, fmt: &str) -> Excludes {
     for item in &settings.excludes {
         let lower = item.to_ascii_lowercase();
         if lower == "weekends" {
-            let (a, b) = if settings.weekend_friday { (4, 5) } else { (5, 6) };
+            let (a, b) = if settings.weekend_friday {
+                (4, 5)
+            } else {
+                (5, 6)
+            };
             out.weekdays[a] = true;
             out.weekdays[b] = true;
         } else if let Some(d) = time::weekday_named(&lower).filter(|_| lower.len() > 3) {
@@ -392,7 +411,14 @@ impl Resolver<'_> {
             End::Text(s) if s.is_empty() => (start, true),
             End::Text(s) => {
                 if let Some(t) = time::parse_date(s, self.fmt) {
-                    (if self.inclusive { t.saturating_add(DAY) } else { t }, true)
+                    (
+                        if self.inclusive {
+                            t.saturating_add(DAY)
+                        } else {
+                            t
+                        },
+                        true,
+                    )
                 } else if let Some(span) = time::parse_duration(s) {
                     (time::add(start, span), false)
                 } else {

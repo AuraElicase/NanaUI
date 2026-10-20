@@ -498,6 +498,35 @@ pub(crate) fn note(
     );
 }
 
+/// A node body in one of the shared shapes, with its decorations, painted
+/// with the shared role table after the author's style.
+pub(crate) fn shape_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint: &Paint) {
+    let (behind, over) = shape.decorations(rect);
+    for geom in behind {
+        out.shape(geom, Some(paint.fill), Some(paint.stroke));
+    }
+    if shape.solid() {
+        let ink = match paint.fill {
+            Ink::Rgba(_) => paint.fill,
+            _ => style::TEXT,
+        };
+        out.shape(shape.outline(rect), Some(ink), None);
+    } else if shape == Shape::FramedCircle {
+        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
+        out.shape(Geom::Ellipse(rect.inset(4.0, 4.0)), Some(style::TEXT), None);
+        return;
+    } else if shape.has_body() {
+        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
+    }
+    let line = Stroke {
+        dash: Dash::Solid,
+        ..paint.stroke
+    };
+    for path in over {
+        out.stroke(Geom::path(path), line);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -534,34 +563,5 @@ mod tests {
         let c = s.resolve("C", &["warm".into()]);
         assert!(c.fill.is_some() && c.stroke.is_some());
         assert_eq!(split_classes("X:::a,b").1.len(), 2);
-    }
-}
-
-/// A node body in one of the shared shapes, with its decorations, painted
-/// with the shared role table after the author's style.
-pub(crate) fn shape_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint: &Paint) {
-    let (behind, over) = shape.decorations(rect);
-    for geom in behind {
-        out.shape(geom, Some(paint.fill), Some(paint.stroke));
-    }
-    if shape.solid() {
-        let ink = match paint.fill {
-            Ink::Rgba(_) => paint.fill,
-            _ => style::TEXT,
-        };
-        out.shape(shape.outline(rect), Some(ink), None);
-    } else if shape == Shape::FramedCircle {
-        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
-        out.shape(Geom::Ellipse(rect.inset(4.0, 4.0)), Some(style::TEXT), None);
-        return;
-    } else if shape.has_body() {
-        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
-    }
-    let line = Stroke {
-        dash: Dash::Solid,
-        ..paint.stroke
-    };
-    for path in over {
-        out.stroke(Geom::path(path), line);
     }
 }

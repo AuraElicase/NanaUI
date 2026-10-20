@@ -5,13 +5,14 @@
 use super::flowchart::{self, EndRef, LineKind, link_stroke};
 use super::{LayoutCx, ParseCx, graphkit};
 use crate::ir::{Align, Geom, Ink, SceneBuilder, Stroke};
-use crate::layout::lanes::{self, LaneEdge, LaneGraph, LaneLayout, LaneNode, LaneSpacing, LaneSpec};
+use crate::layout::lanes::{
+    self, LaneEdge, LaneGraph, LaneLayout, LaneNode, LaneSpacing, LaneSpec,
+};
 use crate::layout::{attach_end, attach_start};
 use crate::style::{self, Paint};
-use crate::text::{FontSpec, LaidText, Label};
+use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, Summary};
 use nana_ui_core::{SemanticColorMix, SemanticColorRole as R};
-
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Model {
@@ -33,8 +34,13 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
         s
     };
-    let roots: Vec<usize> = (0..chart.subgraphs.len()).filter(|&s| chart.subgraphs[s].parent.is_none()).collect();
-    let mut lanes: Vec<Label> = roots.iter().map(|&s| chart.subgraphs[s].title.clone()).collect();
+    let roots: Vec<usize> = (0..chart.subgraphs.len())
+        .filter(|&s| chart.subgraphs[s].parent.is_none())
+        .collect();
+    let mut lanes: Vec<Label> = roots
+        .iter()
+        .map(|&s| chart.subgraphs[s].title.clone())
+        .collect();
     let loose = chart.nodes.iter().any(|n| n.subgraph.is_none());
     if loose {
         lanes.push(Label::default());
@@ -54,7 +60,12 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             _ => cx.warn(0, "swimlane links join steps, not lanes"),
         }
     }
-    Ok(Model { chart, lanes, lane_of, edges })
+    Ok(Model {
+        chart,
+        lanes,
+        lane_of,
+        edges,
+    })
 }
 
 pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScene, DiagramError> {
@@ -71,7 +82,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut labels = Vec::with_capacity(chart.nodes.len());
     let mut graph = LaneGraph {
         direction: chart.direction,
-        lanes: titles.iter().map(|t| LaneSpec { title: t.as_ref().map_or([0.0, 0.0], LaidText::size) }).collect(),
+        lanes: titles
+            .iter()
+            .map(|t| LaneSpec {
+                title: t.as_ref().map_or([0.0, 0.0], LaidText::size),
+            })
+            .collect(),
         ..LaneGraph::default()
     };
     for (n, node) in chart.nodes.iter().enumerate() {
@@ -93,12 +109,20 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut edge_labels = Vec::with_capacity(model.edges.len());
     for &e in &model.edges {
         let edge = &chart.edges[e];
-        let (EndRef::Node(a), EndRef::Node(b)) = (edge.from, edge.to) else { continue };
-        let laid = edge.label.as_ref().map(|l| cx.text.lay(l, small, Some(wrap))).filter(|l| !l.is_empty());
+        let (EndRef::Node(a), EndRef::Node(b)) = (edge.from, edge.to) else {
+            continue;
+        };
+        let laid = edge
+            .label
+            .as_ref()
+            .map(|l| cx.text.lay(l, small, Some(wrap)))
+            .filter(|l| !l.is_empty());
         graph.edges.push(LaneEdge {
             from: a,
             to: b,
-            label: laid.as_ref().map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]),
+            label: laid
+                .as_ref()
+                .map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]),
         });
         edge_labels.push((e, laid));
     }
@@ -114,12 +138,22 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             continue;
         }
         let mut points = route.points.clone();
-        let (EndRef::Node(a), EndRef::Node(b)) = (edge.from, edge.to) else { continue };
+        let (EndRef::Node(a), EndRef::Node(b)) = (edge.from, edge.to) else {
+            continue;
+        };
         if a != b {
             attach_start(&mut points, chart.nodes[a].shape, placed.nodes[a]);
             attach_end(&mut points, chart.nodes[b].shape, placed.nodes[b]);
         }
-        graphkit::edge(&mut out, &points, link_stroke(edge.line, &edge.style), edge.start, edge.end, marker, m.bend_radius);
+        graphkit::edge(
+            &mut out,
+            &points,
+            link_stroke(edge.line, &edge.style),
+            edge.start,
+            edge.end,
+            marker,
+            m.bend_radius,
+        );
     }
     for (k, (e, laid)) in edge_labels.iter().enumerate() {
         if let (Some(laid), Some(center)) = (laid, placed.edges[k].label)
@@ -134,7 +168,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let laid = &labels[n];
         if !laid.is_empty() {
             let lr = node.shape.label_rect(rect, laid.size());
-            let ink = if node.shape.label_outside() { style::TEXT } else { paints[n].text };
+            let ink = if node.shape.label_outside() {
+                style::TEXT
+            } else {
+                paints[n].text
+            };
             out.text(laid, [lr.x, lr.y], lr.w, Align::Center, ink);
         }
         if let Some((url, tooltip)) = &node.link {
@@ -149,7 +187,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 pub(crate) fn summary(model: &Model) -> Summary {
     Summary {
         nodes: model.chart.nodes.len() as u32,
-        edges: model.edges.iter().filter(|&&e| model.chart.edges[e].line != LineKind::Invisible).count() as u32,
+        edges: model
+            .edges
+            .iter()
+            .filter(|&&e| model.chart.edges[e].line != LineKind::Invisible)
+            .count() as u32,
         groups: model.lanes.len() as u32,
     }
 }
@@ -168,7 +210,10 @@ pub(crate) fn spacing(cx: &LayoutCx<'_>) -> LaneSpacing {
 
 pub(crate) fn lane_titles(cx: &LayoutCx<'_>, lanes: &[Label], wrap: f32) -> Vec<Option<LaidText>> {
     let face = FontSpec::new(cx.metrics.small_size).weight(cx.metrics.strong_weight);
-    lanes.iter().map(|l| Some(cx.text.lay(l, face, Some(wrap * 0.75))).filter(|t| !t.is_empty())).collect()
+    lanes
+        .iter()
+        .map(|l| Some(cx.text.lay(l, face, Some(wrap * 0.75))).filter(|t| !t.is_empty()))
+        .collect()
 }
 
 const LANE_STRIPE: Ink = Ink::Mix(SemanticColorMix::alpha(R::Subtle, 0.45));
@@ -179,7 +224,11 @@ pub(crate) fn draw_lanes(out: &mut SceneBuilder, placed: &LaneLayout, titles: &[
     if placed.lanes.is_empty() {
         return;
     }
-    let frame = placed.lanes.iter().skip(1).fold(placed.lanes[0], |a, b| a.union(b));
+    let frame = placed
+        .lanes
+        .iter()
+        .skip(1)
+        .fold(placed.lanes[0], |a, b| a.union(b));
     out.clip(Geom::rounded(frame, style::CLUSTER_CORNER));
     for (l, lane) in placed.lanes.iter().enumerate() {
         if l % 2 == 1 {
@@ -191,17 +240,32 @@ pub(crate) fn draw_lanes(out: &mut SceneBuilder, placed: &LaneLayout, titles: &[
         }
     }
     let line = Stroke::hairline(style::CLUSTER_STROKE);
-    let vertical_lanes = placed.lanes.len() > 1 && (placed.lanes[1].x - placed.lanes[0].x).abs() > 0.5;
+    let vertical_lanes =
+        placed.lanes.len() > 1 && (placed.lanes[1].x - placed.lanes[0].x).abs() > 0.5;
     for lane in placed.lanes.iter().skip(1) {
-        let end = if vertical_lanes { [lane.x, lane.bottom()] } else { [lane.right(), lane.y] };
+        let end = if vertical_lanes {
+            [lane.x, lane.bottom()]
+        } else {
+            [lane.right(), lane.y]
+        };
         graphkit::line(out, [lane.x, lane.y], end, line);
     }
     // The header strip's inner edge.
     if let Some(head) = placed.headers.first().filter(|h| h.w > 0.0 && h.h > 0.0) {
         if vertical_lanes {
-            graphkit::line(out, [frame.x, head.bottom()], [frame.right(), head.bottom()], line);
+            graphkit::line(
+                out,
+                [frame.x, head.bottom()],
+                [frame.right(), head.bottom()],
+                line,
+            );
         } else {
-            graphkit::line(out, [head.right(), frame.y], [head.right(), frame.bottom()], line);
+            graphkit::line(
+                out,
+                [head.right(), frame.y],
+                [head.right(), frame.bottom()],
+                line,
+            );
         }
     }
     out.unclip();
@@ -209,7 +273,13 @@ pub(crate) fn draw_lanes(out: &mut SceneBuilder, placed: &LaneLayout, titles: &[
     for (l, title) in titles.iter().enumerate() {
         if let (Some(title), Some(head)) = (title, placed.headers.get(l)) {
             let c = head.center();
-            out.text(title, [c[0] - title.width / 2.0, c[1] - title.height / 2.0], title.width, Align::Center, style::MUTED);
+            out.text(
+                title,
+                [c[0] - title.width / 2.0, c[1] - title.height / 2.0],
+                title.width,
+                Align::Center,
+                style::MUTED,
+            );
         }
     }
 }

@@ -104,13 +104,18 @@ impl MsgLay {
     }
 
     fn number_w(&self, d: &Dims) -> f32 {
-        self.number.as_ref().map_or(0.0, |t| number_size(t, d)[0] + 2.0)
+        self.number
+            .as_ref()
+            .map_or(0.0, |t| number_size(t, d)[0] + 2.0)
     }
 
     /// How far a self message's loop and its label reach right of the
     /// attachment.
     fn loop_reach(&self, d: &Dims) -> f32 {
-        let lw = self.label.width.max(self.comment.as_ref().map_or(0.0, |c| c.width));
+        let lw = self
+            .label
+            .width
+            .max(self.comment.as_ref().map_or(0.0, |c| c.width));
         (d.loop_w + d.marker * 0.5).max(lw + 6.0 + self.number_w(d))
     }
 }
@@ -199,7 +204,13 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Pass 1: measure every event and collect the column constraints.
     let off_r = |depth: usize| bar_offset(depth, d.bar_w, 1.0);
     let off_l = |depth: usize| bar_offset(depth, d.bar_w, -1.0);
-    let off = |depth: usize, facing_right: bool| if facing_right { off_r(depth) } else { off_l(depth) };
+    let off = |depth: usize, facing_right: bool| {
+        if facing_right {
+            off_r(depth)
+        } else {
+            off_l(depth)
+        }
+    };
     let mut lays: Vec<Lay> = vec![Lay::Skip; events.len()];
     let mut cons: Vec<(usize, usize, f32)> = Vec::new();
     let mut depth = vec![0usize; n];
@@ -208,7 +219,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (i, ev) in events.iter().enumerate() {
         match ev {
             Event::Message(msg) => {
-                let wrap = if msg.wrap || msg_wrap_always { d.wrap } else { d.wrap * 2.0 };
+                let wrap = if msg.wrap || msg_wrap_always {
+                    d.wrap
+                } else {
+                    d.wrap * 2.0
+                };
                 let from_depth = depth[msg.from];
                 if msg.deactivate {
                     depth[msg.from] = depth[msg.from].saturating_sub(1);
@@ -227,7 +242,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 };
                 let lay = MsgLay {
                     label: cx.text.lay(&msg.label, font, Some(wrap)),
-                    comment: msg.comment.as_ref().map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5))),
+                    comment: msg
+                        .comment
+                        .as_ref()
+                        .map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5))),
                     number: numbering.map(|(_, step)| {
                         let text = fmt_num(next_number);
                         next_number += step;
@@ -246,8 +264,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 } else {
                     let [o_f, o_t] = lay.off;
                     let gained = if right { o_t - o_f } else { o_f - o_t };
-                    let lw = lay.label.width.max(lay.comment.as_ref().map_or(0.0, |c| c.width));
-                    let need = (lw + 2.0 * d.label_pad + 2.0 * lay.number_w(&d)).max(d.marker * 3.0);
+                    let lw = lay
+                        .label
+                        .width
+                        .max(lay.comment.as_ref().map_or(0.0, |c| c.width));
+                    let need =
+                        (lw + 2.0 * d.label_pad + 2.0 * lay.number_w(&d)).max(d.marker * 3.0);
                     cons.push((msg.from.min(msg.to), msg.from.max(msg.to), need - gained));
                 }
                 lays[i] = Lay::Msg(Box::new(lay));
@@ -297,20 +319,24 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 comment,
                 ..
             } => {
-                let tag = (*kind != FragmentKind::Rect).then(|| cx.text.lay_plain(kind.keyword(), strong_small));
+                let tag = (*kind != FragmentKind::Rect)
+                    .then(|| cx.text.lay_plain(kind.keyword(), strong_small));
                 let cond = label.as_ref().map(bracketed);
                 let mut min_w = 0.0;
                 if let Some(t) = &tag {
                     min_w = t.width + 2.0 * d.tag_pad[0];
                     if let Some(c) = &cond {
-                        min_w += cx.text.lay(c, small, Some(d.wrap * 1.2)).width + 2.0 * d.tag_pad[0];
+                        min_w +=
+                            cx.text.lay(c, small, Some(d.wrap * 1.2)).width + 2.0 * d.tag_pad[0];
                     }
                     min_w += d.frame_pad;
                 }
                 lays[i] = Lay::Open {
                     tag,
                     cond,
-                    comment: comment.as_ref().map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5))),
+                    comment: comment
+                        .as_ref()
+                        .map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5))),
                     min_w,
                     x: [0.0, 0.0],
                 };
@@ -327,7 +353,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Box titles need their columns wide enough.
     let mut group_titles: Vec<Option<LaidText>> = Vec::with_capacity(model.groups.len());
     for (g, group) in model.groups.iter().enumerate() {
-        let laid = group.title.as_ref().map(|t| cx.text.lay(t, strong_small, Some(d.wrap * 1.5)));
+        let laid = group
+            .title
+            .as_ref()
+            .map(|t| cx.text.lay(t, strong_small, Some(d.wrap * 1.5)));
         if let Some(t) = &laid
             && let Some((a, b)) = group_span(model, g)
             && a < b
@@ -372,9 +401,16 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             (Event::Message(msg), Lay::Msg(lay)) => {
                 let (ax, bx) = lay.ends(msg, &xs);
                 if msg.from == msg.to {
-                    add(&mut stack, xs[msg.from] - d.bar_w * 0.5, ax.max(bx) + lay.loop_reach(&d));
+                    add(
+                        &mut stack,
+                        xs[msg.from] - d.bar_w * 0.5,
+                        ax.max(bx) + lay.loop_reach(&d),
+                    );
                 } else {
-                    let r = lay.number.as_ref().map_or(0.0, |t| number_size(t, &d)[0] / 2.0)
+                    let r = lay
+                        .number
+                        .as_ref()
+                        .map_or(0.0, |t| number_size(t, &d)[0] / 2.0)
                         * if msg.start.is_some() { 2.2 } else { 1.0 };
                     // Whole activation bars at either end stay inside a frame.
                     let lo = (ax.min(bx) - r)
@@ -386,7 +422,15 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     add(&mut stack, lo, hi);
                 }
             }
-            (Event::Note { place, .. }, Lay::Note { label, size, x, bar }) => {
+            (
+                Event::Note { place, .. },
+                Lay::Note {
+                    label,
+                    size,
+                    x,
+                    bar,
+                },
+            ) => {
                 *x = match *place {
                     NotePlace::Right(p) => xs[p] + *bar + d.note_gap,
                     NotePlace::Left(p) => xs[p] - *bar - d.note_gap - size[0],
@@ -477,16 +521,27 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut last_line: Option<f32> = None;
     let mut crosses: Vec<[f32; 2]> = Vec::new();
     for (i, ev) in events.iter().enumerate() {
-        let after_message = last_line.filter(|_| i > 0 && matches!(events[i - 1], Event::Message(_)));
+        let after_message =
+            last_line.filter(|_| i > 0 && matches!(events[i - 1], Event::Message(_)));
         match (ev, &lays[i]) {
             (Event::Message(msg), Lay::Msg(lay)) => {
                 let (ax, bx) = lay.ends(msg, &xs);
                 if let Some(c) = &lay.comment {
-                    layers.msgs.text(c, [ax.min(bx) + 4.0, y], c.width, Align::Start, style::MUTED);
+                    layers.msgs.text(
+                        c,
+                        [ax.min(bx) + 4.0, y],
+                        c.width,
+                        Align::Start,
+                        style::MUTED,
+                    );
                     y += c.height + 2.0;
                 }
                 let label_top = y;
-                let label_h = if lay.label.is_empty() { 0.0 } else { lay.label.height };
+                let label_h = if lay.label.is_empty() {
+                    0.0
+                } else {
+                    lay.label.height
+                };
                 let mut line_y = label_top + label_h + d.label_gap;
                 let stroke = match msg.line {
                     LineKind::Solid => style::edge_stroke(),
@@ -499,7 +554,14 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     let right = ax.max(bx) + d.loop_w;
                     let pts = [[ax, line_y], [right, line_y], [right, bottom], [bx, bottom]];
                     let radius = m.bend_radius.min(d.loop_h * 0.4);
-                    layers.msgs.edge(&pts, move |p| rounded_polyline(p, radius), stroke, msg.start, msg.end, d.marker);
+                    layers.msgs.edge(
+                        &pts,
+                        move |p| rounded_polyline(p, radius),
+                        stroke,
+                        msg.start,
+                        msg.end,
+                        d.marker,
+                    );
                     let mut lx = ax + 4.0;
                     if let Some(num) = &lay.number {
                         let size = number_size(num, &d);
@@ -507,7 +569,13 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                         lx += size[0] / 2.0 + 2.0;
                     }
                     if label_h > 0.0 {
-                        layers.msgs.text(&lay.label, [lx, label_top], lay.label.width, Align::Start, style::TEXT);
+                        layers.msgs.text(
+                            &lay.label,
+                            [lx, label_top],
+                            lay.label.width,
+                            Align::Start,
+                            style::TEXT,
+                        );
                     }
                     y = bottom + d.msg_gap;
                     (line_y, bottom)
@@ -516,7 +584,14 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                         line_y = line_y.max(y + heads[msg.to].h / 2.0);
                     }
                     let pts = [[ax, line_y], [bx, line_y]];
-                    layers.msgs.edge(&pts, PathData::polyline, stroke, msg.start, msg.end, d.marker);
+                    layers.msgs.edge(
+                        &pts,
+                        PathData::polyline,
+                        stroke,
+                        msg.start,
+                        msg.end,
+                        d.marker,
+                    );
                     if label_h > 0.0 {
                         let mid = (ax + bx) / 2.0;
                         layers.msgs.text(
@@ -563,7 +638,9 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             }
             (Event::Note { .. }, Lay::Note { label, size, x, .. }) => {
                 let rect = Rect::new(*x, y, size[0], size[1]);
-                layers.notes.fill(Geom::rounded(rect, style::NOTE_CORNER), style::NODE_FILL);
+                layers
+                    .notes
+                    .fill(Geom::rounded(rect, style::NOTE_CORNER), style::NODE_FILL);
                 layers.notes.shape(
                     Geom::rounded(rect, style::NOTE_CORNER),
                     Some(style::NOTE_FILL),
@@ -571,7 +648,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 );
                 layers.notes.text(
                     label,
-                    [rect.x + (rect.w - label.width) / 2.0, rect.y + d.note_pad[1]],
+                    [
+                        rect.x + (rect.w - label.width) / 2.0,
+                        rect.y + d.note_pad[1],
+                    ],
                     label.width,
                     Align::Center,
                     style::TEXT,
@@ -612,13 +692,18 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 let tag = tag.as_ref().map(|t| {
                     let tag_w = t.width + 2.0 * d.tag_pad[0];
                     let cond = cond.as_ref().map(|c| {
-                        let avail = (width - tag_w - 2.0 * d.tag_pad[0] - d.frame_pad).max(m.font_size * 3.0);
+                        let avail = (width - tag_w - 2.0 * d.tag_pad[0] - d.frame_pad)
+                            .max(m.font_size * 3.0);
                         cx.text.lay(c, small, Some(avail))
                     });
-                    let h = t.height.max(cond.as_ref().map_or(0.0, |c| c.height)) + 2.0 * d.tag_pad[1];
+                    let h =
+                        t.height.max(cond.as_ref().map_or(0.0, |c| c.height)) + 2.0 * d.tag_pad[1];
                     (t.clone(), cond, h)
                 });
-                y = top + tag.as_ref().map_or(d.frame_pad, |t| t.2 + d.frame_pad * 0.8);
+                y = top
+                    + tag
+                        .as_ref()
+                        .map_or(d.frame_pad, |t| t.2 + d.frame_pad * 0.8);
                 open_frames.push(Frame {
                     open: i,
                     kind: *kind,
@@ -632,12 +717,19 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             (Event::Section { .. }, Lay::Section { label }) => {
                 let sep = y - d.msg_gap * 0.35;
                 let laid = open_frames.last().and_then(|f| {
-                    label
-                        .as_ref()
-                        .map(|l| cx.text.lay(l, small, Some((f.rect.w - 2.0 * d.frame_pad).max(m.font_size * 3.0))))
+                    label.as_ref().map(|l| {
+                        cx.text.lay(
+                            l,
+                            small,
+                            Some((f.rect.w - 2.0 * d.frame_pad).max(m.font_size * 3.0)),
+                        )
+                    })
                 });
                 if let Some(f) = open_frames.last_mut() {
-                    y = sep + d.tag_pad[1] * 2.0 + laid.as_ref().map_or(0.0, |l| l.height) + d.frame_pad * 0.6;
+                    y = sep
+                        + d.tag_pad[1] * 2.0
+                        + laid.as_ref().map_or(0.0, |l| l.height)
+                        + d.frame_pad * 0.6;
                     f.sections.push((sep, laid));
                 }
             }
@@ -661,14 +753,23 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Groups behind everything.
     let mirrored = |p: usize| {
-        model.mirror && destroyed_at[p].is_none() && participants[p].kind != ParticipantKind::Starter
+        model.mirror
+            && destroyed_at[p].is_none()
+            && participants[p].kind != ParticipantKind::Starter
     };
-    let mirror_h = (0..n).filter(|&p| mirrored(p)).map(|p| heads[p].h).fold(0.0, f32::max);
+    let mirror_h = (0..n)
+        .filter(|&p| mirrored(p))
+        .map(|p| heads[p].h)
+        .fold(0.0, f32::max);
     let bottom_edge = y_end + mirror_h;
     for (g, group) in model.groups.iter().enumerate() {
-        let Some((a, b)) = group_span(model, g) else { continue };
+        let Some((a, b)) = group_span(model, g) else {
+            continue;
+        };
         let lo = (a..=b).map(|p| xs[p] - hw[p]).fold(f32::INFINITY, f32::min);
-        let hi = (a..=b).map(|p| xs[p] + hw[p]).fold(f32::NEG_INFINITY, f32::max);
+        let hi = (a..=b)
+            .map(|p| xs[p] + hw[p])
+            .fold(f32::NEG_INFINITY, f32::max);
         let title = &group_titles[g];
         let mut x0 = lo - d.frame_pad;
         let mut x1 = hi + d.frame_pad;
@@ -714,14 +815,18 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let end = life_end[p].unwrap_or(y_end);
         let start = life_start[p];
         if end > start + 0.5 {
-            layers.lifelines.stroke(Geom::path(PathData::polyline(&[[xs[p], start], [xs[p], end]])), life);
+            layers.lifelines.stroke(
+                Geom::path(PathData::polyline(&[[xs[p], start], [xs[p], end]])),
+                life,
+            );
         }
     }
 
     // Activation bars, shallow under deep.
     bars.sort_by(|a, b| a.depth.cmp(&b.depth).then(a.y0.total_cmp(&b.y0)));
     for bar in &bars {
-        let x0 = xs[bar.p] - d.bar_w / 2.0 + (bar.depth.clamp(1, MAX_BAR_STEPS) - 1) as f32 * d.bar_w / 2.0;
+        let x0 = xs[bar.p] - d.bar_w / 2.0
+            + (bar.depth.clamp(1, MAX_BAR_STEPS) - 1) as f32 * d.bar_w / 2.0;
         layers.bars.shape(
             Geom::rect(Rect::new(x0, bar.y0, d.bar_w, (bar.y1 - bar.y0).max(1.0))),
             Some(style::NODE_FILL),
@@ -924,7 +1029,10 @@ fn draw_head(out: &mut SceneBuilder, kind: ParticipantKind, head: &Head, rect: R
         if !label.is_empty() {
             out.text(
                 label,
-                [area.x + (area.w - label.width) / 2.0, area.y + (area.h - label.height) / 2.0],
+                [
+                    area.x + (area.w - label.width) / 2.0,
+                    area.y + (area.h - label.height) / 2.0,
+                ],
                 label.width,
                 Align::Center,
                 style::TEXT,
@@ -989,15 +1097,26 @@ fn draw_head(out: &mut SceneBuilder, kind: ParticipantKind, head: &Head, rect: R
             let c = [cx0 + rr * 0.5, top + rr];
             let bar_x = cx0 - rr * 1.5;
             let mut path = PathData::new();
-            path.move_to([bar_x, top]).line_to([bar_x, top + 2.0 * rr]).move_to([bar_x, c[1]]).line_to([c[0] - rr, c[1]]);
+            path.move_to([bar_x, top])
+                .line_to([bar_x, top + 2.0 * rr])
+                .move_to([bar_x, c[1]])
+                .line_to([c[0] - rr, c[1]]);
             out.stroke(Geom::path(path), line);
-            out.shape(Geom::Ellipse(Rect::centered(c, [2.0 * rr, 2.0 * rr])), Some(fill), Some(line));
+            out.shape(
+                Geom::Ellipse(Rect::centered(c, [2.0 * rr, 2.0 * rr])),
+                Some(fill),
+                Some(line),
+            );
             label_below(out);
         }
         ParticipantKind::Control => {
             let rr = icon_h * 0.42;
             let c = [cx0, top + icon_h - rr - 1.0];
-            out.shape(Geom::Ellipse(Rect::centered(c, [2.0 * rr, 2.0 * rr])), Some(fill), Some(line));
+            out.shape(
+                Geom::Ellipse(Rect::centered(c, [2.0 * rr, 2.0 * rr])),
+                Some(fill),
+                Some(line),
+            );
             let tip = [c[0] - rr * 0.35, c[1] - rr];
             let k = rr * 0.4;
             let mut head_path = PathData::new();
@@ -1011,9 +1130,16 @@ fn draw_head(out: &mut SceneBuilder, kind: ParticipantKind, head: &Head, rect: R
         ParticipantKind::Entity => {
             let rr = icon_h * 0.4;
             let c = [cx0, top + rr + 1.0];
-            out.shape(Geom::Ellipse(Rect::centered(c, [2.0 * rr, 2.0 * rr])), Some(fill), Some(line));
+            out.shape(
+                Geom::Ellipse(Rect::centered(c, [2.0 * rr, 2.0 * rr])),
+                Some(fill),
+                Some(line),
+            );
             let base = c[1] + rr + icon_h * 0.12;
-            out.stroke(Geom::path(PathData::polyline(&[[cx0 - rr, base], [cx0 + rr, base]])), line);
+            out.stroke(
+                Geom::path(PathData::polyline(&[[cx0 - rr, base], [cx0 + rr, base]])),
+                line,
+            );
             label_below(out);
         }
         ParticipantKind::Starter => {
@@ -1026,7 +1152,9 @@ fn draw_frame(layers: &mut Layers, f: &Frame, d: &Dims) {
     let rect = f.rect;
     if f.kind == FragmentKind::Rect {
         let fill = f.color.map_or(style::CLUSTER_FILL, wash);
-        layers.frames.fill(Geom::rounded(rect, RadiusTier::Xs), fill);
+        layers
+            .frames
+            .fill(Geom::rounded(rect, RadiusTier::Xs), fill);
         return;
     }
     layers.frames.shape(
@@ -1035,7 +1163,9 @@ fn draw_frame(layers: &mut Layers, f: &Frame, d: &Dims) {
         Some(Stroke::hairline(FRAME_STROKE)),
     );
     if let Some((text, at)) = &f.comment {
-        layers.frame_marks.text(text, *at, text.width, Align::Start, style::MUTED);
+        layers
+            .frame_marks
+            .text(text, *at, text.width, Align::Start, style::MUTED);
     }
     if let Some((tag, cond, h)) = &f.tag {
         let w = tag.width + 2.0 * d.tag_pad[0];
@@ -1048,9 +1178,11 @@ fn draw_frame(layers: &mut Layers, f: &Frame, d: &Dims) {
             [x0 + w - cut, y0 + h],
             [x0, y0 + h],
         ]);
-        layers
-            .frame_marks
-            .shape(Geom::path(pentagon), Some(TAG_FILL), Some(Stroke::hairline(FRAME_STROKE)));
+        layers.frame_marks.shape(
+            Geom::path(pentagon),
+            Some(TAG_FILL),
+            Some(Stroke::hairline(FRAME_STROKE)),
+        );
         layers.frame_marks.text(
             tag,
             [x0 + d.tag_pad[0], y0 + (h - tag.height) / 2.0],
@@ -1077,7 +1209,10 @@ fn draw_frame(layers: &mut Layers, f: &Frame, d: &Dims) {
         if let Some(label) = label {
             layers.frame_marks.text(
                 label,
-                [rect.x + (rect.w - label.width) / 2.0, y + d.tag_pad[1] * 2.0],
+                [
+                    rect.x + (rect.w - label.width) / 2.0,
+                    y + d.tag_pad[1] * 2.0,
+                ],
                 label.width,
                 Align::Center,
                 style::MUTED,

@@ -9,7 +9,6 @@ use super::{LayoutCx, ParseCx};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Plot {
     Bar,
@@ -49,7 +48,12 @@ impl Model {
     pub fn points(&self) -> usize {
         match &self.x {
             XAxis::Categories(c) => c.len(),
-            _ => self.series.iter().map(|s| s.values.len()).max().unwrap_or(0),
+            _ => self
+                .series
+                .iter()
+                .map(|s| s.values.len())
+                .max()
+                .unwrap_or(0),
         }
     }
 }
@@ -66,7 +70,9 @@ fn title(text: &str) -> (Option<String>, &str) {
     if text.is_empty() || text.starts_with('[') || range(text).is_some() {
         return (None, text);
     }
-    let end = text.find(|c: char| c.is_whitespace() || c == '[').unwrap_or(text.len());
+    let end = text
+        .find(|c: char| c.is_whitespace() || c == '[')
+        .unwrap_or(text.len());
     (Some(text[..end].to_string()), &text[end..])
 }
 
@@ -98,7 +104,10 @@ fn list(text: &str) -> Option<Vec<String>> {
 
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
     let mut model = Model {
-        horizontal: cx.config.get("xyChart.chartOrientation").is_some_and(|o| o.trim() == "horizontal"),
+        horizontal: cx
+            .config
+            .get("xyChart.chartOrientation")
+            .is_some_and(|o| o.trim() == "horizontal"),
         data_labels: cx.config.get_bool("xyChart.showDataLabel").unwrap_or(false),
         ..Model::default()
     };
@@ -120,7 +129,11 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         match word {
             "title" => {
                 let (t, tail) = title(rest);
-                let text = if tail.trim().is_empty() { t.unwrap_or_default() } else { rest.to_string() };
+                let text = if tail.trim().is_empty() {
+                    t.unwrap_or_default()
+                } else {
+                    rest.to_string()
+                };
                 cx.meta.title = Some(text);
             }
             "x-axis" => {
@@ -139,7 +152,9 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 } else if let Some((a, b)) = range(tail) {
                     model.x = XAxis::Range(a, b);
                 } else {
-                    return Err(err(format!("expected `[categories]` or `min --> max` after x-axis, found `{tail}`")));
+                    return Err(err(format!(
+                        "expected `[categories]` or `min --> max` after x-axis, found `{tail}`"
+                    )));
                 }
             }
             "y-axis" => {
@@ -151,12 +166,17 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 }
                 match range(tail) {
                     Some(r) => model.y_range = Some(r),
-                    None => return Err(err(format!("expected `min --> max` after y-axis, found `{tail}`"))),
+                    None => {
+                        return Err(err(format!(
+                            "expected `min --> max` after y-axis, found `{tail}`"
+                        )));
+                    }
                 }
             }
             "bar" | "line" => {
                 let (name, tail) = title(rest);
-                let items = list(tail).ok_or_else(|| err(format!("expected `[values]` after `{word}`")))?;
+                let items =
+                    list(tail).ok_or_else(|| err(format!("expected `[values]` after `{word}`")))?;
                 count += items.len();
                 if count > cx.limits.elements {
                     return Err(DiagramError::TooLarge(LimitKind::Elements));
@@ -201,10 +221,16 @@ mod tests {
 
     #[test]
     fn axis_pieces() {
-        assert_eq!(title("\"Revenue (in $)\" 4000 --> 11000").0.as_deref(), Some("Revenue (in $)"));
+        assert_eq!(
+            title("\"Revenue (in $)\" 4000 --> 11000").0.as_deref(),
+            Some("Revenue (in $)")
+        );
         assert_eq!(title("4000 --> 11000").0, None);
         assert_eq!(title("Months [a, b]").0.as_deref(), Some("Months"));
         assert_eq!(range(" -2.5 --> 10"), Some((-2.5, 10.0)));
-        assert_eq!(list("[jan, \"feb, mar\", apr]").unwrap(), vec!["jan", "feb, mar", "apr"]);
+        assert_eq!(
+            list("[jan, \"feb, mar\", apr]").unwrap(),
+            vec!["jan", "feb, mar", "apr"]
+        );
     }
 }

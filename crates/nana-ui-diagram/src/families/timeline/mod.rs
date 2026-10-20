@@ -9,9 +9,8 @@ use super::{LayoutCx, ParseCx};
 use crate::geom::{Marker, PathData};
 use crate::ir::{Align, Dash, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::style::{self, series};
-use crate::text::{FontSpec, LaidText, Label};
+use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct Period {
@@ -46,7 +45,10 @@ fn fields(line: &str) -> Vec<&str> {
 
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
     let mut model = Model {
-        one_color: cx.config.get_bool("timeline.disableMulticolor").unwrap_or(false),
+        one_color: cx
+            .config
+            .get_bool("timeline.disableMulticolor")
+            .unwrap_or(false),
         ..Model::default()
     };
     let (header, rest) = kit::header(body)?;
@@ -109,13 +111,26 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let gap = 10.0 * k;
     let mut out = SceneBuilder::new();
 
-    let periods: Vec<LaidText> = model.periods.iter().map(|p| cx.text.lay(&p.label, strong, Some(wrap))).collect();
+    let periods: Vec<LaidText> = model
+        .periods
+        .iter()
+        .map(|p| cx.text.lay(&p.label, strong, Some(wrap)))
+        .collect();
     let events: Vec<Vec<LaidText>> = model
         .periods
         .iter()
-        .map(|p| p.events.iter().map(|e| cx.text.lay(e, font, Some(wrap))).collect())
+        .map(|p| {
+            p.events
+                .iter()
+                .map(|e| cx.text.lay(e, font, Some(wrap)))
+                .collect()
+        })
         .collect();
-    let sections: Vec<LaidText> = model.sections.iter().map(|s| cx.text.lay(s, strong, Some(wrap * 2.0))).collect();
+    let sections: Vec<LaidText> = model
+        .sections
+        .iter()
+        .map(|s| cx.text.lay(s, strong, Some(wrap * 2.0)))
+        .collect();
 
     // One column width for every period, as wide as the widest content.
     let widest = periods
@@ -139,10 +154,17 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Section bands above their periods.
     let mut y = 0.0;
     if !model.sections.is_empty() {
-        let band_h = sections.iter().map(|s| s.height).fold(cx.text.line_advance(strong), f32::max) + 2.0 * pad[1];
+        let band_h = sections
+            .iter()
+            .map(|s| s.height)
+            .fold(cx.text.line_advance(strong), f32::max)
+            + 2.0 * pad[1];
         for (s, laid) in sections.iter().enumerate() {
             let in_section = |p: &Period| p.section == Some(s);
-            let (Some(first), Some(last)) = (model.periods.iter().position(in_section), model.periods.iter().rposition(in_section)) else {
+            let (Some(first), Some(last)) = (
+                model.periods.iter().position(in_section),
+                model.periods.iter().rposition(in_section),
+            ) else {
                 continue;
             };
             let rect = Rect::new(col_x(first), y, col_x(last) + col_w - col_x(first), band_h);
@@ -152,13 +174,23 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 Some(series(index, Tone::Solid)),
                 None,
             );
-            out.text(laid, [rect.x, rect.y + (rect.h - laid.height) / 2.0], rect.w, Align::Center, series(index, Tone::On));
+            out.text(
+                laid,
+                [rect.x, rect.y + (rect.h - laid.height) / 2.0],
+                rect.w,
+                Align::Center,
+                series(index, Tone::On),
+            );
         }
         y += band_h + gap;
     }
 
     // Periods.
-    let period_h = periods.iter().map(|p| p.height).fold(cx.text.line_advance(strong), f32::max) + 2.0 * pad[1];
+    let period_h = periods
+        .iter()
+        .map(|p| p.height)
+        .fold(cx.text.line_advance(strong), f32::max)
+        + 2.0 * pad[1];
     let period_top = y;
     let axis_y = period_top + period_h + 1.5 * gap;
     let events_top = axis_y + 1.5 * gap;
@@ -181,7 +213,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if let Some(last) = rects.last() {
             let cx_ = x + col_w / 2.0;
             out.stroke(
-                Geom::path(PathData::polyline(&[[cx_, period_top + period_h], [cx_, last.y]])),
+                Geom::path(PathData::polyline(&[
+                    [cx_, period_top + period_h],
+                    [cx_, last.y],
+                ])),
                 Stroke::hairline(series(color(i), Tone::Solid)).dash(Dash::Dashed),
             );
         }
@@ -208,7 +243,13 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             Some(Stroke::hairline(series(c, Tone::Solid))),
         );
         out.text_centered(laid, rect.center(), style::TEXT);
-        out.fill(Geom::Ellipse(Rect::centered([rect.center()[0], axis_y], [9.0 * k, 9.0 * k])), series(c, Tone::Solid));
+        out.fill(
+            Geom::Ellipse(Rect::centered(
+                [rect.center()[0], axis_y],
+                [9.0 * k, 9.0 * k],
+            )),
+            series(c, Tone::Solid),
+        );
         for (rect, laid) in card_rects[i].iter().zip(&events[i]) {
             out.shape(
                 Geom::rounded(*rect, RadiusTier::Sm),
@@ -226,7 +267,8 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
 pub(crate) fn summary(model: &Model) -> Summary {
     Summary {
-        nodes: (model.periods.len() + model.periods.iter().map(|p| p.events.len()).sum::<usize>()) as u32,
+        nodes: (model.periods.len() + model.periods.iter().map(|p| p.events.len()).sum::<usize>())
+            as u32,
         edges: 0,
         groups: model.sections.len() as u32,
     }
@@ -238,7 +280,10 @@ mod tests {
 
     #[test]
     fn colons_split_only_before_whitespace() {
-        assert_eq!(fields("2004 : Facebook : Google"), vec!["2004", "Facebook", "Google"]);
+        assert_eq!(
+            fields("2004 : Facebook : Google"),
+            vec!["2004", "Facebook", "Google"]
+        );
         assert_eq!(fields(": 10:30 standup"), vec!["", "10:30 standup"]);
         assert_eq!(fields("2005 :"), vec!["2005", ""]);
     }

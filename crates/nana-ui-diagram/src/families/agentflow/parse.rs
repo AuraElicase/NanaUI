@@ -95,7 +95,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         p.statement(&stmt)?;
     }
     if !p.stack.is_empty() {
-        p.cx.warn(p.line, "a `flow` or `global` block is not closed with `end`");
+        p.cx.warn(
+            p.line,
+            "a `flow` or `global` block is not closed with `end`",
+        );
     }
     p.finish()
 }
@@ -192,7 +195,9 @@ impl<'s> Cur<'s> {
                     })
                 })
             } else {
-                inner.find(close).map(|e| (inner[..e].trim().to_string(), e + close.len()))
+                inner
+                    .find(close)
+                    .map(|e| (inner[..e].trim().to_string(), e + close.len()))
             };
             if let Some((label, used)) = found {
                 node.label = Some(label);
@@ -294,7 +299,9 @@ impl<'s> Cur<'s> {
                     label: None,
                     len: n as u32 - 1,
                 }
-            } else if after.starts_with('x') && after[1..].chars().next().is_none_or(|c| c.is_whitespace()) {
+            } else if after.starts_with('x')
+                && after[1..].chars().next().is_none_or(|c| c.is_whitespace())
+            {
                 self.i += n + 1;
                 Link {
                     kind: EdgeKind::Failure,
@@ -411,7 +418,11 @@ impl Parser<'_, '_> {
         let f = match self.flow_index.get(&node.id) {
             Some(&f) => f,
             None => {
-                self.cx.limits.check_count(self.flows.len() + 1, self.cx.limits.clusters, LimitKind::Clusters)?;
+                self.cx.limits.check_count(
+                    self.flows.len() + 1,
+                    self.cx.limits.clusters,
+                    LimitKind::Clusters,
+                )?;
                 let title = match &node.label {
                     Some(raw) => self.cx.label(raw)?,
                     None => Label::plain(&node.id),
@@ -462,11 +473,19 @@ impl Parser<'_, '_> {
         let flow = self.scope_flow();
         let global = self.in_global();
         if !self.drafts.contains_key(&node.id) {
-            self.cx.limits.check_count(self.order.len() + 1, self.cx.limits.nodes, LimitKind::Nodes)?;
+            self.cx.limits.check_count(
+                self.order.len() + 1,
+                self.cx.limits.nodes,
+                LimitKind::Nodes,
+            )?;
             self.cx.limits.check_label(&node.id)?;
             self.order.push(node.id.clone());
         }
-        let label = node.label.as_deref().map(|raw| self.cx.label(raw)).transpose()?;
+        let label = node
+            .label
+            .as_deref()
+            .map(|raw| self.cx.label(raw))
+            .transpose()?;
         let mut attr_label = None;
         let mut attr_shape = None;
         for (k, v) in &node.attrs {
@@ -501,11 +520,13 @@ impl Parser<'_, '_> {
     fn chain(&mut self, stmt: &str) -> Result<(), DiagramError> {
         let mut cur = Cur { s: stmt, i: 0 };
         let Some(first) = cur.group() else {
-            self.cx.warn(self.line, format!("cannot read `{}`", truncate(stmt)));
+            self.cx
+                .warn(self.line, format!("cannot read `{}`", truncate(stmt)));
             return Ok(());
         };
         // `id@{ ... }` alone configures a flow, or (ignored) an edge.
-        if first.len() == 1 && cur.at_end() && first[0].label.is_none() && first[0].shape.is_none() {
+        if first.len() == 1 && cur.at_end() && first[0].label.is_none() && first[0].shape.is_none()
+        {
             let n = &first[0];
             if let Some(&f) = self.flow_index.get(&n.id) {
                 self.flow_meta(f, &n.attrs);
@@ -528,7 +549,10 @@ impl Parser<'_, '_> {
                 break;
             }
             let Some(link) = cur.link() else {
-                self.cx.warn(self.line, format!("cannot read link at `{}`", truncate(cur.rest())));
+                self.cx.warn(
+                    self.line,
+                    format!("cannot read link at `{}`", truncate(cur.rest())),
+                );
                 break;
             };
             let Some(right) = cur.group() else {
@@ -538,10 +562,19 @@ impl Parser<'_, '_> {
             for n in &right {
                 self.mention(n)?;
             }
-            let label = link.label.as_deref().filter(|l| !l.trim().is_empty()).map(|raw| self.cx.label(raw)).transpose()?;
+            let label = link
+                .label
+                .as_deref()
+                .filter(|l| !l.trim().is_empty())
+                .map(|raw| self.cx.label(raw))
+                .transpose()?;
             for a in &left {
                 for b in &right {
-                    self.cx.limits.check_count(self.edges.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
+                    self.cx.limits.check_count(
+                        self.edges.len() + 1,
+                        self.cx.limits.edges,
+                        LimitKind::Edges,
+                    )?;
                     self.edges.push((
                         a.id.clone(),
                         b.id.clone(),

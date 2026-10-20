@@ -12,9 +12,8 @@ use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidt
 use crate::layout::tree::{Outline, preorder};
 use crate::source::directives::AuthorStyle;
 use crate::style::{self, Paint};
-use crate::text::{FontSpec, LaidText, Label};
+use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct Node {
@@ -239,7 +238,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let x = row.depth as f32 * indent;
         if show_icons || n.icon.is_some() {
             let cy = row.y + row.label.line_height / 2.0;
-            draw_icon(&mut out, Rect::new(x, cy - icon / 2.0, icon, icon), row.folder);
+            draw_icon(
+                &mut out,
+                Rect::new(x, cy - icon / 2.0, icon, icon),
+                row.folder,
+            );
         }
         let mut ink = style::TEXT;
         if !n.classes.is_empty() {

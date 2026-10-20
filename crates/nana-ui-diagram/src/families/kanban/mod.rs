@@ -10,9 +10,8 @@ use nana_ui_core::{RadiusTier, SemanticColorRole as R};
 use super::{LayoutCx, ParseCx, kit};
 use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::layout::tree::indent_width;
-use crate::text::{FontSpec, LaidText, Label};
+use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Priority {
@@ -177,7 +176,12 @@ fn parse_meta(text: &str) -> Vec<(String, String)> {
     pieces
         .into_iter()
         .filter_map(|piece| piece.split_once(':'))
-        .map(|(key, value)| (key.trim().to_ascii_lowercase(), kit::unquote(value).to_string()))
+        .map(|(key, value)| {
+            (
+                key.trim().to_ascii_lowercase(),
+                kit::unquote(value).to_string(),
+            )
+        })
         .collect()
 }
 

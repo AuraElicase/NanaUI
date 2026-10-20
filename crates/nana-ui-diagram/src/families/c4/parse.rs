@@ -39,7 +39,8 @@ fn arguments(text: &str) -> Args {
         if let Some(named) = part.strip_prefix('$')
             && let Some((key, value)) = named.split_once('=')
         {
-            args.named.insert(key.trim().to_ascii_lowercase(), unquote(value).to_string());
+            args.named
+                .insert(key.trim().to_ascii_lowercase(), unquote(value).to_string());
             continue;
         }
         args.positional.push(unquote(part).to_string());
@@ -169,9 +170,17 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 cx.warn(line_no, format!("`{name}` needs an alias and a label"));
                 continue;
             };
-            cx.limits.check_count(model.elements.len() + 1, cx.limits.nodes.min(crate::layout::grid::MAX_ROUTED), LimitKind::Nodes)?;
+            cx.limits.check_count(
+                model.elements.len() + 1,
+                cx.limits.nodes.min(crate::layout::grid::MAX_ROUTED),
+                LimitKind::Nodes,
+            )?;
             let with_techn = matches!(kind, ElemKind::Container | ElemKind::Component);
-            let techn = if with_techn { args.get(2, "techn") } else { args.named.get("techn").map(String::as_str) };
+            let techn = if with_techn {
+                args.get(2, "techn")
+            } else {
+                args.named.get("techn").map(String::as_str)
+            };
             let descr = args.get(if with_techn { 3 } else { 2 }, "descr");
             let label = cx.label(label)?;
             let techn = techn.map(|t| cx.label(t)).transpose()?;
@@ -198,12 +207,18 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 cx.warn(line_no, format!("`{name}` needs an alias and a label"));
                 continue;
             };
-            cx.limits.check_count(model.boundaries.len() + 1, cx.limits.clusters, LimitKind::Clusters)?;
+            cx.limits.check_count(
+                model.boundaries.len() + 1,
+                cx.limits.clusters,
+                LimitKind::Clusters,
+            )?;
             if stack.len() + 1 > cx.limits.cluster_depth {
                 return Err(DiagramError::TooLarge(LimitKind::ClusterDepth));
             }
             let type_text = match kind {
-                BoundaryKind::Generic | BoundaryKind::Node => args.get(2, "type").map(str::to_string),
+                BoundaryKind::Generic | BoundaryKind::Node => {
+                    args.get(2, "type").map(str::to_string)
+                }
                 BoundaryKind::Enterprise => Some("Enterprise".to_string()),
                 BoundaryKind::System => Some("System".to_string()),
                 BoundaryKind::Container => Some("Container".to_string()),
@@ -230,15 +245,27 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             continue;
         }
         match lower.as_str() {
-            "rel" | "birel" | "rel_u" | "rel_up" | "rel_d" | "rel_down" | "rel_l" | "rel_left" | "rel_r" | "rel_right" | "rel_back" | "rel_neighbor" | "relindex" => {
+            "rel" | "birel" | "rel_u" | "rel_up" | "rel_d" | "rel_down" | "rel_l" | "rel_left"
+            | "rel_r" | "rel_right" | "rel_back" | "rel_neighbor" | "relindex" => {
                 let shift = usize::from(lower == "relindex");
-                let (Some(a), Some(b)) = (args.get(shift, "from"), args.get(shift + 1, "to")) else {
+                let (Some(a), Some(b)) = (args.get(shift, "from"), args.get(shift + 1, "to"))
+                else {
                     cx.warn(line_no, format!("`{name}` needs two aliases"));
                     continue;
                 };
-                cx.limits.check_count(rels.len() + 1, cx.limits.edges.min(crate::layout::grid::MAX_ROUTED), LimitKind::Edges)?;
-                let label = args.get(shift + 2, "label").map(|l| cx.label(l)).transpose()?;
-                let techn = args.get(shift + 3, "techn").map(|l| cx.label(l)).transpose()?;
+                cx.limits.check_count(
+                    rels.len() + 1,
+                    cx.limits.edges.min(crate::layout::grid::MAX_ROUTED),
+                    LimitKind::Edges,
+                )?;
+                let label = args
+                    .get(shift + 2, "label")
+                    .map(|l| cx.label(l))
+                    .transpose()?;
+                let techn = args
+                    .get(shift + 3, "techn")
+                    .map(|l| cx.label(l))
+                    .transpose()?;
                 let written = (a.to_string(), b.to_string());
                 let (from, to) = if lower == "rel_back" { (b, a) } else { (a, b) };
                 rels.push(PendingRel {
@@ -252,7 +279,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 });
             }
             "updateelementstyle" | "updateboundarystyle" => {
-                if let Some(alias) = args.get(0, "elementName").or_else(|| args.get(0, "boundaryName")) {
+                if let Some(alias) = args
+                    .get(0, "elementName")
+                    .or_else(|| args.get(0, "boundaryName"))
+                {
                     element_styles.push((alias.to_string(), colors(&args, 1)));
                 }
             }
@@ -264,7 +294,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 }
             }
             "updatelayoutconfig" => {
-                let read = |v: Option<&str>| v.and_then(|v| v.trim().parse::<usize>().ok()).filter(|&n| n > 0).map(|n| n.min(64));
+                let read = |v: Option<&str>| {
+                    v.and_then(|v| v.trim().parse::<usize>().ok())
+                        .filter(|&n| n > 0)
+                        .map(|n| n.min(64))
+                };
                 if let Some(n) = read(args.get(0, "c4ShapeInRow")) {
                     model.shape_in_row = n;
                 }
@@ -277,7 +311,14 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     }
     for rel in rels {
         let (Some(&from), Some(&to)) = (aliases.get(&rel.from), aliases.get(&rel.to)) else {
-            cx.warn(rel.line, format!("a relationship to an unknown alias `{}` / `{}`", truncate(&rel.from), truncate(&rel.to)));
+            cx.warn(
+                rel.line,
+                format!(
+                    "a relationship to an unknown alias `{}` / `{}`",
+                    truncate(&rel.from),
+                    truncate(&rel.to)
+                ),
+            );
             continue;
         };
         model.rels.push(Rel {
@@ -299,7 +340,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
     }
     for (a, b, text, line) in rel_styles {
-        for rel in model.rels.iter_mut().filter(|r| r.written.0 == a && r.written.1 == b) {
+        for rel in model
+            .rels
+            .iter_mut()
+            .filter(|r| r.written.0 == a && r.written.1 == b)
+        {
             rel.text_color = text.or(rel.text_color);
             rel.line_color = line.or(rel.line_color);
         }
@@ -334,15 +379,27 @@ mod tests {
         assert_eq!(m.boundaries.len(), 2);
         assert_eq!(m.boundaries[1].parent, Some(0));
         assert_eq!(m.elements[3].parent, Some(1));
-        assert_eq!(m.elements[1].techn.as_ref().map(|t| t.text()), Some("JavaScript, Angular".into()));
-        assert_eq!(m.elements[0].descr.as_ref().map(|t| t.text()), Some("A customer, with accounts".into()));
+        assert_eq!(
+            m.elements[1].techn.as_ref().map(|t| t.text()),
+            Some("JavaScript, Angular".into())
+        );
+        assert_eq!(
+            m.elements[0].descr.as_ref().map(|t| t.text()),
+            Some("A customer, with accounts".into())
+        );
         assert_eq!(m.elements[2].stereotype(), "<<external_container_db>>");
         assert_eq!(m.elements[3].stereotype(), "<<component_queue>>");
         assert_eq!(m.rels.len(), 4);
-        assert_eq!((m.rels[1].from, m.rels[1].to), (End::Element(1), End::Element(2)));
+        assert_eq!(
+            (m.rels[1].from, m.rels[1].to),
+            (End::Element(1), End::Element(2))
+        );
         assert!(m.rels[1].line_color.is_some());
         assert!(m.rels[2].both);
-        assert_eq!(m.rels[3].label.as_ref().map(|l| l.text()), Some("Stores".into()));
+        assert_eq!(
+            m.rels[3].label.as_ref().map(|l| l.text()),
+            Some("Stores".into())
+        );
         assert!(m.elements[0].colors.bg.is_some() && m.elements[0].colors.font.is_some());
         assert_eq!((m.shape_in_row, m.boundary_in_row), (3, 1));
     }

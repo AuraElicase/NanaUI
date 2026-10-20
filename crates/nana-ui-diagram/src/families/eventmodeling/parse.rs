@@ -43,7 +43,8 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 let (number, rest) = first_word(rest);
                 let (kind, rest) = first_word(rest);
                 let (entity, mut rest) = first_word(rest);
-                let (Ok(number), Some(kind)) = (number.parse::<u64>(), EntityKind::parse(kind)) else {
+                let (Ok(number), Some(kind)) = (number.parse::<u64>(), EntityKind::parse(kind))
+                else {
                     cx.warn(line_no, format!("cannot read `{}`", truncate(stmt)));
                     continue;
                 };
@@ -52,7 +53,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                     continue;
                 }
                 cx.limits.check_label(entity)?;
-                cx.limits.check_count(pending.len() + 1, cx.limits.elements.min(cx.limits.nodes), LimitKind::Elements)?;
+                cx.limits.check_count(
+                    pending.len() + 1,
+                    cx.limits.elements.min(cx.limits.nodes),
+                    LimitKind::Elements,
+                )?;
                 let mut frame = Pending {
                     line: line_no,
                     number,
@@ -72,7 +77,9 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                         let (n, tail) = first_word(after);
                         match n.parse::<u64>() {
                             Ok(n) => frame.sources.push(n),
-                            Err(_) => cx.warn(line_no, format!("cannot read relation `{}`", truncate(n))),
+                            Err(_) => {
+                                cx.warn(line_no, format!("cannot read relation `{}`", truncate(n)))
+                            }
                         }
                         rest = tail;
                     } else if let Some(after) = rest.strip_prefix("[[") {
@@ -190,7 +197,9 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
         data.truncate(MAX_DATA_LINES);
         let (namespace, name) = match p.entity.split_once('.') {
-            Some((ns, name)) if !ns.is_empty() && !name.is_empty() => (Some(ns.to_string()), name.to_string()),
+            Some((ns, name)) if !ns.is_empty() && !name.is_empty() => {
+                (Some(ns.to_string()), name.to_string())
+            }
             _ => (None, p.entity.clone()),
         };
         model.frames.push(Frame {
@@ -216,7 +225,11 @@ fn skip_type(s: &str) -> &str {
 }
 
 fn data_lines(text: &str) -> Vec<String> {
-    text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect()
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 #[cfg(test)]
@@ -244,7 +257,9 @@ mod tests {
 
     #[test]
     fn explicit_relations_reach_back_and_forward_in_time() {
-        let m = parse_src("eventmodeling\nrf 02 evt CartCreated\nrf 03 evt ItemAdded\ntf 01 rmo CartUI ->> 02 ->> 03");
+        let m = parse_src(
+            "eventmodeling\nrf 02 evt CartCreated\nrf 03 evt ItemAdded\ntf 01 rmo CartUI ->> 02 ->> 03",
+        );
         assert_eq!(m.frames[0].name, "CartUI");
         assert_eq!(m.relations(), vec![(1, 0), (2, 0)]);
     }

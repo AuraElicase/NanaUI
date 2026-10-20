@@ -13,10 +13,44 @@ use crate::{
 pub(crate) mod graphkit;
 pub(crate) mod kit;
 
+// Declared outside `families!` so rustfmt reaches them.
+pub(crate) mod agentflow;
+pub(crate) mod architecture;
+pub(crate) mod block;
+pub(crate) mod c4;
+pub(crate) mod class;
+pub(crate) mod cynefin;
+pub(crate) mod er;
+pub(crate) mod eventmodeling;
+pub(crate) mod flowchart;
+pub(crate) mod gantt;
+pub(crate) mod gitgraph;
+pub(crate) mod info;
+pub(crate) mod ishikawa;
+pub(crate) mod journey;
+pub(crate) mod kanban;
+pub(crate) mod mindmap;
+pub(crate) mod packet;
+pub(crate) mod pie;
+pub(crate) mod quadrant;
+pub(crate) mod radar;
+pub(crate) mod railroad;
+pub(crate) mod requirement;
+pub(crate) mod sankey;
+pub(crate) mod sequence;
+pub(crate) mod state;
+pub(crate) mod swimlane;
+pub(crate) mod timeline;
+pub(crate) mod treemap;
+pub(crate) mod treeview;
+pub(crate) mod usecase;
+pub(crate) mod venn;
+pub(crate) mod wardley;
+pub(crate) mod xychart;
+pub(crate) mod zenuml;
+
 macro_rules! families {
     ($($kind:ident => $module:ident),* $(,)?) => {
-        $(pub(crate) mod $module;)*
-
         #[derive(Debug, Clone)]
         pub(crate) enum Model {
             $($kind($module::Model),)*

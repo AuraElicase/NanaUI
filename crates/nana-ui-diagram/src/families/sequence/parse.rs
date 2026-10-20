@@ -3,17 +3,27 @@
 //! `autonumber`, `title` and actor links.
 
 use super::{Builder, Event, FragmentKind, Group, LineKind, Message, NotePlace, ParticipantKind};
+use crate::DiagramError;
 use crate::families::ParseCx;
 use crate::families::kit::{first_word, header, keyword, number, statements, truncate};
 use crate::geom::Marker;
 use crate::source::color;
 use crate::text::Label;
-use crate::DiagramError;
 
 /// Arrow spellings, longest first at any one position.
 const ARROWS: &[(&str, LineKind, Option<Marker>, Option<Marker>)] = &[
-    ("<<-->>", LineKind::Dashed, Some(Marker::Arrow), Some(Marker::Arrow)),
-    ("<<->>", LineKind::Solid, Some(Marker::Arrow), Some(Marker::Arrow)),
+    (
+        "<<-->>",
+        LineKind::Dashed,
+        Some(Marker::Arrow),
+        Some(Marker::Arrow),
+    ),
+    (
+        "<<->>",
+        LineKind::Solid,
+        Some(Marker::Arrow),
+        Some(Marker::Arrow),
+    ),
     ("-->>", LineKind::Dashed, None, Some(Marker::Arrow)),
     ("->>", LineKind::Solid, None, Some(Marker::Arrow)),
     ("--|\\", LineKind::Dashed, None, Some(Marker::Arrow)),
@@ -132,7 +142,9 @@ impl Parser<'_, '_> {
 
     /// The label of a block or divider, `None` when blank.
     fn label(&self, text: &str) -> Result<Option<Label>, DiagramError> {
-        (!text.trim().is_empty()).then(|| self.cx.label(text)).transpose()
+        (!text.trim().is_empty())
+            .then(|| self.cx.label(text))
+            .transpose()
     }
 
     fn statement(&mut self, stmt: &str) -> Result<(), DiagramError> {
@@ -204,14 +216,22 @@ impl Parser<'_, '_> {
         }
     }
 
-    fn declare(&mut self, mut kind: ParticipantKind, rest: &str, create: bool) -> Result<(), DiagramError> {
+    fn declare(
+        &mut self,
+        mut kind: ParticipantKind,
+        rest: &str,
+        create: bool,
+    ) -> Result<(), DiagramError> {
         let rest = rest.trim();
         let (mut id, mut tail) = (rest, "");
         let mut alias: Option<String> = None;
         if let Some(at) = rest.find("@{") {
             id = &rest[..at];
             let json_start = at + 1;
-            let close = rest[json_start..].find('}').map(|e| json_start + e + 1).unwrap_or(rest.len());
+            let close = rest[json_start..]
+                .find('}')
+                .map(|e| json_start + e + 1)
+                .unwrap_or(rest.len());
             let json = &rest[json_start..close];
             if let Some(t) = json_str(json, "type") {
                 match ParticipantKind::from_type(&t) {
@@ -252,7 +272,11 @@ impl Parser<'_, '_> {
         let (color, title) = leading_color(rest);
         let title = self.label(title.trim())?;
         let limits = self.cx.limits;
-        limits.check_count(self.b.model.groups.len() + 1, limits.clusters, crate::LimitKind::Clusters)?;
+        limits.check_count(
+            self.b.model.groups.len() + 1,
+            limits.clusters,
+            crate::LimitKind::Clusters,
+        )?;
         self.group = Some(self.b.model.groups.len());
         self.b.model.groups.push(Group { title, color });
         self.stack.push(Open::Box);
@@ -307,7 +331,9 @@ impl Parser<'_, '_> {
         if rest == "off" {
             return self.push(Event::Autonumber(None));
         }
-        let mut nums = rest.split_whitespace().map(|w| number(w).filter(|v| v.abs() < 1e9));
+        let mut nums = rest
+            .split_whitespace()
+            .map(|w| number(w).filter(|v| v.abs() < 1e9));
         let start = nums.next().flatten().unwrap_or(1.0);
         let step = nums.next().flatten().unwrap_or(1.0);
         self.push(Event::Autonumber(Some((start, step))))
@@ -324,7 +350,8 @@ impl Parser<'_, '_> {
         let pair = if json {
             json_pairs(what).into_iter().next()
         } else {
-            what.split_once('@').map(|(l, u)| (l.trim().to_string(), u.trim().to_string()))
+            what.split_once('@')
+                .map(|(l, u)| (l.trim().to_string(), u.trim().to_string()))
         };
         if let Some((label, url)) = pair.filter(|(_, u)| !u.is_empty())
             && self.b.model.participants[p].link.is_none()
@@ -374,10 +401,12 @@ impl Parser<'_, '_> {
     /// `A->>+B: text`. `Ok(false)` when the statement has no arrow.
     fn message(&mut self, stmt: &str) -> Result<bool, DiagramError> {
         let (head, text) = stmt.split_once(':').unwrap_or((stmt, ""));
-        let Some((at, &(spelling, line, start, end))) = head
-            .char_indices()
-            .find_map(|(i, _)| ARROWS.iter().find(|a| head[i..].starts_with(a.0)).map(|a| (i, a)))
-        else {
+        let Some((at, &(spelling, line, start, end))) = head.char_indices().find_map(|(i, _)| {
+            ARROWS
+                .iter()
+                .find(|a| head[i..].starts_with(a.0))
+                .map(|a| (i, a))
+        }) else {
             return Ok(false);
         };
         let from = head[..at].trim();
@@ -461,7 +490,9 @@ fn json_pairs(json: &str) -> Vec<(String, String)> {
 fn leading_color(rest: &str) -> (Option<[f32; 4]>, &str) {
     let rest = rest.trim();
     let lower = rest.to_ascii_lowercase();
-    if ["rgb(", "rgba(", "hsl(", "hsla("].iter().any(|f| lower.starts_with(f))
+    if ["rgb(", "rgba(", "hsl(", "hsla("]
+        .iter()
+        .any(|f| lower.starts_with(f))
         && let Some(end) = rest.find(')')
     {
         let func = &rest[..=end];
@@ -495,7 +526,13 @@ fn hsl(args: &str) -> Option<[f32; 4]> {
     if parts.len() < 3 {
         return None;
     }
-    let num = |p: &str| p.trim_end_matches(['%']).trim_end_matches("deg").parse::<f32>().ok().filter(|v| v.is_finite());
+    let num = |p: &str| {
+        p.trim_end_matches(['%'])
+            .trim_end_matches("deg")
+            .parse::<f32>()
+            .ok()
+            .filter(|v| v.is_finite())
+    };
     let h = num(parts[0])?.rem_euclid(360.0) / 360.0;
     let s = (num(parts[1])? / 100.0).clamp(0.0, 1.0);
     let l = (num(parts[2])? / 100.0).clamp(0.0, 1.0);
@@ -505,7 +542,11 @@ fn hsl(args: &str) -> Option<[f32; 4]> {
         None => 1.0,
     }
     .clamp(0.0, 1.0);
-    let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+    let q = if l < 0.5 {
+        l * (1.0 + s)
+    } else {
+        l + s - l * s
+    };
     let p = 2.0 * l - q;
     let channel = |t: f32| {
         let t = t.rem_euclid(1.0);
@@ -519,7 +560,12 @@ fn hsl(args: &str) -> Option<[f32; 4]> {
             p
         }
     };
-    Some([channel(h + 1.0 / 3.0), channel(h), channel(h - 1.0 / 3.0), a])
+    Some([
+        channel(h + 1.0 / 3.0),
+        channel(h),
+        channel(h - 1.0 / 3.0),
+        a,
+    ])
 }
 
 #[cfg(test)]
@@ -534,7 +580,9 @@ mod tests {
 
     #[test]
     fn arrows_read_their_line_and_heads() {
-        let m = model("sequenceDiagram\nA->>B: one\nB-->>A: two\nA-xB: x\nA--)B: async\nA<<->>B: both\nA->B: plain");
+        let m = model(
+            "sequenceDiagram\nA->>B: one\nB-->>A: two\nA-xB: x\nA--)B: async\nA<<->>B: both\nA->B: plain",
+        );
         let msgs: Vec<_> = m
             .events
             .iter()
@@ -577,10 +625,14 @@ mod tests {
     #[test]
     fn activation_shorthand_and_entity_semicolons() {
         let m = model("sequenceDiagram\nA->>+B: I #9829; you#59; really\nB-->>-A: ok");
-        let Event::Message(first) = &m.events[0] else { panic!() };
+        let Event::Message(first) = &m.events[0] else {
+            panic!()
+        };
         assert!(first.activate);
         assert_eq!(first.label.text(), "I \u{2665} you; really");
-        let Event::Message(second) = &m.events[1] else { panic!() };
+        let Event::Message(second) = &m.events[1] else {
+            panic!()
+        };
         assert!(second.deactivate);
     }
 

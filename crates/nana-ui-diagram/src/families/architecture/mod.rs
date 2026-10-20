@@ -10,7 +10,6 @@ use crate::layout::grid::Side;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct Group {
     pub title: Label,

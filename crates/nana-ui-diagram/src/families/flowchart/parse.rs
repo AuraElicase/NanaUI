@@ -94,11 +94,17 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         let mut rest = trimmed;
         if !header_seen {
             let Some((_, after)) = kind::header(trimmed) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected a flowchart header"));
+                return Err(DiagramError::syntax(
+                    index as u32 + 1,
+                    1,
+                    "expected a flowchart header",
+                ));
             };
             header_seen = true;
             let after = after.trim_start_matches(':').trim();
-            let split = after.find(|c: char| c.is_whitespace() || c == ';').unwrap_or(after.len());
+            let split = after
+                .find(|c: char| c.is_whitespace() || c == ';')
+                .unwrap_or(after.len());
             let (first, tail) = after.split_at(split);
             if let Some(d) = Direction::parse(first) {
                 p.direction = d;
@@ -123,7 +129,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     p.finish()
 }
 
-
 impl Parser<'_, '_> {
     fn statement(&mut self, stmt: &str) -> Result<(), DiagramError> {
         let (word, rest) = first_word(stmt);
@@ -147,7 +152,10 @@ impl Parser<'_, '_> {
             "classDef" => {
                 let (names, decls) = first_word(rest);
                 for name in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                    self.class_defs.entry(name.to_string()).or_default().apply(decls);
+                    self.class_defs
+                        .entry(name.to_string())
+                        .or_default()
+                        .apply(decls);
                 }
                 return Ok(());
             }
@@ -169,7 +177,12 @@ impl Parser<'_, '_> {
                 let targets = if which == "default" {
                     None
                 } else {
-                    Some(which.split(',').filter_map(|n| n.trim().parse::<usize>().ok()).collect())
+                    Some(
+                        which
+                            .split(',')
+                            .filter_map(|n| n.trim().parse::<usize>().ok())
+                            .collect(),
+                    )
                 };
                 let mut curve = None;
                 if let Some(after) = decls.strip_prefix("interpolate") {
@@ -190,13 +203,20 @@ impl Parser<'_, '_> {
     }
 
     fn open_subgraph(&mut self, rest: &str) -> Result<(), DiagramError> {
-        self.cx.limits.check_count(self.subgraphs.len() + 1, self.cx.limits.clusters, LimitKind::Clusters)?;
+        self.cx.limits.check_count(
+            self.subgraphs.len() + 1,
+            self.cx.limits.clusters,
+            LimitKind::Clusters,
+        )?;
         let rest = rest.trim();
         let auto = || format!("subGraph{}", self.subgraphs.len());
         let (id, title) = if rest.is_empty() {
             (auto(), String::new())
         } else if let Some(open) = rest.find('[').filter(|&i| i > 0 && rest.ends_with(']')) {
-            (rest[..open].trim().to_string(), rest[open + 1..rest.len() - 1].to_string())
+            (
+                rest[..open].trim().to_string(),
+                rest[open + 1..rest.len() - 1].to_string(),
+            )
         } else if rest.starts_with('"') {
             (auto(), rest.to_string())
         } else {
@@ -239,7 +259,11 @@ impl Parser<'_, '_> {
 
     fn mention(&mut self, node: &NodeRef) -> Result<(), DiagramError> {
         if !self.drafts.contains_key(&node.name) {
-            self.cx.limits.check_count(self.order.len() + 1, self.cx.limits.nodes, LimitKind::Nodes)?;
+            self.cx.limits.check_count(
+                self.order.len() + 1,
+                self.cx.limits.nodes,
+                LimitKind::Nodes,
+            )?;
             self.order.push(node.name.clone());
         }
         let top = self.stack.last().copied();
@@ -276,13 +300,21 @@ impl Parser<'_, '_> {
     fn chain(&mut self, stmt: &str) -> Result<(), DiagramError> {
         let mut cur = Cur { s: stmt, i: 0 };
         let Some(first) = cur.group() else {
-            self.cx.warn(self.line, format!("cannot read `{}`", truncate(stmt)));
+            self.cx
+                .warn(self.line, format!("cannot read `{}`", truncate(stmt)));
             return Ok(());
         };
         // `id@{ curve: ... }` on its own names an edge.
-        if first.len() == 1 && cur.at_end() && !first[0].attrs.is_empty() && first[0].shape.is_none() {
+        if first.len() == 1
+            && cur.at_end()
+            && !first[0].attrs.is_empty()
+            && first[0].shape.is_none()
+        {
             let r = &first[0];
-            let is_edge = self.edges.iter().any(|e| e.id.as_deref() == Some(r.name.as_str()));
+            let is_edge = self
+                .edges
+                .iter()
+                .any(|e| e.id.as_deref() == Some(r.name.as_str()));
             let is_node_attr = r.attrs.iter().any(|(k, _)| k == "shape" || k == "label");
             if is_edge && !is_node_attr {
                 self.edge_attrs.push((r.name.clone(), r.attrs.clone()));
@@ -299,7 +331,10 @@ impl Parser<'_, '_> {
                 break;
             }
             let Some(link) = cur.link() else {
-                self.cx.warn(self.line, format!("cannot read link at `{}`", truncate(cur.rest())));
+                self.cx.warn(
+                    self.line,
+                    format!("cannot read link at `{}`", truncate(cur.rest())),
+                );
                 break;
             };
             cur.ws();
@@ -316,7 +351,11 @@ impl Parser<'_, '_> {
             };
             for a in &left {
                 for b in &right {
-                    self.cx.limits.check_count(self.edges.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
+                    self.cx.limits.check_count(
+                        self.edges.len() + 1,
+                        self.cx.limits.edges,
+                        LimitKind::Edges,
+                    )?;
                     self.edges.push(PendingEdge {
                         from: a.name.clone(),
                         to: b.name.clone(),
@@ -338,13 +377,19 @@ impl Parser<'_, '_> {
             left = right;
         }
         if !cur.at_end() {
-            self.cx.warn(self.line, format!("ignored `{}`", truncate(cur.rest())));
+            self.cx
+                .warn(self.line, format!("ignored `{}`", truncate(cur.rest())));
         }
         Ok(())
     }
 
     fn finish(mut self) -> Result<Model, DiagramError> {
-        let sub_index: HashMap<String, usize> = self.subgraphs.iter().enumerate().map(|(i, s)| (s.id.clone(), i)).collect();
+        let sub_index: HashMap<String, usize> = self
+            .subgraphs
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.id.clone(), i))
+            .collect();
         // Names that are subgraph ids are cluster ends unless a node with a
         // shape claimed them.
         let mut index: HashMap<String, usize> = HashMap::new();
@@ -458,7 +503,6 @@ impl Parser<'_, '_> {
     }
 }
 
-
 /// Whitespace-separated words where `"..."` is one word.
 struct Words<'s> {
     rest: &'s str,
@@ -467,7 +511,10 @@ struct Words<'s> {
 
 impl<'s> Words<'s> {
     fn new(rest: &'s str) -> Self {
-        Self { rest, was_quoted: false }
+        Self {
+            rest,
+            was_quoted: false,
+        }
     }
 
     fn next(&mut self) -> Option<String> {
@@ -500,8 +547,14 @@ const OPENERS: &[(&str, &[(&str, Shape)])] = &[
     ("([", &[("])", Shape::Stadium)]),
     ("[[", &[("]]", Shape::Subroutine)]),
     ("[(", &[(")]", Shape::Cylinder)]),
-    ("[/", &[("/]", Shape::LeanRight), ("\\]", Shape::TrapezoidBottom)]),
-    ("[\\", &[("\\]", Shape::LeanLeft), ("/]", Shape::TrapezoidTop)]),
+    (
+        "[/",
+        &[("/]", Shape::LeanRight), ("\\]", Shape::TrapezoidBottom)],
+    ),
+    (
+        "[\\",
+        &[("\\]", Shape::LeanLeft), ("/]", Shape::TrapezoidTop)],
+    ),
     ("{{", &[("}}", Shape::Hexagon)]),
     ("[", &[("]", Shape::Rect)]),
     ("(", &[(")", Shape::Rounded)]),
@@ -620,7 +673,8 @@ impl<'s> Cur<'s> {
                 }
                 self.i += c.len_utf8();
             }
-            node.classes.extend(self.s[start..self.i].split(',').map(|s| s.to_string()));
+            node.classes
+                .extend(self.s[start..self.i].split(',').map(|s| s.to_string()));
         }
         Some(node)
     }
@@ -687,10 +741,17 @@ impl<'s> Cur<'s> {
         // `e1@-->`: an edge id.
         {
             let r = self.rest();
-            let ident_len = r.find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '-')).unwrap_or(r.len());
+            let ident_len = r
+                .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '-'))
+                .unwrap_or(r.len());
             if ident_len > 0 && r[ident_len..].starts_with('@') {
                 let after = &r[ident_len + 1..];
-                if after.starts_with("--") || after.starts_with("==") || after.starts_with("-.") || after.starts_with("~~") || after.starts_with('<') {
+                if after.starts_with("--")
+                    || after.starts_with("==")
+                    || after.starts_with("-.")
+                    || after.starts_with("~~")
+                    || after.starts_with('<')
+                {
                     id = Some(r[..ident_len].to_string());
                     self.i += ident_len + 1;
                 }
@@ -710,7 +771,9 @@ impl<'s> Cur<'s> {
             if let (Some(c), Some(n)) = (chars.next(), chars.next())
                 && matches!(c, '<' | 'o' | 'x')
                 && matches!(n, '-' | '=')
-                && (r[1..].starts_with("--") || r[1..].starts_with("==") || r[1..].starts_with("-."))
+                && (r[1..].starts_with("--")
+                    || r[1..].starts_with("==")
+                    || r[1..].starts_with("-."))
             {
                 start = head(c);
                 self.i += 1;
@@ -733,7 +796,13 @@ impl<'s> Cur<'s> {
             let dots = self.rest().chars().take_while(|&c| c == '.').count();
             self.i += dots;
             if self.eat("-") {
-                let end = self.peek().and_then(|c| if matches!(c, '>' | 'o' | 'x') { head(c) } else { None });
+                let end = self.peek().and_then(|c| {
+                    if matches!(c, '>' | 'o' | 'x') {
+                        head(c)
+                    } else {
+                        None
+                    }
+                });
                 if end.is_some() {
                     self.i += 1;
                 }
@@ -757,7 +826,13 @@ impl<'s> Cur<'s> {
                     self.i = save;
                     return None;
                 }
-                let end = self.peek().and_then(|c| if matches!(c, '>' | 'o' | 'x') { head(c) } else { None });
+                let end = self.peek().and_then(|c| {
+                    if matches!(c, '>' | 'o' | 'x') {
+                        head(c)
+                    } else {
+                        None
+                    }
+                });
                 if end.is_some() {
                     self.i += 1;
                 }
@@ -772,7 +847,11 @@ impl<'s> Cur<'s> {
             }
         } else if r.starts_with("--") || r.starts_with("==") {
             let ch = r.chars().next()?;
-            let line = if ch == '-' { LineKind::Solid } else { LineKind::Thick };
+            let line = if ch == '-' {
+                LineKind::Solid
+            } else {
+                LineKind::Thick
+            };
             let n = r.chars().take_while(|&c| c == ch).count();
             self.i += n;
             let next = self.peek();
@@ -797,11 +876,21 @@ impl<'s> Cur<'s> {
                     self.i += close;
                     let m = self.rest().chars().take_while(|&c| c == ch).count();
                     self.i += m;
-                    let end = self.peek().and_then(|c| if matches!(c, '>' | 'o' | 'x') { head(c) } else { None });
+                    let end = self.peek().and_then(|c| {
+                        if matches!(c, '>' | 'o' | 'x') {
+                            head(c)
+                        } else {
+                            None
+                        }
+                    });
                     if end.is_some() {
                         self.i += 1;
                     }
-                    let len = if end.is_some() { m.saturating_sub(1) } else { m.saturating_sub(2) };
+                    let len = if end.is_some() {
+                        m.saturating_sub(1)
+                    } else {
+                        m.saturating_sub(2)
+                    };
                     Link {
                         line,
                         start,
@@ -917,18 +1006,33 @@ mod tests {
         );
         let e = &m.edges;
         assert_eq!(e.len(), 14);
-        assert_eq!((e[0].line, e[0].end, e[0].min_len), (LineKind::Solid, Some(Marker::Arrow), 1));
+        assert_eq!(
+            (e[0].line, e[0].end, e[0].min_len),
+            (LineKind::Solid, Some(Marker::Arrow), 1)
+        );
         assert_eq!((e[1].line, e[1].end), (LineKind::Solid, None));
-        assert_eq!((e[2].line, e[2].end), (LineKind::Dotted, Some(Marker::Arrow)));
+        assert_eq!(
+            (e[2].line, e[2].end),
+            (LineKind::Dotted, Some(Marker::Arrow))
+        );
         assert_eq!(e[3].line, LineKind::Thick);
         assert_eq!(e[4].line, LineKind::Invisible);
         assert_eq!(e[5].end, Some(Marker::Circle));
         assert_eq!(e[6].end, Some(Marker::Cross));
-        assert_eq!((e[7].start, e[7].end), (Some(Marker::Arrow), Some(Marker::Arrow)));
+        assert_eq!(
+            (e[7].start, e[7].end),
+            (Some(Marker::Arrow), Some(Marker::Arrow))
+        );
         assert_eq!(e[8].label.as_ref().map(|l| l.text()), Some("text".into()));
         assert_eq!(e[9].label.as_ref().map(|l| l.text()), Some("pipe".into()));
-        assert_eq!(e[10].label.as_ref().map(|l| l.text()), Some("dotted".into()));
-        assert_eq!((e[11].line, e[11].label.as_ref().map(|l| l.text())), (LineKind::Thick, Some("thick".into())));
+        assert_eq!(
+            e[10].label.as_ref().map(|l| l.text()),
+            Some("dotted".into())
+        );
+        assert_eq!(
+            (e[11].line, e[11].label.as_ref().map(|l| l.text())),
+            (LineKind::Thick, Some("thick".into()))
+        );
         assert_eq!(e[12].min_len, 3);
         assert_eq!(e[13].min_len, 2);
     }
@@ -949,11 +1053,18 @@ mod tests {
         assert_eq!(m.subgraphs[1].direction, Some(Direction::LR));
         assert_eq!(m.subgraphs[2].parent, Some(1));
         let a2 = m.nodes.iter().find(|n| n.id == "a2").unwrap();
-        assert_eq!(a2.subgraph, Some(0), "a mention inside a subgraph moves the node in");
+        assert_eq!(
+            a2.subgraph,
+            Some(0),
+            "a mention inside a subgraph moves the node in"
+        );
         let x = m.nodes.iter().find(|n| n.id == "x").unwrap();
         assert_eq!(x.subgraph, Some(2));
         let last = &m.edges[m.edges.len() - 2];
-        assert_eq!((last.from, last.to), (EndRef::Subgraph(0), EndRef::Subgraph(1)));
+        assert_eq!(
+            (last.from, last.to),
+            (EndRef::Subgraph(0), EndRef::Subgraph(1))
+        );
         assert!(!m.nodes.iter().any(|n| n.id == "one"));
     }
 
@@ -967,12 +1078,17 @@ mod tests {
         assert!(m.nodes[2].style.stroke.is_some());
         assert_eq!(m.edges[0].style.stroke_width, Some(3.0));
         assert_eq!(m.edges[1].curve, Some(Curve::Linear));
-        assert_eq!(m.nodes[0].link.as_ref().map(|l| l.0.as_str()), Some("https://example.com"));
+        assert_eq!(
+            m.nodes[0].link.as_ref().map(|l| l.0.as_str()),
+            Some("https://example.com")
+        );
     }
 
     #[test]
     fn quoted_and_markdown_labels() {
-        let m = parse_src("flowchart TD\nA[\"Quoted (with) [brackets]\"] --> B[\"`**md** text`\"]\nC[中文标签] --> D");
+        let m = parse_src(
+            "flowchart TD\nA[\"Quoted (with) [brackets]\"] --> B[\"`**md** text`\"]\nC[中文标签] --> D",
+        );
         assert_eq!(m.nodes[0].label.text(), "Quoted (with) [brackets]");
         assert!(m.nodes[1].label.markdown);
         assert_eq!(m.nodes[2].label.text(), "中文标签");

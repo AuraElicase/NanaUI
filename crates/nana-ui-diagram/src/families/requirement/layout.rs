@@ -40,7 +40,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     };
     for block in &model.blocks {
         let kind = plain(format!("«{}»", block.kind.title()), small, None);
-        let name = plain(block.id.clone(), author_font(name_font, &block.style), Some(wrap * 1.2));
+        let name = plain(
+            block.id.clone(),
+            author_font(name_font, &block.style),
+            Some(wrap * 1.2),
+        );
         let fields: Vec<LaidText> = block
             .fields
             .iter()
@@ -56,7 +60,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         } else {
             fields.iter().map(|f| f.height).sum::<f32>() + 2.0 * pad_y
         };
-        graph.nodes.push(NodeSpec::new([(widest + 2.0 * pad_x).max(m.font_size * 8.0), header + body]));
+        graph.nodes.push(NodeSpec::new([
+            (widest + 2.0 * pad_x).max(m.font_size * 8.0),
+            header + body,
+        ]));
         boxes.push(Laid {
             kind,
             name,
@@ -90,9 +97,21 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let (stroke, start, end) = if rel.kind == RelKind::Contains {
             (style::edge_stroke(), Some(Marker::Containment), None)
         } else {
-            (style::edge_stroke().dash(Dash::Dashed), None, Some(Marker::OpenArrow))
+            (
+                style::edge_stroke().dash(Dash::Dashed),
+                None,
+                Some(Marker::OpenArrow),
+            )
         };
-        graphkit::edge(&mut out, &route.points, stroke, start, end, marker, m.bend_radius);
+        graphkit::edge(
+            &mut out,
+            &route.points,
+            stroke,
+            start,
+            end,
+            marker,
+            m.bend_radius,
+        );
     }
     for (i, laid) in edge_labels.iter().enumerate() {
         if let Some(center) = placed.edges[i].label
@@ -107,7 +126,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let laid = &boxes[b];
         let paint = graphkit::node_paint(&block.style);
         let band = block.style.fill.is_none().then_some(HEADER_FILL);
-        let header = if laid.fields.is_empty() { rect.h } else { laid.header };
+        let header = if laid.fields.is_empty() {
+            rect.h
+        } else {
+            laid.header
+        };
         graphkit::header_box(&mut out, rect, header, RadiusTier::Sm, &paint, band);
         let mut y = rect.y + pad_y;
         out.text(&laid.kind, [rect.x, y], rect.w, Align::Center, style::MUTED);
@@ -115,7 +138,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         out.text(&laid.name, [rect.x, y], rect.w, Align::Center, paint.text);
         let mut y = rect.y + laid.header + pad_y;
         for field in &laid.fields {
-            out.text(field, [rect.x + pad_x, y], field.width, Align::Start, paint.text);
+            out.text(
+                field,
+                [rect.x + pad_x, y],
+                field.width,
+                Align::Start,
+                paint.text,
+            );
             y += field.height;
         }
     }

@@ -7,7 +7,6 @@ use super::sequence;
 use super::{LayoutCx, ParseCx};
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 pub(crate) type Model = sequence::Model;
 
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {

@@ -29,7 +29,8 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let mut elements = 0usize;
     for (line, stmt) in kit::statements(body, header) {
         elements += 1;
-        cx.limits.check_count(elements, cx.limits.elements, LimitKind::Elements)?;
+        cx.limits
+            .check_count(elements, cx.limits.elements, LimitKind::Elements)?;
         if stmt == "}" {
             if pipeline.take().is_none() {
                 cx.warn(line, "`}` without a pipeline");
@@ -44,11 +45,16 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             };
             let (name, rest) = split_name(def);
             let Some(evolution) = single(rest) else {
-                cx.warn(line, format!("pipeline component `{name}` needs `[evolution]`"));
+                cx.warn(
+                    line,
+                    format!("pipeline component `{name}` needs `[evolution]`"),
+                );
                 continue;
             };
             let visibility = model.components[owner].visibility;
-            add(cx, &mut model, &mut names, line, name, visibility, evolution, false, rest)?;
+            add(
+                cx, &mut model, &mut names, line, name, visibility, evolution, false, rest,
+            )?;
             if let Some(c) = model.components.last_mut() {
                 c.pipeline = Some(owner);
             }
@@ -66,11 +72,27 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             }
         } else if let Some(stages) = keyword(stmt, "evolution") {
             model.stages = parse_stages(cx, stages)?;
-        } else if let Some((word, def)) = ["anchor", "component"].into_iter().find_map(|w| Some((w, keyword(stmt, w)?))) {
+        } else if let Some((word, def)) = ["anchor", "component"]
+            .into_iter()
+            .find_map(|w| Some((w, keyword(stmt, w)?)))
+        {
             let (name, rest) = split_name(def);
             match kit::pair(rest_coords(rest)) {
-                Some((v, e)) => add(cx, &mut model, &mut names, line, name, v as f32, e as f32, word == "anchor", rest)?,
-                None => cx.warn(line, format!("{word} `{name}` needs `[visibility, evolution]`")),
+                Some((v, e)) => add(
+                    cx,
+                    &mut model,
+                    &mut names,
+                    line,
+                    name,
+                    v as f32,
+                    e as f32,
+                    word == "anchor",
+                    rest,
+                )?,
+                None => cx.warn(
+                    line,
+                    format!("{word} `{name}` needs `[visibility, evolution]`"),
+                ),
             }
         } else if let Some(def) = keyword(stmt, "pipeline") {
             let def = def.trim_end();
@@ -87,7 +109,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                     pipeline = Some(owner);
                 }
                 None => {
-                    cx.warn(line, format!("pipeline names an undefined component `{name}`"));
+                    cx.warn(
+                        line,
+                        format!("pipeline names an undefined component `{name}`"),
+                    );
                     // Swallow the block so its lines do not read as statements.
                     pipeline = None;
                 }
@@ -96,8 +121,15 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let def = def.trim();
             let split = def.rfind(char::is_whitespace).unwrap_or(0);
             match kit::number(&def[split..]) {
-                Some(e) if split > 0 => evolves.push((line, kit::unquote(&def[..split]).trim().to_string(), e as f32)),
-                _ => cx.warn(line, format!("`evolve {def}` needs a component and an evolution")),
+                Some(e) if split > 0 => evolves.push((
+                    line,
+                    kit::unquote(&def[..split]).trim().to_string(),
+                    e as f32,
+                )),
+                _ => cx.warn(
+                    line,
+                    format!("`evolve {def}` needs a component and an evolution"),
+                ),
             }
         } else if let Some(def) = keyword(stmt, "note") {
             match marked(cx, def)? {
@@ -107,12 +139,18 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         } else if let Some(def) = keyword(stmt, "accelerator") {
             match marked(cx, def)? {
                 Some(mark) => model.accelerators.push((mark, true)),
-                None => cx.warn(line, "an accelerator needs a name and [visibility, evolution]"),
+                None => cx.warn(
+                    line,
+                    "an accelerator needs a name and [visibility, evolution]",
+                ),
             }
         } else if let Some(def) = keyword(stmt, "deaccelerator") {
             match marked(cx, def)? {
                 Some(mark) => model.accelerators.push((mark, false)),
-                None => cx.warn(line, "a deaccelerator needs a name and [visibility, evolution]"),
+                None => cx.warn(
+                    line,
+                    "a deaccelerator needs a name and [visibility, evolution]",
+                ),
             }
         } else if let Some(at) = keyword(stmt, "annotations") {
             match kit::pair(at) {
@@ -122,12 +160,16 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         } else if let Some(def) = keyword(stmt, "annotation") {
             match annotation(cx, def)? {
                 Some(a) => model.annotations.push(a),
-                None => cx.warn(line, "an annotation needs N,[visibility, evolution] \"text\""),
+                None => cx.warn(
+                    line,
+                    "an annotation needs N,[visibility, evolution] \"text\"",
+                ),
             }
         } else if let Some((from, x, y)) = trend(stmt) {
             trends.push((line, from, x, y));
         } else if let Some(link) = link(stmt, line) {
-            cx.limits.check_count(links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
+            cx.limits
+                .check_count(links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
             links.push(link);
         } else {
             cx.warn(line, format!("unreadable wardley statement `{stmt}`"));
@@ -139,7 +181,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     for l in links {
         match (names.get(&l.from), names.get(&l.to)) {
             (Some(&from), Some(&to)) => {
-                let label = l.label.map(|t| cx.label(&t)).transpose()?.filter(|l| !l.is_empty());
+                let label = l
+                    .label
+                    .map(|t| cx.label(&t))
+                    .transpose()?
+                    .filter(|l| !l.is_empty());
                 model.links.push(Link {
                     from,
                     to,
@@ -147,13 +193,19 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                     label,
                 });
             }
-            _ => cx.warn(l.line, format!("link `{} -> {}` names an undefined component", l.from, l.to)),
+            _ => cx.warn(
+                l.line,
+                format!("link `{} -> {}` names an undefined component", l.from, l.to),
+            ),
         }
     }
     for (line, name, e) in evolves {
         match names.get(&name) {
             Some(&c) => model.evolves.push((c, e)),
-            None => cx.warn(line, format!("`evolve` names an undefined component `{name}`")),
+            None => cx.warn(
+                line,
+                format!("`evolve` names an undefined component `{name}`"),
+            ),
         }
     }
     for (line, name, x, y) in trends {
@@ -185,7 +237,11 @@ fn add(
         cx.warn(line, format!("`{name}` is already on the map"));
         return Ok(());
     }
-    cx.limits.check_count(model.components.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
+    cx.limits.check_count(
+        model.components.len() + 1,
+        cx.limits.nodes,
+        LimitKind::Nodes,
+    )?;
     let label = cx.label(name)?;
     let mut component = Component {
         label,
@@ -283,7 +339,10 @@ fn annotation(cx: &ParseCx<'_>, def: &str) -> Result<Option<Annotation>, Diagram
     let coords = &rest[..=text_at];
     let text = kit::unquote(rest[text_at + 1..].trim());
     let mut points = Vec::new();
-    let inner = coords.strip_prefix('[').and_then(|c| c.strip_suffix(']')).unwrap_or("");
+    let inner = coords
+        .strip_prefix('[')
+        .and_then(|c| c.strip_suffix(']'))
+        .unwrap_or("");
     if inner.trim_start().starts_with('[') {
         for part in kit::split_top(inner, ',') {
             if let Some((v, e)) = kit::pair(part) {
@@ -305,7 +364,12 @@ fn annotation(cx: &ParseCx<'_>, def: &str) -> Result<Option<Annotation>, Diagram
 
 /// `Genesis@0.25 -> Custom / Emerging -> ...`.
 fn parse_stages(cx: &ParseCx<'_>, text: &str) -> Result<Vec<Stage>, DiagramError> {
-    let parts: Vec<&str> = text.split("->").map(str::trim).filter(|p| !p.is_empty()).take(12).collect();
+    let parts: Vec<&str> = text
+        .split("->")
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .take(12)
+        .collect();
     let n = parts.len().max(1);
     let mut out = Vec::with_capacity(n);
     let mut prev = 0.0f32;
@@ -315,7 +379,11 @@ fn parse_stages(cx: &ParseCx<'_>, text: &str) -> Result<Vec<Stage>, DiagramError
             None => (*part, None),
         };
         let end = end.unwrap_or((i + 1) as f32 / n as f32).clamp(prev, 1.0);
-        let text = name.split(" / ").map(str::trim).collect::<Vec<_>>().join("<br>");
+        let text = name
+            .split(" / ")
+            .map(str::trim)
+            .collect::<Vec<_>>()
+            .join("<br>");
         out.push(Stage {
             label: cx.label(&text)?,
             end,
@@ -354,14 +422,42 @@ fn link(stmt: &str, line: usize) -> Option<RawLink> {
         }
         let rest = &stmt[i..];
         let (kind, len, mut label) = if rest.starts_with("+<>") {
-            (LinkKind::Flow { forward: true, back: true }, 3, None)
+            (
+                LinkKind::Flow {
+                    forward: true,
+                    back: true,
+                },
+                3,
+                None,
+            )
         } else if rest.starts_with("+<") {
-            (LinkKind::Flow { forward: false, back: true }, 2, None)
+            (
+                LinkKind::Flow {
+                    forward: false,
+                    back: true,
+                },
+                2,
+                None,
+            )
         } else if rest.starts_with("+>") {
-            (LinkKind::Flow { forward: true, back: false }, 2, None)
+            (
+                LinkKind::Flow {
+                    forward: true,
+                    back: false,
+                },
+                2,
+                None,
+            )
         } else if let Some(text) = rest.strip_prefix("+'") {
             let close = text.find("'>")?;
-            (LinkKind::Flow { forward: true, back: false }, close + 4, Some(text[..close].to_string()))
+            (
+                LinkKind::Flow {
+                    forward: true,
+                    back: false,
+                },
+                close + 4,
+                Some(text[..close].to_string()),
+            )
         } else if rest.starts_with("-.->") {
             (LinkKind::Dashed, 4, None)
         } else if rest.starts_with("-->") {

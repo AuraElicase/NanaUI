@@ -18,7 +18,6 @@ use crate::style::{self, Paint};
 use crate::text::{FontSpec, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct Node {
     pub name: Label,

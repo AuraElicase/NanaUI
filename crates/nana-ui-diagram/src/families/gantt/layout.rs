@@ -29,8 +29,12 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let mut out = SceneBuilder::new();
 
-    let bars: Vec<usize> = (0..model.tasks.len()).filter(|&i| !model.tasks[i].vert).collect();
-    let verts: Vec<usize> = (0..model.tasks.len()).filter(|&i| model.tasks[i].vert).collect();
+    let bars: Vec<usize> = (0..model.tasks.len())
+        .filter(|&i| !model.tasks[i].vert)
+        .collect();
+    let verts: Vec<usize> = (0..model.tasks.len())
+        .filter(|&i| model.tasks[i].vert)
+        .collect();
     if model.tasks.is_empty() {
         let content = cx.title_above(&mut out, Rect::default());
         return Ok(out.finish(content, m.margin));
@@ -43,7 +47,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let mut ends: Vec<i64> = Vec::new();
         for &i in bars.iter().filter(|&&i| model.tasks[i].section == s) {
             let task = &model.tasks[i];
-            let free = model.compact.then(|| ends.iter().position(|&e| e <= task.start)).flatten();
+            let free = model
+                .compact
+                .then(|| ends.iter().position(|&e| e <= task.start))
+                .flatten();
             let row = free.unwrap_or_else(|| {
                 ends.push(task.end);
                 ends.len() - 1
@@ -93,7 +100,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .map(|t| (t.end - t.start) as f64)
         .fold(f64::INFINITY, f64::min);
     let base = 640.0 * k;
-    let need = if shortest.is_finite() { (28.0 * k) as f64 * span / shortest } else { 0.0 };
+    let need = if shortest.is_finite() {
+        (28.0 * k) as f64 * span / shortest
+    } else {
+        0.0
+    };
     let width = (need as f32).clamp(base, 2_000.0 * k);
     let x0 = column;
     let x_of = |t: i64| x0 + (((t as f64) - (t_min as f64)) / span * f64::from(width)) as f32;
@@ -189,7 +200,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             match (excluded, run) {
                 (true, None) => run = Some(day),
                 (false, Some(from)) => {
-                    shade(&mut out, x_of(from.max(t_min)), x_of(day.min(t_max)), rows_top, rows_h);
+                    shade(
+                        &mut out,
+                        x_of(from.max(t_min)),
+                        x_of(day.min(t_max)),
+                        rows_top,
+                        rows_h,
+                    );
                     run = None;
                 }
                 _ => {}
@@ -197,7 +214,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             day += DAY;
         }
         if let Some(from) = run {
-            shade(&mut out, x_of(from.max(t_min)), x_of(day.min(t_max)), rows_top, rows_h);
+            shade(
+                &mut out,
+                x_of(from.max(t_min)),
+                x_of(day.min(t_max)),
+                rows_top,
+                rows_h,
+            );
         }
     }
 
@@ -205,11 +228,21 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let grid = Stroke::hairline(style::GRID);
     for &t in &ticks {
         let x = x_of(t);
-        out.stroke(Geom::path(PathData::polyline(&[[x, rows_top], [x, rows_bottom]])), grid);
+        out.stroke(
+            Geom::path(PathData::polyline(&[[x, rows_top], [x, rows_bottom]])),
+            grid,
+        );
     }
-    let axis_y = if model.top_axis { rows_top } else { rows_bottom };
+    let axis_y = if model.top_axis {
+        rows_top
+    } else {
+        rows_bottom
+    };
     let axis = Stroke::hairline(style::AXIS);
-    out.stroke(Geom::path(PathData::polyline(&[[x0, axis_y], [x0 + width, axis_y]])), axis);
+    out.stroke(
+        Geom::path(PathData::polyline(&[[x0, axis_y], [x0 + width, axis_y]])),
+        axis,
+    );
     let tick_len = 4.0 * k;
     for (&t, laid) in ticks.iter().zip(&tick_labels) {
         let x = x_of(t);
@@ -219,7 +252,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             (axis_y, axis_y + tick_len, axis_y + tick_len + 2.0 * k)
         };
         out.stroke(Geom::path(PathData::polyline(&[[x, a], [x, b]])), axis);
-        out.text(laid, [x - laid.width / 2.0, label_y], laid.width, Align::Center, style::MUTED);
+        out.text(
+            laid,
+            [x - laid.width / 2.0, label_y],
+            laid.width,
+            Align::Center,
+            style::MUTED,
+        );
     }
 
     // Section titles.
@@ -228,7 +267,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             && !title.is_empty()
         {
             let top = rect.y + (rect.h - title.height) / 2.0;
-            out.text(title, [pad, top], column - 2.0 * pad, Align::Start, style::TEXT);
+            out.text(
+                title,
+                [pad, top],
+                column - 2.0 * pad,
+                Align::Start,
+                style::TEXT,
+            );
         }
     }
 
@@ -256,7 +301,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             Rect::new(left, cy - h, right - left, 2.0 * h)
         } else {
             let rect = Rect::new(left, cy - bar_h / 2.0, right - left, bar_h);
-            out.shape(Geom::rounded(rect, RadiusTier::Xs), Some(paint.fill), Some(paint.stroke));
+            out.shape(
+                Geom::rounded(rect, RadiusTier::Xs),
+                Some(paint.fill),
+                Some(paint.stroke),
+            );
             rect
         };
         match &names[i] {
@@ -281,7 +330,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         );
         out.chip(laid, [*x, top + chip_h / 2.0], chip_pad);
         if let Some(url) = &model.tasks[*i].link {
-            out.link(Rect::centered([*x, top + chip_h / 2.0], [laid.width, chip_h]), url, None);
+            out.link(
+                Rect::centered([*x, top + chip_h / 2.0], [laid.width, chip_h]),
+                url,
+                None,
+            );
         }
     }
     // A vert without a label still marks its date.
@@ -333,9 +386,17 @@ fn paint(task: &Task) -> Paint {
             style::MUTED,
         )
     } else if task.active {
-        (Ink::Mix(SemanticColorMix::alpha(R::Accent, 0.22)), style::ACCENT, style::ACCENT)
+        (
+            Ink::Mix(SemanticColorMix::alpha(R::Accent, 0.22)),
+            style::ACCENT,
+            style::ACCENT,
+        )
     } else if task.crit {
-        (Ink::Mix(SemanticColorMix::alpha(R::Danger, 0.18)), style::DANGER, style::DANGER)
+        (
+            Ink::Mix(SemanticColorMix::alpha(R::Danger, 0.18)),
+            style::DANGER,
+            style::DANGER,
+        )
     } else {
         let solid = style::series(task.section, Tone::Solid);
         (style::series(task.section, Tone::Soft), solid, solid)
@@ -377,7 +438,10 @@ fn ticks(
         // Ask for twice what fits: the calendar steps are coarse, and the
         // thinning below brings a crowded axis back down.
         let count = ((width / (sample + gap)).floor() as usize).clamp(1, 16);
-        ticks = time_ticks(t_min, t_max, 2 * count, 0).into_iter().map(|t| t.value).collect();
+        ticks = time_ticks(t_min, t_max, 2 * count, 0)
+            .into_iter()
+            .map(|t| t.value)
+            .collect();
     }
     if ticks.is_empty() {
         ticks.push(t_min);

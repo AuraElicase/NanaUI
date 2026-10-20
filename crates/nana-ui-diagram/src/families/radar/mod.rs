@@ -11,7 +11,6 @@ use crate::ir::{Align, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Graticule {
     Circle,
@@ -73,7 +72,11 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         } else if let Some(list) = keyword(stmt, "axis") {
             for item in items(list) {
                 let (id, label) = id_label(cx, item)?;
-                cx.limits.check_count(model.axes.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+                cx.limits.check_count(
+                    model.axes.len() + 1,
+                    cx.limits.elements,
+                    LimitKind::Elements,
+                )?;
                 ids.entry(id).or_insert(model.axes.len());
                 model.axes.push(label);
             }
@@ -90,7 +93,11 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 let (_, label) = id_label(cx, &item[..open])?;
                 match values(inner) {
                     Some(v) => {
-                        cx.limits.check_count(raw.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+                        cx.limits.check_count(
+                            raw.len() + 1,
+                            cx.limits.elements,
+                            LimitKind::Elements,
+                        )?;
                         raw.push((line, label, v));
                     }
                     None => cx.warn(line, format!("unreadable values in curve `{item}`")),
@@ -121,14 +128,20 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
     }
     let n = model.axes.len();
-    cx.limits.check_count(n * raw.len(), cx.limits.elements * 4, LimitKind::Elements)?;
+    cx.limits
+        .check_count(n * raw.len(), cx.limits.elements * 4, LimitKind::Elements)?;
     for (line, label, values) in raw {
         let values = match values {
             Values::List(list) => {
                 if list.len() != n {
-                    cx.warn(line, format!("curve has {} values for {n} axes", list.len()));
+                    cx.warn(
+                        line,
+                        format!("curve has {} values for {n} axes", list.len()),
+                    );
                 }
-                (0..n).map(|i| list.get(i).copied().unwrap_or(0.0)).collect()
+                (0..n)
+                    .map(|i| list.get(i).copied().unwrap_or(0.0))
+                    .collect()
             }
             Values::Keyed(pairs) => {
                 let mut out = vec![0.0; n];
@@ -148,7 +161,10 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
 
 /// The non-empty items of a comma list.
 fn items(list: &str) -> impl Iterator<Item = &str> {
-    split_top(list, ',').into_iter().map(str::trim).filter(|i| !i.is_empty())
+    split_top(list, ',')
+        .into_iter()
+        .map(str::trim)
+        .filter(|i| !i.is_empty())
 }
 
 fn option_number(cx: &mut ParseCx<'_>, line: usize, v: &str) -> Option<f64> {
@@ -172,7 +188,11 @@ fn id_label(cx: &ParseCx<'_>, item: &str) -> Result<(String, Label), DiagramErro
 }
 
 fn values(inner: &str) -> Option<Values> {
-    let parts: Vec<&str> = inner.split(',').map(str::trim).filter(|p| !p.is_empty()).collect();
+    let parts: Vec<&str> = inner
+        .split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
     if parts.iter().any(|p| p.contains(':')) {
         let mut out = Vec::with_capacity(parts.len());
         for p in parts {
@@ -181,7 +201,11 @@ fn values(inner: &str) -> Option<Values> {
         }
         Some(Values::Keyed(out))
     } else {
-        parts.into_iter().map(kit::number).collect::<Option<Vec<_>>>().map(Values::List)
+        parts
+            .into_iter()
+            .map(kit::number)
+            .collect::<Option<Vec<_>>>()
+            .map(Values::List)
     }
 }
 
@@ -193,14 +217,25 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let n = model.axes.len();
     let mut out = SceneBuilder::new();
 
-    let data_max = model.curves.iter().flat_map(|c| c.values.iter().copied()).fold(f64::NEG_INFINITY, f64::max);
+    let data_max = model
+        .curves
+        .iter()
+        .flat_map(|c| c.values.iter().copied())
+        .fold(f64::NEG_INFINITY, f64::max);
     let min = model.min.unwrap_or(0.0);
-    let mut max = model.max.unwrap_or(if data_max.is_finite() { data_max } else { 1.0 });
+    let mut max = model
+        .max
+        .unwrap_or(if data_max.is_finite() { data_max } else { 1.0 });
     if max <= min {
         max = min + 1.0;
     }
     let angle = |i: usize| -FRAC_PI_2 + TAU * i as f32 / n.max(1) as f32;
-    let at = |i: usize, r: f32| [center[0] + r * angle(i).cos(), center[1] + r * angle(i).sin()];
+    let at = |i: usize, r: f32| {
+        [
+            center[0] + r * angle(i).cos(),
+            center[1] + r * angle(i).sin(),
+        ]
+    };
 
     let grid = |out: &mut SceneBuilder| {
         let stroke = Stroke::hairline(style::GRID);
@@ -210,7 +245,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 let pts: Vec<[f32; 2]> = (0..n).map(|i| at(i, r)).collect();
                 out.stroke(Geom::path(PathData::polygon(&pts)), stroke);
             } else {
-                out.stroke(Geom::Ellipse(Rect::centered(center, [r * 2.0, r * 2.0])), stroke);
+                out.stroke(
+                    Geom::Ellipse(Rect::centered(center, [r * 2.0, r * 2.0])),
+                    stroke,
+                );
             }
         }
         let mut spokes = PathData::new();
@@ -224,7 +262,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Curves: washes first, largest underneath so every one stays visible,
     // then the grid again over the washes, then the outlines.
-    let tension = cx.config.get_f32("radar.curveTension").unwrap_or(0.17).clamp(0.0, 0.5);
+    let tension = cx
+        .config
+        .get_f32("radar.curveTension")
+        .unwrap_or(0.17)
+        .clamp(0.0, 0.5);
     let shapes: Vec<(f32, Vec<[f32; 2]>)> = model
         .curves
         .iter()
@@ -243,7 +285,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     order.sort_by(|&a, &b| shapes[b].0.total_cmp(&shapes[a].0).then(a.cmp(&b)));
     if n >= 3 {
         for &c in &order {
-            out.fill(Geom::path(closed_curve(&shapes[c].1, tension)), style::series(c, Tone::Soft));
+            out.fill(
+                Geom::path(closed_curve(&shapes[c].1, tension)),
+                style::series(c, Tone::Soft),
+            );
         }
         grid(&mut out);
     }
@@ -256,20 +301,36 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
         let dot = m.font_size * 0.22;
         for p in pts {
-            out.fill(Geom::Ellipse(Rect::centered(*p, [dot * 2.0, dot * 2.0])), style::series(c, Tone::Solid));
+            out.fill(
+                Geom::Ellipse(Rect::centered(*p, [dot * 2.0, dot * 2.0])),
+                style::series(c, Tone::Solid),
+            );
         }
     }
 
     // Axis labels just outside the rim, anchored by direction.
     let gap = m.font_size * 0.6;
-    let wrap = cx.wrap_width("radar.axisLabelWidth").min(m.font_size * 10.0);
+    let wrap = cx
+        .wrap_width("radar.axisLabelWidth")
+        .min(m.font_size * 10.0);
     // How much of the label sits back toward the centre along one axis.
-    let back = |d: f32| if d > 0.3 { 0.0 } else if d < -0.3 { 1.0 } else { 0.5 };
+    let back = |d: f32| {
+        if d > 0.3 {
+            0.0
+        } else if d < -0.3 {
+            1.0
+        } else {
+            0.5
+        }
+    };
     for (i, label) in model.axes.iter().enumerate() {
         let laid = cx.text.lay(label, small, Some(wrap));
         let a = angle(i);
         let (c, s) = (a.cos(), a.sin());
-        let p = [center[0] + (radius + gap) * c, center[1] + (radius + gap) * s];
+        let p = [
+            center[0] + (radius + gap) * c,
+            center[1] + (radius + gap) * s,
+        ];
         let align = if c > 0.3 {
             Align::Start
         } else if c < -0.3 {
@@ -290,11 +351,19 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             .enumerate()
             .map(|(i, c)| LegendRow {
                 index: i as u16,
-                name: cx.text.lay(&c.label, font, Some(cx.wrap_width("radar.legendWidth"))),
+                name: cx
+                    .text
+                    .lay(&c.label, font, Some(cx.wrap_width("radar.legendWidth"))),
                 value: None,
             })
             .collect();
-        let legend = kit::legend(&mut out, cx, &rows, content.right() + m.font_size * 2.0, center[1]);
+        let legend = kit::legend(
+            &mut out,
+            cx,
+            &rows,
+            content.right() + m.font_size * 2.0,
+            center[1],
+        );
         content = content.union(&legend);
     }
     let content = cx.title_above(&mut out, content);
@@ -326,8 +395,14 @@ fn closed_curve(pts: &[[f32; 2]], tension: f32) -> PathData {
         let p1 = pts[i];
         let p2 = pts[(i + 1) % n];
         let p3 = pts[(i + 2) % n];
-        let c1 = [p1[0] + (p2[0] - p0[0]) * tension, p1[1] + (p2[1] - p0[1]) * tension];
-        let c2 = [p2[0] - (p3[0] - p1[0]) * tension, p2[1] - (p3[1] - p1[1]) * tension];
+        let c1 = [
+            p1[0] + (p2[0] - p0[0]) * tension,
+            p1[1] + (p2[1] - p0[1]) * tension,
+        ];
+        let c2 = [
+            p2[0] - (p3[0] - p1[0]) * tension,
+            p2[1] - (p3[1] - p1[1]) * tension,
+        ];
         path.cubic_to(c1, c2, p2);
     }
     path.close();

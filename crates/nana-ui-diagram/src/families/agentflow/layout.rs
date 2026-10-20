@@ -66,7 +66,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if node.flow.and_then(|f| folded[f]).is_some() {
             continue;
         }
-        let laid = cx.text.lay(&node.label, author_font(font, &node.style), Some(wrap));
+        let laid = cx
+            .text
+            .lay(&node.label, author_font(font, &node.style), Some(wrap));
         node_item[n] = items.len();
         graph.nodes.push(NodeSpec {
             size: node.shape.size(laid.size(), pad),
@@ -90,7 +92,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         collapsed_item[f] = items.len();
         graph.nodes.push(NodeSpec {
             cluster: container(flow.parent),
-            ..NodeSpec::new(padded([laid.width.max(more.width), laid.height + more.height], pad))
+            ..NodeSpec::new(padded(
+                [laid.width.max(more.width), laid.height + more.height],
+                pad,
+            ))
         });
         items.push(Item::Collapsed(f));
         labels.push(laid);
@@ -102,7 +107,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         graph.clusters.push(ClusterSpec {
             parent: container(flow.parent),
             direction: None,
-            title: if laid.is_empty() { [0.0, 0.0] } else { laid.size() },
+            title: if laid.is_empty() {
+                [0.0, 0.0]
+            } else {
+                laid.size()
+            },
         });
         titles.push(laid);
     }
@@ -142,7 +151,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let placed = layered::layout(&graph, &cx.spacing(), cx.limits)?;
     let mut out = SceneBuilder::new();
 
-    let parents: Vec<Option<usize>> = clusters.iter().map(|&f| container(model.flows[f].parent)).collect();
+    let parents: Vec<Option<usize>> = clusters
+        .iter()
+        .map(|&f| container(model.flows[f].parent))
+        .collect();
     for k in graphkit::outermost_first(&parents) {
         let flow = &model.flows[clusters[k]];
         let title = (!titles[k].is_empty()).then(|| (&titles[k], placed.titles[k]));
@@ -199,7 +211,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     out.text(laid, [lr.x, lr.y], lr.w, Align::Center, paint.text);
                 }
             }
-            Item::Collapsed(f) => collapsed(&mut out, rect, laid, &model.flows[f].style, cx, pad[1]),
+            Item::Collapsed(f) => {
+                collapsed(&mut out, rect, laid, &model.flows[f].style, cx, pad[1])
+            }
         }
     }
 

@@ -14,7 +14,6 @@ mod parse;
 use super::{LayoutCx, ParseCx};
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 /// Which notation the header names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum Notation {

@@ -321,12 +321,19 @@ impl Lower<'_, '_> {
                         "if" => {
                             let sections = sections(nodes, &mut i, |next| match keyword(next) {
                                 ("else", tail) => Some(match keyword(tail) {
-                                    ("if", cond) => format!("else if {}", condition(cond).unwrap_or("")),
+                                    ("if", cond) => {
+                                        format!("else if {}", condition(cond).unwrap_or(""))
+                                    }
                                     _ => "else".to_string(),
                                 }),
                                 _ => None,
                             });
-                            self.fragment(FragmentKind::Alt, condition(rest), block.as_deref(), sections)?;
+                            self.fragment(
+                                FragmentKind::Alt,
+                                condition(rest),
+                                block.as_deref(),
+                                sections,
+                            )?;
                         }
                         "try" => {
                             let sections = sections(nodes, &mut i, |next| match keyword(next) {
@@ -338,10 +345,19 @@ impl Lower<'_, '_> {
                             });
                             self.fragment(FragmentKind::Try, None, block.as_deref(), sections)?;
                         }
-                        "while" | "for" | "forEach" | "foreach" | "loop" if rest.is_empty() || rest.starts_with('(') => {
-                            self.fragment(FragmentKind::Loop, condition(rest), block.as_deref(), Vec::new())?;
+                        "while" | "for" | "forEach" | "foreach" | "loop"
+                            if rest.is_empty() || rest.starts_with('(') =>
+                        {
+                            self.fragment(
+                                FragmentKind::Loop,
+                                condition(rest),
+                                block.as_deref(),
+                                Vec::new(),
+                            )?;
                         }
-                        "opt" | "par" | "critical" | "section" | "ref" if rest.is_empty() || rest.starts_with('(') => {
+                        "opt" | "par" | "critical" | "section" | "ref"
+                            if rest.is_empty() || rest.starts_with('(') =>
+                        {
                             let kind = match kw {
                                 "opt" => FragmentKind::Opt,
                                 "par" => FragmentKind::Par,
@@ -357,8 +373,14 @@ impl Lower<'_, '_> {
                                 self.block(b)?;
                             }
                         }
-                        "group" if block.is_some() => self.group(rest, block.as_deref().unwrap_or_default())?,
-                        "title" if block.is_none() && !rest.is_empty() && !rest.starts_with(['.', '-', '=']) => {
+                        "group" if block.is_some() => {
+                            self.group(rest, block.as_deref().unwrap_or_default())?
+                        }
+                        "title"
+                            if block.is_none()
+                                && !rest.is_empty()
+                                && !rest.starts_with(['.', '-', '=']) =>
+                        {
                             self.cx.limits.check_label(rest)?;
                             self.cx.meta.title = Some(rest.to_string());
                         }
@@ -405,9 +427,17 @@ impl Lower<'_, '_> {
 
     fn group(&mut self, rest: &str, nodes: &[Node]) -> Result<(), DiagramError> {
         let title = unquote(rest);
-        let title = if title.is_empty() { None } else { Some(self.cx.label(title)?) };
+        let title = if title.is_empty() {
+            None
+        } else {
+            Some(self.cx.label(title)?)
+        };
         let limits = self.cx.limits;
-        limits.check_count(self.b.model.groups.len() + 1, limits.clusters, LimitKind::Clusters)?;
+        limits.check_count(
+            self.b.model.groups.len() + 1,
+            limits.clusters,
+            LimitKind::Clusters,
+        )?;
         let outer = self.group.replace(self.b.model.groups.len());
         self.b.model.groups.push(Group { title, color: None });
         self.block(nodes)?;
@@ -426,10 +456,17 @@ impl Lower<'_, '_> {
         if text.starts_with("@Starter") {
             return Ok(());
         }
-        if let Some(rest) = text.strip_prefix("@return").or_else(|| text.strip_prefix("@reply")) {
+        if let Some(rest) = text
+            .strip_prefix("@return")
+            .or_else(|| text.strip_prefix("@reply"))
+        {
             self.reply_next = true;
             let rest = rest.trim();
-            return if rest.is_empty() { Ok(()) } else { self.statement(rest, block) };
+            return if rest.is_empty() {
+                Ok(())
+            } else {
+                self.statement(rest, block)
+            };
         }
         if let Some(rest) = text.strip_prefix('@') {
             let (annotation, name) = keyword(rest);
@@ -456,7 +493,10 @@ impl Lower<'_, '_> {
             }
             _ => (None, text),
         };
-        if let Some(rest) = expr.strip_prefix("new ").or_else(|| (expr == "new").then_some("")) {
+        if let Some(rest) = expr
+            .strip_prefix("new ")
+            .or_else(|| (expr == "new").then_some(""))
+        {
             return self.create(rest.trim(), assign, block);
         }
         if let Some((who, call)) = target(expr) {
@@ -512,7 +552,12 @@ impl Lower<'_, '_> {
         Ok(())
     }
 
-    fn arrow(&mut self, from: &str, rest: &str, block: Option<&[Node]>) -> Result<(), DiagramError> {
+    fn arrow(
+        &mut self,
+        from: &str,
+        rest: &str,
+        block: Option<&[Node]>,
+    ) -> Result<(), DiagramError> {
         let from = if from.is_empty() {
             self.speaker()?
         } else {
@@ -544,18 +589,40 @@ impl Lower<'_, '_> {
     }
 
     /// An async message, or a reply after `@return`.
-    fn message(&mut self, from: usize, to: usize, text: &str, block: Option<&[Node]>) -> Result<(), DiagramError> {
-        let line = if std::mem::take(&mut self.reply_next) { LineKind::Dashed } else { LineKind::Solid };
+    fn message(
+        &mut self,
+        from: usize,
+        to: usize,
+        text: &str,
+        block: Option<&[Node]>,
+    ) -> Result<(), DiagramError> {
+        let line = if std::mem::take(&mut self.reply_next) {
+            LineKind::Dashed
+        } else {
+            LineKind::Solid
+        };
         let label = self.cx.label(text)?;
         let comment = self.take_comment()?;
-        self.push(Event::Message(message(from, to, line, Marker::OpenArrow, label, comment)))?;
+        self.push(Event::Message(message(
+            from,
+            to,
+            line,
+            Marker::OpenArrow,
+            label,
+            comment,
+        )))?;
         if let Some(b) = block {
             self.block(b)?;
         }
         Ok(())
     }
 
-    fn create(&mut self, rest: &str, assign: Option<String>, block: Option<&[Node]>) -> Result<(), DiagramError> {
+    fn create(
+        &mut self,
+        rest: &str,
+        assign: Option<String>,
+        block: Option<&[Node]>,
+    ) -> Result<(), DiagramError> {
         let (name, args) = match rest.find('(') {
             Some(i) => (rest[..i].trim(), condition(&rest[i..])),
             None => (rest.trim(), None),
@@ -643,7 +710,14 @@ impl Lower<'_, '_> {
         let comment = self.take_comment()?;
         self.push(Event::Message(Message {
             deactivate: ends,
-            ..message(who, caller, LineKind::Dashed, Marker::OpenArrow, label, comment)
+            ..message(
+                who,
+                caller,
+                LineKind::Dashed,
+                Marker::OpenArrow,
+                label,
+                comment,
+            )
         }))
     }
 }
@@ -713,7 +787,9 @@ fn move_to_front(model: &mut Model, s: usize) {
                     NotePlace::Over(a, b) => NotePlace::Over(map(a), map(b)),
                 };
             }
-            Event::Activate(p) | Event::Deactivate(p) | Event::Create(p) | Event::Destroy(p) => *p = map(*p),
+            Event::Activate(p) | Event::Deactivate(p) | Event::Create(p) | Event::Destroy(p) => {
+                *p = map(*p)
+            }
             _ => {}
         }
     }
@@ -772,15 +848,24 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(kinds, [FragmentKind::Alt, FragmentKind::Try, FragmentKind::Loop]);
-        let sections = m.events.iter().filter(|e| matches!(e, Event::Section { .. })).count();
+        assert_eq!(
+            kinds,
+            [FragmentKind::Alt, FragmentKind::Try, FragmentKind::Loop]
+        );
+        let sections = m
+            .events
+            .iter()
+            .filter(|e| matches!(e, Event::Section { .. }))
+            .count();
         assert_eq!(sections, 4);
     }
 
     #[test]
     fn comments_attach_to_the_next_message() {
         let m = model("zenuml\n// **why** we call\nA.go()");
-        let Some(Event::Message(msg)) = m.events.first() else { panic!() };
+        let Some(Event::Message(msg)) = m.events.first() else {
+            panic!()
+        };
         assert_eq!(msg.comment.as_ref().unwrap().text(), "why we call");
     }
 

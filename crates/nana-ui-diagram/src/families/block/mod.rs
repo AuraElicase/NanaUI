@@ -12,7 +12,6 @@ use crate::source::directives::AuthorStyle;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 /// Which way a block arrow points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct Heads {
@@ -82,9 +81,11 @@ pub(crate) fn summary(model: &Model) -> Summary {
     let count = |f: fn(&Kind) -> bool| model.blocks.iter().filter(|b| f(&b.kind)).count() as u32;
     Summary {
         nodes: count(|k| matches!(k, Kind::Node(_) | Kind::Arrow(_))),
-        edges: model.edges.iter().filter(|e| e.line != LineKind::Invisible).count() as u32,
+        edges: model
+            .edges
+            .iter()
+            .filter(|e| e.line != LineKind::Invisible)
+            .count() as u32,
         groups: count(|k| matches!(k, Kind::Group { .. })),
     }
 }
-
-

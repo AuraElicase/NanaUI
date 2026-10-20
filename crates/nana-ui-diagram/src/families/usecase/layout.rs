@@ -47,7 +47,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut bodies = Vec::with_capacity(model.nodes.len());
     for node in &model.nodes {
         let face = author_font(font, &node.style);
-        let stereotype = node.stereotype.as_ref().map(|s| plain(&format!("«{s}»"), small));
+        let stereotype = node
+            .stereotype
+            .as_ref()
+            .map(|s| plain(&format!("«{s}»"), small));
         let st_h = stereotype.as_ref().map_or(0.0, |s| s.height);
         let st_w = stereotype.as_ref().map_or(0.0, |s| s.width);
         let mut rows = Vec::new();
@@ -55,7 +58,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let (label, size) = match &node.kind {
             NodeKind::Actor(_) => {
                 let label = cx.text.lay(&node.label, face, Some(wrap * 0.7));
-                let size = [figure[0].max(label.width).max(st_w), figure[1] + fig_gap + st_h + label.height];
+                let size = [
+                    figure[0].max(label.width).max(st_w),
+                    figure[1] + fig_gap + st_h + label.height,
+                ];
                 (label, size)
             }
             NodeKind::Ellipse => {
@@ -118,7 +124,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for b in &model.boundaries {
         let laid = cx.text.lay(&b.title, title_font, Some(wrap * 1.5));
         let size = if b.package {
-            [laid.width + 2.0 * pad[0] * 0.75, laid.height + 2.0 * row_pad]
+            [
+                laid.width + 2.0 * pad[0] * 0.75,
+                laid.height + 2.0 * row_pad,
+            ]
         } else {
             laid.size()
         };
@@ -150,7 +159,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (i, b) in model.boundaries.iter().enumerate() {
         let rect = placed.clusters[i];
         if b.package {
-            package(&mut out, rect, &titles[i], &b.style, [pad[0] * 0.75, row_pad]);
+            package(
+                &mut out,
+                rect,
+                &titles[i],
+                &b.style,
+                [pad[0] * 0.75, row_pad],
+            );
         } else {
             let title = (!titles[i].is_empty()).then(|| (&titles[i], placed.titles[i]));
             graphkit::cluster(&mut out, rect, title, &b.style);
@@ -179,7 +194,15 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             _ => style::edge_stroke(),
         };
         let stroke = graphkit::line_stroke(base, &e.style);
-        graphkit::edge(&mut out, &points, stroke, e.start, e.end, marker, m.bend_radius);
+        graphkit::edge(
+            &mut out,
+            &points,
+            stroke,
+            e.start,
+            e.end,
+            marker,
+            m.bend_radius,
+        );
     }
     for (i, laid) in edge_labels.iter().enumerate() {
         if let (Some(laid), Some(center)) = (laid, placed.edges[i].label) {
@@ -194,7 +217,12 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let paint = graphkit::node_paint(&node.style);
         match &node.kind {
             NodeKind::Actor(look) => {
-                let fig = Rect::new(rect.center()[0] - figure[0] / 2.0, rect.y, figure[0], figure[1]);
+                let fig = Rect::new(
+                    rect.center()[0] - figure[0] / 2.0,
+                    rect.y,
+                    figure[0],
+                    figure[1],
+                );
                 actor(&mut out, fig, *look, &paint, node.business);
                 let mut y = fig.bottom() + fig_gap;
                 if let Some(st) = &body.stereotype {
@@ -226,7 +254,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 if let Some(st) = &body.stereotype {
                     out.text(st, [rect.x, top], rect.w, Align::Center, style::MUTED);
                 }
-                out.text(&body.label, [rect.x, top + st_h], rect.w, Align::Center, paint.text);
+                out.text(
+                    &body.label,
+                    [rect.x, top + st_h],
+                    rect.w,
+                    Align::Center,
+                    paint.text,
+                );
             }
             NodeKind::Note => {
                 let paint = graphkit::note_paint(&node.style);
@@ -236,7 +270,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 let header = body.label.height + 2.0 * row_pad * 1.5;
                 let band = node.style.fill.is_none().then_some(HEADER_FILL);
                 graphkit::header_box(&mut out, rect, header, RadiusTier::Sm, &paint, band);
-                out.text(&body.label, [rect.x, rect.y + row_pad * 1.5], rect.w, Align::Center, paint.text);
+                out.text(
+                    &body.label,
+                    [rect.x, rect.y + row_pad * 1.5],
+                    rect.w,
+                    Align::Center,
+                    paint.text,
+                );
                 let mut y = rect.y + header;
                 let x = rect.x + pad[0] * 0.75;
                 for (r, (key, value)) in body.rows.iter().enumerate() {
@@ -244,7 +284,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                         graphkit::divider(&mut out, rect.x, rect.right(), y, ROW_RULE);
                     }
                     out.text(key, [x, y + row_pad], key.width, Align::Start, style::MUTED);
-                    out.text(value, [x + body.key_w + col_gap, y + row_pad], value.width, Align::Start, paint.text);
+                    out.text(
+                        value,
+                        [x + body.key_w + col_gap, y + row_pad],
+                        value.width,
+                        Align::Start,
+                        paint.text,
+                    );
                     y += key.height.max(value.height) + 2.0 * row_pad;
                 }
             }
@@ -258,7 +304,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
 /// A boundary of `type: package`: a title tab on the top-left corner of
 /// the box.
-fn package(out: &mut SceneBuilder, rect: Rect, title: &LaidText, author: &AuthorStyle, pad: [f32; 2]) {
+fn package(
+    out: &mut SceneBuilder,
+    rect: Rect,
+    title: &LaidText,
+    author: &AuthorStyle,
+    pad: [f32; 2],
+) {
     let tab = Rect::new(
         rect.x,
         rect.y,
@@ -271,7 +323,13 @@ fn package(out: &mut SceneBuilder, rect: Rect, title: &LaidText, author: &Author
     out.shape(Geom::Rect { rect: tab, corner }, Some(fill), Some(stroke));
     out.shape(Geom::Rect { rect: body, corner }, Some(fill), Some(stroke));
     let ink = author.color.map_or(style::MUTED, Ink::Rgba);
-    out.text(title, [tab.x + pad[0], tab.y + pad[1]], title.width, Align::Start, ink);
+    out.text(
+        title,
+        [tab.x + pad[0], tab.y + pad[1]],
+        title.width,
+        Align::Start,
+        ink,
+    );
 }
 
 /// An actor figure inside `r` (head on top, feet at the bottom).
@@ -294,7 +352,9 @@ fn actor(out: &mut SceneBuilder, r: Rect, look: ActorLook, paint: &Paint, busine
             let mut p = PathData::new();
             p.move_to([cx, neck]).line_to([cx, hip]);
             p.move_to([r.x, arms]).line_to([r.right(), arms]);
-            p.move_to([r.x + r.w * 0.1, r.bottom()]).line_to([cx, hip]).line_to([r.right() - r.w * 0.1, r.bottom()]);
+            p.move_to([r.x + r.w * 0.1, r.bottom()])
+                .line_to([cx, hip])
+                .line_to([r.right() - r.w * 0.1, r.bottom()]);
             out.stroke(Geom::path(p), line_stroke);
         }
         ActorLook::Hollow => {
@@ -345,11 +405,17 @@ fn actor(out: &mut SceneBuilder, r: Rect, look: ActorLook, paint: &Paint, busine
             );
             let d = frame.w * 0.34;
             let c = frame.center();
-            out.fill(Geom::Ellipse(Rect::new(c[0] - d / 2.0, frame.y + frame.h * 0.18, d, d)), ink);
+            out.fill(
+                Geom::Ellipse(Rect::new(c[0] - d / 2.0, frame.y + frame.h * 0.18, d, d)),
+                ink,
+            );
             let mut sh = PathData::new();
             let base = frame.y + frame.h * 0.82;
             sh.move_to([frame.x + frame.w * 0.22, base])
-                .quad_to([c[0], frame.y + frame.h * 0.42], [frame.right() - frame.w * 0.22, base])
+                .quad_to(
+                    [c[0], frame.y + frame.h * 0.42],
+                    [frame.right() - frame.w * 0.22, base],
+                )
                 .close();
             out.fill(Geom::path(sh), ink);
         }

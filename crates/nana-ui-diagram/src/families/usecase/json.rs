@@ -85,7 +85,12 @@ impl Reader<'_> {
             b'n' => self.word("null", Value::Null),
             b'-' | b'0'..=b'9' => {
                 let start = self.i;
-                while self.i < self.s.len() && matches!(self.s[self.i], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9') {
+                while self.i < self.s.len()
+                    && matches!(
+                        self.s[self.i],
+                        b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9'
+                    )
+                {
                     self.i += 1;
                 }
                 let n = &self.text[start..self.i];
@@ -183,7 +188,11 @@ fn flatten(value: &Value, path: String, out: &mut Vec<(String, String)>, max: us
         }
         Value::Object(props) => {
             for (k, v) in props {
-                let p = if path.is_empty() { k.clone() } else { format!("{path}.{k}") };
+                let p = if path.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{path}.{k}")
+                };
                 flatten(v, p, out, max);
             }
         }
@@ -203,7 +212,22 @@ mod tests {
         )
         .unwrap();
         let keys: Vec<&str> = rows.iter().map(|r| r.0.as_str()).collect();
-        assert_eq!(keys, vec!["2", "1", "on", "n", "x", "colors", "", "address.city", "items[0].name", "e", "a"]);
+        assert_eq!(
+            keys,
+            vec![
+                "2",
+                "1",
+                "on",
+                "n",
+                "x",
+                "colors",
+                "",
+                "address.city",
+                "items[0].name",
+                "e",
+                "a"
+            ]
+        );
         assert_eq!(rows[0].1, "again");
         assert_eq!(rows[6].1, "Green");
         assert!(super::rows("[1]", 10).is_none());

@@ -11,14 +11,17 @@ use crate::geom::{Marker, PathData, Shape};
 use crate::ir::{Align, Corner, Dash, Geom, Rect, SceneBuilder, Stroke};
 use crate::layout::{ClusterSpec, EdgeSpec, End, Graph, NodeSpec, RouteKind, layered};
 use crate::style;
-use crate::text::{FontSpec, LaidText, Label};
+use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene};
 
 enum Body {
     /// One centred label.
     Plain(LaidText),
     /// A bold title, a divider, then left-aligned descriptions.
-    Titled { title: LaidText, lines: Vec<LaidText> },
+    Titled {
+        title: LaidText,
+        lines: Vec<LaidText>,
+    },
     Mark,
 }
 
@@ -32,13 +35,19 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let note_pad = graphkit::note_pad(&m);
     let dot = m.font_size;
     let bar = [m.font_size * 4.6, m.font_size * 0.5];
-    let name = |state: &State| state.label.clone().unwrap_or_else(|| Label::plain(&state.id));
+    let name = |state: &State| {
+        state
+            .label
+            .clone()
+            .unwrap_or_else(|| Label::plain(&state.id))
+    };
 
     // Clusters: composites first, then each composite's regions.
     let nc = model.composites.len();
     let mut region_base = vec![usize::MAX; nc];
     // (composite, parent cluster)
-    let mut clusters: Vec<(Option<usize>, Option<usize>)> = (0..nc).map(|c| (Some(c), None)).collect();
+    let mut clusters: Vec<(Option<usize>, Option<usize>)> =
+        (0..nc).map(|c| (Some(c), None)).collect();
     for (c, comp) in model.composites.iter().enumerate() {
         if comp.regions > 0 {
             region_base[c] = clusters.len();
@@ -88,25 +97,39 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             Kind::End => (Body::Mark, [dot * 1.3, dot * 1.3]),
             Kind::Choice => (Body::Mark, [dot * 1.8, dot * 1.8]),
             Kind::Fork | Kind::Join => {
-                let size = if dir_of(cluster).horizontal() { [bar[1], bar[0]] } else { bar };
+                let size = if dir_of(cluster).horizontal() {
+                    [bar[1], bar[0]]
+                } else {
+                    bar
+                };
                 (Body::Mark, size)
             }
             Kind::Normal => {
                 let face = author_font(font, &state.style);
-                if state.descriptions.len() == 1 && state.label.is_none() || state.descriptions.is_empty() {
-                    let label = state.descriptions.first().cloned().unwrap_or_else(|| name(state));
+                if state.descriptions.len() == 1 && state.label.is_none()
+                    || state.descriptions.is_empty()
+                {
+                    let label = state
+                        .descriptions
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| name(state));
                     let laid = cx.text.lay(&label, face, Some(wrap));
                     let size = padded(laid.size(), pad);
                     (Body::Plain(laid), [size[0].max(m.font_size * 3.5), size[1]])
                 } else {
-                    let title = cx.text.lay(&name(state), face.weight(m.strong_weight), Some(wrap));
+                    let title = cx
+                        .text
+                        .lay(&name(state), face.weight(m.strong_weight), Some(wrap));
                     let lines: Vec<LaidText> = state
                         .descriptions
                         .iter()
                         .map(|d| cx.text.lay(d, small, Some(wrap)))
                         .collect();
                     let w = lines.iter().map(|l| l.width).fold(title.width, f32::max);
-                    let h = title.height + lines.iter().map(|l| l.height).sum::<f32>() + 4.0 * pad[1] * 0.75;
+                    let h = title.height
+                        + lines.iter().map(|l| l.height).sum::<f32>()
+                        + 4.0 * pad[1] * 0.75;
                     (Body::Titled { title, lines }, [w + 2.0 * pad[0], h])
                 }
             }
@@ -115,7 +138,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         graph.nodes.push(NodeSpec {
             size,
             cluster,
-            port_span: if matches!(state.kind, Kind::Normal | Kind::Fork | Kind::Join) { 0.7 } else { 0.0 },
+            port_span: if matches!(state.kind, Kind::Normal | Kind::Fork | Kind::Join) {
+                0.7
+            } else {
+                0.0
+            },
         });
         bodies.push(body);
         owners.push(s);
@@ -137,11 +164,27 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let (title, direction) = match comp {
             Some(c) => {
                 let comp = &model.composites[c];
-                let direction = if comp.regions > 0 { None } else { comp.direction };
-                (Some(cx.text.lay(&name(&model.states[comp.state]), title_font, Some(wrap * 1.5))), direction)
+                let direction = if comp.regions > 0 {
+                    None
+                } else {
+                    comp.direction
+                };
+                (
+                    Some(cx.text.lay(
+                        &name(&model.states[comp.state]),
+                        title_font,
+                        Some(wrap * 1.5),
+                    )),
+                    direction,
+                )
             }
             // Regions take their composite's direction.
-            None => (None, parent.and_then(|p| model.composites.get(p)).and_then(|c| c.direction)),
+            None => (
+                None,
+                parent
+                    .and_then(|p| model.composites.get(p))
+                    .and_then(|c| c.direction),
+            ),
         };
         graph.clusters.push(ClusterSpec {
             parent,
@@ -190,11 +233,16 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for k in graphkit::outermost_first(&parents) {
         let Some(c) = clusters[k].0 else { continue };
         let state = &model.states[model.composites[c].state];
-        let title = titles[k].as_ref().filter(|t| !t.is_empty()).map(|t| (t, placed.titles[k]));
+        let title = titles[k]
+            .as_ref()
+            .filter(|t| !t.is_empty())
+            .map(|t| (t, placed.titles[k]));
         graphkit::cluster(&mut out, placed.clusters[k], title, &state.style);
         if region_base[c] != usize::MAX {
             let n = model.composites[c].regions as usize + 1;
-            let rects: Vec<Rect> = (0..n).map(|r| placed.clusters[region_base[c] + r]).collect();
+            let rects: Vec<Rect> = (0..n)
+                .map(|r| placed.clusters[region_base[c] + r])
+                .collect();
             region_lines(&mut out, &rects, placed.clusters[k]);
         }
     }
@@ -218,7 +266,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let (stroke, head) = if i < model.transitions.len() {
             (style::edge_stroke(), Some(Marker::Arrow))
         } else {
-            (Stroke::hairline(style::NOTE_STROKE).dash(Dash::Dashed), None)
+            (
+                Stroke::hairline(style::NOTE_STROKE).dash(Dash::Dashed),
+                None,
+            )
         };
         graphkit::edge(&mut out, &points, stroke, None, head, marker, m.bend_radius);
     }
@@ -248,7 +299,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 },
                 solid,
             ),
-            Kind::Choice => out.shape(Shape::Diamond.outline(rect), Some(paint.fill), Some(paint.stroke)),
+            Kind::Choice => out.shape(
+                Shape::Diamond.outline(rect),
+                Some(paint.fill),
+                Some(paint.stroke),
+            ),
             Kind::Normal => match body {
                 Body::Plain(laid) => {
                     out.shape(
@@ -264,10 +319,22 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 Body::Titled { title, lines } => {
                     let header = title.height + 2.0 * pad[1] * 0.75;
                     graphkit::header_box(&mut out, rect, header, RadiusTier::Md, &paint, None);
-                    out.text(title, [rect.x, rect.y + pad[1] * 0.75], rect.w, Align::Center, paint.text);
+                    out.text(
+                        title,
+                        [rect.x, rect.y + pad[1] * 0.75],
+                        rect.w,
+                        Align::Center,
+                        paint.text,
+                    );
                     let mut y = rect.y + header + pad[1] * 0.75;
                     for line in lines {
-                        out.text(line, [rect.x + pad[0], y], line.width, Align::Start, paint.text);
+                        out.text(
+                            line,
+                            [rect.x + pad[0], y],
+                            line.width,
+                            Align::Start,
+                            paint.text,
+                        );
                         y += line.height;
                     }
                 }
@@ -277,7 +344,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
     let note_paint = graphkit::note_paint(&Default::default());
     for (i, laid) in notes.iter().enumerate() {
-        graphkit::note(&mut out, placed.nodes[first_note + i], laid, note_pad, &note_paint);
+        graphkit::note(
+            &mut out,
+            placed.nodes[first_note + i],
+            laid,
+            note_pad,
+            &note_paint,
+        );
     }
 
     let content = out.bounds().union(&placed.bounds);
@@ -306,7 +379,10 @@ fn region_lines(out: &mut SceneBuilder, rects: &[Rect], outer: Rect) {
         .all(|w| w[0].right() <= w[1].x + 0.5 || w[1].right() <= w[0].x + 0.5);
     let mut sorted = rects.to_vec();
     let top = rects.iter().map(|r| r.y).fold(f32::INFINITY, f32::min);
-    let bottom = rects.iter().map(|r| r.bottom()).fold(f32::NEG_INFINITY, f32::max);
+    let bottom = rects
+        .iter()
+        .map(|r| r.bottom())
+        .fold(f32::NEG_INFINITY, f32::max);
     if side_by_side {
         sorted.sort_by(|a, b| a.x.total_cmp(&b.x));
         for w in sorted.windows(2) {

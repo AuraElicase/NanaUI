@@ -10,7 +10,6 @@ use crate::source::directives::AuthorStyle;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 /// One attribute or method line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Member {
