@@ -316,7 +316,11 @@ impl UiWorld {
         if blocks_3d && style.transform_3d.is_some() {
             return (IDENTITY_AFFINE, [0.0, 0.0]);
         }
-        if let Some(transform) = self.sampled_compositor_transform(id) {
+        // A triggered menu's overlay moves its hanging surface, not the
+        // trigger: see `hanging_branch_transform`.
+        if let Some(transform) = self.sampled_compositor_transform(id)
+            && !self.is_triggered_menu(id)
+        {
             let [ox, oy] = self
                 .modal_pivot(id, bounds)
                 .unwrap_or_else(|| style.resolved_transform_origin(bounds.width, bounds.height));
@@ -340,6 +344,46 @@ impl UiWorld {
             return None;
         }
         self.component_geometry(id)?.presentation_pivot(bounds)
+    }
+
+    fn is_triggered_menu(&self, id: StableNodeId) -> bool {
+        self.nodes
+            .visual(id)
+            .is_some_and(|visual| visual.triggered_menu_overlay().is_some())
+    }
+
+    /// Where the viewport-fixed branch rooted at `fixed` starts: the identity,
+    /// unless `fixed` is an item a triggered menu places. Those, and the
+    /// surface hanging behind them, take the menu's presentation transform
+    /// about the surface's pivot; the trigger keeps its logical one.
+    pub(super) fn hanging_branch_transform(&self, fixed: StableNodeId) -> ([f32; 6], [f32; 2]) {
+        self.nodes
+            .get(fixed)
+            .and_then(|node| node.hierarchy.parent)
+            .and_then(|menu| {
+                let overlay = self.nodes.visual(menu)?.triggered_menu_overlay()?;
+                (overlay.trigger_content != Some(fixed)).then_some(menu)
+            })
+            .and_then(|menu| self.hanging_surface_transform(menu))
+            .unwrap_or((IDENTITY_AFFINE, [0.0, 0.0]))
+    }
+
+    /// A triggered menu's presentation transform where its surface hangs:
+    /// `None` when it has no transform overlay or is not a triggered menu.
+    pub(super) fn hanging_surface_transform(
+        &self,
+        menu: StableNodeId,
+    ) -> Option<([f32; 6], [f32; 2])> {
+        if !self.is_triggered_menu(menu) {
+            return None;
+        }
+        let transform = self.sampled_compositor_transform(menu)?;
+        let bounds = self.component_layout_box(menu)?;
+        let [ox, oy] = self.component_geometry(menu)?.presentation_pivot(bounds)?;
+        Some((
+            transform.around_origin(bounds.x, bounds.y, ox, oy),
+            [0.0, 0.0],
+        ))
     }
 
     /// Viewport AABB of the logical layout box after compositor presentation

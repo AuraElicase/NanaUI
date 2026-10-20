@@ -2659,10 +2659,12 @@ fn sync_opacity_groups(
             || !group.mix_blend.is_normal()
             || group.inset_shadow.is_some()
     });
+    // A triggered menu's trigger composites its menu's logical opacity while
+    // the hanging surface fades: one node, two groups.
     let common = stack
         .iter()
         .zip(needed.clone())
-        .take_while(|(open, want)| open.node == want.node)
+        .take_while(|(open, want)| open.node == want.node && open.opacity == want.opacity)
         .count();
     let mut emitted = false;
     while stack.len() > common {

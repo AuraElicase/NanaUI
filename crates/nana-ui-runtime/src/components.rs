@@ -3092,13 +3092,29 @@ impl ComponentGeometry {
     /// of its layout box `bounds`, when it is not the node's own
     /// `transform-origin`: a modal frame's node is its whole scrim, and its
     /// entrance scales and moves the card about the card's own centre, the
-    /// way CSS pivots a transform on the card.
+    /// way CSS pivots a transform on the card. A triggered menu's node is its
+    /// trigger, and its entrance is the hanging surface's: it grows out of the
+    /// point of the surface nearest the trigger's centre.
     pub fn presentation_pivot(&self, bounds: LayoutBox) -> Option<[f32; 2]> {
         match self {
             Self::ModalFrame { surface, .. } => Some([
                 surface.x + surface.width / 2.0 - bounds.x,
                 surface.y + surface.height / 2.0 - bounds.y,
             ]),
+            Self::MenuSurface {
+                trigger_surface: Some(trigger),
+                surface,
+                ..
+            } => {
+                let trigger = trigger.bounds;
+                let x = (trigger.x + trigger.width / 2.0)
+                    .min(surface.x + surface.width)
+                    .max(surface.x);
+                let y = (trigger.y + trigger.height / 2.0)
+                    .min(surface.y + surface.height)
+                    .max(surface.y);
+                Some([x - bounds.x, y - bounds.y])
+            }
             _ => None,
         }
     }
@@ -4504,6 +4520,29 @@ pub struct ExtractedTextSpan {
 }
 
 impl StandardVisual {
+    /// The overlay of a triggered menu (Popover, ActionMenu, HoverCard): an
+    /// in-flow trigger with a surface hanging off it. Its node's presentation
+    /// layers belong to that surface: they fade and scale the surface and the
+    /// items it places, never the trigger or its trigger content.
+    pub fn triggered_menu_overlay(&self) -> Option<TriggeredMenuOverlay> {
+        match self {
+            Self::MenuSurface {
+                trigger,
+                trigger_icon,
+                trigger_image,
+                overlay: Some(overlay),
+                ..
+            } if trigger.is_some()
+                || trigger_icon.is_some()
+                || trigger_image.is_some()
+                || overlay.trigger_content.is_some() =>
+            {
+                Some(*overlay)
+            }
+            _ => None,
+        }
+    }
+
     /// Whether this node's own paint, clip and hit area are sized from
     /// `child`'s box, so a change to that box changes them although this
     /// node's box did not: a modal frame's surface fits its body slot, an

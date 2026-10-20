@@ -2403,6 +2403,10 @@ fn a_press_on_the_hanging_surface_stays_in_the_menu() {
         .update_component(menu, |menu, _| menu.popover.open = true)
         .unwrap();
     context.layout_document(document, viewport).unwrap();
+    // The surface takes the pointer where it paints: past its entrance, at
+    // its full size, not scaled down about its pivot.
+    context.advance_animations(std::time::Duration::from_secs(1));
+    context.layout_document(document, viewport).unwrap();
     context.rebuild_hit_test(document);
 
     let item_box = context.world().layout_box(item.stable_id()).unwrap();

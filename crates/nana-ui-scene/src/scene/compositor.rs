@@ -634,9 +634,44 @@ impl UiScene {
         if block_3d && node.source_style.layout.transform_3d.is_some() {
             return AffineTransform::IDENTITY;
         }
-        self.compositor.transform(node.id).unwrap_or_else(|| {
-            node_scene_transform(node.source_style.layout.as_ref(), node.layout, block_3d)
-        })
+        // A triggered menu's presentation moves its hanging surface, not its
+        // trigger: see `hanging_transform`.
+        self.compositor
+            .transform(node.id)
+            .filter(|_| !super::is_triggered_menu(node))
+            .unwrap_or_else(|| {
+                node_scene_transform(node.source_style.layout.as_ref(), node.layout, block_3d)
+            })
+    }
+
+    /// What a triggered menu's presentation does to its hanging surface and
+    /// the items it places, which are viewport-fixed: its transform overlay
+    /// about the surface's pivot ([`ComponentGeometry::presentation_pivot`]).
+    /// `None` for any other node, or while the menu has no transform overlay.
+    ///
+    /// [`ComponentGeometry::presentation_pivot`]: nana_ui_runtime::ComponentGeometry::presentation_pivot
+    pub(super) fn hanging_transform(&self, menu: StableNodeId) -> Option<AffineTransform> {
+        let node = self
+            .nodes
+            .get(&menu)
+            .filter(|node| super::is_triggered_menu(node))?;
+        let presented = self.compositor.transform(menu)?;
+        // An opacity-only layer holds the logical transform, which the
+        // viewport-fixed overlay never inherited.
+        (presented != node_scene_transform(node.source_style.layout.as_ref(), node.layout, false))
+            .then_some(presented)
+    }
+
+    /// The transform the viewport-fixed branch rooted at `fixed` starts from:
+    /// its menu's [`Self::hanging_transform`] when it is an item a triggered
+    /// menu places, the identity otherwise.
+    pub(super) fn hanging_branch_transform(&self, fixed: &ExtractedNode) -> AffineTransform {
+        fixed
+            .parent
+            .and_then(|parent| self.nodes.get(&parent))
+            .filter(|menu| !super::is_trigger_content(menu, fixed.id))
+            .and_then(|menu| self.hanging_transform(menu.id))
+            .unwrap_or(AffineTransform::IDENTITY)
     }
 
     pub(super) fn resolved_local_opacity(&self, node: &ExtractedNode) -> f32 {
@@ -791,7 +826,18 @@ impl UiScene {
     /// [`Self::compositor_gpu_motion_ids`], with or without the node's own
     /// opacity overlay.
     fn gpu_motion_ids(&self, node: StableNodeId, own_opacity: bool) -> (u32, u32) {
-        let mut transform = self.gpu_motion_id_for(node, 0);
+        // A triggered menu's transform overlay is not evaluated in its own
+        // place: its trigger keeps the logical transform, and the surface and
+        // items it moves take it on the CPU (`hanging_transform`).
+        let mut transform = if self
+            .nodes
+            .get(&node)
+            .is_some_and(|node| super::is_triggered_menu(node))
+        {
+            0
+        } else {
+            self.gpu_motion_id_for(node, 0)
+        };
         // The shader evaluates the overlay in the node's own place, so it owes
         // the same refusal [`Self::resolved_local_transform`] makes, or the
         // GPU hands back what the CPU gave up. The ancestor walk sits behind
