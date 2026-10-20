@@ -1,0 +1,69 @@
+size 710.9 423.6
+summary nodes=24 edges=0 groups=1
+text 8 41.6 16.2 19.6 size=14 w=400 ink=Muted "°C"
+shape path M29.9,365.2 L701.9,365.2 stroke=BorderSoft/hairline/Solid
+text 8 356.8 13.9 16.8 size=12 w=400 ink=Muted "-6"
+shape path M29.9,315.2 L701.9,315.2 stroke=BorderSoft/hairline/Solid
+text 8 306.8 13.9 16.8 size=12 w=400 ink=Muted "-3"
+shape path M29.9,265.2 L701.9,265.2 stroke=BorderSoft/hairline/Solid
+text 15 256.8 7 16.8 size=12 w=400 ink=Muted "0"
+shape path M29.9,215.2 L701.9,215.2 stroke=BorderSoft/hairline/Solid
+text 15 206.8 7 16.8 size=12 w=400 ink=Muted "3"
+shape path M29.9,165.2 L701.9,165.2 stroke=BorderSoft/hairline/Solid
+text 15 156.8 7 16.8 size=12 w=400 ink=Muted "6"
+shape path M29.9,115.2 L701.9,115.2 stroke=BorderSoft/hairline/Solid
+text 15 106.8 7 16.8 size=12 w=400 ink=Muted "9"
+shape path M29.9,65.2 L701.9,65.2 stroke=BorderSoft/hairline/Solid
+text 8 56.8 13.9 16.8 size=12 w=400 ink=Muted "12"
+shape path M29.9,65.2 L29.9,365.2 L701.9,365.2 stroke=Border/hairline/Solid
+shape path M43.9,365.2 L43.9,369.2 stroke=Border/hairline/Solid
+text 40.4 371.2 7 16.8 size=12 w=400 ink=Muted "0"
+shape path M99.9,365.2 L99.9,369.2 stroke=Border/hairline/Solid
+text 96.4 371.2 7 16.8 size=12 w=400 ink=Muted "2"
+shape path M155.9,365.2 L155.9,369.2 stroke=Border/hairline/Solid
+text 152.4 371.2 7 16.8 size=12 w=400 ink=Muted "4"
+shape path M211.9,365.2 L211.9,369.2 stroke=Border/hairline/Solid
+text 208.4 371.2 7 16.8 size=12 w=400 ink=Muted "6"
+shape path M267.9,365.2 L267.9,369.2 stroke=Border/hairline/Solid
+text 264.4 371.2 7 16.8 size=12 w=400 ink=Muted "8"
+shape path M323.9,365.2 L323.9,369.2 stroke=Border/hairline/Solid
+text 317 371.2 13.9 16.8 size=12 w=400 ink=Muted "10"
+shape path M379.9,365.2 L379.9,369.2 stroke=Border/hairline/Solid
+text 373 371.2 13.9 16.8 size=12 w=400 ink=Muted "12"
+shape path M435.9,365.2 L435.9,369.2 stroke=Border/hairline/Solid
+text 429 371.2 13.9 16.8 size=12 w=400 ink=Muted "14"
+shape path M491.9,365.2 L491.9,369.2 stroke=Border/hairline/Solid
+text 485 371.2 13.9 16.8 size=12 w=400 ink=Muted "16"
+shape path M547.9,365.2 L547.9,369.2 stroke=Border/hairline/Solid
+text 541 371.2 13.9 16.8 size=12 w=400 ink=Muted "18"
+shape path M603.9,365.2 L603.9,369.2 stroke=Border/hairline/Solid
+text 597 371.2 13.9 16.8 size=12 w=400 ink=Muted "20"
+shape path M659.9,365.2 L659.9,369.2 stroke=Border/hairline/Solid
+text 653 371.2 13.9 16.8 size=12 w=400 ink=Muted "22"
+shape path M43.9,315.2 L71.9,323.5 L99.9,331.9 L127.9,335.2 L155.9,331.9 L183.9,315.2 L211.9,281.9 L239.9,240.2 L267.9,198.5 L295.9,165.2 L323.9,131.9 L351.9,106.9 L379.9,95.2 L407.9,85.2 L435.9,90.2 L463.9,105.2 L491.9,131.9 L519.9,165.2 L547.9,198.5 L575.9,223.5 L603.9,248.5 L631.9,265.2 L659.9,281.9 L687.9,298.5 stroke=series0/thick/Solid
+shape ellipse 40.9 312.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 68.9 320.5 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 96.9 328.9 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 124.9 332.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 152.9 328.9 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 180.9 312.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 208.9 278.9 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 236.9 237.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 264.9 195.5 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 292.9 162.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 320.9 128.9 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 348.9 103.9 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 376.9 92.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 404.9 82.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 432.9 87.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 460.9 102.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 488.9 128.9 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 516.9 162.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 544.9 195.5 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 572.9 220.5 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 600.9 245.5 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 628.9 262.2 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 656.9 278.9 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 684.9 295.5 6 6 fill=series0 stroke=Surface/1/Solid
+text 349.7 396 32.5 19.6 size=14 w=400 ink=Muted "Hour"
+text 247.3 8 216.4 22.4 size=16 w=600 ink=Text "Temperature over a day"
