@@ -329,9 +329,10 @@ mod tests {
         let publish = |exchange: &mut FrameExchange<u64, String>, width, payload: &str| {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
             // A slot the binding gave back is free once the GPU reports the
-            // work that sampled it done. Other tests share this device, so
-            // that report can come after the next copy is asked for: wait for
-            // it, as a producer would retry, rather than treat it as a fault.
+            // work that sampled it done, and the shared test device admits
+            // one frame at a time. Other tests share it, so either can make a
+            // copy report PoolFull: wait, as a producer would retry, rather
+            // than treat it as a fault.
             loop {
                 match exchange.copy_from_with_payload(
                     &source(&gpu, width),
@@ -660,14 +661,23 @@ mod tests {
         let mut exchange = FrameExchange::new(&gpu, DEFAULT_CAPACITY, 0u64, Arc::new(|| {}));
         let inbox = exchange.inbox();
         let source = source(&gpu, 4);
-        assert_eq!(
-            exchange.copy_from_with_metadata(
+        // The shared test device admits one frame at a time; a copy that
+        // finds another test's frame open reports PoolFull and is retried.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            match exchange.copy_from_with_metadata(
                 &source,
                 0,
                 FrameColorMetadata::bt2020_pq(FrameAlphaMode::Premultiplied),
-            ),
-            CopyOutcome::Submitted
-        );
+            ) {
+                CopyOutcome::Submitted => break,
+                CopyOutcome::PoolFull => {
+                    assert!(std::time::Instant::now() < deadline, "no frame came free");
+                    std::thread::yield_now();
+                }
+                other => panic!("copy {other:?}"),
+            }
+        }
         __framework::device(&gpu)
             .poll(wgpu::PollType::wait_indefinitely())
             .unwrap();
