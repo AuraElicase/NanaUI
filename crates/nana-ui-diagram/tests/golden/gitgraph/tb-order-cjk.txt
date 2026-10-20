@@ -1,0 +1,37 @@
+size 594.3 217.8
+summary nodes=5 edges=5 groups=4
+shape path M60.6,52.8 L60.6,208.8 stroke=BorderSoft/hairline/Dashed
+shape rect 34.8 9 51.7 27.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 44.4 13 32.5 19.6 size=14 w=400 ink=Text "main"
+shape path M501.9,52.8 L501.9,208.8 stroke=BorderSoft/hairline/Dashed
+shape rect 472 9 59.8 27.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 481.6 13 40.6 19.6 size=14 w=400 ink=Text "test1"
+shape path M354.8,52.8 L354.8,208.8 stroke=BorderSoft/hairline/Dashed
+shape rect 324.9 9 59.8 27.6 r=Sm fill=series2.soft stroke=series2/hairline/Solid
+text 334.5 13 40.6 19.6 size=14 w=400 ink=Text "test2"
+shape path M207.7,52.8 L207.7,208.8 stroke=BorderSoft/hairline/Dashed
+shape rect 170.1 9 75.2 27.6 r=Sm fill=series3.soft stroke=series3/hairline/Solid
+text 179.7 13 56 19.6 size=14 w=400 ink=Text "功能分支"
+shape path M60.6,58.8 L486.6,58.8 Q501.9,58.8 501.9,74.1 L501.9,92.8 stroke=series1/thick/Solid
+shape path M60.6,58.8 L339.5,58.8 Q354.8,58.8 354.8,74.1 L354.8,126.8 stroke=series2/thick/Solid
+shape path M60.6,58.8 L192.4,58.8 Q207.7,58.8 207.7,74.1 L207.7,160.8 stroke=series3/thick/Solid
+shape path M60.6,58.8 L60.6,194.8 stroke=series0/thick/Solid
+shape path M207.7,160.8 L207.7,179.5 Q207.7,194.8 192.4,194.8 L60.6,194.8 stroke=series3/thick/Solid
+shape ellipse 53.6 51.8 14 14 fill=series0 stroke=Surface/2/Solid
+shape rect 70.6 48.6 46.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 76 50.4 36 16.8 size=12 w=400 ink=Muted "初始化"
+shape ellipse 494.9 85.8 14 14 fill=series1 stroke=Surface/2/Solid
+shape rect 511.9 82.6 73.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 517.3 84.4 62.6 16.8 size=12 w=400 ink=Muted "1-d2aefa4"
+shape ellipse 347.8 119.8 14 14 fill=series2 stroke=Surface/2/Solid
+shape rect 364.8 116.6 73.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 370.2 118.4 62.6 16.8 size=12 w=400 ink=Muted "2-df8ce07"
+shape ellipse 200.7 153.8 14 14 fill=series3 stroke=Surface/2/Solid
+shape rect 217.7 150.6 58.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 223.1 152.4 48 16.8 size=12 w=400 ink=Muted "实现登录"
+shape ellipse 53.6 187.8 14 14 fill=series0 stroke=Surface/2/Solid
+shape ellipse 57.1 191.3 7 7 fill=Surface
+shape rect 70.6 184.6 73.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 76 186.4 62.6 16.8 size=12 w=400 ink=Muted "4-c5d1141"
+shape rect 9 184.6 38.6 20.4 r=Xs fill=SemanticColorMix{first:Accent,second:None,weight:1400} stroke=SemanticColorMix{first:Accent,second:None,weight:5000}/hairline/Solid
+text 14.4 186.4 27.8 16.8 size=12 w=400 ink=Text "v2.0"
