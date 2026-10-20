@@ -308,8 +308,24 @@ impl UiWorld {
     /// and every node with no intent at all — keeps sharing the same `Arc`.
     pub(crate) fn resolve_layout_intent(
         style: &NodeStyle,
-        metrics: nana_ui_core::ThemeMetrics,
+        tokens: IntentTokens,
     ) -> (Arc<nana_ui_core::LayoutStyle>, bool) {
+        let IntentTokens {
+            metrics,
+            typography,
+            spacing,
+        } = tokens;
+        let font_size = style.type_role.map(|role| typography.size(role));
+        let font_weight = style.type_weight.map(|weight| typography.weight(weight));
+        let gap = style
+            .gap_step
+            .map(|step| nana_ui_core::LengthSpec::Px(spacing.resolve(step)));
+        let padding = style.padding_step.map(|[x, y]| {
+            (
+                nana_ui_core::LengthSpec::Px(spacing.resolve(x)),
+                nana_ui_core::LengthSpec::Px(spacing.resolve(y)),
+            )
+        });
         let radius = style.radius.map(|tier| tier.resolve(metrics));
         let corners = style.corner_radii.map(|tiers| {
             tiers.map(|tier| {
@@ -396,6 +412,15 @@ impl UiWorld {
         });
         let aspect_width_settled =
             aspect_width.is_none_or(|length| style.layout.width == Some(length));
+        let type_settled = font_size.is_none_or(|size| style.layout.font_size == Some(size))
+            && font_weight.is_none_or(|weight| style.layout.font_weight == Some(weight));
+        let gap_settled = gap.is_none_or(|length| style.layout.gap == Some(length));
+        let padding_settled = padding.is_none_or(|(x, y)| {
+            style.layout.padding_left == Some(x)
+                && style.layout.padding_right == Some(x)
+                && style.layout.padding_top == Some(y)
+                && style.layout.padding_bottom == Some(y)
+        });
         if radius_settled
             && corners_settled
             && control_settled
@@ -404,6 +429,9 @@ impl UiWorld {
             && surface_settled
             && square_settled
             && aspect_width_settled
+            && type_settled
+            && gap_settled
+            && padding_settled
         {
             return (Arc::clone(&style.layout), false);
         }
@@ -448,6 +476,22 @@ impl UiWorld {
         }
         if let Some(length) = aspect_width {
             target.width = Some(length);
+        }
+        if let Some(size) = font_size {
+            target.font_size = Some(size);
+        }
+        if let Some(weight) = font_weight {
+            target.font_weight = Some(weight);
+        }
+        if let Some(length) = gap {
+            target.gap = Some(length);
+        }
+        if let Some((x, y)) = padding {
+            target.padding = None;
+            target.padding_left = Some(x);
+            target.padding_right = Some(x);
+            target.padding_top = Some(y);
+            target.padding_bottom = Some(y);
         }
         (layout, true)
     }
@@ -519,8 +563,7 @@ impl UiWorld {
         id: StableNodeId,
         style: &NodeStyle,
     ) -> (Arc<nana_ui_core::LayoutStyle>, bool) {
-        let (mut resolved, mut copied) =
-            Self::resolve_layout_intent(style, self.style_model.metrics);
+        let (mut resolved, mut copied) = Self::resolve_layout_intent(style, self.intent_tokens());
         // A locale's direction, where the node names none (Issue #269).
         if resolved.dir.is_none()
             && let Some(direction) = self.locale_direction(id)
@@ -881,6 +924,7 @@ impl UiWorld {
             self.cancel_hover_transition(id);
         }
         let previous_metrics = self.style_model.metrics;
+        let previous_scales = (self.theme.typography(), self.theme.spacing());
         // A dialog card is placed from its recipe and the hairline its
         // dividers take, which no layout input names; a change to either
         // reaches only the modal frames.
@@ -902,7 +946,10 @@ impl UiWorld {
             self.mark_repaint(id);
         }
         // A corner shape only paints: it moves no box.
-        let metrics_changed = !self.style_model.metrics.same_layout(&previous_metrics);
+        // The type and spacing scales are design intent too: a node that
+        // names a step moves when its scale does.
+        let metrics_changed = !self.style_model.metrics.same_layout(&previous_metrics)
+            || previous_scales != (self.theme.typography(), self.theme.spacing());
         let seeds_before = self.layout_seeds_created;
         let mut ids = Vec::new();
         for roots in self.live_document_roots.values() {
@@ -1365,8 +1412,31 @@ fn scaled_line_height(
 
 /// Whether `style` declares design intent the installed metrics resolve: a
 /// radius tier, a control height or padding step, a surface inset, a square.
+/// What design intent resolves against: the installed metrics, type scale
+/// and spacing scale.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct IntentTokens {
+    pub(crate) metrics: nana_ui_core::ThemeMetrics,
+    pub(crate) typography: nana_ui_core::TypographyTokens,
+    pub(crate) spacing: nana_ui_core::SpacingTokens,
+}
+
+impl UiWorld {
+    pub(crate) fn intent_tokens(&self) -> IntentTokens {
+        IntentTokens {
+            metrics: self.style_model.metrics,
+            typography: self.theme.typography(),
+            spacing: self.theme.spacing(),
+        }
+    }
+}
+
 fn style_declares_intent(style: &NodeStyle) -> bool {
-    style.radius.is_some()
+    style.type_role.is_some()
+        || style.type_weight.is_some()
+        || style.gap_step.is_some()
+        || style.padding_step.is_some()
+        || style.radius.is_some()
         || style.corner_radii.is_some()
         || style.control_height.is_some()
         || style.control_padding_x.is_some()

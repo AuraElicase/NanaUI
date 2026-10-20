@@ -2014,6 +2014,20 @@ pub struct NodeStyle {
     /// so a density setting can move them. It is the box when nothing else
     /// says: an axis whose `width` / `height` the layout writes keeps that.
     pub square: Option<nana_ui_core::SquareSize>,
+    /// Type step, resolved against the installed
+    /// [`nana_ui_core::TypographyTokens`] into `layout.font_size`. Sibling of
+    /// [`Self::radius`]: a node that wrote `font_size = type_scale::BODY`
+    /// spent the token at construction, and a theme that moves the scale
+    /// could not reach it. When set it wins over `layout.font_size`.
+    pub type_role: Option<nana_ui_core::TypeRole>,
+    /// Weight step, resolved into `layout.font_weight` the same way.
+    pub type_weight: Option<nana_ui_core::TextWeight>,
+    /// Gap step between children, resolved against the installed
+    /// [`nana_ui_core::SpacingTokens`] into `layout.gap`.
+    pub gap_step: Option<nana_ui_core::SpacingStep>,
+    /// Inset steps, horizontal then vertical, resolved against the installed
+    /// [`nana_ui_core::SpacingTokens`] into the four padding edges.
+    pub padding_step: Option<[nana_ui_core::SpacingStep; 2]>,
     pub interaction: InteractionStyle,
     pub text_horizontal_alignment: TextHorizontalAlignment,
     pub text_vertical_alignment: TextVerticalAlignment,
@@ -2046,6 +2060,10 @@ impl PartialEq for NodeStyle {
             control_padding_y,
             surface_padding,
             square,
+            type_role,
+            type_weight,
+            gap_step,
+            padding_step,
             interaction,
             text_horizontal_alignment,
             text_vertical_alignment,
@@ -2061,6 +2079,10 @@ impl PartialEq for NodeStyle {
             && control_padding_y == &other.control_padding_y
             && surface_padding == &other.surface_padding
             && square == &other.square
+            && type_role == &other.type_role
+            && type_weight == &other.type_weight
+            && gap_step == &other.gap_step
+            && padding_step == &other.padding_step
             && text_horizontal_alignment == &other.text_horizontal_alignment
             && text_vertical_alignment == &other.text_vertical_alignment
             && interaction == &other.interaction
@@ -2096,6 +2118,10 @@ impl NodeStyle {
             control_padding_y: None,
             surface_padding: None,
             square: None,
+            type_role: None,
+            type_weight: None,
+            gap_step: None,
+            padding_step: None,
             interaction: InteractionStyle::default(),
             text_horizontal_alignment: TextHorizontalAlignment::Start,
             text_vertical_alignment: TextVerticalAlignment::Top,
@@ -2106,6 +2132,35 @@ impl NodeStyle {
     /// 挂上节点自绘。见 [`crate::Painter`]。
     pub fn painter(mut self, painter: impl Into<crate::NodePainter>) -> Self {
         self.painter = Some(painter.into());
+        self
+    }
+
+    /// Name the type step instead of spending it. See [`Self::type_role`].
+    pub fn type_role(mut self, role: nana_ui_core::TypeRole) -> Self {
+        self.type_role = Some(role);
+        self
+    }
+
+    /// Name the weight step. See [`Self::type_weight`].
+    pub fn type_weight(mut self, weight: nana_ui_core::TextWeight) -> Self {
+        self.type_weight = Some(weight);
+        self
+    }
+
+    /// Name the gap step between children. See [`Self::gap_step`].
+    pub fn gap_step(mut self, step: nana_ui_core::SpacingStep) -> Self {
+        self.gap_step = Some(step);
+        self
+    }
+
+    /// Name the inset steps, horizontal then vertical. See
+    /// [`Self::padding_step`].
+    pub fn padding_step(
+        mut self,
+        x: nana_ui_core::SpacingStep,
+        y: nana_ui_core::SpacingStep,
+    ) -> Self {
+        self.padding_step = Some([x, y]);
         self
     }
 
