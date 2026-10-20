@@ -114,6 +114,9 @@ mod scene_gpu;
 mod staged;
 #[cfg(feature = "gpu")]
 pub use native_content::{NativeContentRegion, NativeContentWork, native_content_regions};
+/// A host with no native window, for offscreen acceptance of a whole program.
+#[cfg(feature = "hosted")]
+pub mod headless;
 #[cfg(feature = "hosted")]
 mod scene_host;
 /// Two-phase startup (Issue #225): Early Splash, `UiReady`, takeover.

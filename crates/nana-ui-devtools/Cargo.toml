@@ -61,6 +61,9 @@ runtime-agent = [
     "dep:serde",
     "dep:serde_json",
 ]
+# A whole RuntimeProgram offscreen: its hooks driven by the framework's
+# headless host, its windows painted and read back.
+headless-host = ["runtime-agent", "nana-ui/hosted"]
 # Why a node last changed, in the runtime session's view inspector.
 reactive-trace = ["runtime-agent", "nana-ui/reactive-trace"]
 agent = [

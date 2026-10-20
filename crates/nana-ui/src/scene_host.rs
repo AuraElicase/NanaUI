@@ -15,6 +15,7 @@ mod production;
 mod schedule;
 mod startup;
 mod tasks;
+pub(crate) use tasks::spawn_detached_task_workers;
 mod web_surface;
 mod windows;
 
