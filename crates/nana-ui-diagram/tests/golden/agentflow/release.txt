@@ -1,0 +1,34 @@
+size 405.5 643.6
+summary nodes=7 edges=6 groups=2
+shape rect 9 96.6 387.5 193.9 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 151.1 106.2 103.3 16.8 size=12 w=600 ink=Muted "Drafting Agent"
+shape rect 105.8 338.5 193.9 208.5 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 158.5 348.1 88.5 16.8 size=12 w=600 ink=Muted "Review Agent"
+shape path M159,177 L159,193 Q159,201 167,201 L168.2,201 Q176.2,201 176.2,209 L176.2,223.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M176.2,230 L172.7,221.6 L176.2,223.1 L179.8,221.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M266.7,177 L266.7,199.4 Q266.7,201 265.1,201 L265.1,201 Q263.6,201 263.6,202.6 L263.6,225 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape path M202.7,418.9 L202.7,460.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M202.7,466.9 L199.2,458.5 L202.7,460 L206.3,458.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M202.7,48.6 L202.7,89.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M202.7,96.6 L199.2,88.2 L202.7,89.7 L206.3,88.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M202.7,290.5 L202.7,331.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M202.7,338.5 L199.2,330.1 L202.7,331.6 L206.3,330.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M202.7,531 L202.7,588.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M202.7,595 L199.2,586.6 L202.7,588.2 L206.3,586.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M134,9 L283.4,9 L271.5,48.6 L122.1,48.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 150 19 105.6 19.6 size=14 w=400 ink=Text "Release brief"
+shape rect 135.9 137.4 153.8 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 151.9 147.4 121.8 19.6 size=14 w=400 ink=Text "Draft the notes"
+shape rect 25 230 177.9 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M33,230 L33,269.6 stroke=BorderStrong/hairline/Solid
+shape path M194.9,230 L194.9,269.6 stroke=BorderStrong/hairline/Solid
+text 49 240 129.9 19.6 size=14 w=400 ink=Text "changelog_search"
+shape path M242.9,225 L380.5,225 L380.5,268.6 C346.1,256.7 277.3,280.4 242.9,268.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M252.9,225 L252.9,268.6 stroke=BorderStrong/hairline/Solid
+text 258.9 237 105.6 19.6 size=14 w=400 ink=Text "Tone of voice"
+shape rect 121.8 379.3 161.9 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 137.8 389.3 129.9 19.6 size=14 w=400 ink=Text "Check the claims"
+shape path M202.7,466.9 L266.9,499 L202.7,531 L138.6,499 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 166.2 489.2 73.1 19.6 size=14 w=400 ink=Text "Accurate?"
+shape path M158.3,595 L247.2,595 L257.1,614.8 L247.2,634.6 L158.3,634.6 L148.4,614.8 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 174.3 605 56.8 19.6 size=14 w=400 ink=Text "Publish"
