@@ -2,6 +2,8 @@
 
 pub mod axis;
 pub mod graph;
+pub mod grid;
+pub mod lanes;
 pub mod layered;
 pub mod squarify;
 pub mod tree;
