@@ -4,7 +4,7 @@
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::pie::kit::{self, keyword};
+use super::kit::{self, keyword};
 use super::{LayoutCx, ParseCx};
 use crate::ir::{Align, Geom, Rect, SceneBuilder};
 use crate::text::{FontSpec, LaidText, Label, Measurer};
@@ -115,7 +115,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
     }
     let rows = segments.last().map_or(0, |s| s.row + 1);
-    kit::check(cx.limits, segments.len(), cx.limits.elements, LimitKind::Elements)?;
+    cx.limits.check_count(segments.len(), cx.limits.elements, LimitKind::Elements)?;
 
     let laid: Vec<LaidText> = segments
         .iter()

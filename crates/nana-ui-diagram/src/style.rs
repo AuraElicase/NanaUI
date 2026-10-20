@@ -39,6 +39,14 @@ pub const HIGHLIGHT: Ink = Ink::Role(R::Highlight);
 pub const GRID: Ink = Ink::Role(R::BorderSoft);
 pub const AXIS: Ink = Ink::Role(R::Border);
 
+/// Categorical series colour `index` (cycling past the palette's end).
+pub fn series(index: usize, tone: crate::ir::Tone) -> Ink {
+    Ink::Series {
+        index: index.min(usize::from(u16::MAX)) as u16,
+        tone,
+    }
+}
+
 pub fn node_stroke() -> Stroke {
     Stroke::hairline(NODE_STROKE)
 }

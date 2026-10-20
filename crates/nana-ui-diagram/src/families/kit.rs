@@ -1,13 +1,13 @@
-//! Small pieces the quantitative families (pie, quadrant, radar, sankey,
-//! venn, packet, wardley, cynefin) share: header splitting, quoting,
-//! number formatting and the series legend.
+//! Small pieces every family can use: header and statement splitting,
+//! words, quotes, identifiers and brackets, numbers, warning excerpts and
+//! the series legend.
 
+use crate::DiagramError;
 use crate::families::LayoutCx;
 use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Tone};
 use crate::kind;
 use crate::style;
 use crate::text::LaidText;
-use crate::{DiagramError, LimitKind, Limits};
 
 /// The header's line index and the text after its keyword, or `Empty`.
 pub(crate) fn header(body: &str) -> Result<(usize, &str), DiagramError> {
@@ -18,7 +18,11 @@ pub(crate) fn header(body: &str) -> Result<(usize, &str), DiagramError> {
         }
         return match kind::header(trimmed) {
             Some((_, rest)) => Ok((index, rest.trim_start_matches(':').trim())),
-            None => Err(DiagramError::syntax(index as u32 + 1, 1, "expected a diagram header")),
+            None => Err(DiagramError::syntax(
+                index as u32 + 1,
+                1,
+                "expected a diagram header",
+            )),
         };
     }
     Err(DiagramError::Empty)
@@ -40,6 +44,66 @@ pub(crate) fn keyword<'a>(line: &'a str, word: &str) -> Option<&'a str> {
         return Some("");
     }
     rest.starts_with(char::is_whitespace).then(|| rest.trim())
+}
+
+/// The first whitespace-separated word and the rest, trimmed.
+pub(crate) fn first_word(s: &str) -> (&str, &str) {
+    let s = s.trim_start();
+    match s.find(char::is_whitespace) {
+        Some(i) => (&s[..i], s[i..].trim_start()),
+        None => (s, ""),
+    }
+}
+
+/// The first word, or a whole `"quoted words"` run without its quotes,
+/// and the rest.
+pub(crate) fn first_name(s: &str) -> (&str, &str) {
+    let s = s.trim_start();
+    if let Some(body) = s.strip_prefix('"')
+        && let Some(end) = body.find('"')
+    {
+        return (&body[..end], body[end + 1..].trim_start());
+    }
+    first_word(s)
+}
+
+/// The end of a quoted label at the start of `s`: past the closing `"`,
+/// or past `` `" `` for a markdown string.
+pub(crate) fn quoted_end(s: &str) -> Option<usize> {
+    if let Some(body) = s.strip_prefix("\"`") {
+        body.find("`\"").map(|e| e + 4)
+    } else {
+        s.strip_prefix('"')?.find('"').map(|e| e + 2)
+    }
+}
+
+/// Byte length of the identifier at the start of `s`: letters, digits,
+/// `_` and any of `extra`.
+pub(crate) fn ident_len(s: &str, extra: &str) -> usize {
+    s.char_indices()
+        .find(|&(_, c)| !(c.is_alphanumeric() || c == '_' || extra.contains(c)))
+        .map_or(s.len(), |(i, _)| i)
+}
+
+/// The byte index of the `close` that balances the `open` at index 0,
+/// skipping quoted text.
+pub(crate) fn balanced(s: &str, open: char, close: char) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut quote = false;
+    for (i, c) in s.char_indices() {
+        match c {
+            '"' => quote = !quote,
+            c if c == open && !quote => depth += 1,
+            c if c == close && !quote => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Strip one pair of matching quotes.
@@ -98,11 +162,16 @@ pub(crate) fn fmt_num(v: f64) -> String {
     }
     let s = format!("{:.2}", v);
     let s = s.trim_end_matches('0').trim_end_matches('.');
-    if s == "-0" { "0".to_string() } else { s.to_string() }
+    if s == "-0" {
+        "0".to_string()
+    } else {
+        s.to_string()
+    }
 }
 
-pub(crate) fn check(limits: &Limits, count: usize, bound: usize, kind: LimitKind) -> Result<(), DiagramError> {
-    limits.check_count(count, bound, kind)
+/// The start of `s`, short enough to quote in a warning.
+pub(crate) fn truncate(s: &str) -> String {
+    s.chars().take(40).collect()
 }
 
 /// One legend row: the series swatch, its name and an optional value.
@@ -120,7 +189,13 @@ impl LegendRow {
 
 /// Legend rows stacked from `origin`, vertically centred on `center_y`.
 /// Returns the legend's bounds.
-pub(crate) fn legend(out: &mut SceneBuilder, cx: &LayoutCx<'_>, rows: &[LegendRow], left: f32, center_y: f32) -> Rect {
+pub(crate) fn legend(
+    out: &mut SceneBuilder,
+    cx: &LayoutCx<'_>,
+    rows: &[LegendRow],
+    left: f32,
+    center_y: f32,
+) -> Rect {
     if rows.is_empty() {
         return Rect::new(left, center_y, 0.0, 0.0);
     }
@@ -145,7 +220,13 @@ pub(crate) fn legend(out: &mut SceneBuilder, cx: &LayoutCx<'_>, rows: &[LegendRo
             },
         );
         let tx = left + swatch + gap;
-        out.text(&row.name, [tx, y], row.name.width, Align::Start, style::TEXT);
+        out.text(
+            &row.name,
+            [tx, y],
+            row.name.width,
+            Align::Start,
+            style::TEXT,
+        );
         if let Some(value) = &row.value {
             let vx = tx + row.name.width + gap * 0.6;
             out.text(value, [vx, y], value.width, Align::Start, style::MUTED);
@@ -166,7 +247,10 @@ mod tests {
         assert_eq!(fmt_num(386.0), "386");
         assert_eq!(fmt_num(0.004), "0");
         assert_eq!(unquote("\"a b\""), "a b");
-        assert_eq!(split_top("a[\"x, y\"], b{1, 2}", ','), vec!["a[\"x, y\"]", " b{1, 2}"]);
+        assert_eq!(
+            split_top("a[\"x, y\"], b{1, 2}", ','),
+            vec!["a[\"x, y\"]", " b{1, 2}"]
+        );
         assert_eq!(pair("[0.3, 0.6]"), Some((0.3, 0.6)));
         assert_eq!(keyword("title  Hi", "title"), Some("Hi"));
         assert_eq!(keyword("titles", "title"), None);
@@ -177,7 +261,7 @@ mod tests {
     #[test]
     fn large_inputs_finish() {
         use crate::{DiagramMetrics, FixedMeasure, render};
-        let limits = Limits::DEFAULT;
+        let limits = crate::Limits::DEFAULT;
         let mut sources = Vec::new();
         let mut pie = String::from("pie showData\n");
         let mut quad = String::from("quadrantChart\n");
@@ -189,12 +273,25 @@ mod tests {
         let mut cynefin = String::from("cynefin-beta\ncomplex\n");
         for i in 0..1200 {
             pie.push_str(&format!("\"s{i}\" : {}\n", i % 7 + 1));
-            quad.push_str(&format!("p{i}: [{}, {}]\n", (i % 97) as f32 / 97.0, (i % 89) as f32 / 89.0));
+            quad.push_str(&format!(
+                "p{i}: [{}, {}]\n",
+                (i % 97) as f32 / 97.0,
+                (i % 89) as f32 / 89.0
+            ));
             radar.push_str(&format!("a{i}, "));
-            sankey.push_str(&format!("n{},n{},{}\n", i % 300, i % 300 + 1 + i % 5, i % 9 + 1));
+            sankey.push_str(&format!(
+                "n{},n{},{}\n",
+                i % 300,
+                i % 300 + 1 + i % 5,
+                i % 9 + 1
+            ));
             venn.push_str(&format!("union A,B[\"u{i}\"]\n  text t{i}\n"));
             packet.push_str("+3: \"field with a long name\"\n");
-            wardley.push_str(&format!("component c{i} [{}, {}]\n", (i % 83) as f32 / 83.0, (i % 79) as f32 / 79.0));
+            wardley.push_str(&format!(
+                "component c{i} [{}, {}]\n",
+                (i % 83) as f32 / 83.0,
+                (i % 79) as f32 / 79.0
+            ));
             if i > 0 {
                 wardley.push_str(&format!("c{} -> c{i}\n", i - 1));
             }

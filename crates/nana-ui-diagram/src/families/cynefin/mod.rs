@@ -3,7 +3,7 @@
 //! bottom right, Confusion in the middle — with each domain's items and
 //! `a --> b : "label"` transitions between domains.
 
-use super::pie::kit::{self, keyword};
+use super::kit::{self, keyword};
 use super::{LayoutCx, ParseCx};
 use crate::geom::{Marker, PathData};
 use crate::ir::{Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
@@ -118,7 +118,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 (Some(from), Some(to)) if from == to => {}
                 (Some(from), Some(to)) => {
                     count += 1;
-                    kit::check(cx.limits, count, cx.limits.elements, LimitKind::Elements)?;
+                    cx.limits.check_count(count, cx.limits.elements, LimitKind::Elements)?;
                     let label = match label.map(|l| kit::unquote(l.trim()).trim()) {
                         Some(l) if !l.is_empty() => Some(cx.label(l)?),
                         _ => None,
@@ -133,7 +133,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 continue;
             };
             count += 1;
-            kit::check(cx.limits, count, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits.check_count(count, cx.limits.elements, LimitKind::Elements)?;
             let label = cx.label(kit::unquote(stmt))?;
             if !label.is_empty() {
                 model.items[domain.index()].push(label);

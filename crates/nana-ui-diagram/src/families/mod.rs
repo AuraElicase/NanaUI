@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub(crate) mod graphkit;
+pub(crate) mod kit;
 
 macro_rules! families {
     ($($kind:ident => $module:ident),* $(,)?) => {
@@ -85,6 +86,25 @@ families! {
     Wardley => wardley,
     XyChart => xychart,
     ZenUml => zenuml,
+}
+
+/// Parse `source` with `parse` under default limits and config, for unit
+/// tests: the result and the warnings it produced.
+#[cfg(test)]
+pub(crate) fn parse_for_test<T>(
+    source: &str,
+    parse: impl FnOnce(&str, &mut ParseCx<'_>) -> Result<T, DiagramError>,
+) -> (Result<T, DiagramError>, Vec<Warning>, Meta) {
+    let limits = Limits::DEFAULT;
+    let config = Config::default();
+    let mut cx = ParseCx {
+        limits: &limits,
+        config: &config,
+        meta: Meta::default(),
+        warnings: Vec::new(),
+    };
+    let result = parse(source, &mut cx);
+    (result, cx.warnings, cx.meta)
 }
 
 /// What a parser reads with and reports to.

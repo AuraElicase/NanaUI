@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use super::{Curve, Edge, EndRef, LineKind, Model, Node, Subgraph};
 use crate::families::ParseCx;
+use crate::families::kit::{first_word, truncate};
 use crate::geom::{Marker, Shape};
 use crate::kind;
 use crate::layout::Direction;
@@ -122,13 +123,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     p.finish()
 }
 
-fn first_word(s: &str) -> (&str, &str) {
-    let s = s.trim_start();
-    match s.find(char::is_whitespace) {
-        Some(i) => (&s[..i], s[i..].trim_start()),
-        None => (s, ""),
-    }
-}
 
 impl Parser<'_, '_> {
     fn statement(&mut self, stmt: &str) -> Result<(), DiagramError> {
@@ -464,9 +458,6 @@ impl Parser<'_, '_> {
     }
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
 
 /// Whitespace-separated words where `"..."` is one word.
 struct Words<'s> {
@@ -882,21 +873,11 @@ fn attributes(body: &str) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]

@@ -2,11 +2,10 @@
 //! Slices run clockwise from twelve o'clock in source order; the legend
 //! sits on the right.
 
-pub(crate) mod kit;
 
 use std::f32::consts::{FRAC_PI_2, TAU};
 
-use self::kit::{LegendRow, fmt_num, keyword};
+use super::kit::{self, LegendRow, fmt_num, keyword};
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
 use crate::ir::{Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
@@ -54,7 +53,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
         match slice(stmt) {
             Some((label, value)) if value >= 0.0 => {
-                kit::check(cx.limits, model.slices.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+                cx.limits.check_count(model.slices.len() + 1, cx.limits.elements, LimitKind::Elements)?;
                 let label = cx.label(label)?;
                 model.slices.push(Slice { label, value });
             }

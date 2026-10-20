@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, TAU};
 
-use super::pie::kit::{self, LegendRow, keyword, split_top};
+use super::kit::{self, LegendRow, keyword, split_top};
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
 use crate::ir::{Align, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
@@ -83,7 +83,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                     continue;
                 }
                 let (id, label) = id_label(cx, item)?;
-                kit::check(cx.limits, model.axes.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+                cx.limits.check_count(model.axes.len() + 1, cx.limits.elements, LimitKind::Elements)?;
                 ids.entry(id).or_insert(model.axes.len());
                 model.axes.push(Axis { label });
             }
@@ -104,7 +104,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 let (_, label) = id_label(cx, &item[..open])?;
                 match values(inner) {
                     Some(v) => {
-                        kit::check(cx.limits, raw.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+                        cx.limits.check_count(raw.len() + 1, cx.limits.elements, LimitKind::Elements)?;
                         raw.push((line, label, v));
                     }
                     None => cx.warn(line, format!("unreadable values in curve `{item}`")),
@@ -135,7 +135,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
     }
     let n = model.axes.len();
-    kit::check(cx.limits, n * raw.len(), cx.limits.elements * 4, LimitKind::Elements)?;
+    cx.limits.check_count(n * raw.len(), cx.limits.elements * 4, LimitKind::Elements)?;
     for (line, label, values) in raw {
         let values = match values {
             Values::List(list) => {
