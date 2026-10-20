@@ -56,7 +56,7 @@ struct LevelEdge {
     port: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct Level {
     cluster: Option<usize>,
     dir: Direction,
@@ -67,10 +67,10 @@ struct Level {
     doubled: bool,
 }
 
-/// One level's geometry, on screen, relative to its box's top-left.
 /// A route on screen and its label's centre.
 type Segment = (Vec<[f32; 2]>, Option<[f32; 2]>);
 
+/// One level's geometry, on screen, relative to its box's top-left.
 #[derive(Debug, Clone, Default)]
 struct LevelGeom {
     size: [f32; 2],
@@ -150,11 +150,7 @@ pub fn layout(
         .map(|&cluster| Level {
             cluster,
             dir: graph.direction,
-            items: Vec::new(),
-            edges: Vec::new(),
-            self_loops: Vec::new(),
-            ranks: Vec::new(),
-            doubled: false,
+            ..Level::default()
         })
         .collect();
     // Items: member nodes, then member clusters.
@@ -228,18 +224,7 @@ pub fn layout(
     let mut pending: Vec<Vec<(usize, Side, GlobalEnd)>> = vec![Vec::new(); levels.len()];
     let mut depth_of_path: HashMap<(usize, GlobalEnd), usize> = HashMap::new();
     for li in 0..levels.len() {
-        let mut level = std::mem::replace(
-            &mut levels[li],
-            Level {
-                cluster: None,
-                dir: Direction::TB,
-                items: Vec::new(),
-                edges: Vec::new(),
-                self_loops: Vec::new(),
-                ranks: Vec::new(),
-                doubled: false,
-            },
-        );
+        let mut level = std::mem::take(&mut levels[li]);
         // Direction: a group that edges leave follows its parent.
         if let Some(c) = level.cluster {
             let parent_dir = levels[level_index(graph.clusters[c].parent)].dir;

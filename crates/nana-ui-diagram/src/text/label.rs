@@ -149,14 +149,6 @@ impl Label {
             .collect::<Vec<_>>()
             .join(" ")
     }
-
-    pub fn char_count(&self) -> usize {
-        self.lines
-            .iter()
-            .flatten()
-            .map(|r| r.text.chars().count())
-            .sum()
-    }
 }
 
 fn trim_lines(lines: &mut Vec<Vec<Run>>) {

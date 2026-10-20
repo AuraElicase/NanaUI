@@ -8,7 +8,7 @@ mod preamble;
 
 use std::collections::BTreeMap;
 
-use crate::{DiagramError, Meta};
+use crate::Meta;
 
 pub use preamble::preprocess;
 
@@ -79,8 +79,4 @@ pub fn split_statements(line: &str) -> Vec<(usize, &str)> {
     }
     out.push((start, &line[start..]));
     out
-}
-
-pub(crate) fn empty_error() -> DiagramError {
-    DiagramError::Empty
 }

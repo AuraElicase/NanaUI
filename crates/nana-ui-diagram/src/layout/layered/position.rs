@@ -54,8 +54,8 @@ pub(crate) fn position_x(
                 base.clone()
             };
             let neighbours = if vertical_up { up } else { down };
-            let (root, align) = vertical_alignment(n, &layering, &conflicts, neighbours);
-            let mut xs = compaction(n, &layering, &root, &align, sep);
+            let root = vertical_alignment(n, &layering, &conflicts, neighbours);
+            let mut xs = compaction(n, &layering, &root, sep);
             if right {
                 for x in &mut xs {
                     *x = -*x;
@@ -161,7 +161,7 @@ fn vertical_alignment(
     layering: &[Vec<usize>],
     conflicts: &HashSet<(usize, usize)>,
     neighbours: &[Vec<usize>],
-) -> (Vec<usize>, Vec<usize>) {
+) -> Vec<usize> {
     let mut root: Vec<usize> = (0..n).collect();
     let mut align: Vec<usize> = (0..n).collect();
     let mut pos = vec![0usize; n];
@@ -189,16 +189,10 @@ fn vertical_alignment(
             }
         }
     }
-    (root, align)
+    root
 }
 
-fn compaction(
-    n: usize,
-    layering: &[Vec<usize>],
-    root: &[usize],
-    _align: &[usize],
-    sep: &Separation<'_>,
-) -> Vec<f32> {
+fn compaction(n: usize, layering: &[Vec<usize>], root: &[usize], sep: &Separation<'_>) -> Vec<f32> {
     // Block graph: an edge root(u) → root(v) for each left neighbour u of v,
     // weighted by the separation they need.
     let mut out_edges: Vec<Vec<(usize, f32)>> = vec![Vec::new(); n];
