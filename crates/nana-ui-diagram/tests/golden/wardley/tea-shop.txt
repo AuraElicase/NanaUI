@@ -1,0 +1,50 @@
+size 949 599.4
+summary nodes=6 edges=5 groups=0
+shape rect 91.6 51 840 476 fill=Surface
+text 172.2 534 48.7 16.8 size=12 w=400 ink=Muted "Genesis"
+shape path M301.6,51 L301.6,527 stroke=BorderSoft/hairline/Dashed
+text 364.8 534 83.5 16.8 size=12 w=400 ink=Muted "Custom-Built"
+shape path M511.6,51 L511.6,527 stroke=BorderSoft/hairline/Dashed
+text 592.2 534 48.7 16.8 size=12 w=400 ink=Muted "Product"
+text 585.2 550.8 62.6 16.8 size=12 w=400 ink=Muted "(+rental)"
+shape path M721.6,51 L721.6,527 stroke=BorderSoft/hairline/Dashed
+text 795.2 534 62.6 16.8 size=12 w=400 ink=Muted "Commodity"
+text 791.8 550.8 69.6 16.8 size=12 w=400 ink=Muted "(+utility)"
+shape path M91.6,527 L933.2,527 stroke=Border/hairline/Solid
+shape path M940,527 L931.6,530.5 L933.1,527 L931.6,523.5 Z fill=Border stroke=Border/hairline/Solid
+shape path M91.6,527 L91.6,49.3 stroke=Border/hairline/Solid
+shape path M91.6,42.6 L95.1,51 L91.6,49.5 L88,51 Z fill=Border stroke=Border/hairline/Solid
+text 877.3 574.6 62.6 16.8 size=12 w=400 ink=Muted "Evolution"
+text 8 42.6 76.6 16.8 size=12 w=400 ink=Muted "Value Chain"
+text 35.8 79 48.7 16.8 size=12 w=400 ink=Muted "Visible"
+text 21.9 510.2 62.6 16.8 size=12 w=400 ink=Muted "Invisible"
+shape path M619.5,80.7 L605.3,145.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M609.5,153.5 L766.5,224.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M608.7,154.7 L758.9,275.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M757.6,280.2 L391.6,321.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M390.9,325.2 L674.2,476.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M392.6,322.3 L598.6,322.3 stroke=Danger/hairline/Dashed
+shape path M605.3,322.3 L596.9,325.8 L598.4,322.3 L596.9,318.8 Z fill=Danger stroke=Danger/hairline/Solid
+shape ellipse 607.3 317.3 10.1 10.1 fill=Surface stroke=Danger/hairline/Solid
+text 621.4 313.9 41.8 16.8 size=12 w=400 ink=Danger "Kettle"
+shape path M686.6,479.4 L825.4,479.4 stroke=Danger/hairline/Dashed
+shape path M832.1,479.4 L823.7,482.9 L825.2,479.4 L823.7,475.9 Z fill=Danger stroke=Danger/hairline/Solid
+shape ellipse 834.1 474.4 10.1 10.1 fill=Surface stroke=Danger/hairline/Solid
+text 848.2 471 34.8 16.8 size=12 w=400 ink=Danger "Power"
+shape ellipse 598.9 145.9 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape ellipse 766.9 222.1 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape ellipse 758.5 274.4 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape ellipse 380.5 317.3 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape ellipse 674.5 474.4 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+text 503.2 359 140.2 16.8 size=12 w=600 ink=Text "Standardising power"
+text 503.2 375.8 125.4 16.8 size=12 w=600 ink=Text "allows Kettles to"
+text 503.2 392.6 95.9 16.8 size=12 w=600 ink=Text "evolve faster"
+shape rect 582.3 65 76.9 19.6 fill=Surface
+text 586.3 65 68.9 19.6 size=14 w=600 ink=Text "Business"
+text 612 133.2 69.6 16.8 size=12 w=400 ink=Text "Cup of Tea"
+text 780 209.3 20.9 16.8 size=12 w=400 ink=Text "Tea"
+text 771.6 261.7 62.6 16.8 size=12 w=400 ink=Text "Hot Water"
+text 393.6 304.5 41.8 16.8 size=12 w=400 ink=Text "Kettle"
+text 687.6 461.6 34.8 16.8 size=12 w=400 ink=Text "Power"
+shape rect 91.6 51 840 476 stroke=BorderSoft/hairline/Solid
+text 376.1 8 196.7 22.4 size=16 w=600 ink=Text "Tea Shop Value Chain"

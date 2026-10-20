@@ -1,0 +1,21 @@
+size 416.2 393.5
+summary nodes=3 edges=0 groups=1
+shape ellipse 9 9 252 252 fill=series0.soft
+shape ellipse 155.2 9 252 252 fill=series1.soft
+shape ellipse 82.1 132.5 252 252 fill=series2.soft
+clip ellipse 9 9 252 252
+shape ellipse 155.2 9 252 252 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+clip ellipse 9 9 252 252
+shape ellipse 82.1 132.5 252 252 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+clip ellipse 155.2 9 252 252
+shape ellipse 82.1 132.5 252 252 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+shape ellipse 9 9 252 252 stroke=series0/thick/Solid
+shape ellipse 155.2 9 252 252 stroke=series1/thick/Solid
+shape ellipse 82.1 132.5 252 252 stroke=series2/thick/Solid
+text 47.7 93.1 77.5 19.6 size=14 w=600 ink=Text "Desirable"
+text 295.3 93.1 68.9 19.6 size=14 w=600 ink=Text "Feasible"
+text 182.3 306.9 51.6 19.6 size=14 w=600 ink=Text "Viable"
+text 167.5 166.1 81.2 19.6 size=14 w=400 ink=Text "Innovation"

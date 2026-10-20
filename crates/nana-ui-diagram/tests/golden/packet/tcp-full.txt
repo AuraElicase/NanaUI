@@ -1,0 +1,69 @@
+size 846.8 433.6
+summary nodes=17 edges=0 groups=0
+shape rect 9 55.9 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 177.9 64.3 76.6 16.8 size=12 w=400 ink=Text "Source Port"
+text 11 41.6 5.9 14.3 size=10.2 w=400 ink=Muted "0"
+text 409.6 41.6 11.8 14.3 size=10.2 w=400 ink=Muted "15"
+shape rect 423.4 55.9 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 574.9 64.3 111.4 16.8 size=12 w=400 ink=Text "Destination Port"
+text 425.4 41.6 11.8 14.3 size=10.2 w=400 ink=Muted "16"
+text 824 41.6 11.8 14.3 size=10.2 w=400 ink=Muted "31"
+shape rect 9 103.8 828.8 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 371.2 112.2 104.4 16.8 size=12 w=400 ink=Text "Sequence Number"
+text 11 89.5 11.8 14.3 size=10.2 w=400 ink=Muted "32"
+text 824 89.5 11.8 14.3 size=10.2 w=400 ink=Muted "63"
+shape rect 9 151.6 828.8 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 350.3 160 146.2 16.8 size=12 w=400 ink=Text "Acknowledgment Number"
+text 11 137.4 11.8 14.3 size=10.2 w=400 ink=Muted "64"
+text 824 137.4 11.8 14.3 size=10.2 w=400 ink=Muted "95"
+shape rect 9 199.5 103.6 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 22.5 207.9 76.6 16.8 size=12 w=400 ink=Text "Data Offset"
+text 11 185.2 11.8 14.3 size=10.2 w=400 ink=Muted "96"
+text 98.8 185.2 11.8 14.3 size=10.2 w=400 ink=Muted "99"
+shape rect 112.6 199.5 155.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 162.5 207.9 55.7 16.8 size=12 w=400 ink=Text "Reserved"
+text 114.6 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "100"
+text 248.3 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "105"
+shape rect 268 199.5 25.9 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 270.5 207.9 20.9 16.8 size=12 w=400 ink=Text "URG"
+text 272.1 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "106"
+shape rect 293.9 199.5 25.9 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 296.4 207.9 20.9 16.8 size=12 w=400 ink=Text "ACK"
+text 298 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "107"
+shape rect 319.8 199.5 25.9 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 322.3 207.9 20.9 16.8 size=12 w=400 ink=Text "PSH"
+text 323.9 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "108"
+shape rect 345.7 199.5 25.9 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 348.2 207.9 20.9 16.8 size=12 w=400 ink=Text "RST"
+text 349.8 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "109"
+shape rect 371.6 199.5 25.9 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 374.1 207.9 20.9 16.8 size=12 w=400 ink=Text "SYN"
+text 375.7 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "110"
+shape rect 397.5 199.5 25.9 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 400 207.9 20.9 16.8 size=12 w=400 ink=Text "FIN"
+text 401.6 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "111"
+shape rect 423.4 199.5 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 609.7 207.9 41.8 16.8 size=12 w=400 ink=Text "Window"
+text 425.4 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "112"
+text 818.1 185.2 17.7 14.3 size=10.2 w=400 ink=Muted "127"
+shape rect 9 247.4 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 188.4 255.8 55.7 16.8 size=12 w=400 ink=Text "Checksum"
+text 11 233.1 17.7 14.3 size=10.2 w=400 ink=Muted "128"
+text 403.7 233.1 17.7 14.3 size=10.2 w=400 ink=Muted "143"
+shape rect 423.4 247.4 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 581.9 255.8 97.4 16.8 size=12 w=400 ink=Text "Urgent Pointer"
+text 425.4 233.1 17.7 14.3 size=10.2 w=400 ink=Muted "144"
+text 818.1 233.1 17.7 14.3 size=10.2 w=400 ink=Muted "159"
+shape rect 9 295.3 828.8 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 350.3 303.7 146.2 16.8 size=12 w=400 ink=Text "(Options and Padding)"
+text 11 281 17.7 14.3 size=10.2 w=400 ink=Muted "160"
+text 818.1 281 17.7 14.3 size=10.2 w=400 ink=Muted "191"
+shape rect 9 343.2 828.8 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 346.8 351.6 153.1 16.8 size=12 w=400 ink=Text "Data (variable length)"
+text 11 328.9 17.7 14.3 size=10.2 w=400 ink=Muted "192"
+text 818.1 328.9 17.7 14.3 size=10.2 w=400 ink=Muted "223"
+shape rect 9 391 828.8 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 346.8 399.4 153.1 16.8 size=12 w=400 ink=Text "Data (variable length)"
+text 11 376.8 17.7 14.3 size=10.2 w=400 ink=Muted "224"
+text 818.1 376.8 17.7 14.3 size=10.2 w=400 ink=Muted "255"
+text 374.2 8 98.4 22.4 size=16 w=600 ink=Text "TCP Packet"

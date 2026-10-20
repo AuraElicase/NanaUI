@@ -1,0 +1,29 @@
+size 479.7 497.8
+summary nodes=5 edges=0 groups=4
+shape rect 260.7 47.9 210 210 fill=series0.soft
+shape rect 50.7 47.9 210 210 fill=series1.soft
+shape rect 50.7 257.9 210 210 fill=series2.soft
+shape rect 260.7 257.9 210 210 fill=series3.soft
+shape path M260.7,47.9 L260.7,467.9 M50.7,257.9 L470.7,257.9 stroke=Surface/thick/Solid
+shape rect 50.7 47.9 420 420 stroke=Border/hairline/Solid
+text 269.3 56.3 192.9 19.6 size=14 w=600 ink=Text "首选：成熟且容易上手，可以"
+text 298.9 75.9 133.6 19.6 size=14 w=600 ink=Text "直接在新项目里采用"
+text 126 56.3 59.4 19.6 size=14 w=600 ink=Text "值得投入"
+text 140.9 266.3 29.7 19.6 size=14 w=600 ink=Text "暂缓"
+text 350.9 266.3 29.7 19.6 size=14 w=600 ink=Text "观察"
+text 125.7 473 60 16.8 size=12 w=400 ink=Muted "学习成本低"
+text 8 354.5 36 16.8 size=12 w=400 ink=Muted "社区小"
+text 8 144.5 36 16.8 size=12 w=400 ink=Muted "社区大"
+shape path M47.4,270.5 L47.4,250.7 stroke=Muted/hairline/Solid
+shape path M47.4,245.3 L50.2,252 L47.4,250.8 L44.5,252 Z fill=Muted stroke=Muted/hairline/Solid
+shape ellipse 150.4 126.6 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 381.4 147.6 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 129.4 420.6 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 276.4 441.6 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 444.4 42.6 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+text 141.8 139.2 27.8 16.8 size=12 w=400 ink=Text "Rust"
+text 364.3 160.2 44.9 16.8 size=12 w=400 ink=Text "Go 语言"
+text 124.3 433.2 20.9 16.8 size=12 w=400 ink=Text "Zig"
+text 271.3 422.8 20.9 16.8 size=12 w=400 ink=Text "Elm"
+text 427 105.6 41.8 16.8 size=12 w=400 ink=Text "Python"
+text 189 8 101.8 22.4 size=16 w=600 ink=Text "技术选型评估"

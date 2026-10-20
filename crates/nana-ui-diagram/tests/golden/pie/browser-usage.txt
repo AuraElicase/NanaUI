@@ -1,0 +1,26 @@
+size 429.5 317
+summary nodes=5 edges=0 groups=0
+shape path M138.4,168.6 L138.4,42.6 C198.2,42.6 249.8,84.6 261.8,143.2 C273.9,201.7 243.1,260.7 188.2,284.3 C133.3,308 69.3,289.8 35.1,240.7 Z fill=series0 stroke=Surface/thick/Solid
+shape path M138.4,168.6 L35.1,240.7 C16.6,214.2 9,181.6 13.9,149.7 Z fill=series1 stroke=Surface/thick/Solid
+shape path M138.4,168.6 L13.9,149.7 C21.2,101.4 55.7,61.7 102.5,47.8 Z fill=series2 stroke=Surface/thick/Solid
+shape path M138.4,168.6 L102.5,47.8 C110.6,45.4 118.9,43.8 127.4,43.1 Z fill=series3 stroke=Surface/thick/Solid
+shape path M138.4,168.6 L127.4,43.1 C131,42.8 134.7,42.6 138.4,42.6 Z fill=series4 stroke=Surface/thick/Solid
+text 204 199.8 20.9 16.8 size=12 w=400 ink=series0.on "65%"
+text 44.5 179.7 20.9 16.8 size=12 w=400 ink=series1.on "12%"
+text 63.4 103.9 20.9 16.8 size=12 w=400 ink=series2.on "18%"
+shape rect 292.4 112.6 12 12 r=Xs fill=series0
+text 311.6 108.8 48.7 19.6 size=14 w=400 ink=Text "Chrome"
+text 364.7 108.8 48.7 19.6 size=14 w=400 ink=Muted "[65.3]"
+shape rect 292.4 137.6 12 12 r=Xs fill=series1
+text 311.6 133.8 56.8 19.6 size=14 w=400 ink=Text "Firefox"
+text 372.8 133.8 48.7 19.6 size=14 w=400 ink=Muted "[12.1]"
+shape rect 292.4 162.6 12 12 r=Xs fill=series2
+text 311.6 158.8 48.7 19.6 size=14 w=400 ink=Text "Safari"
+text 364.7 158.8 32.5 19.6 size=14 w=400 ink=Muted "[18]"
+shape rect 292.4 187.6 12 12 r=Xs fill=series3
+text 311.6 183.8 32.5 19.6 size=14 w=400 ink=Text "Edge"
+text 348.4 183.8 40.6 19.6 size=14 w=400 ink=Muted "[3.2]"
+shape rect 292.4 212.6 12 12 r=Xs fill=series4
+text 311.6 208.8 40.6 19.6 size=14 w=400 ink=Text "Other"
+text 356.5 208.8 40.6 19.6 size=14 w=400 ink=Muted "[1.4]"
+text 150.8 8 127.9 22.4 size=16 w=600 ink=Text "Browser usage"
