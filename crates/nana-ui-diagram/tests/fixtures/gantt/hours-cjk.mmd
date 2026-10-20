@@ -1,0 +1,17 @@
+---
+title: 发布日排期
+---
+gantt
+    dateFormat HH:mm
+    axisFormat %H:%M
+    tickInterval 30minute
+    todayMarker 10:15
+    section 准备
+        冻结代码 : milestone, freeze, 09:00, 0m
+        构建与签名 : build, after freeze, 45m
+        冒烟测试 : crit, smoke, after build, 30m
+    section 发布
+        灰度 10% : active, canary, after smoke, 40m
+        全量发布并观察错误率与延迟指标 : after canary, 1h
+        公告 : vert, 11:30, 0m
+    click build href "https://example.com/build"
