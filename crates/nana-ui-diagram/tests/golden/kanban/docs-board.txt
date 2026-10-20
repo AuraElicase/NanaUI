@@ -1,0 +1,67 @@
+size 1416 320.8
+summary nodes=10 edges=0 groups=6
+shape rect 8 8 220 304.8 r=Md fill=Subtle
+text 24 18 34.4 19.6 size=14 w=600 ink=Text "Todo"
+text 205 19.4 7 16.8 size=12 w=400 ink=Muted "2"
+shape rect 18 47.6 200 39.6 r=Sm fill=Surface stroke=Border/hairline/Solid
+text 39 57.6 162.4 19.6 size=14 w=400 ink=Text "Create Documentation"
+shape rect 18 95.2 200 59.2 r=Sm fill=Surface stroke=Border/hairline/Solid
+text 39 105.2 138 19.6 size=14 w=400 ink=Text "Create Blog about"
+text 39 124.8 121.8 19.6 size=14 w=400 ink=Text "the new diagram"
+shape rect 244 8 220 304.8 r=Md fill=Subtle
+text 260 18 94.7 19.6 size=14 w=600 ink=Text "In progress"
+text 441 19.4 7 16.8 size=12 w=400 ink=Muted "1"
+shape rect 254 47.6 200 176.8 r=Sm fill=Surface stroke=Border/hairline/Solid
+text 275 57.6 146.2 19.6 size=14 w=400 ink=Text "Create renderer so"
+text 275 77.2 162.4 19.6 size=14 w=400 ink=Text "that it works in all"
+text 275 96.8 146.2 19.6 size=14 w=400 ink=Text "cases. We also add"
+text 275 116.4 162.4 19.6 size=14 w=400 ink=Text "some extra text here"
+text 275 136 89.3 19.6 size=14 w=400 ink=Text "for testing"
+text 275 155.6 146.2 19.6 size=14 w=400 ink=Text "purposes. And some"
+text 275 175.2 138 19.6 size=14 w=400 ink=Text "more just for the"
+text 275 194.8 97.4 19.6 size=14 w=400 ink=Text "extra flare."
+shape rect 480 8 220 304.8 r=Md fill=Subtle
+text 496 18 137.7 19.6 size=14 w=600 ink=Text "Ready for deploy"
+text 677 19.4 7 16.8 size=12 w=400 ink=Muted "1"
+shape rect 490 47.6 200 60.6 r=Sm fill=Surface stroke=Border/hairline/Solid
+text 511 57.6 113.7 19.6 size=14 w=400 ink=Text "Design grammar"
+text 650.2 81.4 27.8 16.8 size=12 w=400 ink=Muted "knsv"
+shape rect 716 8 220 304.8 r=Md fill=Subtle
+text 732 18 120.5 19.6 size=14 w=600 ink=Text "Ready for test"
+text 913 19.4 7 16.8 size=12 w=400 ink=Muted "2"
+shape rect 726 47.6 200 60.6 r=Sm fill=Surface stroke=Border/hairline/Solid
+shape rect 738 57.6 3 40.6 r=Full fill=Warning
+text 747 57.6 162.4 19.6 size=14 w=400 ink=Text "Create parsing tests"
+text 747 81.4 48.7 16.8 size=12 w=400 ink=Muted "MC-2038"
+text 830.5 81.4 83.5 16.8 size=12 w=400 ink=Muted "K.Sveidqvist"
+shape rect 726 116.2 200 60.6 r=Sm fill=Surface stroke=Border/hairline/Solid
+shape rect 738 126.2 3 40.6 r=Full fill=Faint
+text 747 126.2 73.1 19.6 size=14 w=400 ink=Text "last item"
+text 886.2 150 27.8 16.8 size=12 w=400 ink=Muted "knsv"
+shape rect 952 8 220 304.8 r=Md fill=Subtle
+text 968 18 34.4 19.6 size=14 w=600 ink=Text "Done"
+text 1149 19.4 7 16.8 size=12 w=400 ink=Muted "3"
+shape rect 962 47.6 200 39.6 r=Sm fill=Surface stroke=Border/hairline/Solid
+text 983 57.6 113.7 19.6 size=14 w=400 ink=Text "define getData"
+shape rect 962 95.2 200 139 r=Sm fill=Surface stroke=Border/hairline/Solid
+shape rect 974 105.2 3 119 r=Full fill=Danger
+text 983 105.2 154.3 19.6 size=14 w=400 ink=Text "Title of diagram is"
+text 983 124.8 154.3 19.6 size=14 w=400 ink=Text "more than 100 chars"
+text 983 144.4 162.4 19.6 size=14 w=400 ink=Text "when user duplicates"
+text 983 164 129.9 19.6 size=14 w=400 ink=Text "diagram with 100"
+text 983 183.6 32.5 19.6 size=14 w=400 ink=Text "char"
+text 983 207.4 48.7 16.8 size=12 w=400 ink=Muted "MC-2036"
+shape rect 962 242.2 200 60.6 r=Sm fill=Surface stroke=Border/hairline/Solid
+shape rect 974 252.2 3 40.6 r=Full fill=Warning
+text 983 252.2 146.2 19.6 size=14 w=400 ink=Text "Update DB function"
+text 983 276 48.7 16.8 size=12 w=400 ink=Muted "MC-2037"
+text 1122.2 276 27.8 16.8 size=12 w=400 ink=Muted "knsv"
+shape rect 1188 8 220 304.8 r=Md fill=Subtle
+text 1204 18 129.1 19.6 size=14 w=600 ink=Text "Can't reproduce"
+text 1385 19.4 7 16.8 size=12 w=400 ink=Muted "1"
+shape rect 1198 47.6 200 59.2 r=Sm fill=Surface stroke=Border/hairline/Solid
+text 1219 57.6 154.3 19.6 size=14 w=400 ink=Text "Weird flickering in"
+text 1219 77.2 56.8 19.6 size=14 w=400 ink=Text "Firefox"
+link 726 47.6 200 60.6 "https://mermaidchart.atlassian.net/browse/MC-2038"
+link 962 95.2 200 139 "https://mermaidchart.atlassian.net/browse/MC-2036"
+link 962 242.2 200 60.6 "https://mermaidchart.atlassian.net/browse/MC-2037"
