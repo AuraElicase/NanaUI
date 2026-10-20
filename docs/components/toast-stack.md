@@ -110,4 +110,4 @@ cx.remove_toast(stack, toast)?;
 
 ## 参见
 
-[总览](index.md) · [Toast](toast.md) · [控件](../reference/components.md)
+[总览](index.md) · [Toast](toast.md) · [控件](../reference/components.md)（含多窗口通知中心 `nana_ui::notices`）
