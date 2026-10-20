@@ -13525,3 +13525,125 @@ fn a_host_texture_gradient_mask_takes_the_stops_alpha_not_their_luminance() {
         );
     }
 }
+
+/// A painter's adjacent solid boxes go out as one batch primitive and paint
+/// exactly what they painted one primitive each: same order, same blending.
+mod painted_quad_runs {
+    use super::*;
+    use nana_ui_runtime::{BoxPaint, PaintContext, Painter, Stack};
+
+    /// Overlapping boxes, the later ones translucent, so a reordered or
+    /// double-blended box shows. `radius` per box: unequal neighbours never
+    /// share a primitive.
+    struct Boxes(fn(usize) -> f32);
+
+    const COLORS: [[f32; 4]; 4] = [
+        [1.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.5],
+        [0.0, 1.0, 0.0, 0.5],
+        [1.0, 1.0, 1.0, 0.25],
+    ];
+
+    impl Painter for Boxes {
+        fn paint(&self, cx: &mut PaintContext<'_>) {
+            for (index, color) in COLORS.into_iter().enumerate() {
+                let at = 6.0 + index as f32 * 6.0;
+                cx.rounded_rect(
+                    LayoutBox {
+                        x: at,
+                        y: at,
+                        width: 30.0,
+                        height: 30.0,
+                    },
+                    (self.0)(index),
+                    BoxPaint::fill(color),
+                );
+            }
+        }
+
+        fn paint_key(&self) -> u64 {
+            0
+        }
+    }
+
+    fn scene(boxes: Boxes) -> UiScene {
+        let mut context = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let root = context
+            .create_component(
+                document,
+                Stack::column(0.0)
+                    .width(LengthSpec::Px(64.0))
+                    .height(LengthSpec::Px(64.0))
+                    .painter(boxes),
+            )
+            .unwrap();
+        let ids = [root.stable_id()];
+        context.resolve_styles(&ids).unwrap();
+        context
+            .layout_document(document, nana_ui_runtime::LayoutViewport::new(64.0, 64.0))
+            .unwrap();
+        let mut scene = UiScene::new();
+        scene.apply_delta(context.world().extract_document(document), []);
+        scene
+    }
+
+    fn kinds(scene: &UiScene) -> (usize, usize) {
+        scene
+            .primitives()
+            .fold((0, 0), |(quads, batches), p| match &p.kind {
+                ScenePrimitiveKind::Quad { .. } => (quads + 1, batches),
+                ScenePrimitiveKind::QuadColorBatch { .. } => (quads, batches + 1),
+                _ => (quads, batches),
+            })
+    }
+
+    #[test]
+    fn a_run_of_boxes_paints_as_one_batch_with_the_same_pixels() {
+        let run = scene(Boxes(|_| 4.0));
+        // A hair of difference in every other corner keeps each box apart.
+        let apart = scene(Boxes(|index| 4.0 + (index % 2) as f32 * 1e-3));
+        assert_eq!(kinds(&run), (0, 1), "the four boxes share one primitive");
+        assert_eq!(kinds(&apart), (4, 0), "unequal corners never share");
+
+        let (device, queue) = test_device();
+        let mut painter = SceneWgpuPainter::for_test(wgpu::TextureFormat::Rgba8Unorm);
+        let mut paint = |scene: &UiScene| {
+            paint_scene_rgba(
+                &device,
+                &queue,
+                &mut painter,
+                scene,
+                [64.0; 2],
+                [64; 2],
+                1.0,
+            )
+        };
+        let (run, apart) = (paint(&run), paint(&apart));
+        let worst = run
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(apart.as_chunks::<4>().0)
+            .map(|(a, b)| distance(*a, *b))
+            .max()
+            .unwrap();
+        assert!(worst <= 1, "batched and separate boxes differ by {worst}");
+        // Where all four overlap, each translucent box blends over the last.
+        let mut expected = [0.0f32; 3];
+        for color in COLORS {
+            for channel in 0..3 {
+                expected[channel] =
+                    expected[channel] * (1.0 - color[3]) + color[channel] * color[3];
+            }
+        }
+        let center = pixel(&run, 64, 30, 30);
+        for channel in 0..3 {
+            let want = (expected[channel] * 255.0).round() as i32;
+            assert!(
+                (i32::from(center[channel]) - want).abs() <= 2,
+                "channel {channel}: {center:?} against {expected:?}"
+            );
+        }
+    }
+}
