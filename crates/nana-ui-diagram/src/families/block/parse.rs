@@ -135,7 +135,7 @@ impl Parser<'_, '_> {
 
     fn add(&mut self, block: Block) -> Result<usize, DiagramError> {
         let limits = self.cx.limits;
-        limits.check_count(self.model.blocks.len() + 1, limits.nodes, LimitKind::Nodes)?;
+        limits.check_count(self.model.blocks.len() + 1, limits.nodes.min(crate::layout::grid::MAX_ROUTED), LimitKind::Nodes)?;
         let i = self.model.blocks.len();
         match self.container() {
             Some(g) => self.model.blocks[g].children.push(i),
@@ -204,7 +204,7 @@ impl Parser<'_, '_> {
                     None => None,
                 };
                 let limits = self.cx.limits;
-                limits.check_count(self.pending.len() + 1, limits.edges, LimitKind::Edges)?;
+                limits.check_count(self.pending.len() + 1, limits.edges.min(crate::layout::grid::MAX_ROUTED), LimitKind::Edges)?;
                 self.pending.push((
                     left.clone(),
                     right.clone(),

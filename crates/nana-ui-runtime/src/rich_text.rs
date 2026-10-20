@@ -1571,7 +1571,7 @@ pub(crate) enum BlockArt {
     None,
     /// A native diagram.
     Diagram(DiagramArt),
-    /// A formula, or a diagram type the native engine does not draw yet.
+    /// A display formula.
     Drawing(Arc<crate::markdown_drawing::MarkdownDrawing>),
     /// Unreadable diagram source, shown as a code block.
     Code,
@@ -2085,10 +2085,6 @@ fn layout_block(
                     match crate::markdown_diagram::layout(source, &measurer) {
                         crate::markdown_diagram::Outcome::Native(scene) => {
                             BlockArt::Diagram(DiagramArt(scene))
-                        }
-                        crate::markdown_diagram::Outcome::Legacy => {
-                            crate::markdown_drawing::mermaid(source)
-                                .map_or(BlockArt::None, |d| BlockArt::Drawing(Arc::new(d)))
                         }
                         crate::markdown_diagram::Outcome::Fallback => BlockArt::Code,
                     }

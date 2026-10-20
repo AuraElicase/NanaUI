@@ -28,8 +28,6 @@ use crate::{LayoutBox, TextHorizontalAlignment, TextVerticalAlignment};
 pub(crate) enum Outcome {
     /// A native drawing.
     Native(Arc<DiagramScene>),
-    /// A type the native engine does not draw yet.
-    Legacy,
     /// Source the engine cannot read: shown as a code block.
     Fallback,
 }
@@ -97,7 +95,6 @@ pub(crate) fn layout(source: &str, measurer: &Measurer<'_>) -> Outcome {
     let hash = hash_str(source);
     let parsed: &Parsed = match parsed.as_ref() {
         Ok(parsed) => parsed,
-        Err(DiagramError::Unsupported(_)) => return Outcome::Legacy,
         Err(_) => return Outcome::Fallback,
     };
     let metrics = metrics();
@@ -113,7 +110,6 @@ pub(crate) fn layout(source: &str, measurer: &Measurer<'_>) -> Outcome {
     let adapter = Adapter(measurer);
     let outcome = match nana_ui_diagram::layout(parsed, &adapter, &metrics, &limits) {
         Ok(scene) => Outcome::Native(Arc::new(scene)),
-        Err(DiagramError::Unsupported(_)) => Outcome::Legacy,
         Err(_) => Outcome::Fallback,
     };
     layout_cache()
@@ -512,8 +508,12 @@ mod tests {
             Outcome::Fallback
         ));
         assert!(matches!(
-            layout("sequenceDiagram\n  A->>B: hi", &fixed()),
-            Outcome::Legacy
+            layout(
+                "sequenceDiagram
+  A->>B: hi",
+                &fixed()
+            ),
+            Outcome::Native(_)
         ));
     }
 

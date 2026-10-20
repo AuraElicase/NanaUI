@@ -12,7 +12,7 @@ charts = []
 controls = []
 graph-canvas = []
 image-viewer = []
-rich-text = ["dep:pulldown-cmark", "dep:nana-ui-diagram", "dep:mermaid-svg", "dep:ratex-parser", "dep:ratex-layout", "dep:ratex-svg", "dep:ratex-types"]
+rich-text = ["dep:pulldown-cmark", "dep:nana-ui-diagram", "dep:ratex-parser", "dep:ratex-layout", "dep:ratex-svg", "dep:ratex-types"]
 components = ["calendar", "charts", "controls", "graph-canvas", "image-viewer", "rich-text"]
 default = ["icu"]
 # Locale-aware message formatting with ICU4X and its compiled CLDR data:
@@ -55,7 +55,6 @@ nana-ui-input.workspace = true
 nana-text.workspace = true
 nana-ui-view-macros = { path = "../nana-ui-view-macros", optional = true }
 nana-ui-diagram = { workspace = true, optional = true }
-mermaid-svg = { version = "=0.7.0", optional = true }
 ratex-parser = { version = "=0.1.14", optional = true }
 ratex-layout = { version = "=0.1.14", optional = true }
 ratex-svg = { version = "=0.1.14", features = ["embed-fonts"], optional = true }
