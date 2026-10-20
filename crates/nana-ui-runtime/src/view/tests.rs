@@ -4469,7 +4469,7 @@ fn a_title_bar_shows_and_hides_from_a_view() {
 /// hidden-while-empty, and the rules some fields carry.
 mod control_fields {
     use super::*;
-    use crate::view::fields::{self, HiddenWhenEmpty};
+    use crate::view::fields::{self, FromString, HiddenWhenEmpty};
     use std::sync::Arc;
 
     fn hidden(cx: &AppContext, id: StableNodeId) -> bool {
@@ -4491,9 +4491,10 @@ mod control_fields {
                     empty_state("").prop::<_, HiddenWhenEmpty<fields::empty_state::title>>(
                         move || Arc::<str>::from(title.get()),
                     ),
-                    labeled_value("型号").prop::<_, HiddenWhenEmpty<fields::labeled_value::value>>(
-                        move || Arc::<str>::from(title.get()),
-                    ),
+                    labeled_value("型号")
+                        .prop::<_, HiddenWhenEmpty<FromString<fields::labeled_value::value>>>(
+                            title,
+                        ),
                 ))
             })
             .unwrap();

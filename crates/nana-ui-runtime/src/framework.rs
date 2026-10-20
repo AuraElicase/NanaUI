@@ -1060,6 +1060,14 @@ impl From<UiWorldError> for FrameworkError {
     }
 }
 
+/// Its message, so `?` reaches a host callback whose error is text
+/// (`RuntimeProgram::Error = String`).
+impl From<FrameworkError> for String {
+    fn from(value: FrameworkError) -> Self {
+        value.to_string()
+    }
+}
+
 /// How much of the built-in component machinery a context installs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BuiltinComponents {

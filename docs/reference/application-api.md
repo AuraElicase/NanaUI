@@ -202,6 +202,8 @@ device/surface 丢失后宿主调用 `RuntimeDocument::set_surface_generation`�
 
 `RuntimeProgramUpdate.redraw` 支持 `None`、`Window(id)`、`Windows(ids)`、`All`。
 合并局部更新会保留实际窗口集合。`RuntimeRedraw::for_windows` 会排序去重。
+`RuntimeRedraw::merge` 与 `RuntimeProgramUpdate::merge` 是公开的：`All` 吸收另一方，`None` 不加窗口，窗口列表取并集；更新的窗口命令按先后拼接，任一方要求退出即退出。宿主自己也用它们把一次回调里的各个更新合成一个。
+`FrameworkError` 可以转成 `String`，所以 `type Error = String` 的回调里直接对文档操作写 `?`。
 `RuntimeRedraw` 现在持有窗口列表。只实现 `Clone`。不再实现 `Copy`。穷尽匹配需处理 `Windows`。
 Vue 输入按语义变化和已挂载节点消费的 Canvas／HostTexture 版本选择窗口。
 
