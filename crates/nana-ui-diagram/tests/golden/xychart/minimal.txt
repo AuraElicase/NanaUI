@@ -1,0 +1,29 @@
+size 465.9 347.2
+summary nodes=3 edges=0 groups=1
+shape path M36.9,316.4 L456.9,316.4 stroke=BorderSoft/hairline/Solid
+text 8 308 20.9 16.8 size=12 w=400 ink=Muted "0.9"
+shape path M36.9,273.5 L456.9,273.5 stroke=BorderSoft/hairline/Solid
+text 8 265.1 20.9 16.8 size=12 w=400 ink=Muted "1.2"
+shape path M36.9,230.7 L456.9,230.7 stroke=BorderSoft/hairline/Solid
+text 8 222.3 20.9 16.8 size=12 w=400 ink=Muted "1.5"
+shape path M36.9,187.8 L456.9,187.8 stroke=BorderSoft/hairline/Solid
+text 8 179.4 20.9 16.8 size=12 w=400 ink=Muted "1.8"
+shape path M36.9,145 L456.9,145 stroke=BorderSoft/hairline/Solid
+text 8 136.6 20.9 16.8 size=12 w=400 ink=Muted "2.1"
+shape path M36.9,102.1 L456.9,102.1 stroke=BorderSoft/hairline/Solid
+text 8 93.7 20.9 16.8 size=12 w=400 ink=Muted "2.4"
+shape path M36.9,59.3 L456.9,59.3 stroke=BorderSoft/hairline/Solid
+text 8 50.9 20.9 16.8 size=12 w=400 ink=Muted "2.7"
+shape path M36.9,16.4 L456.9,16.4 stroke=BorderSoft/hairline/Solid
+text 8 8 20.9 16.8 size=12 w=400 ink=Muted "3.0"
+shape path M36.9,16.4 L36.9,316.4 L456.9,316.4 stroke=Border/hairline/Solid
+shape path M106.9,316.4 L106.9,320.4 stroke=Border/hairline/Solid
+text 103.4 322.4 7 16.8 size=12 w=400 ink=Muted "1"
+shape path M246.9,316.4 L246.9,320.4 stroke=Border/hairline/Solid
+text 243.4 322.4 7 16.8 size=12 w=400 ink=Muted "2"
+shape path M386.9,316.4 L386.9,320.4 stroke=Border/hairline/Solid
+text 383.4 322.4 7 16.8 size=12 w=400 ink=Muted "3"
+shape path M106.9,302.1 L246.9,16.4 L386.9,159.3 stroke=series0/thick/Solid
+shape ellipse 103.9 299.1 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 243.9 13.4 6 6 fill=series0 stroke=Surface/1/Solid
+shape ellipse 383.9 156.3 6 6 fill=series0 stroke=Surface/1/Solid
