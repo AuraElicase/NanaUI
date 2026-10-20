@@ -23,6 +23,7 @@ nana-ui                  宿主适配器：run_runtime、控件再导出、Scene
     │                    Shell、Workspace、Dock、AreaLayout、GPU 槽声明（不依赖 WGPU）
     ├── nana-ui-scene    绘制图权威（UiScene）与帧图（FramePlan）（依赖 runtime，不依赖 WGPU）
     ├── nana-ui-charts   图表模型：ChartOption、刻度、布局、命中与 GPU 标记数组（仅依赖 nana-ui-core）
+    ├── nana-ui-diagram  Mermaid 图表：解析、布局与主题无关的矢量显示列表（依赖 nana-ui-core 与 nana-ui-charts 的刻度）
     ├── nana-ui-core     共享基础合同：Style Model、主题令牌、WorkspaceModel、Motion IR、几何
     ├── nana-ui-platform 平台中立窗口合同（WindowId、描述符、事件、命令、显示器）并再导出输入合同
     └── nana-window      原生窗口句柄、系统材质、标题栏拖拽、客户区 chrome、缩放与全屏
@@ -44,7 +45,7 @@ Vue + JS L1/L2（可选宿主适配）
                          应用直接引用常量，未引用图标由链接器剔除，不属于产品绘制核
 ```
 
-主线依赖单向流动：`nana-ui` 依赖 `nana-ui-scene` 与 `nana-ui-runtime`；`nana-ui-scene` 依赖 `nana-ui-runtime`；三者均依赖仅构建在 `nana-ui-core` 之上的 `nana-ui-charts`。`nana-ui` 与 `nana-frame-exchange` 依赖 `nana-gpu`。`SceneWgpuPainter` 位于 `nana-ui` 内，建立在宿主的 `GpuContext` 之上，每一帧画进宿主的 `FrameContext`。
+主线依赖单向流动：`nana-ui` 依赖 `nana-ui-scene` 与 `nana-ui-runtime`；`nana-ui-scene` 依赖 `nana-ui-runtime`；三者均依赖仅构建在 `nana-ui-core` 之上的 `nana-ui-charts`。`nana-ui-runtime` 的 `rich-text` 控件族另外引入 `nana-ui-diagram`，Scene 只看到它录成的 `PaintRecording`。`nana-ui` 与 `nana-frame-exchange` 依赖 `nana-gpu`。`SceneWgpuPainter` 位于 `nana-ui` 内，建立在宿主的 `GpuContext` 之上，每一帧画进宿主的 `FrameContext`。
 
 ### 无窗口输出与边界守护脚本
 

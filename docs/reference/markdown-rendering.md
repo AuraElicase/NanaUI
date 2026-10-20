@@ -4,11 +4,12 @@
 
 ## NativeMarkdown：排版、公式、图表与图片
 
-`NativeMarkdown` 在 `nana-ui-runtime` 内完成解析与排版。`UiWorld::markdown_layout` 直接使用当前宿主的文本整形器（text shaper）与节点当前的内容盒尺寸，因此文本选区、指针命中激活与 Scene 绘制消费的是同一份几何结果。Scene 将解析后的内容展开为普通的文本、Quad 与 SVG 图元并合入现有场景树——既不创建独立的 Markdown 窗口或渲染器，也不申请额外的 GPU 设备。
+`NativeMarkdown` 在 `nana-ui-runtime` 内完成解析与排版。`UiWorld::markdown_layout` 直接使用当前宿主的文本整形器（text shaper）与节点当前的内容盒尺寸，因此文本选区、指针命中激活与 Scene 绘制消费的是同一份几何结果。Scene 将解析后的内容展开为普通的文本、Quad、矢量路径与 SVG 图元并合入现有场景树——既不创建独立的 Markdown 窗口或渲染器，也不申请额外的 GPU 设备。
 
 - **行内样式与装饰**：`strong`、`emphasis`、`strike`（删除线）、链接下划线以及行内 `code` 表面均直接生成对应的绘制命令。
-- **数学公式（TeX）与 Mermaid 图表**：行内公式在排版阶段占据其渲染后的实际宽度；独立公式块与 Mermaid 图表占据其渲染后的实际高度。TeX 公式使用 RaTeX 生成的 SVG 字形轮廓；Mermaid 图表中的 SVG 文字则使用捆绑的 UI 字体走标准 SVG 栅格化路径，同时保留源文本供用户框选与复制。
-- **失败回退与体积上限**：语法无效的公式回退显示源文本，无效的 Mermaid 图表回退显示代码块文本。数学公式源码超过 `16,384` 字节或 Mermaid 源码超过 `128,000` 字节时，会在构造缓存键之前被直接拒绝，不会污染容量为 200 条的有界缓存。
+- **数学公式（TeX）**：行内公式在排版阶段占据其渲染后的实际宽度，独立公式块占据其实际高度，使用 RaTeX 生成的 SVG 字形轮廓。
+- **Mermaid 图表**：由原生图表引擎 `nana-ui-diagram` 解析与布局，按当前主题录成矢量路径与普通文字，随明暗主题自动换色，任意缩放比都清晰；图表占据其实际高度，比栏宽时等比缩小。每个围栏在一次排版里只布局一次，解析与布局结果按源码和测宽身份缓存，滚动与选区不触发重排。源文本仍保留供框选与复制，`accTitle` / `accDescr` 进入无障碍名称与描述。尚未迁移到原生引擎的图表类型暂走旧的 SVG 路径。详见 [原生图表引擎](diagram-engine.md)。
+- **失败回退与体积上限**：语法无效的公式回退显示源文本；无法识别或语法错误的 Mermaid 图表显示为 `mermaid` 代码块。数学公式源码超过 `16,384` 字节时在构造缓存键之前被直接拒绝；Mermaid 的上限见 [原生图表引擎](diagram-engine.md#失败与上限)。
 - **异步图片解析（`resolve_image`）**：图片的异步拉取与资源缓存归应用所有。下载或解码完成后，应用调用 `resolve_image(original_source, resolved_url, width, height)`（`width` 与 `height` 必须是非零固有尺寸），文档中该图片的所有出现位置（包括表格单元格内以及空 `alt` 文本的图片）都会同步更新。绘制使用解析后的 `resolved_url`，而 `RichTextEvent::ImageActivated` 事件仍保留原始 `original_source` 与 `alt` 文本；共享同一 URL 的普通超链接仍触发 `LinkActivated`。重复提交相同的图片解析结果是安全的空操作。
 
 ## ImageViewer：固有尺寸与舞台缩放
@@ -28,13 +29,16 @@
 
 ```bash
 CARGO_BUILD_JOBS=2 cargo test -p nana-ui-runtime --all-features --lib markdown
+CARGO_BUILD_JOBS=2 cargo test -p nana-ui-diagram
+CARGO_BUILD_JOBS=2 cargo test -p nana-ui-scene --features rich-text --lib markdown
 CARGO_BUILD_JOBS=2 cargo test -p nana-ui --features components --test text_input_max_length --test text_area_resize --test scroll_workspace_surface
 CARGO_BUILD_JOBS=2 cargo test -p nana-ui-scene --features components --test image_viewer_content_order
 CARGO_BUILD_JOBS=2 cargo run -p nana-ui-devtools --features runtime-agent,nana-ui/components --example restored-content-probe -- target/restored-content-probe
+CARGO_BUILD_JOBS=2 cargo run -p nana-ui-devtools --features runtime-agent,nana-ui/components --example diagram-probe -- target/diagram-probe
 ```
 
-`restored-content-probe` 会通过共享 Scene 路径渲染真实的 SVG、数学公式、Markdown 图片与宿主纹理（覆盖浅色/深色主题及 1×/2× 缩放），并通过 `RuntimeAgentSession` 注入指针拖拽验证高度变化与前后帧像素。
+`restored-content-probe` 会通过共享 Scene 路径渲染真实的 SVG、数学公式、Markdown 图片与宿主纹理（覆盖浅色/深色主题及 1×/2× 缩放），并通过 `RuntimeAgentSession` 注入指针拖拽验证高度变化与前后帧像素。`diagram-probe` 把每个 Mermaid 样例按同样的主题与缩放矩阵渲染成 PNG。
 
 ## 参见
 
-- [NativeMarkdown 组件](../components/native-markdown.md) · [ImageViewer 组件](../components/image-viewer.md) · [TextInput 组件](../components/text-input.md) · [TextArea 组件](../components/text-area.md)
+- [原生图表引擎](diagram-engine.md) · [NativeMarkdown 组件](../components/native-markdown.md) · [ImageViewer 组件](../components/image-viewer.md) · [TextInput 组件](../components/text-input.md) · [TextArea 组件](../components/text-area.md)

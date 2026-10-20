@@ -40,6 +40,7 @@ FORBIDDEN_IN_READER = {
 EMBEDDABLE = {
     "nana-ui-core",
     "nana-ui-charts",
+    "nana-ui-diagram",
     "nana-ui-runtime",
     "nana-ui-scene",
     "nana-text",

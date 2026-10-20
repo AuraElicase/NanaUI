@@ -74,6 +74,8 @@ mod native_content;
 pub use browser_view::BrowserView;
 mod i18n;
 #[cfg(feature = "rich-text")]
+mod markdown_diagram;
+#[cfg(feature = "rich-text")]
 mod markdown_drawing;
 mod media_transport;
 mod overlay_surfaces;
@@ -105,6 +107,8 @@ pub use responsive::{
 };
 #[cfg(feature = "controls")]
 mod reorder_list;
+#[cfg(feature = "rich-text")]
+pub use markdown_diagram::DiagramDrawing;
 #[cfg(feature = "rich-text")]
 pub use markdown_drawing::{MarkdownDrawing, MarkdownDrawingCommand};
 #[cfg(feature = "rich-text")]

@@ -195,6 +195,10 @@ impl MarkdownBlock {
         Some(MarkdownFenceChild {
             source: self.fence_source()?.to_owned(),
             highlight: self.fence_highlight_request(),
+            diagram: match self {
+                Self::Mermaid(source) => crate::markdown_diagram::describe(source),
+                _ => None,
+            },
         })
     }
 }
@@ -943,6 +947,8 @@ impl ComponentView for NativeMarkdown {
 struct MarkdownFenceChild {
     source: String,
     highlight: Option<HighlightRequest>,
+    /// A diagram's title, description and counts, for its accessible name.
+    diagram: Option<crate::markdown_diagram::Description>,
 }
 
 impl ComponentView for MarkdownFenceChild {
@@ -976,12 +982,41 @@ impl ComponentView for MarkdownFenceChild {
                 pointer_events: false,
                 focusable: false,
             },
-            AccessibilityState {
-                role: AccessibilityRole::Text,
-                value: Some(Arc::from(self.source.as_str())),
-                ..AccessibilityState::default()
-            },
+            self.accessibility(world),
         );
+    }
+}
+
+impl MarkdownFenceChild {
+    /// The source as the value; a diagram also names itself (its title, or
+    /// "diagram") and describes itself (its description, or its counts).
+    fn accessibility(&self, world: &UiWorld) -> AccessibilityState {
+        let mut state = AccessibilityState {
+            role: AccessibilityRole::Text,
+            value: Some(Arc::from(self.source.as_str())),
+            ..AccessibilityState::default()
+        };
+        if let Some(diagram) = &self.diagram {
+            let strings = world.framework_strings();
+            state.label = Some(
+                diagram
+                    .title
+                    .as_deref()
+                    .map_or_else(|| Arc::clone(&strings.diagram_label), Arc::from),
+            );
+            state.description = diagram.description.as_deref().map(Arc::from).or_else(|| {
+                (diagram.summary.nodes > 0).then(|| {
+                    Arc::from(nana_ui_core::framework_strings::fill(
+                        &strings.diagram_summary,
+                        &[
+                            ("nodes", &diagram.summary.nodes),
+                            ("edges", &diagram.summary.edges),
+                        ],
+                    ))
+                })
+            });
+        }
+        state
     }
 }
 
@@ -1525,6 +1560,52 @@ pub struct MarkdownBlockGeometry {
     pub language: Option<Arc<str>>,
     pub label: Option<Arc<str>>,
     pub graphemes: Vec<GraphemeGeometry>,
+    /// What draws the block when it is not text, computed once per layout.
+    pub(crate) art: BlockArt,
+}
+
+/// A block drawn as a picture rather than as its text.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) enum BlockArt {
+    #[default]
+    None,
+    /// A native diagram.
+    Diagram(DiagramArt),
+    /// A formula, or a diagram type the native engine does not draw yet.
+    Drawing(Arc<crate::markdown_drawing::MarkdownDrawing>),
+    /// Unreadable diagram source, shown as a code block.
+    Code,
+}
+
+/// A laid-out diagram; equal when it is the same layout.
+#[derive(Clone, Debug)]
+pub(crate) struct DiagramArt(pub Arc<nana_ui_diagram::DiagramScene>);
+
+impl PartialEq for DiagramArt {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl BlockArt {
+    /// Natural width of the picture, when there is one.
+    pub(crate) fn width(&self) -> Option<f32> {
+        match self {
+            Self::Diagram(DiagramArt(scene)) => Some(scene.size[0]),
+            Self::Drawing(drawing) => Some(drawing.width),
+            Self::None | Self::Code => None,
+        }
+    }
+
+    /// Height when placed into `width`, never scaled up.
+    pub(crate) fn placed_height(&self, width: f32) -> Option<f32> {
+        let (w, h) = match self {
+            Self::Diagram(DiagramArt(scene)) => (scene.size[0], scene.size[1]),
+            Self::Drawing(drawing) => (drawing.width, drawing.height),
+            Self::None | Self::Code => return None,
+        };
+        Some(h * (width.max(1.0) / w.max(1.0)).min(1.0))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1629,7 +1710,7 @@ impl DocumentRun {
 /// per line of a span rather than one per grapheme: kerning, ligatures and
 /// joining scripts only come out right when the run is shaped together, which
 /// is how the painter draws it.
-type MarkdownMeasure<'a> = dyn Fn(&str, f32, u16, bool) -> Vec<f32> + 'a;
+pub(crate) type MarkdownMeasure<'a> = dyn Fn(&str, f32, u16, bool) -> Vec<f32> + 'a;
 
 struct LayoutCursor<'a> {
     measure: Option<&'a MarkdownMeasure<'a>>,
@@ -1859,13 +1940,16 @@ pub(crate) fn text_rect_at(origin: LayoutBox, rect: nana_text::TextRect) -> Layo
 }
 
 pub(crate) fn layout_markdown(blocks: &[MarkdownBlock], bounds: LayoutBox) -> MarkdownGeometry {
-    layout_markdown_measured(blocks, bounds, None)
+    layout_markdown_measured(blocks, bounds, None, 0)
 }
 
+/// `measure_key` names the fonts and shaping behind `measure`: diagrams
+/// cache their layout under it.
 pub(crate) fn layout_markdown_measured(
     blocks: &[MarkdownBlock],
     bounds: LayoutBox,
     measure: Option<&MarkdownMeasure<'_>>,
+    measure_key: u64,
 ) -> MarkdownGeometry {
     let mut run = DocumentRun::empty(bounds);
     let mut block_geometry = Vec::with_capacity(blocks.len());
@@ -1874,7 +1958,16 @@ pub(crate) fn layout_markdown_measured(
         if index > 0 {
             y += BLOCK_GAP;
         }
-        let geometry = layout_block(index, block, bounds.x, y, bounds.width, &mut run, measure);
+        let geometry = layout_block(
+            index,
+            block,
+            bounds.x,
+            y,
+            bounds.width,
+            &mut run,
+            measure,
+            measure_key,
+        );
         y = geometry.bounds.y + geometry.bounds.height;
         block_geometry.push(geometry);
     }
@@ -1891,9 +1984,9 @@ pub(crate) fn markdown_content_width(blocks: &[MarkdownBlock], geometry: &Markdo
     blocks
         .iter()
         .zip(&geometry.blocks)
-        .map(|(block, geometry)| {
-            if let Some(drawing) = crate::markdown_drawing::block_drawing(block) {
-                return drawing.width.min(geometry.bounds.width);
+        .map(|(_, geometry)| {
+            if let Some(width) = geometry.art.width() {
+                return width.min(geometry.bounds.width);
             }
             geometry
                 .graphemes
@@ -1904,6 +1997,7 @@ pub(crate) fn markdown_content_width(blocks: &[MarkdownBlock], geometry: &Markdo
         .fold(0.0, f32::max)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn layout_block(
     index: usize,
     block: &MarkdownBlock,
@@ -1912,6 +2006,7 @@ fn layout_block(
     width: f32,
     run: &mut DocumentRun,
     measure: Option<&MarkdownMeasure<'_>>,
+    measure_key: u64,
 ) -> MarkdownBlockGeometry {
     match block {
         MarkdownBlock::Text { kind, spans } => {
@@ -1981,7 +2076,37 @@ fn layout_block(
             )
         }
         MarkdownBlock::DisplayMath(source) | MarkdownBlock::Mermaid(source) => {
-            let drawing = crate::markdown_drawing::block_drawing(block);
+            let art = match block {
+                MarkdownBlock::Mermaid(_) => {
+                    let measurer = crate::markdown_diagram::Measurer {
+                        advances: measure,
+                        key: measure_key,
+                    };
+                    match crate::markdown_diagram::layout(source, &measurer) {
+                        crate::markdown_diagram::Outcome::Native(scene) => {
+                            BlockArt::Diagram(DiagramArt(scene))
+                        }
+                        crate::markdown_diagram::Outcome::Legacy => {
+                            crate::markdown_drawing::mermaid(source)
+                                .map_or(BlockArt::None, |d| BlockArt::Drawing(Arc::new(d)))
+                        }
+                        crate::markdown_diagram::Outcome::Fallback => BlockArt::Code,
+                    }
+                }
+                _ => crate::markdown_drawing::block_drawing(block)
+                    .map_or(BlockArt::None, |d| BlockArt::Drawing(Arc::new(d))),
+            };
+            if art == BlockArt::Code {
+                // Source the engine cannot read reads as a code block.
+                let fallback = MarkdownBlock::Code {
+                    language: Some("mermaid".into()),
+                    source: source.clone(),
+                };
+                let mut geometry =
+                    layout_block(index, &fallback, x, y, width, run, measure, measure_key);
+                geometry.art = BlockArt::Code;
+                return geometry;
+            }
             let mut cursor = LayoutCursor::new(x, y, usable_width(width), LINE_HEIGHT)
                 .markdown(measure, 13.0, 400);
             let start = run.graphemes.len();
@@ -1992,20 +2117,10 @@ fn layout_block(
                 source,
                 if start == 0 { "" } else { "\n\n" },
             );
-            let height = drawing
-                .as_ref()
-                .map(|drawing| {
-                    drawing
-                        .placed(LayoutBox {
-                            x,
-                            y,
-                            width,
-                            height: 0.0,
-                        })
-                        .height
-                })
+            let height = art
+                .placed_height(width)
                 .unwrap_or_else(|| cursor.height_from(y));
-            if drawing.is_some() {
+            if art != BlockArt::None {
                 let count = (run.graphemes.len() - start).max(1) as f32;
                 for (offset, grapheme) in run.graphemes[start..].iter_mut().enumerate() {
                     grapheme.bounds = LayoutBox {
@@ -2016,7 +2131,7 @@ fn layout_block(
                     };
                 }
             }
-            labeled_block(
+            let mut geometry = labeled_block(
                 index,
                 x,
                 y,
@@ -2025,7 +2140,9 @@ fn layout_block(
                 None,
                 None,
                 run.graphemes[start..].to_vec(),
-            )
+            );
+            geometry.art = art;
+            geometry
         }
         MarkdownBlock::Table(table) => layout_table(index, table, x, y, width, run, measure),
         MarkdownBlock::Rule => labeled_block(
@@ -2114,6 +2231,7 @@ fn labeled_block(
         language,
         label,
         graphemes,
+        art: BlockArt::None,
     }
 }
 
@@ -2414,7 +2532,7 @@ mod tests {
         let measure =
             |value: &str, _: f32, _: u16, _: bool| vec![7.2; value.graphemes(true).count()];
         let natural =
-            layout_markdown_measured(markdown.blocks(), bounds(1000.0, 100.0), Some(&measure));
+            layout_markdown_measured(markdown.blocks(), bounds(1000.0, 100.0), Some(&measure), 1);
         let width = markdown_content_width(markdown.blocks(), &natural);
         for x in [0.0, 681.0, 10000.0] {
             let placed = layout_markdown_measured(
@@ -2425,6 +2543,7 @@ mod tests {
                     ..bounds(width, 100.0)
                 },
                 Some(&measure),
+                1,
             );
             assert_eq!(
                 placed.bounds.height, natural.bounds.height,
@@ -2828,6 +2947,20 @@ mod tests {
     }
 
     #[test]
+    fn diagram_fences_name_themselves_from_acc_title_and_description() {
+        let parsed = NativeMarkdown::from_source(
+            "```mermaid\nflowchart LR\naccTitle: Login flow\naccDescr: How a user signs in\nA-->B-->C\n```",
+        );
+        let mut context = AppContext::new();
+        let markdown = context.create_component(document(), parsed).unwrap();
+        context.assemble_markdown(markdown).unwrap();
+        let child = context.world().node(markdown.stable_id()).unwrap().children[0];
+        let state = context.world().accessibility(child).unwrap();
+        assert_eq!(state.label.as_deref(), Some("Login flow"));
+        assert_eq!(state.description.as_deref(), Some("How a user signs in"));
+    }
+
+    #[test]
     fn assemble_markdown_creates_fence_children_for_mermaid_math_and_code() {
         let source = concat!(
             "```mermaid\n",
@@ -2904,6 +3037,17 @@ mod tests {
                 NativeMarkdown::MERMAID_PRESENTER,
                 "flowchart LR\nA-->B"
             ))
+        );
+        let diagram = context.world().accessibility(children[0]).unwrap();
+        assert_eq!(diagram.label.as_deref(), Some("图表"));
+        assert_eq!(diagram.description.as_deref(), Some("2 个节点，1 条连线"));
+        assert!(
+            context
+                .world()
+                .accessibility(children[1])
+                .unwrap()
+                .label
+                .is_none()
         );
         assert_eq!(context.world().text(children[1]), Some("\\frac{1}{2}"));
         assert_eq!(

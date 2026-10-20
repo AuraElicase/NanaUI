@@ -106,6 +106,23 @@ impl UiWorld {
         else {
             return crate::rich_text::layout_markdown(blocks, bounds);
         };
+        // What the advances depend on besides the text: the engine, its face
+        // set and the node's family and spacing. Diagrams cache under it.
+        let key = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            (std::sync::Arc::as_ptr(engine) as usize).hash(&mut hasher);
+            {
+                use nana_text::TextEngine as _;
+                nana_text::lock_text_engine(engine)
+                    .font_generation()
+                    .get()
+                    .hash(&mut hasher);
+            }
+            style.font_family.hash(&mut hasher);
+            style.letter_spacing.to_bits().hash(&mut hasher);
+            hasher.finish()
+        };
         crate::rich_text::layout_markdown_measured(
             blocks,
             bounds,
@@ -118,6 +135,31 @@ impl UiWorld {
                 measured.writing_mode = nana_ui_core::WritingModeSpec::HorizontalTb;
                 crate::text_engine_shaper::grapheme_advances(engine, text, &measured)
             }),
+            key,
         )
+    }
+
+    /// A laid-out diagram recorded against the installed theme, reused
+    /// until the palette epoch moves.
+    pub(crate) fn diagram_drawing(
+        &self,
+        scene: &std::sync::Arc<nana_ui_diagram::DiagramScene>,
+        scale: f32,
+    ) -> crate::markdown_diagram::DiagramDrawing {
+        let epoch = self.palette_epoch;
+        let mut held = self.diagram_recordings.borrow_mut();
+        held.retain(|(e, _)| *e == epoch);
+        if let Some((_, drawing)) = held
+            .iter()
+            .find(|(_, d)| std::sync::Arc::ptr_eq(&d.scene, scene) && d.scale == scale)
+        {
+            return drawing.clone();
+        }
+        let drawing = crate::markdown_diagram::record(scene, &self.theme, scale);
+        if held.len() >= 64 {
+            held.remove(0);
+        }
+        held.push((epoch, drawing.clone()));
+        drawing
     }
 }
