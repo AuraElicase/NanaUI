@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use super::{EntityKind, Frame, Model};
 use crate::families::ParseCx;
-use crate::kind;
+use crate::families::kit::{self, first_word, truncate};
 use crate::{DiagramError, LimitKind};
 
 /// Data lines shown per frame.
@@ -28,8 +28,8 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let lines: Vec<&str> = body.lines().collect();
     let mut pending: Vec<Pending> = Vec::new();
     let mut blocks: HashMap<String, Vec<String>> = HashMap::new();
-    let mut header = false;
-    let mut i = 0;
+    // Data blocks may consume the lines after their statement.
+    let mut i = kit::header(body)?.0 + 1;
     while i < lines.len() {
         let line_no = i;
         let stmt = lines[i].trim();
@@ -37,19 +37,12 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         if stmt.is_empty() {
             continue;
         }
-        if !header {
-            if kind::header(stmt).is_none() {
-                return Err(DiagramError::syntax(line_no as u32 + 1, 1, "expected an eventmodeling header"));
-            }
-            header = true;
-            continue;
-        }
-        let (word, rest) = split_word(stmt);
+        let (word, rest) = first_word(stmt);
         match word {
             "tf" | "timeframe" | "rf" | "resetframe" => {
-                let (number, rest) = split_word(rest);
-                let (kind, rest) = split_word(rest);
-                let (entity, mut rest) = split_word(rest);
+                let (number, rest) = first_word(rest);
+                let (kind, rest) = first_word(rest);
+                let (entity, mut rest) = first_word(rest);
                 let (Ok(number), Some(kind)) = (number.parse::<u64>(), EntityKind::parse(kind)) else {
                     cx.warn(line_no, format!("cannot read `{}`", truncate(stmt)));
                     continue;
@@ -76,7 +69,7 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                         break;
                     }
                     if let Some(after) = rest.strip_prefix("->>") {
-                        let (n, tail) = split_word(after);
+                        let (n, tail) = first_word(after);
                         match n.parse::<u64>() {
                             Ok(n) => frame.sources.push(n),
                             Err(_) => cx.warn(line_no, format!("cannot read relation `{}`", truncate(n))),
@@ -126,7 +119,7 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 pending.push(frame);
             }
             "data" => {
-                let (name, rest) = split_word(rest);
+                let (name, rest) = first_word(rest);
                 let name = name.split(['{', '`']).next().unwrap_or("").to_string();
                 let after_name = stmt.find(&name).map_or(rest, |p| &stmt[p + name.len()..]);
                 let body = skip_type(after_name.trim_start());
@@ -167,9 +160,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             _ => cx.warn(line_no, format!("cannot read `{}`", truncate(stmt))),
         }
     }
-    if !header {
-        return Err(DiagramError::Empty);
-    }
     // Time order, one frame per number.
     pending.sort_by_key(|p| p.number);
     let mut seen: HashMap<u64, usize> = HashMap::new();
@@ -204,7 +194,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             _ => (None, p.entity.clone()),
         };
         model.frames.push(Frame {
-            number: p.number,
             reset: p.reset,
             kind: p.kind,
             namespace,
@@ -214,14 +203,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         });
     }
     Ok(model)
-}
-
-fn split_word(s: &str) -> (&str, &str) {
-    let s = s.trim_start();
-    match s.find(char::is_whitespace) {
-        Some(i) => (&s[..i], &s[i..]),
-        None => (s, ""),
-    }
 }
 
 /// Skip a `` `type` `` prefix.
@@ -238,28 +219,14 @@ fn data_lines(text: &str) -> Vec<String> {
     text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect()
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]

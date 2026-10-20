@@ -4,8 +4,7 @@
 use nana_ui_core::{RadiusTier, SemanticColorMix, SemanticColorRole as R};
 
 use super::{BoundaryKind, ElemKind, Element, End, Model, Variant};
-use crate::families::LayoutCx;
-use crate::geom::path::rounded_polyline;
+use crate::families::{LayoutCx, graphkit};
 use crate::geom::{Marker, Shape};
 use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::layout::grid::{self, Connect, GridItem, GridSpec};
@@ -164,18 +163,8 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         boundary_in_row: model.boundary_in_row,
     };
 
-    // Boundaries bottom-up: deeper first.
-    let depth = |mut b: usize| {
-        let mut d = 0;
-        while let Some(p) = model.boundaries[b].parent {
-            d += 1;
-            b = p;
-        }
-        d
-    };
-    let mut order: Vec<usize> = (0..model.boundaries.len()).collect();
-    order.sort_by_key(|&b| (std::cmp::Reverse(depth(b)), b));
-    for &b in &order {
+    // Boundaries bottom-up: a boundary always comes after its parent.
+    for b in (0..model.boundaries.len()).rev() {
         let content = content_size(&geo, b + 1);
         let head = geo.heads[b].size;
         geo.boundary_size[b] = [content[0].max(head[0]) + 2.0 * geo.pad, head[1] + geo.pad * 0.75 + content[1] + 2.0 * geo.pad];
@@ -186,9 +175,8 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut out = SceneBuilder::new();
 
     // Boundaries, outermost first.
-    let mut by_depth: Vec<usize> = (0..model.boundaries.len()).collect();
-    by_depth.sort_by_key(|&b| (depth(b), b));
-    for &b in &by_depth {
+    let parents: Vec<Option<usize>> = model.boundaries.iter().map(|b| b.parent).collect();
+    for b in graphkit::outermost_first(&parents) {
         let boundary = &model.boundaries[b];
         let rect = geo.boundary_rect[b];
         let node = boundary.kind == BoundaryKind::Node;
@@ -245,8 +233,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if let Some(c) = rel.line_color {
             stroke.ink = Ink::Rgba(c);
         }
-        let radius = m.bend_radius;
-        out.edge(&points, move |p| rounded_polyline(p, radius), stroke, rel.both.then_some(Marker::Arrow), Some(Marker::Arrow), marker);
+        graphkit::edge(&mut out, &points, stroke, rel.both.then_some(Marker::Arrow), Some(Marker::Arrow), marker, m.bend_radius);
         if rel_texts[i].0.is_some() || rel_texts[i].1.is_some() {
             chips.push((i, grid::place_label(&points, chip_size(i), &obstacles, &mut taken)));
         }
@@ -294,44 +281,43 @@ fn bracketed(label: &Label) -> Label {
     out
 }
 
-fn element_grid(geo: &Geo, c: usize) -> GridSpec {
-    let list = &geo.elements[c];
-    let cells = grid::flow(&vec![1; list.len()], geo.shape_in_row);
-    GridSpec {
-        items: list.iter().zip(&cells).map(|(&e, &(col, row, _))| GridItem::new(col, row, geo.cards[e].size)).collect(),
-        col_gap: geo.col_gap,
-        row_gap: geo.row_gap,
-        min_size: [0.0, 0.0],
-    }
-}
-
-fn boundary_grid(geo: &Geo, c: usize, min_w: f32) -> GridSpec {
-    let list = &geo.boundaries[c];
-    let cells = grid::flow(&vec![1; list.len()], geo.boundary_in_row);
-    GridSpec {
-        items: list.iter().zip(&cells).map(|(&b, &(col, row, _))| GridItem::new(col, row, geo.boundary_size[b])).collect(),
+/// `sizes` in rows of `per_row`, statement order.
+fn row_grid(geo: &Geo, sizes: Vec<[f32; 2]>, per_row: usize, min_w: f32) -> grid::GridLayout {
+    let cells = grid::flow(&vec![1; sizes.len()], per_row);
+    grid::solve(&GridSpec {
+        items: sizes.iter().zip(&cells).map(|(&size, &(col, row, _))| GridItem::new(col, row, size)).collect(),
         col_gap: geo.col_gap,
         row_gap: geo.row_gap,
         min_size: [min_w, 0.0],
-    }
+    })
+}
+
+fn element_grid(geo: &Geo, c: usize) -> grid::GridLayout {
+    let sizes = geo.elements[c].iter().map(|&e| geo.cards[e].size).collect();
+    row_grid(geo, sizes, geo.shape_in_row, 0.0)
+}
+
+fn boundary_grid(geo: &Geo, c: usize, min_w: f32) -> grid::GridLayout {
+    let sizes = geo.boundaries[c].iter().map(|&b| geo.boundary_size[b]).collect();
+    row_grid(geo, sizes, geo.boundary_in_row, min_w)
 }
 
 /// Elements on top, boundaries below.
 fn content_size(geo: &Geo, c: usize) -> [f32; 2] {
-    let e = grid::solve(&element_grid(geo, c)).size;
-    let b = grid::solve(&boundary_grid(geo, c, 0.0)).size;
+    let e = element_grid(geo, c).size;
+    let b = boundary_grid(geo, c, 0.0).size;
     let between = if e[1] > 0.0 && b[1] > 0.0 { geo.row_gap } else { 0.0 };
     [e[0].max(b[0]), e[1] + between + b[1]]
 }
 
 fn place(geo: &mut Geo, c: usize, area: Rect) {
-    let eg = grid::solve(&element_grid(geo, c));
+    let eg = element_grid(geo, c);
     let ex = area.x + (area.w - eg.size[0]).max(0.0) / 2.0;
     for (k, &e) in geo.elements[c].clone().iter().enumerate() {
         geo.element_rect[e] = eg.cells[k].translated(ex, area.y);
     }
     let top = if eg.size[1] > 0.0 { area.y + eg.size[1] + geo.row_gap } else { area.y };
-    let bg = grid::solve(&boundary_grid(geo, c, area.w));
+    let bg = boundary_grid(geo, c, area.w);
     for (k, &b) in geo.boundaries[c].clone().iter().enumerate() {
         let rect = bg.cells[k].translated(area.x, top);
         geo.boundary_rect[b] = rect;

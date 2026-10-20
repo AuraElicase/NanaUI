@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use super::{Block, Edge, Heads, Kind, Model};
 use crate::families::ParseCx;
 use crate::families::flowchart::LineKind;
+use crate::families::kit::{self, first_word, truncate};
 use crate::geom::{Marker, Shape};
-use crate::kind;
 use crate::source::directives::AuthorStyle;
 use crate::source::split_statements;
 use crate::text::Label;
@@ -33,6 +33,7 @@ struct Parser<'a, 'c> {
 }
 
 pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
+    let (header, after) = kit::header(body)?;
     let mut p = Parser {
         cx,
         model: Model::default(),
@@ -46,43 +47,17 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         spaces: 0,
         line: 0,
     };
-    let mut header = false;
-    for (index, line) in body.lines().enumerate() {
+    // Statements may follow the header on its own line.
+    for (index, line) in std::iter::once((header, after)).chain(kit::statements(body, header)) {
         p.line = index;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let mut rest = trimmed;
-        if !header {
-            let Some((_, after)) = kind::header(trimmed) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected a block header"));
-            };
-            header = true;
-            rest = after.trim_start_matches(':').trim();
-            if rest.is_empty() {
-                continue;
-            }
-        }
-        for (_, stmt) in split_statements(rest) {
+        for (_, stmt) in split_statements(line) {
             let stmt = stmt.trim();
             if !stmt.is_empty() {
                 p.statement(stmt)?;
             }
         }
     }
-    if !header {
-        return Err(DiagramError::Empty);
-    }
     p.finish()
-}
-
-fn first_word(s: &str) -> (&str, &str) {
-    let s = s.trim_start();
-    match s.find(char::is_whitespace) {
-        Some(i) => (&s[..i], s[i..].trim_start()),
-        None => (s, ""),
-    }
 }
 
 impl Parser<'_, '_> {
@@ -153,21 +128,9 @@ impl Parser<'_, '_> {
             if cur.at_end() {
                 break;
             }
-            if let Some(span) = cur.keyword("space") {
-                let span = match span {
-                    Some(text) => text.parse::<usize>().unwrap_or(1),
-                    None => 1,
-                };
+            if let Some(span) = cur.space() {
                 self.spaces += 1;
-                self.add(Block {
-                    id: format!("space-{}", self.spaces),
-                    label: Label::default(),
-                    kind: Kind::Space,
-                    span: span.clamp(1, MAX_SPAN),
-                    children: Vec::new(),
-                    classes: Vec::new(),
-                    style: AuthorStyle::default(),
-                })?;
+                self.add(block(format!("space-{}", self.spaces), Label::default(), Kind::Space, span))?;
                 continue;
             }
             if cur.word_is("end") {
@@ -248,15 +211,7 @@ impl Parser<'_, '_> {
                 span = cur.number().unwrap_or(1);
             }
         }
-        let g = self.add(Block {
-            id: id.clone(),
-            label: Label::default(),
-            kind: Kind::Group { columns: None },
-            span: span.clamp(1, MAX_SPAN),
-            children: Vec::new(),
-            classes: Vec::new(),
-            style: AuthorStyle::default(),
-        })?;
+        let g = self.add(block(id.clone(), Label::default(), Kind::Group { columns: None }, span))?;
         self.index.entry(id).or_insert(g);
         self.stack.push(g);
         Ok(())
@@ -286,13 +241,13 @@ impl Parser<'_, '_> {
             return Ok(node.id.clone());
         }
         let i = self.add(Block {
-            id: node.id.clone(),
-            label: label.unwrap_or_else(|| Label::plain(&node.id)),
-            kind: node.kind.clone().unwrap_or(Kind::Node(Shape::Rect)),
-            span: node.span.unwrap_or(1).clamp(1, MAX_SPAN),
-            children: Vec::new(),
             classes: node.classes.clone(),
-            style: AuthorStyle::default(),
+            ..block(
+                node.id.clone(),
+                label.unwrap_or_else(|| Label::plain(&node.id)),
+                node.kind.clone().unwrap_or(Kind::Node(Shape::Rect)),
+                node.span.unwrap_or(1),
+            )
         })?;
         self.index.insert(node.id.clone(), i);
         Ok(node.id.clone())
@@ -333,8 +288,17 @@ impl Parser<'_, '_> {
     }
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
+/// A block with no classes or style yet; `span` is clamped.
+fn block(id: String, label: Label, kind: Kind, span: usize) -> Block {
+    Block {
+        id,
+        label,
+        kind,
+        span: span.clamp(1, MAX_SPAN),
+        children: Vec::new(),
+        classes: Vec::new(),
+        style: AuthorStyle::default(),
+    }
 }
 
 struct NodeRef {
@@ -435,23 +399,20 @@ impl<'s> Cur<'s> {
         }
     }
 
-    /// `space` or `space:N`: `Some(None)` for a bare space.
-    fn keyword(&mut self, word: &str) -> Option<Option<String>> {
+    /// `space` or `space:N`: the width, 1 for a bare space.
+    fn space(&mut self) -> Option<usize> {
         let save = self.i;
-        if !self.word_is_prefix(word) {
+        if !self.word_is_prefix("space") {
             return None;
         }
-        if self.eat(":") {
-            let digits = self.rest().chars().take_while(char::is_ascii_digit).count();
-            if digits == 0 {
-                self.i = save;
-                return None;
-            }
-            let text = self.rest()[..digits].to_string();
-            self.i += digits;
-            return Some(Some(text));
+        if !self.eat(":") {
+            return Some(1);
         }
-        Some(None)
+        if !self.rest().starts_with(|c: char| c.is_ascii_digit()) {
+            self.i = save;
+            return None;
+        }
+        Some(self.number().unwrap_or(1))
     }
 
     fn arrow_ahead(&self) -> bool {
@@ -717,21 +678,11 @@ impl<'s> Cur<'s> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]

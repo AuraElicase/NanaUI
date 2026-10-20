@@ -4,11 +4,10 @@
 
 use super::block::{draw_node, link_stroke};
 use super::flowchart::{self, EndRef, LineKind};
-use super::{LayoutCx, ParseCx};
+use super::{LayoutCx, ParseCx, graphkit};
 use crate::ir::{Align, Geom, Ink, SceneBuilder, Stroke};
 use crate::layout::lanes::{self, LaneEdge, LaneGraph, LaneLayout, LaneNode, LaneSpacing, LaneSpec};
 use crate::layout::{attach_end, attach_start};
-use crate::geom::path::rounded_polyline;
 use crate::style::{self, Paint};
 use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, Summary};
@@ -122,8 +121,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             attach_start(&mut points, chart.nodes[a].shape, placed.nodes[a]);
             attach_end(&mut points, chart.nodes[b].shape, placed.nodes[b]);
         }
-        let radius = m.bend_radius;
-        out.edge(&points, move |p| rounded_polyline(p, radius), link_stroke(edge.line, &edge.style), edge.start, edge.end, marker);
+        graphkit::edge(&mut out, &points, link_stroke(edge.line, &edge.style), edge.start, edge.end, marker, m.bend_radius);
     }
     for (k, (e, laid)) in edge_labels.iter().enumerate() {
         if let (Some(laid), Some(center)) = (laid, placed.edges[k].label)
@@ -197,21 +195,16 @@ pub(crate) fn draw_lanes(out: &mut SceneBuilder, placed: &LaneLayout, titles: &[
     let line = Stroke::hairline(style::CLUSTER_STROKE);
     let vertical_lanes = placed.lanes.len() > 1 && (placed.lanes[1].x - placed.lanes[0].x).abs() > 0.5;
     for lane in placed.lanes.iter().skip(1) {
-        let path = if vertical_lanes {
-            crate::geom::PathData::polyline(&[[lane.x, lane.y], [lane.x, lane.bottom()]])
-        } else {
-            crate::geom::PathData::polyline(&[[lane.x, lane.y], [lane.right(), lane.y]])
-        };
-        out.stroke(Geom::path(path), line);
+        let end = if vertical_lanes { [lane.x, lane.bottom()] } else { [lane.right(), lane.y] };
+        graphkit::line(out, [lane.x, lane.y], end, line);
     }
     // The header strip's inner edge.
     if let Some(head) = placed.headers.first().filter(|h| h.w > 0.0 && h.h > 0.0) {
-        let path = if vertical_lanes {
-            crate::geom::PathData::polyline(&[[frame.x, head.bottom()], [frame.right(), head.bottom()]])
+        if vertical_lanes {
+            graphkit::line(out, [frame.x, head.bottom()], [frame.right(), head.bottom()], line);
         } else {
-            crate::geom::PathData::polyline(&[[head.right(), frame.y], [head.right(), frame.bottom()]])
-        };
-        out.stroke(Geom::path(path), line);
+            graphkit::line(out, [head.right(), frame.y], [head.right(), frame.bottom()], line);
+        }
     }
     out.unclip();
     out.stroke(Geom::rounded(frame, style::CLUSTER_CORNER), line);

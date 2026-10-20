@@ -14,8 +14,6 @@ pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Group {
-    #[allow(dead_code)]
-    pub id: String,
     pub title: Label,
     pub icon: Option<String>,
     pub parent: Option<usize>,
@@ -23,8 +21,6 @@ pub(crate) struct Group {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Service {
-    #[allow(dead_code)]
-    pub id: String,
     pub title: Label,
     pub icon: Option<String>,
     pub junction: bool,

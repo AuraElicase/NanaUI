@@ -10,9 +10,8 @@ mod parse;
 use nana_ui_core::{SemanticColorMix, SemanticColorRole as R};
 
 use super::swimlane::{draw_lanes, lane_titles, spacing};
-use super::{LayoutCx, ParseCx};
+use super::{LayoutCx, ParseCx, graphkit};
 use crate::geom::Marker;
-use crate::geom::path::rounded_polyline;
 use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::layout::lanes::{self, LaneEdge, LaneGraph, LaneNode, LaneSpec};
 use crate::layout::Direction;
@@ -81,9 +80,6 @@ impl EntityKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Frame {
-    /// The frame number as written, for diagnostics.
-    #[allow(dead_code)]
-    pub number: u64,
     /// `rf` / `resetframe`: no inferred relation from the frame before.
     pub reset: bool,
     pub kind: EntityKind,
@@ -211,8 +207,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if route.points.len() < 2 {
             continue;
         }
-        let radius = m.bend_radius;
-        out.edge(&route.points, move |p| rounded_polyline(p, radius), style::edge_stroke(), None, Some(Marker::Arrow), marker);
+        graphkit::edge(&mut out, &route.points, style::edge_stroke(), None, Some(Marker::Arrow), marker, m.bend_radius);
     }
     for (i, f) in model.frames.iter().enumerate() {
         let rect = placed.nodes[i];

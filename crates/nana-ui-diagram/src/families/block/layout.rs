@@ -3,11 +3,10 @@
 //! connect linked blocks orthogonally.
 
 use super::{Heads, Kind, Model, draw_node, link_stroke};
-use crate::families::LayoutCx;
 use crate::families::flowchart::LineKind;
-use crate::geom::path::rounded_polyline;
+use crate::families::{LayoutCx, graphkit};
 use crate::geom::{PathData, Shape};
-use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, StrokeWidth};
+use crate::ir::{Align, Geom, Rect, SceneBuilder};
 use crate::layout::grid::{self, Connect, GridItem, GridSpec};
 use crate::layout::{self as shared};
 use crate::style::{self, Paint};
@@ -67,25 +66,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     while let Some(i) = stack.pop() {
         let block = &model.blocks[i];
         if let Kind::Group { .. } = block.kind {
-            let fill = block.style.fill.map_or(style::CLUSTER_FILL, Ink::Rgba);
-            let mut stroke = style::cluster_stroke();
-            if let Some(s) = block.style.stroke {
-                stroke.ink = Ink::Rgba(s);
-            }
-            if let Some(w) = block.style.stroke_width {
-                stroke.width = StrokeWidth::Px(w);
-            }
-            if block.style.dashed == Some(true) {
-                stroke.dash = Dash::Dashed;
-            }
-            out.shape(
-                Geom::Rect {
-                    rect: geo.rects[i],
-                    corner: Corner::Tier(style::CLUSTER_CORNER),
-                },
-                Some(fill),
-                Some(stroke),
-            );
+            graphkit::cluster(&mut out, geo.rects[i], None, &block.style);
             stack.extend(block.children.iter().rev().copied());
         }
     }
@@ -117,8 +98,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             shared::attach_end(&mut points, shape, geo.rects[edge.to]);
         }
         let stroke = link_stroke(edge.line, &Default::default());
-        let radius = m.bend_radius;
-        out.edge(&points, move |p| rounded_polyline(p, radius), stroke, edge.start, edge.end, marker);
+        graphkit::edge(&mut out, &points, stroke, edge.start, edge.end, marker, m.bend_radius);
         if let Some(label) = &edge.label {
             let laid = cx.text.lay(label, small, Some(wrap));
             if !laid.is_empty() {

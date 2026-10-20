@@ -37,8 +37,6 @@ pub(crate) struct Colors {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Element {
-    #[allow(dead_code)]
-    pub alias: String,
     pub label: Label,
     pub kind: ElemKind,
     pub variant: Variant,
@@ -80,8 +78,6 @@ pub(crate) enum BoundaryKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Boundary {
-    #[allow(dead_code)]
-    pub alias: String,
     pub label: Label,
     pub kind: BoundaryKind,
     /// `[type]` under the label.

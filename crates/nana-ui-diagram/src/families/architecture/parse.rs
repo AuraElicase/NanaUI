@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use super::{Align, Edge, Group, Model, Service};
 use crate::families::ParseCx;
-use crate::kind;
+use crate::families::kit::{self, first_word, truncate};
 use crate::layout::grid::Side;
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
@@ -18,27 +18,13 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let mut services: HashMap<String, usize> = HashMap::new();
     let mut pending: Vec<(usize, PendingEdge)> = Vec::new();
     let mut aligns: Vec<(usize, bool, Vec<String>)> = Vec::new();
-    let mut header = false;
-    for (line_no, line) in body.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if !header {
-            if kind::header(trimmed).is_none() {
-                return Err(DiagramError::syntax(line_no as u32 + 1, 1, "expected an architecture header"));
-            }
-            header = true;
-            continue;
-        }
+    let (header, _) = kit::header(body)?;
+    for (line_no, trimmed) in kit::statements(body, header) {
         if let Some(title) = trimmed.strip_prefix("title ") {
             cx.meta.title = Some(title.trim().to_string());
             continue;
         }
-        let (word, rest) = match trimmed.find(char::is_whitespace) {
-            Some(i) => (&trimmed[..i], trimmed[i..].trim()),
-            None => (trimmed, ""),
-        };
+        let (word, rest) = first_word(trimmed);
         match word {
             "group" | "service" | "junction" => {
                 let Some(decl) = declaration(rest, word == "junction") else {
@@ -74,9 +60,8 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                         cx.warn(line_no, format!("group `{}` declared twice", truncate(&decl.id)));
                         continue;
                     }
-                    groups.insert(decl.id.clone(), model.groups.len());
+                    groups.insert(decl.id, model.groups.len());
                     model.groups.push(Group {
-                        id: decl.id,
                         title,
                         icon: decl.icon,
                         parent,
@@ -87,11 +72,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                         cx.warn(line_no, format!("`{}` declared twice", truncate(&decl.id)));
                         continue;
                     }
-                    services.insert(decl.id.clone(), model.services.len());
+                    services.insert(decl.id, model.services.len());
                     let junction = word == "junction";
                     model.services.push(Service {
                         title: if junction { Label::default() } else { title },
-                        id: decl.id,
                         icon: decl.icon,
                         junction,
                         parent,
@@ -118,9 +102,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 None => cx.warn(line_no, format!("cannot read `{}`", truncate(trimmed))),
             },
         }
-    }
-    if !header {
-        return Err(DiagramError::Empty);
     }
     for (line_no, e) in pending {
         let (Some(&from), Some(&to)) = (services.get(&e.from), services.get(&e.to)) else {
@@ -152,10 +133,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         model.aligns.push(Align { row, members });
     }
     Ok(model)
-}
-
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
 }
 
 struct Decl {
@@ -232,8 +209,8 @@ fn edge(stmt: &str) -> Option<PendingEdge> {
     let (to, to_group) = endpoint(&stmt[right_colon + 1..])?;
     let middle = stmt[left_colon + 1..right_colon].trim();
     let mut chars = middle.chars();
-    let from_side = Side::parse(&chars.next()?.to_string())?;
-    let to_side = Side::parse(&chars.next_back()?.to_string())?;
+    let from_side = Side::parse(chars.next()?)?;
+    let to_side = Side::parse(chars.next_back()?)?;
     let arrow = chars.as_str().trim();
     let start_arrow = arrow.starts_with('<');
     let end_arrow = arrow.ends_with('>');
@@ -276,21 +253,11 @@ fn endpoint(text: &str) -> Option<(String, bool)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]

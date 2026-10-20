@@ -19,6 +19,7 @@
 use std::collections::HashMap;
 
 use super::graph::Direction;
+use super::grid::{simplify, spread};
 use crate::ir::Rect;
 use crate::{DiagramError, LimitKind, Limits};
 
@@ -85,9 +86,6 @@ pub struct LaneLayout {
     /// The rank of every node.
     pub ranks: Vec<usize>,
 }
-
-/// An edge end on a shared side: edge, which end, sort key, tie-break.
-type SharedEnd = (usize, usize, f32, f32);
 
 /// Which way a canonical run leaves or enters a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -201,28 +199,26 @@ pub fn layout(
     // Canonical sizes: [along, across].
     let canon = |s: [f32; 2]| if horizontal { s } else { [s[1], s[0]] };
 
-    // Ranks.
-    let pairs: Vec<(usize, usize)> = graph.edges.iter().map(|e| (e.from, e.to)).collect();
+    // Ranks: fixed ones win, the rest come from the edges.
     let mut ranks = if graph.nodes.iter().all(|nd| nd.rank.is_some()) {
-        graph.nodes.iter().map(|nd| nd.rank.unwrap_or(0)).collect()
+        vec![0; n]
     } else {
-        let mut r = ranks_from_edges(n, &pairs);
-        for (i, nd) in graph.nodes.iter().enumerate() {
-            if let Some(fixed) = nd.rank {
-                r[i] = fixed;
-            }
-        }
-        r
+        let pairs: Vec<(usize, usize)> = graph.edges.iter().map(|e| (e.from, e.to)).collect();
+        ranks_from_edges(n, &pairs)
     };
-    // Compact unused ranks away.
-    let mut used: Vec<usize> = ranks.clone();
-    used.sort_unstable();
-    used.dedup();
-    let remap: HashMap<usize, usize> = used.iter().enumerate().map(|(i, &r)| (r, i)).collect();
-    for r in &mut ranks {
-        *r = remap[r];
+    for (r, nd) in ranks.iter_mut().zip(&graph.nodes) {
+        if let Some(fixed) = nd.rank {
+            *r = fixed;
+        }
     }
-    let nranks = used.len().max(1);
+    // Compact unused ranks away.
+    let mut distinct = ranks.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    for r in &mut ranks {
+        *r = distinct.partition_point(|&d| d < *r);
+    }
+    let nranks = distinct.len().max(1);
     limits.check_count(
         nranks.saturating_mul(lanes),
         limits.elements.saturating_mul(4),
@@ -248,11 +244,13 @@ pub fn layout(
     let titles: Vec<[f32; 2]> = (0..lanes)
         .map(|l| graph.lanes.get(l).map_or([0.0, 0.0], |s| canon(s.title)))
         .collect();
+    let stack_h = |list: &[usize]| {
+        list.iter().map(|&v| sizes[v][1]).sum::<f32>()
+            + spacing.node_sep * (list.len().saturating_sub(1)) as f32
+    };
     let mut inner = vec![0.0f32; lanes];
     for (&(l, _), list) in &cells {
-        let h: f32 = list.iter().map(|&v| sizes[v][1]).sum::<f32>()
-            + spacing.node_sep * (list.len().saturating_sub(1)) as f32;
-        inner[l] = inner[l].max(h);
+        inner[l] = inner[l].max(stack_h(list));
     }
     for l in 0..lanes {
         let title = titles[l][1];
@@ -264,9 +262,7 @@ pub fn layout(
     // Centre of every node, measured from the top of its lane's inner area.
     let mut local = vec![0.0f32; n];
     for (&(l, _), list) in &cells {
-        let h: f32 = list.iter().map(|&v| sizes[v][1]).sum::<f32>()
-            + spacing.node_sep * (list.len().saturating_sub(1)) as f32;
-        let mut y = (inner[l] - h) / 2.0;
+        let mut y = (inner[l] - stack_h(list)) / 2.0;
         for &v in list {
             local[v] = y + sizes[v][1] / 2.0;
             y += sizes[v][1] + spacing.node_sep;
@@ -293,6 +289,8 @@ pub fn layout(
         })
     };
     let key = |v: usize| (lane_of(v), stack_index[v]);
+    // Across position over the whole diagram, by lane then lane-local centre.
+    let at = |v: usize| lane_of(v) as f32 * 1e6 + local[v];
 
     // Plans.
     let mut plans = Vec::with_capacity(graph.edges.len());
@@ -330,6 +328,7 @@ pub fn layout(
         let plan = if a_free {
             Plan::Direct { gap: gv }
         } else if b_free {
+            // Through the source gap, then along the target's line.
             Plan::Direct { gap: gu }
         } else {
             let (lu, lv) = (lane_of(u), lane_of(v));
@@ -340,7 +339,6 @@ pub fn layout(
                 top: lu < lv || (lu == lv && local[u] < local[v]),
             }
         };
-        // `Direct` through the source gap runs along the target's line.
         plans.push(plan);
     }
 
@@ -367,7 +365,8 @@ pub fn layout(
             }
         };
     }
-    let mut shared: HashMap<(usize, Port), Vec<SharedEnd>> = HashMap::new();
+    // Ends on one port: (edge, which end, sort key, tie-break).
+    let mut shared: HashMap<(usize, Port), Vec<_>> = HashMap::new();
     for (i, e) in graph.edges.iter().enumerate() {
         for (end, node, other) in [(0usize, e.from, e.to), (1, e.to, e.from)] {
             if let Some(p) = ports[i][end] {
@@ -376,13 +375,11 @@ pub fn layout(
                 // Ends whose other node lies on the same line nest by
                 // distance: the nearest one takes the port on the side the
                 // others come from, so no run crosses another's bend.
-                let pos =
-                    |v: usize| (lane_of(v) as f32) * 1e6 + local.get(v).copied().unwrap_or(0.0);
                 let dist = ranks[other].abs_diff(ranks[node]) as f32;
                 let (k, tie) = match p {
                     Port::Out | Port::In => {
-                        let k = pos(other);
-                        (k, if k >= pos(node) { -dist } else { dist })
+                        let k = at(other);
+                        (k, if k >= at(node) { -dist } else { dist })
                     }
                     Port::Up | Port::Down => (ranks[other] as f32, 0.0),
                 };
@@ -398,13 +395,8 @@ pub fn layout(
                 .then(a.0.cmp(&b.0))
                 .then(a.1.cmp(&b.1))
         });
-        let m = list.len();
         for (k, &(i, end, _, _)) in list.iter().enumerate() {
-            offset[i][end] = if m == 1 {
-                0.5
-            } else {
-                0.2 + 0.6 * k as f32 / (m - 1) as f32
-            };
+            offset[i][end] = spread(k, list.len());
         }
     }
 
@@ -415,7 +407,6 @@ pub fn layout(
     let mut gap_tracks: Vec<Vec<(usize, f32, f32, f32)>> = vec![Vec::new(); nranks + 1];
     let mut band_tracks: HashMap<(usize, bool), Vec<usize>> = HashMap::new();
     let label_along = |i: usize| graph.edges[i].label.map_or(0.0, |l| canon(l)[0]);
-    let at = |v: usize| lane_of(v) as f32 * 1e6 + local[v];
     let band_at = |l: usize, top: bool| l as f32 * 1e6 + if top { -1.0 } else { inner[l] + 1.0 };
     for (i, plan) in plans.iter().enumerate() {
         let (u, v) = (graph.edges[i].from, graph.edges[i].to);
@@ -469,20 +460,12 @@ pub fn layout(
                 .then(a.0.cmp(&b.0))
         });
     }
-    let track_w = |l: f32| {
-        if l > 0.0 {
-            l + spacing.track_sep
-        } else {
-            spacing.track_sep
-        }
-    };
-    let gap_w: Vec<f32> = gap_tracks
+    let track_w = |l: f32| l.max(0.0) + spacing.track_sep;
+    let need: Vec<f32> = gap_tracks
         .iter()
-        .map(|list| {
-            let need: f32 = list.iter().map(|t| track_w(t.1)).sum::<f32>() + spacing.track_sep;
-            need.max(spacing.rank_sep)
-        })
+        .map(|list| list.iter().map(|t| track_w(t.1)).sum::<f32>() + spacing.track_sep)
         .collect();
+    let gap_w: Vec<f32> = need.iter().map(|n| n.max(spacing.rank_sep)).collect();
 
     // Along positions: header strip, then ranks and gaps.
     let header_w = titles.iter().map(|t| t[0]).fold(0.0f32, f32::max);
@@ -501,20 +484,15 @@ pub fn layout(
         }
     }
     // A trailing gap only when a detour uses it.
-    let trailing = if gap_tracks[nranks - 1].is_empty() || nranks == 0 {
+    let trailing = if gap_tracks[nranks - 1].is_empty() {
         0.0
     } else {
         gap_w[nranks - 1]
     };
     let total_along = x + trailing.max(spacing.lane_pad);
-    let gap_start = |g: usize| rank_x[g.min(nranks - 1)] + rank_w[g.min(nranks - 1)];
     let mut track_x: HashMap<(usize, usize), f32> = HashMap::new();
-    for (g, list) in gap_tracks.iter().enumerate() {
-        if g >= nranks {
-            continue;
-        }
-        let need: f32 = list.iter().map(|t| track_w(t.1)).sum::<f32>() + spacing.track_sep;
-        let mut at = gap_start(g) + (gap_w[g] - need) / 2.0 + spacing.track_sep;
+    for (g, list) in gap_tracks.iter().enumerate().take(nranks) {
+        let mut at = rank_x[g] + rank_w[g] + (gap_w[g] - need[g]) / 2.0 + spacing.track_sep;
         for &(i, l, _, _) in list {
             let w = track_w(l);
             let center = at + (w - spacing.track_sep) / 2.0;
@@ -539,10 +517,9 @@ pub fn layout(
     let total_across = y;
     let inner_top = |l: usize| lane_y[l] + band_size(l, true);
     let mut band_y: HashMap<(usize, bool, usize), f32> = HashMap::new();
+    // Each list is already in edge order.
     for (&(l, top), list) in &band_tracks {
-        let mut sorted = list.clone();
-        sorted.sort_unstable();
-        for (k, &i) in sorted.iter().enumerate() {
+        for (k, &i) in list.iter().enumerate() {
             let yy = if top {
                 inner_top(l) - (k as f32 + 1.0) * spacing.track_sep
             } else {
@@ -600,17 +577,7 @@ pub fn layout(
                     points = vec![a, b];
                 }
             }
-            Plan::SameRankDetour { gap } => {
-                if let (Some(a), Some(b)) = (ends(0), ends(1)) {
-                    let tx = track_x
-                        .get(&(gap, i))
-                        .copied()
-                        .unwrap_or(a[0] + spacing.rank_sep / 2.0);
-                    points = vec![a, [tx, a[1]], [tx, b[1]], b];
-                    label = Some([tx, (a[1] + b[1]) / 2.0]);
-                }
-            }
-            Plan::Direct { gap } => {
+            Plan::SameRankDetour { gap } | Plan::Direct { gap } => {
                 if let (Some(a), Some(b)) = (ends(0), ends(1)) {
                     let tx = track_x
                         .get(&(gap, i))
@@ -636,7 +603,7 @@ pub fn layout(
             }
         }
         routes.push(LaneRoute {
-            points: super::grid::simplify(&points),
+            points: simplify(&points),
             label,
         });
     }
