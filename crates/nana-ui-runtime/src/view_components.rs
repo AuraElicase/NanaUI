@@ -455,6 +455,20 @@ impl Text {
 
     /// Semantic foreground role. Business colors do not belong here; pick the
     /// role that matches the text's job.
+    /// Type step, following the installed theme's type scale. See
+    /// [`NodeStyle::type_role`].
+    pub fn role(mut self, role: nana_ui_core::TypeRole) -> Self {
+        self.style.type_role = Some(role);
+        self
+    }
+
+    /// Weight step, following the installed theme. See
+    /// [`NodeStyle::type_weight`].
+    pub fn weight(mut self, weight: nana_ui_core::TextWeight) -> Self {
+        self.style.type_weight = Some(weight);
+        self
+    }
+
     pub fn color(mut self, role: nana_ui_core::SemanticColorRole) -> Self {
         self.style.foreground = Some(role);
         self
@@ -627,6 +641,10 @@ impl Button {
                 control_padding_y: None,
                 surface_padding: None,
                 square: None,
+                type_role: None,
+                type_weight: None,
+                gap_step: None,
+                padding_step: None,
                 interaction: crate::InteractionStyle {
                     hovered: SemanticPaint {
                         background: Some(nana_ui_core::SemanticColorRole::Hover),
@@ -5487,6 +5505,22 @@ impl Stack {
     /// 圆角档位，跟随安装的 `ThemeMetrics`。
     pub fn radius(mut self, tier: nana_ui_core::RadiusTier) -> Self {
         self.style = self.style.radius(tier);
+        self
+    }
+
+    /// 子项间距档位，跟随安装主题的间距刻度，覆盖构造时给的 `gap`。
+    pub fn gap_step(mut self, step: nana_ui_core::SpacingStep) -> Self {
+        self.style = self.style.gap_step(step);
+        self
+    }
+
+    /// 内边距档位（水平、垂直），跟随安装主题的间距刻度。
+    pub fn padding_step(
+        mut self,
+        x: nana_ui_core::SpacingStep,
+        y: nana_ui_core::SpacingStep,
+    ) -> Self {
+        self.style = self.style.padding_step(x, y);
         self
     }
 

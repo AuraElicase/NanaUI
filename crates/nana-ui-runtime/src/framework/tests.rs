@@ -7212,6 +7212,59 @@ fn an_installed_radius_reaches_a_control_that_named_the_tier() {
 }
 
 /// The 2xl step is a tier like the others: a node that names it follows the
+/// A node that names a type step and spacing steps follows the installed
+/// theme's scales, as a radius step follows its metrics.
+#[test]
+fn type_and_spacing_steps_follow_the_installed_scales() {
+    use nana_ui_core::{SpacingStep, TextWeight, TypeRole};
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let column = context
+        .create_component(
+            document,
+            crate::Stack::column(1.0)
+                .gap_step(SpacingStep::Md)
+                .padding_step(SpacingStep::Xl, SpacingStep::Xs),
+        )
+        .unwrap();
+    let label = context
+        .create_component(
+            document,
+            crate::Text::new("x")
+                .role(TypeRole::Body)
+                .weight(TextWeight::Semibold),
+        )
+        .unwrap();
+    let layout = |context: &AppContext, id: StableNodeId| {
+        context.world().extract_nodes(&[id])[0]
+            .source_style
+            .layout
+            .clone()
+    };
+    let px = nana_ui_core::LengthSpec::Px;
+    let base = context.world().theme().clone();
+    let text = layout(&context, label.stable_id());
+    assert_eq!(text.font_size, Some(base.typography().body));
+    assert_eq!(text.font_weight, Some(base.typography().semibold));
+    let stack = layout(&context, column.stable_id());
+    assert_eq!(stack.gap, Some(px(base.spacing().md)));
+    assert_eq!(stack.padding_left, Some(px(base.spacing().xl)));
+    assert_eq!(stack.padding_top, Some(px(base.spacing().xs)));
+
+    let mut definition = nana_ui_core::ThemeDefinition::NANA_DARK.clone();
+    definition.typography.body = 15.0;
+    definition.typography.semibold = 650;
+    definition.tokens.spacing.md = 9.0;
+    definition.tokens.spacing.xl = 13.0;
+    assert!(context.set_theme_definition(&definition).unwrap());
+    let text = layout(&context, label.stable_id());
+    assert_eq!(text.font_size, Some(15.0));
+    assert_eq!(text.font_weight, Some(650));
+    let stack = layout(&context, column.stable_id());
+    assert_eq!(stack.gap, Some(px(9.0)));
+    assert_eq!(stack.padding_left, Some(px(13.0)));
+}
+
 /// installed metrics, not the default it was built under.
 #[test]
 fn a_node_that_names_the_2xl_radius_follows_the_installed_theme() {
