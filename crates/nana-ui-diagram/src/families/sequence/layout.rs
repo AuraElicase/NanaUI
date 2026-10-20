@@ -6,6 +6,7 @@ use nana_ui_core::{RadiusTier, SemanticColorMix, SemanticColorRole as R};
 
 use super::{Event, FragmentKind, LineKind, Message, Model, NotePlace, ParticipantKind};
 use crate::families::LayoutCx;
+use crate::families::kit::fmt_num;
 use crate::geom::path::rounded_polyline;
 use crate::geom::{PathData, Shape};
 use crate::ir::{Align, Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth};
@@ -44,6 +45,8 @@ struct Dims {
     tag_pad: [f32; 2],
     marker: f32,
     wrap: f32,
+    /// The shortest activation bar.
+    min_bar: f32,
 }
 
 /// A participant's header drawing.
@@ -57,15 +60,17 @@ struct Head {
     icon_h: f32,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 enum Lay {
-    #[default]
     Skip,
     Msg(Box<MsgLay>),
     Note {
         label: LaidText,
         size: [f32; 2],
         x: f32,
+        /// How far the note stands off its column to clear an activation
+        /// bar.
+        bar: f32,
     },
     Open {
         tag: Option<LaidText>,
@@ -88,9 +93,26 @@ struct MsgLay {
     to_depth: usize,
     /// This message creates its receiver.
     creates: bool,
-    /// Attachment points, set once columns are known.
-    ax: f32,
-    bx: f32,
+    /// Where each end attaches, relative to its column.
+    off: [f32; 2],
+}
+
+impl MsgLay {
+    /// The sender and receiver attachment points.
+    fn ends(&self, msg: &Message, xs: &[f32]) -> (f32, f32) {
+        (xs[msg.from] + self.off[0], xs[msg.to] + self.off[1])
+    }
+
+    fn number_w(&self, d: &Dims) -> f32 {
+        self.number.as_ref().map_or(0.0, |t| number_size(t, d)[0] + 2.0)
+    }
+
+    /// How far a self message's loop and its label reach right of the
+    /// attachment.
+    fn loop_reach(&self, d: &Dims) -> f32 {
+        let lw = self.label.width.max(self.comment.as_ref().map_or(0.0, |c| c.width));
+        (d.loop_w + d.marker * 0.5).max(lw + 6.0 + self.number_w(d))
+    }
 }
 
 struct Frame {
@@ -116,7 +138,6 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let strong_small = FontSpec::new(m.small_size).weight(m.strong_weight);
     let num_font = FontSpec::new(m.small_size * 0.85).weight(m.strong_weight);
-    let wrap = cx.wrap_width("sequence.width");
     let d = Dims {
         pad: [m.node_pad_x, m.node_pad_y],
         col_gap: m.node_sep,
@@ -133,7 +154,8 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         num_r: m.small_size * 0.75,
         tag_pad: [m.small_size * 0.5, m.small_size * 0.25],
         marker: cx.marker_size(),
-        wrap,
+        wrap: cx.wrap_width("sequence.width"),
+        min_bar: m.font_size * 0.8,
     };
     let msg_wrap_always = cx.config.get_bool("sequence.wrap") == Some(true);
     let participants = &model.participants;
@@ -177,6 +199,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Pass 1: measure every event and collect the column constraints.
     let off_r = |depth: usize| bar_offset(depth, d.bar_w, 1.0);
     let off_l = |depth: usize| bar_offset(depth, d.bar_w, -1.0);
+    let off = |depth: usize, facing_right: bool| if facing_right { off_r(depth) } else { off_l(depth) };
     let mut lays: Vec<Lay> = vec![Lay::Skip; events.len()];
     let mut cons: Vec<(usize, usize, f32)> = Vec::new();
     let mut depth = vec![0usize; n];
@@ -185,34 +208,49 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (i, ev) in events.iter().enumerate() {
         match ev {
             Event::Message(msg) => {
-                let lay = measure_message(cx, msg, &mut depth, &mut numbering, &mut next_number, font, small, num_font, &d, msg_wrap_always);
+                let wrap = if msg.wrap || msg_wrap_always { d.wrap } else { d.wrap * 2.0 };
+                let from_depth = depth[msg.from];
+                if msg.deactivate {
+                    depth[msg.from] = depth[msg.from].saturating_sub(1);
+                }
+                if msg.activate {
+                    depth[msg.to] += 1;
+                }
+                let to_depth = depth[msg.to];
                 let creates = created_by[msg.to] == Some(i);
-                let lw = lay
-                    .label
-                    .width
-                    .max(lay.comment.as_ref().map_or(0.0, |c| c.width));
-                let num_w = lay.number.as_ref().map_or(0.0, |t| number_size(t, &d)[0] + 2.0);
+                // A self message attaches both ends on the right.
+                let right = msg.to > msg.from;
+                let to_off = if creates {
+                    if right { -hw[msg.to] } else { hw[msg.to] }
+                } else {
+                    off(to_depth, msg.to <= msg.from)
+                };
+                let lay = MsgLay {
+                    label: cx.text.lay(&msg.label, font, Some(wrap)),
+                    comment: msg.comment.as_ref().map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5))),
+                    number: numbering.map(|(_, step)| {
+                        let text = fmt_num(next_number);
+                        next_number += step;
+                        cx.text.lay_plain(&text, num_font)
+                    }),
+                    from_depth,
+                    to_depth,
+                    creates,
+                    off: [off(from_depth, msg.to >= msg.from), to_off],
+                };
                 if msg.from == msg.to {
-                    let off = off_r(lay.from_depth.max(lay.to_depth));
-                    let ext = off + (d.loop_w + d.marker * 0.5).max(lw + 6.0 + num_w);
+                    let ext = off_r(from_depth.max(to_depth)) + lay.loop_reach(&d);
                     if msg.from + 1 < n {
                         cons.push((msg.from, msg.from + 1, ext + d.bar_w + d.col_gap * 0.25));
                     }
                 } else {
-                    let right = msg.to > msg.from;
-                    let o_f = if right { off_r(lay.from_depth) } else { off_l(lay.from_depth) };
-                    let o_t = if creates {
-                        if right { -hw[msg.to] } else { hw[msg.to] }
-                    } else if right {
-                        off_l(lay.to_depth)
-                    } else {
-                        off_r(lay.to_depth)
-                    };
+                    let [o_f, o_t] = lay.off;
                     let gained = if right { o_t - o_f } else { o_f - o_t };
-                    let need = (lw + 2.0 * d.label_pad + 2.0 * num_w).max(d.marker * 3.0);
+                    let lw = lay.label.width.max(lay.comment.as_ref().map_or(0.0, |c| c.width));
+                    let need = (lw + 2.0 * d.label_pad + 2.0 * lay.number_w(&d)).max(d.marker * 3.0);
                     cons.push((msg.from.min(msg.to), msg.from.max(msg.to), need - gained));
                 }
-                lays[i] = Lay::Msg(Box::new(MsgLay { creates, ..lay }));
+                lays[i] = Lay::Msg(Box::new(lay));
             }
             Event::Note { place, label } => {
                 let laid = cx.text.lay(label, font, Some(d.wrap));
@@ -220,29 +258,29 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     (laid.width + 2.0 * d.note_pad[0]).max(m.font_size * 3.0),
                     laid.height + 2.0 * d.note_pad[1],
                 ];
-                match *place {
-                    NotePlace::Right(p) => {
-                        if p + 1 < n {
-                            cons.push((p, p + 1, off_r(depth[p]) + size[0] + 2.0 * d.note_gap + d.bar_w * 0.5));
-                        }
-                    }
-                    NotePlace::Left(p) => {
-                        if p > 0 {
-                            let off = if depth[p] > 0 { d.bar_w * 0.5 } else { 0.0 };
-                            cons.push((p - 1, p, off + size[0] + 2.0 * d.note_gap + d.bar_w * 0.5));
-                        }
-                    }
-                    NotePlace::Over(a, b) => {
-                        let (a, b) = (a.min(b), a.max(b));
-                        if a < b {
-                            cons.push((a, b, size[0] - 2.0 * d.over_ext));
-                        }
-                    }
+                let bar = match *place {
+                    NotePlace::Right(p) => off_r(depth[p]),
+                    NotePlace::Left(p) if depth[p] > 0 => d.bar_w * 0.5,
+                    _ => 0.0,
+                };
+                let span = match *place {
+                    NotePlace::Right(p) if p + 1 < n => Some((p, p + 1)),
+                    NotePlace::Left(p) if p > 0 => Some((p - 1, p)),
+                    _ => None,
+                };
+                if let Some((a, b)) = span {
+                    cons.push((a, b, bar + size[0] + 2.0 * d.note_gap + d.bar_w * 0.5));
+                }
+                if let NotePlace::Over(a, b) = *place
+                    && a != b
+                {
+                    cons.push((a.min(b), a.max(b), size[0] - 2.0 * d.over_ext));
                 }
                 lays[i] = Lay::Note {
                     label: laid,
                     size,
                     x: 0.0,
+                    bar,
                 };
             }
             Event::Activate(p) => depth[*p] += 1,
@@ -260,20 +298,19 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 ..
             } => {
                 let tag = (*kind != FragmentKind::Rect).then(|| cx.text.lay_plain(kind.keyword(), strong_small));
-                let comment = comment.as_ref().map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5)));
+                let cond = label.as_ref().map(bracketed);
                 let mut min_w = 0.0;
                 if let Some(t) = &tag {
                     min_w = t.width + 2.0 * d.tag_pad[0];
-                    if let Some(label) = label {
-                        let cond = cx.text.lay(&bracketed(label), small, Some(d.wrap * 1.2));
-                        min_w += cond.width + 2.0 * d.tag_pad[0];
+                    if let Some(c) = &cond {
+                        min_w += cx.text.lay(c, small, Some(d.wrap * 1.2)).width + 2.0 * d.tag_pad[0];
                     }
                     min_w += d.frame_pad;
                 }
                 lays[i] = Lay::Open {
                     tag,
-                    cond: label.as_ref().map(bracketed),
-                    comment,
+                    cond,
+                    comment: comment.as_ref().map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5))),
                     min_w,
                     x: [0.0, 0.0],
                 };
@@ -318,17 +355,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             }
         }
     }
-    let mut xs = Vec::with_capacity(n);
-    let mut x = 0.0;
-    for k in 0..n {
-        xs.push(x);
-        if k < gaps.len() {
-            x += gaps[k];
-        }
+    let mut xs = vec![0.0f32; n];
+    for k in 1..n {
+        xs[k] = xs[k - 1] + gaps[k - 1];
     }
-    let attach = |p: usize, depth: usize, facing_right: bool| {
-        xs[p] + if facing_right { off_r(depth) } else { off_l(depth) }
-    };
 
     // Pass 2: horizontal extents of messages, notes and fragments.
     let mut stack: Vec<(usize, Option<[f32; 2]>, f32)> = Vec::new();
@@ -337,53 +367,29 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             top.1 = Some(top.1.map_or([lo, hi], |e| [e[0].min(lo), e[1].max(hi)]));
         }
     };
-    let mut depth = vec![0usize; n];
     for (i, ev) in events.iter().enumerate() {
         match (ev, &mut lays[i]) {
             (Event::Message(msg), Lay::Msg(lay)) => {
+                let (ax, bx) = lay.ends(msg, &xs);
                 if msg.from == msg.to {
-                    lay.ax = attach(msg.from, lay.from_depth, true);
-                    lay.bx = attach(msg.to, lay.to_depth, true);
-                    let num_w = lay.number.as_ref().map_or(0.0, |t| number_size(t, &d)[0] + 2.0);
-                    let lw = lay
-                        .label
-                        .width
-                        .max(lay.comment.as_ref().map_or(0.0, |c| c.width));
-                    let reach = (d.loop_w + d.marker * 0.5).max(lw + 6.0 + num_w);
-                    add(&mut stack, xs[msg.from] - d.bar_w * 0.5, lay.ax.max(lay.bx) + reach);
+                    add(&mut stack, xs[msg.from] - d.bar_w * 0.5, ax.max(bx) + lay.loop_reach(&d));
                 } else {
-                    let right = msg.to > msg.from;
-                    lay.ax = attach(msg.from, lay.from_depth, right);
-                    lay.bx = if lay.creates {
-                        xs[msg.to] + if right { -hw[msg.to] } else { hw[msg.to] }
-                    } else {
-                        attach(msg.to, lay.to_depth, !right)
-                    };
                     let r = lay.number.as_ref().map_or(0.0, |t| number_size(t, &d)[0] / 2.0)
                         * if msg.start.is_some() { 2.2 } else { 1.0 };
                     // Whole activation bars at either end stay inside a frame.
-                    let lo = (lay.ax.min(lay.bx) - r)
+                    let lo = (ax.min(bx) - r)
                         .min(xs[msg.from] - d.bar_w * 0.5)
                         .min(xs[msg.to] - d.bar_w * 0.5);
-                    let hi = (lay.ax.max(lay.bx) + r)
+                    let hi = (ax.max(bx) + r)
                         .max(xs[msg.from] + off_r(lay.from_depth).max(d.bar_w * 0.5))
                         .max(xs[msg.to] + off_r(lay.to_depth).max(d.bar_w * 0.5));
                     add(&mut stack, lo, hi);
                 }
-                if msg.deactivate {
-                    depth[msg.from] = depth[msg.from].saturating_sub(1);
-                }
-                if msg.activate {
-                    depth[msg.to] += 1;
-                }
             }
-            (Event::Note { place, .. }, Lay::Note { label, size, x }) => {
+            (Event::Note { place, .. }, Lay::Note { label, size, x, bar }) => {
                 *x = match *place {
-                    NotePlace::Right(p) => attach(p, depth[p], true).max(xs[p]) + d.note_gap,
-                    NotePlace::Left(p) => {
-                        let off = if depth[p] > 0 { d.bar_w * 0.5 } else { 0.0 };
-                        xs[p] - off - d.note_gap - size[0]
-                    }
+                    NotePlace::Right(p) => xs[p] + *bar + d.note_gap,
+                    NotePlace::Left(p) => xs[p] - *bar - d.note_gap - size[0],
                     NotePlace::Over(a, b) => {
                         let (lo, hi) = (xs[a].min(xs[b]), xs[a].max(xs[b]));
                         if a == b {
@@ -404,8 +410,6 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 };
                 add(&mut stack, *x, *x + size[0]);
             }
-            (Event::Activate(p), _) => depth[*p] += 1,
-            (Event::Deactivate(p), _) => depth[*p] = depth[*p].saturating_sub(1),
             (Event::Open { .. }, Lay::Open { min_w, .. }) => stack.push((i, None, *min_w)),
             (Event::Section { .. }, Lay::Section { label }) => {
                 if let (Some(label), Some(top)) = (label, stack.last_mut()) {
@@ -456,13 +460,14 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let lifeline_top = head_top + head_h;
     let mut life_start: Vec<f32> = vec![lifeline_top; n];
     let mut life_end: Vec<Option<f32>> = vec![None; n];
-    let mut head_rects: Vec<Option<Rect>> = vec![None; n];
-    for p in 0..n {
-        if created_by[p].is_none() {
+    let mut head_rects: Vec<Option<Rect>> = (0..n)
+        .map(|p| {
             let h = &heads[p];
-            head_rects[p] = Some(Rect::new(xs[p] - h.w / 2.0, lifeline_top - h.h, h.w, h.h));
-        }
-    }
+            created_by[p]
+                .is_none()
+                .then(|| Rect::new(xs[p] - h.w / 2.0, lifeline_top - h.h, h.w, h.h))
+        })
+        .collect();
 
     let mut y = lifeline_top + d.msg_gap;
     let mut bars: Vec<Bar> = Vec::new();
@@ -475,48 +480,45 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let after_message = last_line.filter(|_| i > 0 && matches!(events[i - 1], Event::Message(_)));
         match (ev, &lays[i]) {
             (Event::Message(msg), Lay::Msg(lay)) => {
+                let (ax, bx) = lay.ends(msg, &xs);
                 if let Some(c) = &lay.comment {
-                    let x0 = lay.ax.min(lay.bx) + 4.0;
-                    layers.msgs.text(c, [x0, y], c.width, Align::Start, style::MUTED);
+                    layers.msgs.text(c, [ax.min(bx) + 4.0, y], c.width, Align::Start, style::MUTED);
                     y += c.height + 2.0;
                 }
                 let label_top = y;
                 let label_h = if lay.label.is_empty() { 0.0 } else { lay.label.height };
                 let mut line_y = label_top + label_h + d.label_gap;
-                let stroke = message_stroke(msg);
-                if msg.from == msg.to {
-                    let top = line_y;
-                    let bottom = top + d.loop_h;
-                    let right = lay.ax.max(lay.bx) + d.loop_w;
-                    let pts = [[lay.ax, top], [right, top], [right, bottom], [lay.bx, bottom]];
+                let stroke = match msg.line {
+                    LineKind::Solid => style::edge_stroke(),
+                    LineKind::Dashed => style::edge_stroke().dash(Dash::Dashed),
+                };
+                // Where the sender's bar closes and where the message ends:
+                // a self loop closes at its top and ends at its bottom.
+                let (close_at, end_at) = if msg.from == msg.to {
+                    let bottom = line_y + d.loop_h;
+                    let right = ax.max(bx) + d.loop_w;
+                    let pts = [[ax, line_y], [right, line_y], [right, bottom], [bx, bottom]];
                     let radius = m.bend_radius.min(d.loop_h * 0.4);
                     layers.msgs.edge(&pts, move |p| rounded_polyline(p, radius), stroke, msg.start, msg.end, d.marker);
-                    let mut lx = lay.ax + 4.0;
+                    let mut lx = ax + 4.0;
                     if let Some(num) = &lay.number {
                         let size = number_size(num, &d);
-                        draw_number(&mut layers.msgs, num, [lay.ax, top], size);
+                        draw_number(&mut layers.msgs, num, [ax, line_y], size);
                         lx += size[0] / 2.0 + 2.0;
                     }
                     if label_h > 0.0 {
                         layers.msgs.text(&lay.label, [lx, label_top], lay.label.width, Align::Start, style::TEXT);
                     }
-                    if msg.deactivate {
-                        close_bar(&mut open_bars, &mut bars, msg.from, top, d.font_min(m.font_size));
-                    }
-                    if msg.activate {
-                        open_bars[msg.to].push((bottom, lay.to_depth));
-                    }
-                    last_line = Some(bottom);
                     y = bottom + d.msg_gap;
-                    end_lifelines(msg, i, &destroyed_at, &mut life_end, &mut crosses, &xs, bottom);
+                    (line_y, bottom)
                 } else {
                     if lay.creates {
                         line_y = line_y.max(y + heads[msg.to].h / 2.0);
                     }
-                    let pts = [[lay.ax, line_y], [lay.bx, line_y]];
+                    let pts = [[ax, line_y], [bx, line_y]];
                     layers.msgs.edge(&pts, PathData::polyline, stroke, msg.start, msg.end, d.marker);
                     if label_h > 0.0 {
-                        let mid = (lay.ax + lay.bx) / 2.0;
+                        let mid = (ax + bx) / 2.0;
                         layers.msgs.text(
                             &lay.label,
                             [mid - lay.label.width / 2.0, label_top],
@@ -529,34 +531,37 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                         let size = number_size(num, &d);
                         // A head at the sender: the number steps out behind it.
                         let back = if msg.start.is_some() {
-                            (size[0] / 2.0 + 2.0) * (lay.ax - lay.bx).signum()
+                            (size[0] / 2.0 + 2.0) * (ax - bx).signum()
                         } else {
                             0.0
                         };
-                        draw_number(&mut layers.msgs, num, [lay.ax + back, line_y], size);
+                        draw_number(&mut layers.msgs, num, [ax + back, line_y], size);
                     }
-                    if msg.deactivate {
-                        close_bar(&mut open_bars, &mut bars, msg.from, line_y, d.font_min(m.font_size));
-                    }
+                    y = line_y + d.msg_gap;
                     if lay.creates {
                         let h = &heads[msg.to];
                         let rect = Rect::new(xs[msg.to] - h.w / 2.0, line_y - h.h / 2.0, h.w, h.h);
                         head_rects[msg.to] = Some(rect);
                         life_start[msg.to] = rect.bottom();
+                        y = line_y + h.h / 2.0 + d.msg_gap * 0.7;
                     }
-                    if msg.activate {
-                        open_bars[msg.to].push((line_y, lay.to_depth));
+                    (line_y, line_y)
+                };
+                if msg.deactivate {
+                    close_bar(&mut open_bars, &mut bars, msg.from, close_at, d.min_bar);
+                }
+                if msg.activate {
+                    open_bars[msg.to].push((end_at, lay.to_depth));
+                }
+                last_line = Some(end_at);
+                for p in [msg.from, msg.to] {
+                    if destroyed_at[p] == Some(i) && life_end[p].is_none() {
+                        life_end[p] = Some(end_at);
+                        crosses.push([xs[p], end_at]);
                     }
-                    last_line = Some(line_y);
-                    y = if lay.creates {
-                        line_y + heads[msg.to].h / 2.0 + d.msg_gap * 0.7
-                    } else {
-                        line_y + d.msg_gap
-                    };
-                    end_lifelines(msg, i, &destroyed_at, &mut life_end, &mut crosses, &xs, line_y);
                 }
             }
-            (Event::Note { .. }, Lay::Note { label, size, x }) => {
+            (Event::Note { .. }, Lay::Note { label, size, x, .. }) => {
                 let rect = Rect::new(*x, y, size[0], size[1]);
                 layers.notes.fill(Geom::rounded(rect, style::NOTE_CORNER), style::NODE_FILL);
                 layers.notes.shape(
@@ -564,11 +569,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     Some(style::NOTE_FILL),
                     Some(Stroke::hairline(style::NOTE_STROKE)),
                 );
-                let laid = label;
                 layers.notes.text(
-                    laid,
-                    [rect.x + (rect.w - laid.width) / 2.0, rect.y + d.note_pad[1]],
-                    laid.width,
+                    label,
+                    [rect.x + (rect.w - label.width) / 2.0, rect.y + d.note_pad[1]],
+                    label.width,
                     Align::Center,
                     style::TEXT,
                 );
@@ -581,13 +585,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             }
             (Event::Deactivate(p), _) => {
                 let end = after_message.unwrap_or(y - d.msg_gap * 0.5);
-                let min = d.font_min(m.font_size);
                 if let Some(&(start, _)) = open_bars[*p].last()
-                    && end < start + min
+                    && end < start + d.min_bar
                 {
-                    y = y.max(start + min + d.msg_gap * 0.5);
+                    y = y.max(start + d.min_bar + d.msg_gap * 0.5);
                 }
-                close_bar(&mut open_bars, &mut bars, *p, end, min);
+                close_bar(&mut open_bars, &mut bars, *p, end, d.min_bar);
             }
             (
                 Event::Open { kind, color, .. },
@@ -599,11 +602,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     ..
                 },
             ) => {
-                let mut comment_at = None;
-                if let Some(c) = comment {
-                    comment_at = Some((c.clone(), [x[0], y]));
+                let comment = comment.as_ref().map(|c| {
+                    let at = [x[0], y];
                     y += c.height + 2.0;
-                }
+                    (c.clone(), at)
+                });
                 let top = y;
                 let width = x[1] - x[0];
                 let tag = tag.as_ref().map(|t| {
@@ -623,7 +626,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     color: *color,
                     tag,
                     sections: Vec::new(),
-                    comment: comment_at,
+                    comment,
                 });
             }
             (Event::Section { .. }, Lay::Section { label }) => {
@@ -650,26 +653,17 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
     }
     let y_end = (y + d.msg_gap * 0.3).max(lifeline_top + d.msg_gap);
-    for (p, open) in open_bars.iter_mut().enumerate() {
-        while let Some((start, depth)) = open.pop() {
-            bars.push(Bar {
-                p,
-                depth,
-                y0: start,
-                y1: y_end.max(start + d.font_min(m.font_size)),
-            });
+    for p in 0..n {
+        while !open_bars[p].is_empty() {
+            close_bar(&mut open_bars, &mut bars, p, y_end, d.min_bar);
         }
     }
 
     // Groups behind everything.
-    let mirror_h = if model.mirror {
-        (0..n)
-            .filter(|&p| destroyed_at[p].is_none() && participants[p].kind != ParticipantKind::Starter)
-            .map(|p| heads[p].h)
-            .fold(0.0, f32::max)
-    } else {
-        0.0
+    let mirrored = |p: usize| {
+        model.mirror && destroyed_at[p].is_none() && participants[p].kind != ParticipantKind::Starter
     };
+    let mirror_h = (0..n).filter(|&p| mirrored(p)).map(|p| heads[p].h).fold(0.0, f32::max);
     let bottom_edge = y_end + mirror_h;
     for (g, group) in model.groups.iter().enumerate() {
         let Some((a, b)) = group_span(model, g) else { continue };
@@ -689,7 +683,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let rect = Rect::new(x0, 0.0, x1 - x0, bottom_edge + d.frame_pad);
         let fill = match group.color {
             Some(c) if c[3] <= 0.0 => None,
-            Some(c) => Some(Ink::Rgba([c[0], c[1], c[2], c[3].min(AUTHOR_WASH)])),
+            Some(c) => Some(wash(c)),
             None => Some(style::CLUSTER_FILL),
         };
         layers.groups.shape(
@@ -742,7 +736,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if let Some((url, label)) = &participants[p].link {
             layers.heads.link(rect, url, Some(label));
         }
-        if model.mirror && destroyed_at[p].is_none() && participants[p].kind != ParticipantKind::Starter {
+        if mirrored(p) {
             let h = &heads[p];
             let bottom = Rect::new(xs[p] - h.w / 2.0, y_end, h.w, h.h);
             draw_head(&mut layers.heads, participants[p].kind, h, bottom);
@@ -763,13 +757,6 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let content = out.bounds();
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
-}
-
-impl Dims {
-    /// The shortest activation bar.
-    fn font_min(&self, font_size: f32) -> f32 {
-        font_size * 0.8
-    }
 }
 
 /// Paint order: each layer is drawn whole over the one before.
@@ -811,6 +798,11 @@ impl Layers {
     }
 }
 
+/// An author colour kept as a wash.
+fn wash(c: [f32; 4]) -> Ink {
+    Ink::Rgba([c[0], c[1], c[2], c[3].min(AUTHOR_WASH)])
+}
+
 fn bar_offset(depth: usize, bar_w: f32, side: f32) -> f32 {
     if depth == 0 {
         return 0.0;
@@ -836,56 +828,6 @@ fn bracketed(label: &Label) -> Label {
     out
 }
 
-#[allow(clippy::too_many_arguments)]
-fn measure_message(
-    cx: &LayoutCx<'_>,
-    msg: &Message,
-    depth: &mut [usize],
-    numbering: &mut Option<(f64, f64)>,
-    next_number: &mut f64,
-    font: FontSpec,
-    small: FontSpec,
-    num_font: FontSpec,
-    d: &Dims,
-    wrap_always: bool,
-) -> MsgLay {
-    let wrap = if msg.wrap || wrap_always { d.wrap } else { d.wrap * 2.0 };
-    let label = cx.text.lay(&msg.label, font, Some(wrap));
-    let comment = msg.comment.as_ref().map(|c| cx.text.lay(c, small, Some(d.wrap * 1.5)));
-    let from_depth = depth[msg.from];
-    if msg.deactivate {
-        depth[msg.from] = depth[msg.from].saturating_sub(1);
-    }
-    if msg.activate {
-        depth[msg.to] += 1;
-    }
-    let to_depth = depth[msg.to];
-    let number = numbering.map(|(_, step)| {
-        let text = format_number(*next_number);
-        *next_number += step;
-        cx.text.lay_plain(&text, num_font)
-    });
-    MsgLay {
-        label,
-        comment,
-        number,
-        from_depth,
-        to_depth,
-        creates: false,
-        ax: 0.0,
-        bx: 0.0,
-    }
-}
-
-fn format_number(v: f64) -> String {
-    if (v - v.round()).abs() < 1e-6 && v.abs() < 1e12 {
-        format!("{}", v.round() as i64)
-    } else {
-        let s = format!("{v:.2}");
-        s.trim_end_matches('0').trim_end_matches('.').to_string()
-    }
-}
-
 fn number_size(text: &LaidText, d: &Dims) -> [f32; 2] {
     let h = (2.0 * d.num_r).max(text.height * 0.95);
     [(text.width + d.num_r * 0.8).max(h), h]
@@ -902,14 +844,6 @@ fn draw_number(out: &mut SceneBuilder, text: &LaidText, center: [f32; 2], size: 
     out.text_centered(text, center, style::ACCENT_TEXT);
 }
 
-fn message_stroke(msg: &Message) -> Stroke {
-    let stroke = style::edge_stroke();
-    match msg.line {
-        LineKind::Solid => stroke,
-        LineKind::Dashed => stroke.dash(Dash::Dashed),
-    }
-}
-
 fn close_bar(open: &mut [Vec<(f32, usize)>], bars: &mut Vec<Bar>, p: usize, end: f32, min: f32) {
     if let Some((start, depth)) = open[p].pop() {
         bars.push(Bar {
@@ -918,23 +852,6 @@ fn close_bar(open: &mut [Vec<(f32, usize)>], bars: &mut Vec<Bar>, p: usize, end:
             y0: start,
             y1: end.max(start + min),
         });
-    }
-}
-
-fn end_lifelines(
-    msg: &Message,
-    index: usize,
-    destroyed_at: &[Option<usize>],
-    life_end: &mut [Option<f32>],
-    crosses: &mut Vec<[f32; 2]>,
-    xs: &[f32],
-    y: f32,
-) {
-    for p in [msg.from, msg.to] {
-        if destroyed_at[p] == Some(index) && life_end[p].is_none() {
-            life_end[p] = Some(y);
-            crosses.push([xs[p], y]);
-        }
     }
 }
 
@@ -1108,10 +1025,7 @@ fn draw_head(out: &mut SceneBuilder, kind: ParticipantKind, head: &Head, rect: R
 fn draw_frame(layers: &mut Layers, f: &Frame, d: &Dims) {
     let rect = f.rect;
     if f.kind == FragmentKind::Rect {
-        let fill = match f.color {
-            Some(c) => Ink::Rgba([c[0], c[1], c[2], c[3].min(AUTHOR_WASH)]),
-            None => style::CLUSTER_FILL,
-        };
+        let fill = f.color.map_or(style::CLUSTER_FILL, wash);
         layers.frames.fill(Geom::rounded(rect, RadiusTier::Xs), fill);
         return;
     }

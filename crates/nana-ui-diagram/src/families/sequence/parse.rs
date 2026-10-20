@@ -4,9 +4,10 @@
 
 use super::{Builder, Event, FragmentKind, Group, LineKind, Message, NotePlace, ParticipantKind};
 use crate::families::ParseCx;
+use crate::families::kit::{first_word, header, keyword, number, statements, truncate};
 use crate::geom::Marker;
-use crate::kind;
 use crate::source::color;
+use crate::text::Label;
 use crate::DiagramError;
 
 /// Arrow spellings, longest first at any one position.
@@ -66,35 +67,18 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<super::Model, Di
     if numbered {
         p.b.push(p.cx, Event::Autonumber(Some((1.0, 1.0))))?;
     }
-    let mut header_seen = false;
-    let mut last = 0;
-    for (index, line) in body.lines().enumerate() {
+    let (first, after) = header(body)?;
+    for (index, line) in std::iter::once((first, after)).chain(statements(body, first)) {
         p.line = index;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        last = index;
-        let mut rest = trimmed;
-        if !header_seen {
-            let Some((_, after)) = kind::header(trimmed) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected `sequenceDiagram`"));
-            };
-            header_seen = true;
-            rest = after.trim_start_matches([':', ';']).trim();
-        }
-        for stmt in split_statements(rest) {
+        for stmt in split_statements(line) {
             let stmt = stmt.trim();
             if !stmt.is_empty() {
                 p.statement(stmt)?;
             }
         }
     }
-    if !header_seen {
-        return Err(DiagramError::Empty);
-    }
-    let Parser { cx, b, .. } = p;
-    Ok(b.finish(cx, last))
+    let Parser { cx, b, line, .. } = p;
+    Ok(b.finish(cx, line))
 }
 
 /// Split on `;`, except the one that ends an entity code (`#59;`).
@@ -118,14 +102,6 @@ fn split_statements(line: &str) -> Vec<&str> {
     }
     out.push(&line[start..]);
     out
-}
-
-fn first_word(s: &str) -> (&str, &str) {
-    let s = s.trim_start();
-    match s.find(char::is_whitespace) {
-        Some(i) => (&s[..i], s[i..].trim_start()),
-        None => (s, ""),
-    }
 }
 
 /// A message or note text: an optional `wrap:` / `nowrap:` prefix, then the
@@ -154,83 +130,83 @@ impl Parser<'_, '_> {
         self.b.push(self.cx, event)
     }
 
+    /// The label of a block or divider, `None` when blank.
+    fn label(&self, text: &str) -> Result<Option<Label>, DiagramError> {
+        (!text.trim().is_empty()).then(|| self.cx.label(text)).transpose()
+    }
+
     fn statement(&mut self, stmt: &str) -> Result<(), DiagramError> {
         let (word, rest) = first_word(stmt);
         let lower = word.to_ascii_lowercase();
         match lower.as_str() {
-            "participant" => return self.declare(ParticipantKind::Participant, rest, false),
-            "actor" => return self.declare(ParticipantKind::Actor, rest, false),
+            "participant" => self.declare(ParticipantKind::Participant, rest, false),
+            "actor" => self.declare(ParticipantKind::Actor, rest, false),
             "create" => {
                 let (what, tail) = first_word(rest);
-                return match what.to_ascii_lowercase().as_str() {
+                match what.to_ascii_lowercase().as_str() {
                     "participant" => self.declare(ParticipantKind::Participant, tail, true),
                     "actor" => self.declare(ParticipantKind::Actor, tail, true),
                     _ => {
                         self.warn("`create` needs `participant` or `actor`");
                         Ok(())
                     }
-                };
-            }
-            "destroy" => {
-                if rest.is_empty() {
-                    self.warn("`destroy` needs a participant");
-                    return Ok(());
                 }
-                let p = self.b.participant(self.cx, rest)?;
-                return self.push(Event::Destroy(p));
             }
-            "box" => return self.open_box(rest),
-            "end" if rest.is_empty() => return self.close(),
-            "loop" => return self.open(FragmentKind::Loop, rest),
-            "alt" => return self.open(FragmentKind::Alt, rest),
-            "opt" => return self.open(FragmentKind::Opt, rest),
-            "par" | "par_over" => return self.open(FragmentKind::Par, rest),
-            "critical" => return self.open(FragmentKind::Critical, rest),
-            "break" => return self.open(FragmentKind::Break, rest),
-            "rect" => return self.open_rect(rest),
-            "else" | "and" | "option" => return self.section(rest),
-            "activate" | "deactivate" => {
+            "destroy" | "activate" | "deactivate" => {
                 if rest.is_empty() {
                     self.warn(format!("`{word}` needs a participant"));
                     return Ok(());
                 }
                 let p = self.b.participant(self.cx, rest)?;
-                let event = if lower == "activate" { Event::Activate(p) } else { Event::Deactivate(p) };
-                return self.push(event);
+                self.push(match lower.as_str() {
+                    "destroy" => Event::Destroy(p),
+                    "activate" => Event::Activate(p),
+                    _ => Event::Deactivate(p),
+                })
             }
-            "autonumber" => return self.autonumber(rest),
+            "box" => self.open_box(rest),
+            "end" if rest.is_empty() => self.close(),
+            "loop" => self.open(FragmentKind::Loop, rest),
+            "alt" => self.open(FragmentKind::Alt, rest),
+            "opt" => self.open(FragmentKind::Opt, rest),
+            "par" | "par_over" => self.open(FragmentKind::Par, rest),
+            "critical" => self.open(FragmentKind::Critical, rest),
+            "break" => self.open(FragmentKind::Break, rest),
+            "rect" => {
+                let (color, _) = leading_color(rest);
+                if color.is_none() && !rest.trim().is_empty() {
+                    self.warn("unreadable `rect` colour");
+                }
+                self.open_with(FragmentKind::Rect, None, color)
+            }
+            "else" | "and" | "option" => self.section(rest),
+            "autonumber" => self.autonumber(rest),
             "link" | "links" => {
                 self.link(lower == "links", rest);
-                return Ok(());
+                Ok(())
             }
-            "properties" | "details" => return Ok(()),
-            _ => {}
-        }
-        if lower == "note" {
-            return self.note(rest);
-        }
-        if let Some(title) = stmt.strip_prefix("title")
-            && (title.is_empty() || title.starts_with([' ', '\t', ':']))
-        {
-            let title = title.trim_start_matches(':').trim();
-            if !title.is_empty() {
-                self.cx.limits.check_label(title)?;
-                self.cx.meta.title = Some(crate::source::entities::decode(title));
+            "properties" | "details" => Ok(()),
+            "note" => self.note(rest),
+            _ => {
+                if let Some(title) = stmt.strip_prefix("title")
+                    && (title.is_empty() || title.starts_with([' ', '\t', ':']))
+                {
+                    let title = title.trim_start_matches(':').trim();
+                    if !title.is_empty() {
+                        self.cx.limits.check_label(title)?;
+                        self.cx.meta.title = Some(crate::source::entities::decode(title));
+                    }
+                } else if !self.message(stmt)? {
+                    self.warn(format!("unrecognised statement `{}`", truncate(stmt)));
+                }
+                Ok(())
             }
-            return Ok(());
         }
-        if self.message(stmt)? {
-            return Ok(());
-        }
-        let shown: String = stmt.chars().take(40).collect();
-        self.warn(format!("unrecognised statement `{shown}`"));
-        Ok(())
     }
 
-    fn declare(&mut self, kind: ParticipantKind, rest: &str, create: bool) -> Result<(), DiagramError> {
+    fn declare(&mut self, mut kind: ParticipantKind, rest: &str, create: bool) -> Result<(), DiagramError> {
         let rest = rest.trim();
         let (mut id, mut tail) = (rest, "");
-        let mut kind = kind;
         let mut alias: Option<String> = None;
         if let Some(at) = rest.find("@{") {
             id = &rest[..at];
@@ -249,22 +225,17 @@ impl Parser<'_, '_> {
             id = &rest[..at];
             tail = &rest[at..];
         }
-        let tail = tail.trim();
-        if let Some(external) = tail.strip_prefix("as").filter(|t| t.is_empty() || t.starts_with(char::is_whitespace)) {
-            let external = external.trim();
-            if !external.is_empty() {
-                alias = Some(external.to_string());
-            }
+        if let Some(external) = keyword(tail.trim(), "as")
+            && !external.is_empty()
+        {
+            alias = Some(external.to_string());
         }
         let id = id.trim();
         if id.is_empty() {
             self.warn("a participant needs a name");
             return Ok(());
         }
-        let label = match alias {
-            Some(a) => Some(self.cx.label(&a)?),
-            None => None,
-        };
+        let label = alias.map(|a| self.cx.label(&a)).transpose()?;
         let p = self.b.declare(self.cx, id, label, kind, self.group)?;
         if create {
             self.push(Event::Create(p))?;
@@ -279,8 +250,7 @@ impl Parser<'_, '_> {
             return Ok(());
         }
         let (color, title) = leading_color(rest);
-        let title = title.trim();
-        let title = if title.is_empty() { None } else { Some(self.cx.label(title)?) };
+        let title = self.label(title.trim())?;
         let limits = self.cx.limits;
         limits.check_count(self.b.model.groups.len() + 1, limits.clusters, crate::LimitKind::Clusters)?;
         self.group = Some(self.b.model.groups.len());
@@ -290,30 +260,23 @@ impl Parser<'_, '_> {
     }
 
     fn open(&mut self, kind: FragmentKind, rest: &str) -> Result<(), DiagramError> {
-        let label = if rest.trim().is_empty() { None } else { Some(self.cx.label(rest)?) };
+        let label = self.label(rest)?;
+        self.open_with(kind, label, None)
+    }
+
+    fn open_with(
+        &mut self,
+        kind: FragmentKind,
+        label: Option<Label>,
+        color: Option<[f32; 4]>,
+    ) -> Result<(), DiagramError> {
         self.push(Event::Open {
             kind,
             label,
-            color: None,
-            comment: None,
-        })?;
-        self.stack.push(Open::Fragment(kind));
-        Ok(())
-    }
-
-    fn open_rect(&mut self, rest: &str) -> Result<(), DiagramError> {
-        let (color, tail) = leading_color(rest);
-        if color.is_none() && !rest.trim().is_empty() {
-            self.warn("unreadable `rect` colour");
-        }
-        let _ = tail;
-        self.push(Event::Open {
-            kind: FragmentKind::Rect,
-            label: None,
             color,
             comment: None,
         })?;
-        self.stack.push(Open::Fragment(FragmentKind::Rect));
+        self.stack.push(Open::Fragment(kind));
         Ok(())
     }
 
@@ -322,7 +285,7 @@ impl Parser<'_, '_> {
             Some(Open::Fragment(kind)) if *kind != FragmentKind::Rect => {}
             _ => return Err(self.syntax("`else`, `and` or `option` outside a block")),
         }
-        let label = if rest.trim().is_empty() { None } else { Some(self.cx.label(rest)?) };
+        let label = self.label(rest)?;
         self.push(Event::Section { label })
     }
 
@@ -344,7 +307,7 @@ impl Parser<'_, '_> {
         if rest == "off" {
             return self.push(Event::Autonumber(None));
         }
-        let mut nums = rest.split_whitespace().map(|w| w.parse::<f64>().ok().filter(|v| v.is_finite() && v.abs() < 1e9));
+        let mut nums = rest.split_whitespace().map(|w| number(w).filter(|v| v.abs() < 1e9));
         let start = nums.next().flatten().unwrap_or(1.0);
         let step = nums.next().flatten().unwrap_or(1.0);
         self.push(Event::Autonumber(Some((start, step))))
@@ -375,15 +338,17 @@ impl Parser<'_, '_> {
             self.warn("a note needs `: text`");
             return Ok(());
         };
-        let place = place.trim();
-        let lower = place.to_ascii_lowercase();
-        let (which, names) = if let Some(r) = strip_words(&lower, place, &["right", "of"]) {
-            (0, r)
-        } else if let Some(r) = strip_words(&lower, place, &["left", "of"]) {
-            (1, r)
-        } else if let Some(r) = strip_words(&lower, place, &["over"]) {
-            (2, r)
-        } else {
+        let (side, tail) = first_word(place);
+        let side = side.to_ascii_lowercase();
+        let names = match side.as_str() {
+            "over" => Some(tail),
+            "left" | "right" => match first_word(tail) {
+                (of, names) if of.eq_ignore_ascii_case("of") => Some(names),
+                _ => None,
+            },
+            _ => None,
+        };
+        let Some(names) = names else {
             self.warn("a note goes `left of`, `right of` or `over` a participant");
             return Ok(());
         };
@@ -393,9 +358,9 @@ impl Parser<'_, '_> {
             return Ok(());
         };
         let a = self.b.participant(self.cx, first)?;
-        let place = match which {
-            0 => NotePlace::Right(a),
-            1 => NotePlace::Left(a),
+        let place = match side.as_str() {
+            "right" => NotePlace::Right(a),
+            "left" => NotePlace::Left(a),
             _ => match ids.next() {
                 Some(second) => NotePlace::Over(a, self.b.participant(self.cx, second)?),
                 None => NotePlace::Over(a, a),
@@ -408,27 +373,22 @@ impl Parser<'_, '_> {
 
     /// `A->>+B: text`. `Ok(false)` when the statement has no arrow.
     fn message(&mut self, stmt: &str) -> Result<bool, DiagramError> {
-        let (head, text) = match stmt.find(':') {
-            Some(i) => (&stmt[..i], &stmt[i + 1..]),
-            None => (stmt, ""),
-        };
-        let Some((at, len, line, start, end)) = find_arrow(head) else {
+        let (head, text) = stmt.split_once(':').unwrap_or((stmt, ""));
+        let Some((at, &(spelling, line, start, end))) = head
+            .char_indices()
+            .find_map(|(i, _)| ARROWS.iter().find(|a| head[i..].starts_with(a.0)).map(|a| (i, a)))
+        else {
             return Ok(false);
         };
         let from = head[..at].trim();
         let from = from.strip_suffix("()").unwrap_or(from).trim();
-        let mut to = head[at + len..].trim();
-        let mut activate = false;
-        let mut deactivate = false;
-        to = to.strip_prefix("()").unwrap_or(to).trim();
-        if let Some(t) = to.strip_prefix('+') {
-            activate = true;
-            to = t;
-        } else if let Some(t) = to.strip_prefix('-') {
-            deactivate = true;
-            to = t;
+        let to = head[at + spelling.len()..].trim();
+        let mut to = to.strip_prefix("()").unwrap_or(to).trim();
+        let activate = to.starts_with('+');
+        let deactivate = to.starts_with('-');
+        if activate || deactivate {
+            to = to[1..].trim();
         }
-        let to = to.trim();
         let to = to.strip_prefix("()").unwrap_or(to).trim();
         if from.is_empty() || to.is_empty() {
             self.warn("a message needs a sender and a receiver");
@@ -454,21 +414,6 @@ impl Parser<'_, '_> {
     }
 }
 
-type ArrowHit = (usize, usize, LineKind, Option<Marker>, Option<Marker>);
-
-/// The first arrow in `head`: byte offset, length and what it draws.
-fn find_arrow(head: &str) -> Option<ArrowHit> {
-    for (i, _) in head.char_indices() {
-        let tail = &head[i..];
-        for &(spelling, line, start, end) in ARROWS {
-            if tail.starts_with(spelling) {
-                return Some((i, spelling.len(), line, start, end));
-            }
-        }
-    }
-    None
-}
-
 /// Where ` as ` starts in a declaration, if anywhere.
 fn find_as(rest: &str) -> Option<usize> {
     let bytes = rest.as_bytes();
@@ -484,26 +429,8 @@ fn find_as(rest: &str) -> Option<usize> {
     None
 }
 
-/// `place` with the leading `words` removed (matched case-insensitively
-/// against `lower`), keeping the original spelling of what follows.
-fn strip_words<'a>(lower: &str, place: &'a str, words: &[&str]) -> Option<&'a str> {
-    let mut l = lower;
-    let mut offset = 0;
-    for w in words {
-        let trimmed = l.trim_start();
-        offset += l.len() - trimmed.len();
-        let rest = trimmed.strip_prefix(w)?;
-        if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
-            return None;
-        }
-        offset += w.len();
-        l = rest;
-    }
-    Some(place[offset..].trim())
-}
-
 /// The string value of `"key": "value"` in a small JSON object.
-pub(crate) fn json_str(json: &str, key: &str) -> Option<String> {
+fn json_str(json: &str, key: &str) -> Option<String> {
     let quoted = format!("\"{key}\"");
     let at = json.find(&quoted)? + quoted.len();
     let rest = json[at..].trim_start().strip_prefix(':')?.trim_start();
@@ -598,15 +525,11 @@ fn hsl(args: &str) -> Option<[f32; 4]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::families::sequence::{Event, Model};
-    use crate::{Limits, parse as parse_source};
+    use crate::families::parse_for_test;
+    use crate::families::sequence::Model;
 
     fn model(source: &str) -> Model {
-        let parsed = parse_source(source, &Limits::DEFAULT).unwrap();
-        match parsed.model {
-            crate::families::Model::Sequence(m) => m,
-            _ => panic!("not a sequence"),
-        }
+        parse_for_test(source, parse).0.unwrap()
     }
 
     #[test]
@@ -646,7 +569,6 @@ mod tests {
         assert_eq!(p[1].kind, ParticipantKind::Actor);
         assert_eq!(p[2].kind, ParticipantKind::Database);
         assert_eq!(p[2].group, None);
-        assert_eq!(p[3].id, "A");
         assert_eq!(p[3].label.text(), "Alice Smith");
         assert_eq!(m.groups[0].title.as_ref().unwrap().text(), "Team");
         assert!(m.groups[0].color.is_some());
@@ -665,7 +587,7 @@ mod tests {
     #[test]
     fn stray_end_is_a_syntax_error_and_unclosed_blocks_close() {
         assert!(matches!(
-            parse_source("sequenceDiagram\nend", &Limits::DEFAULT),
+            parse_for_test("sequenceDiagram\nend", parse).0,
             Err(DiagramError::Syntax { .. })
         ));
         let m = model("sequenceDiagram\nloop forever\nA->>B: hi");

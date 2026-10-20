@@ -4,14 +4,14 @@
 //! grammar onto the same participants and event list, so both draw through
 //! one layout.
 
-pub(crate) mod layout;
+mod layout;
 mod parse;
+
+use std::collections::HashMap;
 
 use super::{LayoutCx, ParseCx};
 use crate::geom::Marker;
 use crate::text::Label;
-use std::collections::HashMap;
-
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
 pub(crate) const NATIVE: bool = true;
@@ -49,9 +49,6 @@ impl ParticipantKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Participant {
-    /// The author's id, for tests and diagnostics.
-    #[allow(dead_code)]
-    pub id: String,
     pub label: Label,
     pub kind: ParticipantKind,
     /// The box this participant was declared in.
@@ -170,15 +167,6 @@ pub(crate) struct Model {
     pub mirror: bool,
 }
 
-impl Model {
-    pub(crate) fn messages(&self) -> usize {
-        self.events
-            .iter()
-            .filter(|e| matches!(e, Event::Message(_)))
-            .count()
-    }
-}
-
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
     parse::parse(body, cx)
 }
@@ -188,19 +176,15 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 }
 
 pub(crate) fn summary(model: &Model) -> Summary {
-    let fragments = model
-        .events
-        .iter()
-        .filter(|e| matches!(e, Event::Open { .. }))
-        .count();
+    let count = |f: fn(&Event) -> bool| model.events.iter().filter(|e| f(e)).count();
     Summary {
         nodes: model
             .participants
             .iter()
             .filter(|p| p.kind != ParticipantKind::Starter)
             .count() as u32,
-        edges: model.messages() as u32,
-        groups: (model.groups.len() + fragments) as u32,
+        edges: count(|e| matches!(e, Event::Message(_))) as u32,
+        groups: (model.groups.len() + count(|e| matches!(e, Event::Open { .. }))) as u32,
     }
 }
 
@@ -245,7 +229,6 @@ impl Builder {
         let label = cx.label(id)?;
         let i = self.model.participants.len();
         self.model.participants.push(Participant {
-            id: id.to_string(),
             label,
             kind: ParticipantKind::Participant,
             group: None,
@@ -303,9 +286,7 @@ impl Builder {
         if self.depth > 0 {
             cx.warn(line, "unclosed block: closed at the end of the diagram");
         }
-        for _ in 0..self.depth {
-            self.model.events.push(Event::Close);
-        }
+        self.model.events.extend(std::iter::repeat_n(Event::Close, self.depth));
         self.model
     }
 }
