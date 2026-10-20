@@ -1364,9 +1364,14 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         // nothing.
         if !Arc::ptr_eq(&theme, &self.installed_theme) {
             for id in self.known_window_ids() {
-                let _ = self.program.with_document_mut(id, |document| {
+                let installed = self.program.with_document_mut(id, |document| {
                     document.context_mut().set_theme_tokens(Arc::clone(&theme))
                 });
+                // The program's own update may have reported no change, so the
+                // restyle schedules its frame here.
+                if matches!(installed, Ok(Some(Ok(true)))) {
+                    self.request_redraw(id);
+                }
             }
             self.installed_theme = theme;
         }
