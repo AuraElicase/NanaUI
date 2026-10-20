@@ -181,16 +181,6 @@ impl FrameContext {
         let encoder = self.encoder.take().expect("frame encoder");
         let started = Instant::now();
         let commands = encoder.finish();
-        // Outside the submission guard: taking a staging chunk may wait for
-        // one in flight.
-        let uploads = crate::upload::record(
-            &self.gpu.inner.upload_ring,
-            &self.gpu.inner.device,
-            &self.gpu.inner.queue,
-            self.gpu.policy(),
-            self.take_uploads(),
-        );
-        let upload_chunk = uploads.as_ref().map(|uploads| uploads.chunk);
         let index = {
             let _submission = self.gpu.lock_submission();
             // The reconfiguration guard is shared between submitters. A
@@ -201,6 +191,19 @@ impl FrameContext {
                 .submission_order
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
+            // Writes queued outside a frame (or by a dropped one) are taken
+            // in submission order: taken earlier, by a submitter that queues
+            // later, they would land after a frame recorded against them.
+            // Taking a staging chunk may wait for one in flight, never for an
+            // unsubmitted one, since every recording happens under this lock.
+            let uploads = crate::upload::record(
+                &self.gpu.inner.upload_ring,
+                &self.gpu.inner.device,
+                &self.gpu.inner.queue,
+                self.gpu.policy(),
+                self.take_uploads(),
+            );
+            let upload_chunk = uploads.as_ref().map(|uploads| uploads.chunk);
             let index = self.gpu.inner.queue.submit(
                 uploads
                     .map(|uploads| uploads.commands)
