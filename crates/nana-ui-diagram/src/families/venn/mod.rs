@@ -67,27 +67,24 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 cx.meta.title = Some(title.to_string());
             }
         } else if let Some(def) = keyword(stmt, "set") {
+            current = None;
             let (ids, label, size) = area_head(cx, def)?;
             let [id] = ids.as_slice() else {
                 cx.warn(line, "`set` names one set");
-                current = None;
                 continue;
             };
             if set_ids.contains_key(id) {
                 cx.warn(line, format!("set `{id}` is already defined"));
-                current = None;
                 continue;
             }
             if model.sets >= MAX_SETS {
                 cx.warn(line, format!("only {MAX_SETS} sets are drawn; `{id}` is skipped"));
-                current = None;
                 continue;
             }
             set_ids.insert(id.clone(), model.sets);
-            let label = Some(label.unwrap_or_else(|| Label::plain(id)));
             model.areas.push(Area {
                 id: id.clone(),
-                label,
+                label: Some(label.unwrap_or_else(|| Label::plain(id))),
                 mask: 1 << model.sets,
                 size,
                 notes: Vec::new(),
@@ -95,6 +92,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             model.sets += 1;
             current = Some(model.areas.len() - 1);
         } else if let Some(def) = keyword(stmt, "union") {
+            current = None;
             let (ids, label, size) = area_head(cx, def)?;
             let mut mask = 0u8;
             let mut ok = ids.len() >= 2;
@@ -108,7 +106,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 }
             }
             if !ok || mask.count_ones() < 2 {
-                current = None;
                 continue;
             }
             if let Some(existing) = model.areas.iter().position(|a| a.mask == mask) {
@@ -142,9 +139,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let label = label.unwrap_or_else(|| Label::plain(&id));
             model.areas[area].notes.push(Note { id, label });
         } else if let Some(def) = keyword(stmt, "style") {
-            let def = def.trim();
-            let split = def.find(char::is_whitespace).unwrap_or(def.len());
-            let (targets, decls) = def.split_at(split);
+            let (targets, decls) = kit::first_word(def);
             let style = AreaStyle {
                 author: AuthorStyle::parse(decls),
                 fill_opacity: fill_opacity(decls),
@@ -180,10 +175,10 @@ fn fill_opacity(decls: &str) -> Option<f32> {
     })
 }
 
-/// `A`, `"Foo Bar"`, `A,B["Label"]:3` → ids, label and size.
 /// Ids, display label and size of a `set` / `union` / `text` head.
 type Head = (Vec<String>, Option<Label>, Option<f64>);
 
+/// `A`, `"Foo Bar"`, `A,B["Label"]:3` → ids, label and size.
 fn area_head(cx: &ParseCx<'_>, def: &str) -> Result<Head, DiagramError> {
     let mut def = def.trim();
     let mut size = None;
@@ -377,10 +372,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let st = style_of(&model.areas[i].id);
         let fill = match st.author.fill {
             Some(c) => Ink::Rgba([c[0], c[1], c[2], c[3] * st.fill_opacity.unwrap_or(0.35)]),
-            None => Ink::Series {
-                index: i as u16,
-                tone: Tone::Soft,
-            },
+            None => style::series(i, Tone::Soft),
         };
         out.fill(s.geom(), fill);
     }
@@ -395,13 +387,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (i, s) in shapes.iter().enumerate() {
         let st = style_of(&model.areas[i].id);
         let stroke = Stroke::new(
-            st.author.stroke.map_or(
-                Ink::Series {
-                    index: i as u16,
-                    tone: Tone::Solid,
-                },
-                Ink::Rgba,
-            ),
+            st.author.stroke.map_or(style::series(i, Tone::Solid), Ink::Rgba),
             st.author.stroke_width.map_or(StrokeWidth::Thick, StrokeWidth::Px),
         );
         out.stroke(s.geom(), stroke);

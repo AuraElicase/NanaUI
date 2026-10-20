@@ -32,6 +32,8 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     }
     let mut model = Model::default();
     let mut next = 0u32;
+    let elements = cx.limits.elements as u64;
+    let bound = |v: u64| if v >= elements { Err(DiagramError::TooLarge(LimitKind::Elements)) } else { Ok(v as u32) };
     for (line, stmt) in kit::statements(body, header) {
         if let Some(title) = keyword(stmt, "title") {
             let title = kit::unquote(title).trim();
@@ -45,12 +47,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             continue;
         };
         let range = range.trim();
-        let bound = |v: u64| -> Result<u32, DiagramError> {
-            if v >= cx.limits.elements as u64 {
-                return Err(DiagramError::TooLarge(LimitKind::Elements));
-            }
-            Ok(v as u32)
-        };
         let parsed = if let Some(count) = range.strip_prefix('+') {
             count.trim().parse::<u64>().ok().filter(|c| *c > 0).map(|c| (u64::from(next), u64::from(next) + c - 1))
         } else if let Some((a, b)) = range.split_once('-') {
@@ -150,11 +146,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if show_bits {
             let ny = rect.y - number_h;
             let (left, right) = if descending { (s.end, s.start) } else { (s.start, s.end) };
+            let t = cx.text.lay_plain(&left.to_string(), number_font);
             if s.start == s.end {
-                let t = cx.text.lay_plain(&left.to_string(), number_font);
                 out.text(&t, [rect.center()[0] - t.width / 2.0, ny], t.width, Align::Center, style::MUTED);
             } else {
-                let t = cx.text.lay_plain(&left.to_string(), number_font);
                 out.text(&t, [rect.x + 2.0, ny], t.width, Align::Start, style::MUTED);
                 let t = cx.text.lay_plain(&right.to_string(), number_font);
                 out.text(&t, [rect.right() - 2.0 - t.width, ny], t.width, Align::End, style::MUTED);
@@ -200,10 +195,8 @@ fn fit(text: &Measurer<'_>, label: &Label, font: FontSpec, width: f32) -> LaidTe
         used += a;
         kept.push_str(g);
     }
-    if !kept.trim().is_empty() {
-        return text.lay_plain(&format!("{}…", kept.trim_end()), smaller);
-    }
-    text.lay_plain("", smaller)
+    let shown = if kept.trim().is_empty() { String::new() } else { format!("{}…", kept.trim_end()) };
+    text.lay_plain(&shown, smaller)
 }
 
 pub(crate) fn summary(model: &Model) -> Summary {

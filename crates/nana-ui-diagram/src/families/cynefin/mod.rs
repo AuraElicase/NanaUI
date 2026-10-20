@@ -5,8 +5,9 @@
 
 use super::kit::{self, keyword};
 use super::{LayoutCx, ParseCx};
+use crate::geom::path::basis_curve;
 use crate::geom::{Marker, PathData};
-use crate::ir::{Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::ir::{Dash, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::text::{LaidText, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
@@ -249,27 +250,18 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let left = wave([0.0, c[1]], c, amp, 1.0);
     let right = wave(c, [w, c[1]], amp, 1.0);
     let rev = |v: &[[f32; 2]]| v.iter().rev().copied().collect::<Vec<_>>();
-    let mut regions: [Vec<[f32; 2]>; 4] = Default::default();
-    // Complex: top-left.
-    regions[0] = [vec![[0.0, 0.0]], top.clone(), rev(&left)].concat();
-    // Complicated: top-right.
-    regions[1] = [vec![[w, 0.0]], top.clone(), right.clone()].concat();
-    // Chaotic: bottom-left.
-    regions[2] = [vec![[0.0, h]], rev(&bottom), rev(&left)].concat();
-    // Clear: bottom-right.
-    regions[3] = [vec![[w, h]], rev(&bottom), right.clone()].concat();
+    // Each ring runs corner → one boundary into the centre → the other
+    // boundary back out, in `quads` order.
+    let regions = [
+        [vec![[0.0, 0.0]], top.clone(), rev(&left)].concat(),
+        [vec![[w, 0.0]], top.clone(), right.clone()].concat(),
+        [vec![[0.0, h]], rev(&bottom), rev(&left)].concat(),
+        [vec![[w, h]], rev(&bottom), right.clone()].concat(),
+    ];
     let frame = Rect::new(0.0, 0.0, w, h);
     out.clip(Geom::rounded(frame, style::CLUSTER_CORNER));
-    for (q, d) in quads.iter().enumerate() {
-        // Each ring runs corner → one boundary into the centre → the
-        // other boundary back out.
-        out.fill(
-            Geom::path(PathData::polygon(&regions[q])),
-            Ink::Series {
-                index: d.index() as u16,
-                tone: Tone::Soft,
-            },
-        );
+    for (region, d) in regions.iter().zip(quads) {
+        out.fill(Geom::path(PathData::polygon(region)), style::series(d.index(), Tone::Soft));
     }
     out.unclip();
     let boundary = Stroke::hairline(style::NODE_STROKE);
@@ -277,9 +269,8 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     out.stroke(Geom::path(PathData::polyline(&left)), boundary);
     out.stroke(Geom::path(PathData::polyline(&right)), boundary);
     // The cliff between Clear and Chaotic: heavier, with a curl at its foot.
-    let mut cliff = bottom.clone();
-    if let Some(&end) = cliff.last() {
-        cliff.pop();
+    let mut cliff = bottom;
+    if let Some(end) = cliff.pop() {
         cliff.push([end[0], end[1] - pad * 0.8]);
         cliff.push([end[0] - pad * 0.6, end[1] - pad * 0.2]);
     }
@@ -350,7 +341,8 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let (fq, tq) = (t.from.quadrant(), t.to.quadrant());
         let sign = if repeat % 2 == 0 { 1.0 } else { -1.0 };
         let shift = (repeat / 2) as f32 * chip_h;
-        let (points, label_at) = if t.from == Domain::Confusion || t.to == Domain::Confusion {
+        // Only the diagonal route is smoothed.
+        let (points, label_at, smooth) = if t.from == Domain::Confusion || t.to == Domain::Confusion {
             // Straight from the ellipse's rim out toward the domain.
             let other = if t.from == Domain::Confusion { t.to } else { t.from };
             let target = anchor(other);
@@ -360,39 +352,31 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             let rim = [c[0] + d[0] / len * k, c[1] + d[1] / len * k];
             let pts = if t.from == Domain::Confusion { vec![rim, target] } else { vec![target, rim] };
             let mid = [(rim[0] + target[0]) / 2.0, (rim[1] + target[1]) / 2.0];
-            (pts, mid)
+            (pts, mid, false)
         } else if fq.1 == tq.1 {
             // Across the vertical boundary, in the lane beside the ellipse.
             let y = if fq.1 { c[1] + ry + lane / 2.0 } else { c[1] - ry - lane / 2.0 } + sign * shift;
             let dx = qw * 0.3;
             let (x0, x1) = if fq.0 { (c[0] + dx, c[0] - dx) } else { (c[0] - dx, c[0] + dx) };
             let bow = if fq.1 { chip_h * 0.6 } else { -chip_h * 0.6 } * sign;
-            (bezier([x0, y], [c[0], y + bow * 2.0], [x1, y]), [c[0], y + bow])
+            (bezier([x0, y], [c[0], y + bow * 2.0], [x1, y]), [c[0], y + bow], false)
         } else if fq.0 == tq.0 {
             // Across the horizontal boundary, beside the ellipse.
             let x = if fq.0 { c[0] + rx + pad + chip_w / 2.0 } else { c[0] - rx - pad - chip_w / 2.0 } + sign * shift;
             let dy = ry;
             let (y0, y1) = if fq.1 { (c[1] + dy, c[1] - dy) } else { (c[1] - dy, c[1] + dy) };
             let bow = if fq.0 { pad * 0.6 } else { -pad * 0.6 } * sign;
-            (bezier([x, y0], [x + bow * 2.0, c[1]], [x, y1]), [x + bow, c[1]])
+            (bezier([x, y0], [x + bow * 2.0, c[1]], [x, y1]), [x + bow, c[1]], false)
         } else {
             // Diagonal: out along the lane, down the side of the ellipse
             // facing the target's column, and in again.
             let (a, b) = (anchor(t.from), anchor(t.to));
             let side = if tq.0 { 1.0 } else { -1.0 };
             let x = c[0] + side * (rx + pad + chip_w / 2.0) + sign * shift;
-            let pts = vec![a, [x, a[1]], [x, b[1]], b];
-            (pts, [x, c[1]])
+            (vec![a, [x, a[1]], [x, b[1]], b], [x, c[1]], true)
         };
-        let smooth = !(t.from == Domain::Confusion || t.to == Domain::Confusion) && fq.0 != tq.0 && fq.1 != tq.1;
-        if smooth {
-            out.edge(&points, crate::geom::path::basis_curve, stroke, None, Some(Marker::Arrow), marker);
-            if let Some(l) = chip {
-                out.chip(l, label_at, chip_pad);
-            }
-            continue;
-        }
-        out.edge(&points, PathData::polyline, stroke, None, Some(Marker::Arrow), marker);
+        let build: fn(&[[f32; 2]]) -> PathData = if smooth { basis_curve } else { PathData::polyline };
+        out.edge(&points, build, stroke, None, Some(Marker::Arrow), marker);
         if let Some(l) = chip {
             out.chip(l, label_at, chip_pad);
         }

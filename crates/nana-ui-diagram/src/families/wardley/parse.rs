@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use super::{Annotation, Component, Link, LinkKind, Marked, Model, Sourcing, Stage};
 use crate::families::ParseCx;
 use crate::families::kit::{self, keyword};
-use crate::text::Label;
 use crate::{DiagramError, LimitKind};
 
 struct RawLink {
@@ -67,17 +66,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             }
         } else if let Some(stages) = keyword(stmt, "evolution") {
             model.stages = parse_stages(cx, stages)?;
-        } else if let Some(def) = keyword(stmt, "anchor") {
+        } else if let Some((word, def)) = ["anchor", "component"].into_iter().find_map(|w| Some((w, keyword(stmt, w)?))) {
             let (name, rest) = split_name(def);
             match kit::pair(rest_coords(rest)) {
-                Some((v, e)) => add(cx, &mut model, &mut names, line, name, v as f32, e as f32, true, rest)?,
-                None => cx.warn(line, format!("anchor `{name}` needs `[visibility, evolution]`")),
-            }
-        } else if let Some(def) = keyword(stmt, "component") {
-            let (name, rest) = split_name(def);
-            match kit::pair(rest_coords(rest)) {
-                Some((v, e)) => add(cx, &mut model, &mut names, line, name, v as f32, e as f32, false, rest)?,
-                None => cx.warn(line, format!("component `{name}` needs `[visibility, evolution]`")),
+                Some((v, e)) => add(cx, &mut model, &mut names, line, name, v as f32, e as f32, word == "anchor", rest)?,
+                None => cx.warn(line, format!("{word} `{name}` needs `[visibility, evolution]`")),
             }
         } else if let Some(def) = keyword(stmt, "pipeline") {
             let def = def.trim_end();
@@ -146,10 +139,7 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     for l in links {
         match (names.get(&l.from), names.get(&l.to)) {
             (Some(&from), Some(&to)) => {
-                let label = match l.label {
-                    Some(t) => Some(cx.label(&t)?).filter(|l: &Label| !l.is_empty()),
-                    None => None,
-                };
+                let label = l.label.map(|t| cx.label(&t)).transpose()?.filter(|l| !l.is_empty());
                 model.links.push(Link {
                     from,
                     to,
@@ -198,7 +188,6 @@ fn add(
     cx.limits.check_count(model.components.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
     let label = cx.label(name)?;
     let mut component = Component {
-        name: name.to_string(),
         label,
         visibility: visibility.clamp(0.0, 1.0),
         evolution: evolution.clamp(0.0, 1.0),
@@ -364,7 +353,7 @@ fn link(stmt: &str, line: usize) -> Option<RawLink> {
             continue;
         }
         let rest = &stmt[i..];
-        let (kind, len, label) = if rest.starts_with("+<>") {
+        let (kind, len, mut label) = if rest.starts_with("+<>") {
             (LinkKind::Flow { forward: true, back: true }, 3, None)
         } else if rest.starts_with("+<") {
             (LinkKind::Flow { forward: false, back: true }, 2, None)
@@ -384,7 +373,6 @@ fn link(stmt: &str, line: usize) -> Option<RawLink> {
         };
         let from = kit::unquote(stmt[..i].trim()).trim().to_string();
         let mut to = stmt[i + len..].trim();
-        let mut label = label;
         if let Some(semi) = to.find(';') {
             let text = to[semi + 1..].trim();
             if !text.is_empty() {
