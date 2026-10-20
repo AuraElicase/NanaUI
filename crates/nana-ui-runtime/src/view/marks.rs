@@ -1,6 +1,7 @@
 //! Small marks an application's chrome repeats: keycaps and chords, a tag,
-//! a callout, and a settings group (a titled card of rows with inset
-//! dividers). Each names theme roles and steps only, so a theme moves them.
+//! a callout, a heading line with its tools, the fade at a scroll area's
+//! foot, and a settings group (a titled card of rows with inset dividers).
+//! Each names theme roles and steps only, so a theme moves them.
 //!
 //! ```ignore
 //! settings_group(Some("Input"), vec![
@@ -209,34 +210,169 @@ pub fn tag(text: impl Into<String>) -> AnyView {
         .into_any()
 }
 
-/// A note in a box tinted by `tone`: `icon` in the tone's colour, then
-/// `text`, wrapping within the row.
-pub fn callout(icon: Icon, tone: StatusTone, text: impl Into<String>) -> AnyView {
-    let role = tone_role(tone);
+/// A note marked by `tone`: `icon` in the tone's colour, then `text`,
+/// wrapping within the row. In a box tinted by the tone unless
+/// [`Callout::quiet`]; hidden while `text` is empty.
+pub fn callout(icon: Icon, tone: StatusTone, text: impl IntoProp<String>) -> Callout {
+    Callout {
+        icon,
+        tone,
+        text: text.into_source(),
+        quiet: false,
+        trailing: None,
+    }
+}
+
+/// A [`callout`] being set up; a view.
+pub struct Callout {
+    icon: Icon,
+    tone: StatusTone,
+    text: PropSource<String>,
+    quiet: bool,
+    trailing: Option<AnyView>,
+}
+
+impl Callout {
+    /// No tint and no inset of its own, its text small and muted, centred on
+    /// its glyph: a one-line note inside a block that already owns the inset.
+    pub fn quiet(mut self) -> Self {
+        self.quiet = true;
+        self
+    }
+
+    /// `view` at the end of the line: a link to where the note is put right,
+    /// or its buttons. It keeps its width; the text wraps first.
+    pub fn trailing(mut self, view: impl IntoView) -> Self {
+        self.trailing = Some(view.into_any());
+        self
+    }
+}
+
+impl IntoView for Callout {
+    fn build(self, vb: &mut super::node::ViewBuilder<'_, '_, '_>) {
+        let Callout {
+            icon,
+            tone,
+            text,
+            quiet,
+            trailing,
+        } = self;
+        let role = tone_role(tone);
+        let text = super::reactive::computed(move || text.get());
+        let frame = if quiet {
+            Stack::row(0.0)
+                .width(LengthSpec::Fill)
+                .gap_step(SpacingStep::Sm)
+                // The block around it owns the inset across.
+                .padding_xy(0.0, nana_ui_core::space::XS)
+                .align(AlignSpec::Center)
+        } else {
+            Stack::row(0.0)
+                .width(LengthSpec::Fill)
+                .gap_step(SpacingStep::Md)
+                .padding_step(SpacingStep::Xl, SpacingStep::Md)
+                .align(AlignSpec::Start)
+                .radius(RadiusTier::Sm)
+                .surface_mix(SemanticColorMix::alpha(role, 0.10))
+        };
+        let mut glyph = IconGlyph::new(icon).role(role).decorative();
+        if !quiet {
+            glyph = glyph.size(nana_ui_core::type_scale::LINE);
+        }
+        let copy = if quiet {
+            Text::new("")
+                .role(TypeRole::Meta)
+                .color(SemanticColorRole::Muted)
+        } else {
+            Text::new("").role(TypeRole::Body)
+        };
+        widget(frame)
+            .visible(move || !text.with(String::is_empty))
+            .children((
+                widget(glyph),
+                widget(
+                    Stack::column(0.0)
+                        .grow(1.0)
+                        .shrink(1.0)
+                        .with_layout(|l| l.min_width = Some(LengthSpec::Px(0.0))),
+                )
+                .children(widget(copy).value(text)),
+                trailing.map(|trailing| {
+                    widget(Stack::row(0.0).align(AlignSpec::Center).shrink(0.0)).children(trailing)
+                }),
+            ))
+            .build(vb)
+    }
+}
+
+/// A heading line: `title` takes the width that is left and gives it up
+/// first, ellipsing if it must; `tools` keep theirs at the end.
+pub fn heading_row(title: impl IntoView, tools: impl IntoView) -> AnyView {
     widget(
         Stack::row(0.0)
             .width(LengthSpec::Fill)
-            .gap_step(SpacingStep::Md)
-            .padding_step(SpacingStep::Xl, SpacingStep::Md)
-            .align(AlignSpec::Start)
-            .radius(RadiusTier::Sm)
-            .surface_mix(SemanticColorMix::alpha(role, 0.10)),
+            .gap_step(SpacingStep::Sm)
+            .align(AlignSpec::Center),
     )
     .children((
         widget(
-            IconGlyph::new(icon)
-                .size(nana_ui_core::type_scale::LINE)
-                .role(role)
-                .decorative(),
-        ),
-        widget(
-            Stack::column(0.0)
-                .grow(1.0)
+            Stack::row(0.0)
+                .width(LengthSpec::Fill)
+                .gap_step(SpacingStep::Sm)
                 .shrink(1.0)
+                .align(AlignSpec::Center)
                 .with_layout(|l| l.min_width = Some(LengthSpec::Px(0.0))),
         )
-        .children(widget(Text::new(text.into()).role(TypeRole::Body))),
+        .children(title),
+        tools,
     ))
+    .into_any()
+}
+
+/// A heading's tools ([`crate::IconButton::tool`], compact menus): a
+/// toolbar without chrome or vertical inset, so the heading line keeps the
+/// height of its text or its tools, whichever is taller; it never shrinks
+/// its targets.
+pub fn heading_tools(tools: impl IntoView) -> AnyView {
+    widget(
+        crate::Toolbar::new().chrome(false).style(
+            Stack::row(0.0)
+                .gap_step(SpacingStep::Xxs)
+                .shrink(0.0)
+                .align(AlignSpec::Center)
+                .node_style(),
+        ),
+    )
+    .children(tools)
+    .into_any()
+}
+
+/// The foot of a scroll area fading into `surface`, `height` tall: placed
+/// over the area's bottom edge, it shows a list runs on past it instead of
+/// cutting through a row. It takes no input, so the wheel and the pointer
+/// reach the list under it; end the list with `height` of air so its last
+/// row can scroll clear of the fade.
+pub fn scroll_foot_fade(height: f32, surface: SemanticColorRole) -> AnyView {
+    use nana_ui_core::{CssGradient, GradientStop, LinearGradient, MaskImage};
+    let stop = |position: f32, alpha: f32| GradientStop {
+        paint_color: None,
+        position,
+        color: [1.0, 1.0, 1.0, alpha],
+    };
+    widget(Stack::row(0.0).surface(surface).with_layout(|l| {
+        l.position = nana_ui_core::PositionSpec::Absolute;
+        l.offset_left = Some(LengthSpec::Px(0.0));
+        l.offset_right = Some(LengthSpec::Px(0.0));
+        l.offset_bottom = Some(LengthSpec::Px(0.0));
+        l.height = Some(LengthSpec::Px(height));
+        l.pointer_events = Some(nana_ui_core::PointerEventsSpec::None);
+        l.z_index = Some(1);
+        // CSS angles: 180deg runs top to bottom.
+        l.paint.mask = Some(MaskImage::Gradient(CssGradient::Linear(LinearGradient {
+            angle_deg: 180.0,
+            stops: vec![stop(0.0, 0.0), stop(1.0, 1.0)],
+        })));
+    }))
     .into_any()
 }
 

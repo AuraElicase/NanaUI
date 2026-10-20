@@ -95,6 +95,12 @@ pub struct ScrollbarSkin {
     pub track_color: Option<[f32; 4]>,
     /// Thumb fill. `None` keeps the theme's.
     pub thumb_color: Option<[f32; 4]>,
+    /// The margin the bar runs in, when that is narrower than the theme's
+    /// lane and its inset on both sides: the lane narrows to fit it, and the
+    /// thumbs stay no wider than the lane. Resolved against the installed
+    /// metrics when painted, so a theme with a narrower lane still wins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room: Option<f32>,
 }
 
 impl ScrollbarSkin {
@@ -104,6 +110,7 @@ impl ScrollbarSkin {
             && self.thumb_active_thickness.is_none()
             && self.track_color.is_none()
             && self.thumb_color.is_none()
+            && self.room.is_none()
     }
 
     /// Apply this skin onto the installed metrics without replacing track
@@ -129,6 +136,17 @@ impl ScrollbarSkin {
             })
             .min(thickness)
             .max(thumb_thickness);
+        let fitted = positive(self.room)
+            .map(|room| (room - 2.0 * base.track_inset).max(1.0))
+            .filter(|lane| *lane < thickness);
+        let (thickness, thumb_thickness, thumb_active_thickness) = match fitted {
+            Some(lane) => (
+                lane,
+                thumb_thickness.min(lane),
+                thumb_active_thickness.min(lane),
+            ),
+            None => (thickness, thumb_thickness, thumb_active_thickness),
+        };
         ScrollbarMetrics {
             thickness,
             thumb_thickness,
@@ -479,6 +497,38 @@ mod tests {
         .metrics(SCROLLBAR_METRICS);
         assert_eq!(clamped.thumb_thickness, 6.0);
         assert_eq!(clamped.thumb_active_thickness, 6.0);
+    }
+
+    /// A bar in a margin narrower than the theme's lane and inset narrows its
+    /// lane to fit and keeps its thumbs inside it; a wide enough margin
+    /// changes nothing.
+    #[test]
+    fn a_skin_room_fits_the_lane_into_the_margin() {
+        let base = SCROLLBAR_METRICS;
+        let fit = |room: f32| {
+            ScrollbarSkin {
+                room: Some(room),
+                ..ScrollbarSkin::default()
+            }
+            .metrics(base)
+        };
+        let wide = fit(base.thickness + 2.0 * base.track_inset);
+        assert_eq!(wide, base);
+        let narrow = fit(10.0);
+        let lane = 10.0 - 2.0 * base.track_inset;
+        assert_eq!(narrow.thickness, lane);
+        assert_eq!(narrow.thumb_thickness, base.thumb_thickness.min(lane));
+        assert_eq!(
+            narrow.thumb_active_thickness,
+            base.thumb_active_thickness.min(lane)
+        );
+        assert!(
+            !ScrollbarSkin {
+                room: Some(10.0),
+                ..ScrollbarSkin::default()
+            }
+            .is_empty()
+        );
     }
 
     /// A CSS thumb width has no hover size: the thumb it names stays that

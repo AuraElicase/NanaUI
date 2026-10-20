@@ -1053,6 +1053,14 @@ impl IconButton {
         self.tooltip(label, nana_ui_core::TooltipConfig::default())
     }
 
+    /// A heading's tool: [`Self::compact`], its label also its tooltip.
+    pub fn tool(icon: nana_ui_core::Icon, label: impl Into<Arc<str>>) -> Self {
+        let label = label.into();
+        Self::new(icon, Arc::clone(&label))
+            .compact(true)
+            .with_tooltip(label)
+    }
+
     /// Paint this button with the colours in its own [`Self::style`] instead
     /// of the ones [`Self::kind`] picks.
     ///

@@ -3468,6 +3468,99 @@ fn a_settings_group_divides_its_rows_and_hides_a_hidden_rows_divider() {
     assert_eq!(children(&cx, chord).len(), 3, "two keys and the joiner");
 }
 
+/// A callout says what its text says and hides while that is empty; a quiet
+/// one has no tint; what trails it keeps its width at the end.
+#[test]
+fn a_callout_follows_its_text_and_keeps_its_trailing_view() {
+    let (mut cx, _, parent) = setup();
+    let state = std::cell::Cell::new(None);
+    let view = cx
+        .mount_view(parent, || {
+            let note = signal(String::new());
+            state.set(Some(note));
+            column().children((
+                callout(
+                    nana_ui_core::Icon::Add,
+                    nana_ui_core::StatusTone::Warning,
+                    note,
+                )
+                .quiet()
+                .trailing(button("打开")),
+                callout(
+                    nana_ui_core::Icon::Add,
+                    nana_ui_core::StatusTone::Warning,
+                    "固定",
+                ),
+            ))
+        })
+        .unwrap();
+    let note = state.get().unwrap();
+    let [quiet, tinted] = children(&cx, view.roots()[0])[..] else {
+        panic!("two callouts");
+    };
+    let style = |cx: &AppContext, id| cx.world().node_style(id).unwrap().clone();
+    assert!(style(&cx, quiet).layout.hidden, "empty text hides it");
+    assert!(!style(&cx, tinted).layout.hidden);
+    assert!(
+        style(&cx, quiet).interaction.base.background_mix.is_none(),
+        "a quiet one has no tint"
+    );
+    assert!(style(&cx, tinted).interaction.base.background_mix.is_some());
+    note.set("面捕已暂停".into());
+    cx.flush_reactive().unwrap();
+    assert!(!style(&cx, quiet).layout.hidden);
+    let parts = children(&cx, quiet);
+    assert_eq!(parts.len(), 3, "glyph, text and the trailing view");
+    let copy = children(&cx, parts[1])[0];
+    assert_eq!(text_of(&cx, Entity::from_stable_id(copy)), "面捕已暂停");
+    assert_eq!(style(&cx, parts[2]).layout.flex_shrink, Some(0.0));
+}
+
+/// A heading line gives up its title's width before its tools'; the foot
+/// fade of a scroll area takes no input.
+#[test]
+fn a_heading_row_keeps_its_tools_and_a_foot_fade_takes_no_input() {
+    let (mut cx, _, parent) = setup();
+    let view = cx
+        .mount_view(parent, || {
+            column().children((
+                heading_row(
+                    text("很长的分组标题"),
+                    heading_tools(widget(crate::IconButton::tool(
+                        nana_ui_core::Icon::Add,
+                        "添加",
+                    ))),
+                ),
+                scroll_foot_fade(12.0, nana_ui_core::SemanticColorRole::Surface),
+            ))
+        })
+        .unwrap();
+    let [row, fade] = children(&cx, view.roots()[0])[..] else {
+        panic!("a heading and a fade");
+    };
+    let [title, tools] = children(&cx, row)[..] else {
+        panic!("title and tools");
+    };
+    let layout = |cx: &AppContext, id| cx.world().node_style(id).unwrap().layout.clone();
+    assert_eq!(layout(&cx, title).flex_shrink, Some(1.0));
+    assert_eq!(layout(&cx, title).min_width, Some(LengthSpec::Px(0.0)));
+    assert_eq!(layout(&cx, tools).flex_shrink, Some(0.0));
+    let tool = children(&cx, tools)[0];
+    cx.read(
+        Entity::<crate::IconButton>::from_stable_id(tool),
+        |button| {
+            assert!(button.compact);
+        },
+    )
+    .unwrap();
+    let fade = layout(&cx, fade);
+    assert_eq!(
+        fade.pointer_events,
+        Some(nana_ui_core::PointerEventsSpec::None)
+    );
+    assert!(fade.paint.mask.is_some());
+}
+
 /// A settings group marks its first and last shown row, whichever rows are
 /// shown, reading through a keyed list and a conditional block to their
 /// rows; other content takes a place without being marked.
