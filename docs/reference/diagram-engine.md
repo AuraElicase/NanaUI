@@ -69,11 +69,11 @@
 | kanban | `kanban` | 原生 |
 | ishikawa | `ishikawa-beta`、`ishikawa` | 原生 |
 | railroad | `railroad-beta`、`railroad-ebnf-beta`、`railroad-abnf-beta`、`railroad-peg-beta` | 原生 |
-| gantt | `gantt` | 迁移中 |
-| timeline | `timeline` | 迁移中 |
-| gitGraph | `gitGraph` | 迁移中 |
-| journey | `journey` | 迁移中 |
-| xychart | `xychart-beta`、`xychart` | 迁移中 |
+| gantt | `gantt` | 原生 |
+| timeline | `timeline` | 原生 |
+| gitGraph | `gitGraph` | 原生 |
+| journey | `journey` | 原生 |
+| xychart | `xychart-beta`、`xychart` | 原生 |
 | pie | `pie` | 原生 |
 | quadrantChart | `quadrantChart` | 原生 |
 | radar | `radar-beta`、`radar` | 原生 |
