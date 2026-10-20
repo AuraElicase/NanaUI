@@ -252,5 +252,9 @@ name = "window-service-lifecycle"
 required-features = ["hosted", "bundled-fonts"]
 
 [[example]]
+name = "theme-switch-probe"
+required-features = ["hosted", "bundled-fonts"]
+
+[[example]]
 name = "embedded-window-lifecycle"
 required-features = ["hosted", "bundled-fonts", "wgpu-interop"]
