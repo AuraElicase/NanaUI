@@ -1,0 +1,49 @@
+size 633 371.3
+summary nodes=18 edges=0 groups=4
+shape path M20.2,235.1 L489.8,235.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,223.9 L20.2,235.1 L9,246.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M465,235.1 L381.2,95.4 stroke=series0/thick/Solid
+shape path M337.6,219.7 L455.8,219.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 341.6 198.1 97.4 19.6 size=14 w=400 ink=Text "Out of focus"
+shape path M281.1,193.2 L439.9,193.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 285.1 152 138 19.6 size=14 w=400 ink=Text "Shutter speed too"
+text 390.6 171.6 32.5 19.6 size=14 w=400 ink=Text "slow"
+shape path M269.6,147.1 L412.2,147.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 273.6 105.9 121.8 19.6 size=14 w=400 ink=Text "Protective film"
+text 338.6 125.5 56.8 19.6 size=14 w=400 ink=Text "left on"
+shape rect 339.1 61.8 84.3 33.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 351.1 68.8 60.3 19.6 size=14 w=600 ink=Text "Process"
+shape path M465,235.1 L436.5,282.6 stroke=series1/thick/Solid
+shape path M332.7,272.1 L442.8,272.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 336.7 250.5 89.3 19.6 size=14 w=400 ink=Text "Shaky hands"
+shape rect 407.3 282.6 58.4 33.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 419.3 289.6 34.4 19.6 size=14 w=600 ink=Text "User"
+shape path M245.6,235.1 L130.1,42.6 stroke=series2/thick/Solid
+shape path M225.2,219.7 L180.9,145.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M159,219.7 L236.4,219.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 163 198.1 32.5 19.6 size=14 w=400 ink=Text "Lens"
+shape path M118.9,193.2 L209.3,193.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 122.9 174.4 69.6 16.8 size=12 w=400 ink=Muted "Wrong lens"
+shape path M90.8,169.5 L195.1,169.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 94.8 150.7 83.5 16.8 size=12 w=400 ink=Muted "Damaged lens"
+shape path M90.5,145.8 L180.9,145.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 94.5 127 69.6 16.8 size=12 w=400 ink=Muted "Dirty lens"
+shape path M166.6,122.1 L136.5,71.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M84.2,122.1 L177.8,122.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 88.2 100.5 48.7 19.6 size=14 w=400 ink=Text "Sensor"
+shape path M32.5,95.6 L150.7,95.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 36.5 76.8 97.4 16.8 size=12 w=400 ink=Muted "Damaged sensor"
+shape path M32.2,71.9 L136.5,71.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 36.2 53.1 83.5 16.8 size=12 w=400 ink=Muted "Dirty sensor"
+shape rect 79.4 9 101.5 33.6 r=Sm fill=series2.soft stroke=series2/hairline/Solid
+text 91.4 16 77.5 19.6 size=14 w=600 ink=Text "Equipment"
+shape path M245.6,235.1 L189.5,328.7 stroke=series3/thick/Solid
+shape path M52.8,291.7 L211.7,291.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 56.8 250.5 138 19.6 size=14 w=400 ink=Text "Subject moved too"
+text 138 270.1 56.8 19.6 size=14 w=400 ink=Text "quickly"
+shape path M110,318.2 L195.8,318.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 114 296.6 65 19.6 size=14 w=400 ink=Text "Too dark"
+shape rect 130.1 328.7 118.7 33.6 r=Sm fill=series3.soft stroke=series3/hairline/Solid
+text 142.1 335.7 94.7 19.6 size=14 w=600 ink=Text "Environment"
+shape rect 489.8 215.3 135.3 39.6 r=Md fill=Accent
+text 505.8 225.3 103.3 19.6 size=14 w=600 ink=AccentText "Blurry photo"

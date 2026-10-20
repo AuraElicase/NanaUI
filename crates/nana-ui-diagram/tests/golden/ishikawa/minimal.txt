@@ -1,0 +1,6 @@
+size 166.9 55.6
+summary nodes=1 edges=0 groups=0
+shape path M20.2,27.8 L32.2,27.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,16.6 L20.2,27.8 L9,39 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 32.2 8 126.7 39.6 r=Md fill=Accent
+text 48.2 18 94.7 19.6 size=14 w=600 ink=AccentText "Effect only"
