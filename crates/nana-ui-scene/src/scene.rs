@@ -3463,6 +3463,7 @@ fn group_prefix(
 }
 
 /// Whether a node's Markdown drawing holds a native diagram.
+#[cfg(debug_assertions)]
 fn node_has_markdown_diagram(node: &ExtractedNode) -> bool {
     #[cfg(feature = "rich-text")]
     if let Some(ComponentGeometry::NativeMarkdown { drawing, .. }) =
