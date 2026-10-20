@@ -1,0 +1,34 @@
+size 656 446.4
+summary nodes=7 edges=0 groups=3
+shape rect 342.3 43.1 304.2 393.8 r=Sm fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 348.3 46.1 22.1 16.8 size=12 w=600 ink=Text "Hot"
+text 626.6 46.1 13.9 16.8 size=12 w=400 ink=Muted "60"
+shape rect 346.8 67.4 295.2 211.7 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 470 155 48.7 19.6 size=14 w=400 ink=Text "Coffee"
+text 487.4 174.6 13.9 16.8 size=12 w=400 ink=Muted "35"
+shape rect 346.8 282.1 295.2 150.3 r=Sm fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 352.8 285.1 22.1 16.8 size=12 w=600 ink=Text "Tea"
+text 622.1 285.1 13.9 16.8 size=12 w=400 ink=Muted "25"
+shape rect 351.3 306.4 135.8 121.5 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 398.9 348.9 40.6 19.6 size=14 w=400 ink=Text "Black"
+text 412.2 368.5 13.9 16.8 size=12 w=400 ink=Muted "12"
+shape rect 490.1 306.4 89.5 121.5 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 514.6 348.9 40.6 19.6 size=14 w=400 ink=Text "Green"
+text 531.4 368.5 7 16.8 size=12 w=400 ink=Muted "8"
+shape rect 582.7 306.4 54.8 121.5 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 589.8 339.1 40.6 19.6 size=14 w=400 ink=Text "Herba"
+text 606 358.7 8.1 19.6 size=14 w=400 ink=Text "l"
+text 606.6 378.3 7 16.8 size=12 w=400 ink=Muted "5"
+shape rect 9.5 43.1 329.8 393.8 r=Sm fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 15.5 46.1 29.5 16.8 size=12 w=600 ink=Text "Cold"
+text 319.4 46.1 13.9 16.8 size=12 w=400 ink=Muted "65"
+shape rect 14 67.4 320.8 223.5 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 154.1 160.9 40.6 19.6 size=14 w=400 ink=Text "Water"
+text 167.4 180.5 13.9 16.8 size=12 w=400 ink=Muted "40"
+shape rect 14 293.9 191.3 138.5 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 93.4 344.9 32.5 19.6 size=14 w=400 ink=Text "Soda"
+text 102.7 364.5 13.9 16.8 size=12 w=400 ink=Muted "15"
+shape rect 208.3 293.9 126.5 138.5 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 251.2 344.9 40.6 19.6 size=14 w=400 ink=Text "Juice"
+text 264.6 364.5 13.9 16.8 size=12 w=400 ink=Muted "10"
+text 239.5 8 177.1 22.4 size=16 w=600 ink=Text "Drinks consumption"
