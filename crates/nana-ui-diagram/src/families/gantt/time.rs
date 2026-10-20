@@ -3,7 +3,7 @@
 //! so a chart never depends on the machine's zone or clock.
 
 use nana_ui_charts::scale::{civil_from_unix_ms, unix_ms_from_civil};
-use nana_ui_core::date::CivilDate;
+use nana_ui_core::date::{CivilDate, WeekStart, days_in_month};
 
 pub(crate) const SECOND: i64 = 1_000;
 pub(crate) const MINUTE: i64 = 60 * SECOND;
@@ -44,18 +44,15 @@ const WEEKDAYS: [&str; 7] = [
 pub(crate) fn weekday(ms: i64) -> u32 {
     CivilDate::from_days_since_epoch(ms.div_euclid(DAY))
         .weekday()
-        .index_from(nana_ui_core::date::WeekStart::Monday)
+        .index_from(WeekStart::Monday)
 }
 
 /// A weekday name, full or three letters, any case: Monday = 0.
 pub(crate) fn weekday_named(name: &str) -> Option<u32> {
-    let name = name.trim().to_ascii_lowercase();
-    if name.len() < 3 {
-        return None;
-    }
+    let name = name.trim();
     WEEKDAYS
         .iter()
-        .position(|w| w.to_ascii_lowercase().starts_with(&name) && (name.len() == 3 || w.len() == name.len()))
+        .position(|w| w.eq_ignore_ascii_case(name) || (name.len() == 3 && w[..3].eq_ignore_ascii_case(name)))
         .map(|i| i as u32)
 }
 
@@ -137,13 +134,15 @@ fn tokens(fmt: &str) -> Vec<Tok> {
     out
 }
 
-/// Up to `max` ASCII digits (at least `min`) from the front of `s`.
-fn digits(s: &str, min: usize, max: usize) -> Option<(i64, usize)> {
+/// Up to `max` ASCII digits (at least `min`) taken from the front of `s`.
+fn digits(s: &mut &str, min: usize, max: usize) -> Option<i64> {
     let len = s.bytes().take(max).take_while(u8::is_ascii_digit).count();
     if len < min {
         return None;
     }
-    s[..len].parse::<i64>().ok().map(|v| (v, len))
+    let v = s[..len].parse().ok()?;
+    *s = &s[len..];
+    Some(v)
 }
 
 #[derive(Default)]
@@ -165,34 +164,21 @@ pub(crate) fn parse_with(input: &str, fmt: &str) -> Option<i64> {
     let mut s = input.trim();
     let mut f = Fields::default();
     for tok in tokens(fmt.trim()) {
-        let take = |s: &mut &str, n: usize| *s = &s[n..];
         match tok {
-            Tok::Lit(c) => {
-                if c.is_whitespace() {
-                    let trimmed = s.trim_start();
-                    if trimmed.len() == s.len() {
-                        return None;
-                    }
-                    s = trimmed;
-                } else {
-                    s = s.strip_prefix(c)?;
+            Tok::Lit(c) if c.is_whitespace() => {
+                let trimmed = s.trim_start();
+                if trimmed.len() == s.len() {
+                    return None;
                 }
+                s = trimmed;
             }
-            Tok::Year4 => {
-                let (v, n) = digits(s, 4, 4)?;
-                f.year = Some(v);
-                take(&mut s, n);
-            }
+            Tok::Lit(c) => s = s.strip_prefix(c)?,
+            Tok::Year4 => f.year = Some(digits(&mut s, 4, 4)?),
             Tok::Year2 => {
-                let (v, n) = digits(s, 2, 2)?;
+                let v = digits(&mut s, 2, 2)?;
                 f.year = Some(v + if v > 68 { 1900 } else { 2000 });
-                take(&mut s, n);
             }
-            Tok::Month { width } => {
-                let (v, n) = digits(s, usize::from(width), 2)?;
-                f.month = Some(v);
-                take(&mut s, n);
-            }
+            Tok::Month { width } => f.month = Some(digits(&mut s, usize::from(width), 2)?),
             Tok::MonthName { long } => {
                 let lower = s.to_ascii_lowercase();
                 let (i, n) = MONTHS.iter().enumerate().find_map(|(i, m)| {
@@ -201,66 +187,45 @@ pub(crate) fn parse_with(input: &str, fmt: &str) -> Option<i64> {
                     lower.starts_with(name).then_some((i, name.len()))
                 })?;
                 f.month = Some(i as i64 + 1);
-                take(&mut s, n);
+                s = &s[n..];
             }
-            Tok::Day { width } => {
-                let (v, n) = digits(s, usize::from(width), 2)?;
-                f.day = Some(v);
-                take(&mut s, n);
-            }
+            Tok::Day { width } => f.day = Some(digits(&mut s, usize::from(width), 2)?),
             Tok::DayOrdinal => {
-                let (v, n) = digits(s, 1, 2)?;
-                f.day = Some(v);
-                take(&mut s, n);
-                let suffix = s.get(..2).filter(|x| matches!(*x, "st" | "nd" | "rd" | "th"))?;
-                take(&mut s, suffix.len());
+                f.day = Some(digits(&mut s, 1, 2)?);
+                s = ["st", "nd", "rd", "th"].iter().find_map(|x| s.strip_prefix(x))?;
             }
-            Tok::Hour24 { width } | Tok::Hour12 { width } => {
-                let (v, n) = digits(s, usize::from(width), 2)?;
-                f.hour = v;
-                take(&mut s, n);
-            }
+            Tok::Hour24 { width } | Tok::Hour12 { width } => f.hour = digits(&mut s, usize::from(width), 2)?,
             Tok::Meridiem => {
-                let lower = s.get(..2)?.to_ascii_lowercase();
-                f.pm = Some(match lower.as_str() {
+                f.pm = Some(match s.get(..2)?.to_ascii_lowercase().as_str() {
                     "am" => false,
                     "pm" => true,
                     _ => return None,
                 });
-                take(&mut s, 2);
+                s = &s[2..];
             }
-            Tok::Minute { width } => {
-                let (v, n) = digits(s, usize::from(width), 2)?;
-                f.minute = v;
-                take(&mut s, n);
-            }
-            Tok::Second { width } => {
-                let (v, n) = digits(s, usize::from(width), 2)?;
-                f.second = v;
-                take(&mut s, n);
-            }
+            Tok::Minute { width } => f.minute = digits(&mut s, usize::from(width), 2)?,
+            Tok::Second { width } => f.second = digits(&mut s, usize::from(width), 2)?,
             Tok::Fraction { digits: count } => {
-                let (v, n) = digits(s, usize::from(count), usize::from(count))?;
-                f.millis = v * 10_i64.pow(3 - u32::from(count.min(3)));
-                take(&mut s, n);
+                let count = usize::from(count);
+                f.millis = digits(&mut s, count, count)? * 10_i64.pow(3 - count.min(3) as u32);
             }
             Tok::UnixSeconds | Tok::UnixMillis => {
                 let neg = s.starts_with('-');
-                let body = if neg { &s[1..] } else { s };
-                let (whole, n) = digits(body, 1, 15)?;
-                let mut used = n + usize::from(neg);
-                let mut frac = 0.0;
-                if tok == Tok::UnixSeconds
-                    && let Some(rest) = body[n..].strip_prefix('.')
-                    && let Some((v, m)) = digits(rest, 1, 3)
-                {
-                    frac = v as f64 / 10_f64.powi(m as i32);
-                    used += m + 1;
+                if neg {
+                    s = &s[1..];
                 }
-                let scale = if tok == Tok::UnixSeconds { 1000.0 } else { 1.0 };
-                let value = (whole as f64 + frac) * scale;
+                let mut value = digits(&mut s, 1, 15)? as f64;
+                if tok == Tok::UnixSeconds {
+                    if let Some(rest) = s.strip_prefix('.') {
+                        let mut frac = rest;
+                        if let Some(v) = digits(&mut frac, 1, 3) {
+                            value += v as f64 / 10_f64.powi((rest.len() - frac.len()) as i32);
+                            s = frac;
+                        }
+                    }
+                    value *= 1000.0;
+                }
                 f.unix = Some(if neg { -value } else { value } as i64);
-                take(&mut s, used);
             }
             Tok::Offset => {
                 if let Some(rest) = s.strip_prefix('Z') {
@@ -272,20 +237,15 @@ pub(crate) fn parse_with(input: &str, fmt: &str) -> Option<i64> {
                     '-' => -1,
                     _ => return None,
                 };
-                let (h, n) = digits(&s[1..], 2, 2)?;
-                let mut used = 1 + n;
-                let rest = &s[used..];
-                let rest_m = rest.strip_prefix(':').unwrap_or(rest);
-                used += rest.len() - rest_m.len();
-                let (m, k) = digits(rest_m, 2, 2)?;
-                used += k;
-                f.offset_minutes = sign * (h * 60 + m);
-                take(&mut s, used);
+                s = &s[1..];
+                let h = digits(&mut s, 2, 2)?;
+                s = s.strip_prefix(':').unwrap_or(s);
+                f.offset_minutes = sign * (h * 60 + digits(&mut s, 2, 2)?);
             }
             Tok::WeekdayName => {
                 let n = s.chars().take_while(char::is_ascii_alphabetic).count();
                 weekday_named(&s[..n])?;
-                take(&mut s, n);
+                s = &s[n..];
             }
         }
     }
@@ -385,7 +345,7 @@ pub(crate) fn add_months(at: i64, months: f64) -> i64 {
     let total = year * 12 + i64::from(month) - 1 + whole as i64;
     let (y, mo) = (total.div_euclid(12), total.rem_euclid(12) as u32 + 1);
     let y = y.clamp(*YEAR_RANGE.start(), *YEAR_RANGE.end());
-    let last = u32::from(nana_ui_core::date::days_in_month(y as i32, mo as u8));
+    let last = u32::from(days_in_month(y as i32, mo as u8));
     let base = unix_ms_from_civil(y, mo, day.min(last), h, m, s, ms, 0);
     base.saturating_add((frac * 30.436_875 * DAY as f64) as i64)
 }
@@ -566,6 +526,9 @@ mod tests {
         assert_eq!(parse_with("2024-3-7", "YYYY-M-D"), Some(utc(2024, 3, 7, 0, 0)));
         assert_eq!(parse_with("Mar 7th 2024 2:30 pm", "MMM Do YYYY h:mm a"), Some(utc(2024, 3, 7, 14, 30)));
         assert_eq!(parse_with("1700000000", "X"), Some(1_700_000_000_000));
+        assert_eq!(parse_with("1700000000.5", "X"), Some(1_700_000_000_500));
+        assert_eq!(parse_with("2024-03-07T08:00:00+02:00", "YYYY-MM-DDTHH:mm:ssZ"), Some(utc(2024, 3, 7, 6, 0)));
+        assert_eq!(parse_with("7xx", "Do"), None);
         assert_eq!(parse_with("10:30", "HH:mm"), Some(utc(1970, 1, 1, 10, 30)));
         assert_eq!(parse_date("2024-03-07T08:00", "HH:mm"), Some(utc(2024, 3, 7, 8, 0)));
     }

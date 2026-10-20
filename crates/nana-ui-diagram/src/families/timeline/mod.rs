@@ -4,11 +4,13 @@
 
 use nana_ui_core::RadiusTier;
 
+use super::kit::{self, first_word};
 use super::{LayoutCx, ParseCx};
 use crate::geom::{Marker, PathData};
-use crate::ir::{Align, Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::ir::{Align, Dash, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::style::{self, series};
 use crate::text::{FontSpec, LaidText, Label};
-use crate::{DiagramError, DiagramScene, LimitKind, Summary, kind, style};
+use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
 pub(crate) const NATIVE: bool = true;
 
@@ -48,27 +50,13 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         one_color: cx.config.get_bool("timeline.disableMulticolor").unwrap_or(false),
         ..Model::default()
     };
-    let mut header = false;
+    let (header, rest) = kit::header(body)?;
+    if !matches!(rest, "" | "LR" | "TD") {
+        cx.warn(header, format!("unknown direction `{rest}`"));
+    }
     let mut count = 0usize;
-    for (index, line) in body.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if !header {
-            let Some((_, rest)) = kind::header(line) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected a timeline header"));
-            };
-            if !matches!(rest, "" | "LR" | "TD") {
-                cx.warn(index, format!("unknown direction `{rest}`"));
-            }
-            header = true;
-            continue;
-        }
-        let (word, rest) = match line.find(char::is_whitespace) {
-            Some(i) => (&line[..i], line[i..].trim()),
-            None => (line, ""),
-        };
+    for (index, line) in kit::statements(body, header) {
+        let (word, rest) = first_word(line);
         match word {
             "title" => {
                 cx.meta.title = Some(rest.to_string());
@@ -108,9 +96,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             events,
         });
     }
-    if !header {
-        return Err(DiagramError::Empty);
-    }
     Ok(model)
 }
 
@@ -142,26 +127,27 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let col_w = (widest + 2.0 * pad[0]).max(100.0 * k);
     let col_x = |i: usize| i as f32 * (col_w + col_gap);
 
-    let color = |i: usize| -> u16 {
+    let color = |i: usize| {
         if model.one_color {
-            return 0;
+            0
+        } else if model.sections.is_empty() {
+            i
+        } else {
+            model.periods[i].section.unwrap_or(0)
         }
-        let index = if model.sections.is_empty() { i } else { model.periods[i].section.unwrap_or(0) };
-        index.min(u16::MAX as usize) as u16
     };
-    let series = |index: u16, tone: Tone| Ink::Series { index, tone };
 
     // Section bands above their periods.
     let mut y = 0.0;
     if !model.sections.is_empty() {
         let band_h = sections.iter().map(|s| s.height).fold(cx.text.line_advance(strong), f32::max) + 2.0 * pad[1];
         for (s, laid) in sections.iter().enumerate() {
-            let members: Vec<usize> = (0..model.periods.len()).filter(|&i| model.periods[i].section == Some(s)).collect();
-            let (Some(&first), Some(&last)) = (members.first(), members.last()) else {
+            let in_section = |p: &Period| p.section == Some(s);
+            let (Some(first), Some(last)) = (model.periods.iter().position(in_section), model.periods.iter().rposition(in_section)) else {
                 continue;
             };
             let rect = Rect::new(col_x(first), y, col_x(last) + col_w - col_x(first), band_h);
-            let index = if model.one_color { 0 } else { s.min(u16::MAX as usize) as u16 };
+            let index = if model.one_color { 0 } else { s };
             out.shape(
                 Geom::rounded(rect, RadiusTier::Sm),
                 Some(series(index, Tone::Solid)),

@@ -43,18 +43,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let mut ends: Vec<i64> = Vec::new();
         for &i in bars.iter().filter(|&&i| model.tasks[i].section == s) {
             let task = &model.tasks[i];
-            let row = if model.compact {
-                match ends.iter().position(|&e| e <= task.start) {
-                    Some(r) => r,
-                    None => {
-                        ends.push(task.end);
-                        ends.len() - 1
-                    }
-                }
-            } else {
+            let free = model.compact.then(|| ends.iter().position(|&e| e <= task.start)).flatten();
+            let row = free.unwrap_or_else(|| {
                 ends.push(task.end);
                 ends.len() - 1
-            };
+            });
             ends[row] = ends[row].max(task.end);
             row_of[i] = row;
         }
@@ -143,11 +136,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .iter()
         .map(|(_, l, ..)| l.height + 2.0 * chip_pad[1])
         .fold(0.0_f32, f32::max);
-    let mut y = 0.0;
-    let strip_top = y;
-    if !levels.is_empty() {
-        y += levels.len() as f32 * (chip_h + gap);
-    }
+    let mut y = levels.len() as f32 * (chip_h + gap);
     let top_axis_y = y + label_h + gap;
     if model.top_axis {
         y = top_axis_y;
@@ -174,7 +163,6 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
 
     // Section bands.
-    let full = Rect::new(0.0, 0.0, reach, 0.0);
     let mut band_rects = Vec::new();
     let mut index = 0;
     for (s, title) in titles.iter().enumerate() {
@@ -183,7 +171,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             continue;
         }
         let h = (section_rows[s] as f32 * row_h).max(title.height + 2.0 * gap);
-        let rect = Rect::new(full.x, y, full.w, h);
+        let rect = Rect::new(0.0, y, reach, h);
         out.fill(Geom::rect(rect), BAND[index % 2]);
         band_rects.push(Some(rect));
         index += 1;
@@ -254,13 +242,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
 
     // Bars and milestones.
-    let mut band_top = vec![0.0_f32; model.sections.len()];
-    for (s, rect) in band_rects.iter().enumerate() {
-        band_top[s] = rect.map_or(0.0, |r| r.y);
-    }
     for &i in &bars {
         let task = &model.tasks[i];
-        let cy = band_top[task.section] + row_of[i] as f32 * row_h + row_h / 2.0;
+        let band_top = band_rects[task.section].map_or(0.0, |r| r.y);
+        let cy = band_top + row_of[i] as f32 * row_h + row_h / 2.0;
         let paint = paint(task);
         let (left, right) = bar_span(task, &x_of, bar_h, k);
         let shape = if task.milestone {
@@ -289,7 +274,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Vertical markers over everything else.
     for (i, laid, x, level) in &vert_chips {
-        let top = strip_top + *level as f32 * (chip_h + gap);
+        let top = *level as f32 * (chip_h + gap);
         out.stroke(
             Geom::path(PathData::polyline(&[[*x, top + chip_h], [*x, rows_bottom]])),
             Stroke::hairline(style::EDGE).dash(Dash::Dashed),
@@ -341,7 +326,6 @@ struct Paint {
 }
 
 fn paint(task: &Task) -> Paint {
-    let series = task.section.min(u16::MAX as usize) as u16;
     let (fill, line, solid) = if task.done {
         (
             Ink::Mix(SemanticColorMix::alpha(R::Muted, 0.2)),
@@ -353,20 +337,8 @@ fn paint(task: &Task) -> Paint {
     } else if task.crit {
         (Ink::Mix(SemanticColorMix::alpha(R::Danger, 0.18)), style::DANGER, style::DANGER)
     } else {
-        (
-            Ink::Series {
-                index: series,
-                tone: Tone::Soft,
-            },
-            Ink::Series {
-                index: series,
-                tone: Tone::Solid,
-            },
-            Ink::Series {
-                index: series,
-                tone: Tone::Solid,
-            },
-        )
+        let solid = style::series(task.section, Tone::Solid);
+        (style::series(task.section, Tone::Soft), solid, solid)
     };
     let stroke = if task.crit {
         Stroke::new(style::DANGER, StrokeWidth::Thick)

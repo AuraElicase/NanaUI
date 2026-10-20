@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use super::time::{self, DAY};
 use super::{Excludes, Model, Task};
 use crate::families::ParseCx;
-use crate::kind;
+use crate::families::kit::{self, first_word};
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
 
@@ -68,20 +68,13 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     model.top_axis = config.get_bool("gantt.topAxis").unwrap_or(false);
     model.compact = config.get("gantt.displayMode").is_some_and(|m| m.trim() == "compact");
     let mut raws: Vec<Raw> = Vec::new();
-    let mut header = false;
-    for (index, line) in body.lines().enumerate() {
-        let line = line.trim().trim_end_matches(';').trim();
+    let (header, _) = kit::header(body)?;
+    for (index, line) in kit::statements(body, header) {
+        let line = line.trim_end_matches(';').trim_end();
         if line.is_empty() {
             continue;
         }
-        if !header {
-            if kind::header(line).is_none() {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected a gantt header"));
-            }
-            header = true;
-            continue;
-        }
-        let (word, rest) = split_word(line);
+        let (word, rest) = first_word(line);
         match word.to_ascii_lowercase().as_str() {
             "title" => cx.meta.title = Some(rest.to_string()),
             "dateformat" => settings.date_format = Some(rest.to_string()),
@@ -130,9 +123,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             },
         }
     }
-    if !header {
-        return Err(DiagramError::Empty);
-    }
 
     let fmt = settings.date_format.clone().unwrap_or_else(|| "YYYY-MM-DD".into());
     model.excludes = excludes(&settings, &fmt);
@@ -147,13 +137,6 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     Ok(model)
 }
 
-fn split_word(line: &str) -> (&str, &str) {
-    match line.find(char::is_whitespace) {
-        Some(i) => (&line[..i], line[i..].trim()),
-        None => (line, ""),
-    }
-}
-
 fn list(rest: &str) -> impl Iterator<Item = String> + '_ {
     rest.split(|c: char| c == ',' || c.is_whitespace())
         .filter(|s| !s.is_empty())
@@ -162,7 +145,7 @@ fn list(rest: &str) -> impl Iterator<Item = String> + '_ {
 
 /// `click a,b href "url"` (a `call` part is ignored).
 fn click(rest: &str) -> Option<(Vec<String>, String)> {
-    let (ids, tail) = split_word(rest);
+    let (ids, tail) = first_word(rest);
     let at = tail.find("href")?;
     let after = tail[at + 4..].trim_start();
     let url = if let Some(q) = after.strip_prefix('"') {
@@ -184,14 +167,7 @@ fn task(
     let mut task = Task {
         name: cx.label(name.trim())?,
         section,
-        crit: false,
-        done: false,
-        active: false,
-        milestone: false,
-        vert: false,
-        start: 0,
-        end: 0,
-        link: None,
+        ..Task::default()
     };
     cx.limits.check_label(data)?;
     let mut items: Vec<&str> = data.split(',').map(str::trim).collect();
@@ -299,8 +275,7 @@ fn resolve(
     let anchor = raws
         .iter()
         .find_map(|r| match (&r.start, &r.end) {
-            (Start::Date(s), _) => time::parse_date(s, fmt),
-            (_, End::Text(s)) => time::parse_date(s, fmt),
+            (Start::Date(s), _) | (_, End::Text(s)) => time::parse_date(s, fmt),
             _ => None,
         })
         .unwrap_or(0);

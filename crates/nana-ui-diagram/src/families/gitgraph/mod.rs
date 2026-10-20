@@ -8,8 +8,9 @@ mod layout;
 
 use std::collections::HashMap;
 
+use super::kit::{self, first_name, first_word, unquote};
 use super::{LayoutCx, ParseCx};
-use crate::{DiagramError, DiagramScene, LimitKind, Summary, kind};
+use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
 pub(crate) const NATIVE: bool = true;
 
@@ -93,11 +94,6 @@ fn options(text: &str) -> Result<Vec<(String, String)>, String> {
     Ok(out)
 }
 
-fn unquote(s: &str) -> &str {
-    let s = s.trim();
-    s.strip_prefix('"').and_then(|r| r.strip_suffix('"')).unwrap_or(s)
-}
-
 /// A stable stand-in for Mermaid's random id suffix.
 fn auto_id(seq: usize) -> String {
     let mut h = 0xcbf2_9ce4_8422_2325_u64;
@@ -113,8 +109,18 @@ impl State<'_> {
         self.names.get(name).copied()
     }
 
-    fn add_commit(&mut self, id: Option<String>, parents: Vec<usize>, kind: CommitKind, tags: Vec<String>) -> Result<(), String> {
+    fn add_commit(
+        &mut self,
+        limits: &crate::Limits,
+        id: Option<String>,
+        parents: Vec<usize>,
+        kind: CommitKind,
+        tags: Vec<String>,
+    ) -> Result<(), String> {
         let seq = self.model.commits.len();
+        if seq >= limits.elements {
+            return Err("too many commits".into());
+        }
         let id = match id {
             Some(id) => {
                 if self.ids.contains_key(&id) {
@@ -151,14 +157,11 @@ impl State<'_> {
                         other => return Ok(Some(format!("unknown commit option `{other}`"))),
                     }
                 }
-                if self.model.commits.len() >= limits.elements {
-                    return Err("too many commits".into());
-                }
                 let parents = self.heads[self.current].into_iter().collect();
-                self.add_commit(id, parents, kind, tags)?;
+                self.add_commit(limits, id, parents, kind, tags)?;
             }
             "branch" => {
-                let (name, tail) = split_name(rest);
+                let (name, tail) = first_name(rest);
                 if name.is_empty() {
                     return Err("`branch` needs a name".into());
                 }
@@ -185,13 +188,13 @@ impl State<'_> {
                 self.current = index;
             }
             "checkout" | "switch" => {
-                let (name, _) = split_name(rest);
+                let (name, _) = first_name(rest);
                 self.current = self
                     .branch_index(name)
                     .ok_or_else(|| format!("cannot check out unknown branch `{name}`"))?;
             }
             "merge" => {
-                let (name, tail) = split_name(rest);
+                let (name, tail) = first_name(rest);
                 let other = self
                     .branch_index(name)
                     .ok_or_else(|| format!("cannot merge unknown branch `{name}`"))?;
@@ -215,10 +218,7 @@ impl State<'_> {
                         other => return Ok(Some(format!("unknown merge option `{other}`"))),
                     }
                 }
-                if self.model.commits.len() >= limits.elements {
-                    return Err("too many commits".into());
-                }
-                self.add_commit(id, vec![ours, theirs], kind, tags)?;
+                self.add_commit(limits, id, vec![ours, theirs], kind, tags)?;
             }
             "cherry-pick" => {
                 let mut source = None;
@@ -255,28 +255,11 @@ impl State<'_> {
                     }
                     tags.push(tag);
                 }
-                if self.model.commits.len() >= limits.elements {
-                    return Err("too many commits".into());
-                }
-                self.add_commit(None, vec![head, from], CommitKind::CherryPick, tags)?;
+                self.add_commit(limits, None, vec![head, from], CommitKind::CherryPick, tags)?;
             }
             other => return Ok(Some(format!("unknown statement `{other}`"))),
         }
         Ok(None)
-    }
-}
-
-/// A branch name, quoted or bare, and what follows it.
-fn split_name(rest: &str) -> (&str, &str) {
-    let rest = rest.trim();
-    if let Some(q) = rest.strip_prefix('"')
-        && let Some(end) = q.find('"')
-    {
-        return (&q[..end], &q[end + 1..]);
-    }
-    match rest.find(char::is_whitespace) {
-        Some(i) => (&rest[..i], &rest[i..]),
-        None => (rest, ""),
     }
 }
 
@@ -303,7 +286,16 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }],
         ..Model::default()
     };
-    let mut header = false;
+    let (header, rest) = kit::header(body)?;
+    model.flow = match rest.trim_end_matches([';', ':']).trim_end() {
+        "" | "LR" => Flow::LeftRight,
+        "TB" | "TD" => Flow::TopBottom,
+        "BT" => Flow::BottomTop,
+        other => {
+            cx.warn(header, format!("unknown direction `{other}`"));
+            Flow::LeftRight
+        }
+    };
     let mut state = State {
         model: &mut model,
         heads: vec![None],
@@ -311,31 +303,12 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         ids: HashMap::new(),
         current: 0,
     };
-    for (index, line) in body.lines().enumerate() {
-        let line = line.trim().trim_end_matches(';').trim();
+    for (index, line) in kit::statements(body, header) {
+        let line = line.trim_end_matches(';').trim_end();
         if line.is_empty() {
             continue;
         }
-        if !header {
-            let Some((_, rest)) = kind::header(line) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected a gitGraph header"));
-            };
-            state.model.flow = match rest.trim_end_matches(':').trim() {
-                "" | "LR" => Flow::LeftRight,
-                "TB" | "TD" => Flow::TopBottom,
-                "BT" => Flow::BottomTop,
-                other => {
-                    cx.warn(index, format!("unknown direction `{other}`"));
-                    Flow::LeftRight
-                }
-            };
-            header = true;
-            continue;
-        }
-        let (word, rest) = match line.find(char::is_whitespace) {
-            Some(i) => (&line[..i], line[i..].trim()),
-            None => (line, ""),
-        };
+        let (word, rest) = first_word(line);
         if word == "title" {
             cx.meta.title = Some(rest.to_string());
             continue;
@@ -352,9 +325,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             }
             Err(message) => return Err(DiagramError::syntax(index as u32 + 1, 1, message)),
         }
-    }
-    if !header {
-        return Err(DiagramError::Empty);
     }
     // Branches without an order sit between the main branch and the
     // explicitly ordered ones, by creation.

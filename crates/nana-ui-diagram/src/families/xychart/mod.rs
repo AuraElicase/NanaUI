@@ -4,9 +4,10 @@
 
 mod layout;
 
+use super::kit::{self, first_word, number};
 use super::{LayoutCx, ParseCx};
 use crate::text::Label;
-use crate::{DiagramError, DiagramScene, LimitKind, Summary, kind};
+use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
 pub(crate) const NATIVE: bool = true;
 
@@ -73,9 +74,7 @@ fn title(text: &str) -> (Option<String>, &str) {
 /// `min --> max`.
 fn range(text: &str) -> Option<(f64, f64)> {
     let (a, b) = text.split_once("-->")?;
-    let a: f64 = a.trim().parse().ok()?;
-    let b: f64 = b.trim().parse().ok()?;
-    (a.is_finite() && b.is_finite()).then_some((a, b))
+    Some((number(a)?, number(b)?))
 }
 
 /// The items of `[a, "b, c", d]`.
@@ -104,31 +103,21 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         data_labels: cx.config.get_bool("xyChart.showDataLabel").unwrap_or(false),
         ..Model::default()
     };
-    let mut header = false;
+    let (header, rest) = kit::header(body)?;
+    match rest.trim_end_matches(';').trim_end() {
+        "" | "vertical" => {}
+        "horizontal" => model.horizontal = true,
+        other => cx.warn(header, format!("unknown orientation `{other}`")),
+    }
     let mut count = 0usize;
-    for (index, line) in body.lines().enumerate() {
-        let line = line.trim().trim_end_matches(';').trim();
+    for (index, line) in kit::statements(body, header) {
+        let line = line.trim_end_matches(';').trim_end();
         if line.is_empty() {
             continue;
         }
         let err = |message: String| DiagramError::syntax(index as u32 + 1, 1, message);
-        if !header {
-            let Some((_, rest)) = kind::header(line) else {
-                return Err(err("expected an xychart header".into()));
-            };
-            match rest {
-                "" | "vertical" => {}
-                "horizontal" => model.horizontal = true,
-                other => cx.warn(index, format!("unknown orientation `{other}`")),
-            }
-            header = true;
-            continue;
-        }
         cx.limits.check_label(line)?;
-        let (word, rest) = match line.find(char::is_whitespace) {
-            Some(i) => (&line[..i], line[i..].trim()),
-            None => (line, ""),
-        };
+        let (word, rest) = first_word(line);
         match word {
             "title" => {
                 let (t, tail) = title(rest);
@@ -175,7 +164,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 }
                 let values = items
                     .iter()
-                    .map(|v| v.parse::<f64>().ok().filter(|v| v.is_finite() && v.abs() < 1e15))
+                    .map(|v| number(v).filter(|v| v.abs() < 1e15))
                     .collect::<Option<Vec<f64>>>()
                     .ok_or_else(|| err(format!("`{word}` values must be numbers")))?;
                 model.series.push(Series {
@@ -186,9 +175,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             }
             other => cx.warn(index, format!("unknown statement `{other}`")),
         }
-    }
-    if !header {
-        return Err(DiagramError::Empty);
     }
     if let XAxis::Categories(c) = &model.x
         && model.series.iter().any(|s| s.values.len() > c.len())

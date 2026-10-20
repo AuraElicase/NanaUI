@@ -4,11 +4,13 @@
 
 use nana_ui_core::{RadiusTier, SemanticColorMix, SemanticColorRole as R};
 
+use super::kit::{self, first_word};
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
 use crate::ir::{Align, Cap, Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::style::{self, series};
 use crate::text::{FontSpec, LaidText, Label};
-use crate::{DiagramError, DiagramScene, LimitKind, Summary, kind, style};
+use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
 pub(crate) const NATIVE: bool = true;
 
@@ -31,23 +33,13 @@ pub(crate) struct Model {
 
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
     let mut model = Model::default();
-    let mut header = false;
-    for (index, line) in body.lines().enumerate() {
-        let line = line.trim().trim_end_matches(';').trim();
+    let (header, _) = kit::header(body)?;
+    for (index, line) in kit::statements(body, header) {
+        let line = line.trim_end_matches(';').trim_end();
         if line.is_empty() {
             continue;
         }
-        if !header {
-            if kind::header(line).is_none() {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected a journey header"));
-            }
-            header = true;
-            continue;
-        }
-        let (word, rest) = match line.find(char::is_whitespace) {
-            Some(i) => (&line[..i], line[i..].trim()),
-            None => (line, ""),
-        };
+        let (word, rest) = first_word(line);
         match word {
             "title" => {
                 cx.meta.title = Some(rest.to_string());
@@ -102,17 +94,7 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             actors,
         });
     }
-    if !header {
-        return Err(DiagramError::Empty);
-    }
     Ok(model)
-}
-
-fn series(index: usize, tone: Tone) -> Ink {
-    Ink::Series {
-        index: index.min(u16::MAX as usize) as u16,
-        tone,
-    }
 }
 
 /// Fill and outline of a face by mood.
@@ -189,14 +171,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let has_titles = sections.iter().any(|s| !s.is_empty());
     if has_titles {
         let band_h = sections.iter().map(|s| s.height).fold(cx.text.line_advance(strong), f32::max) + 2.0 * pad[1];
-        for (s, laid) in sections.iter().enumerate() {
-            let members: Vec<usize> = (0..model.tasks.len()).filter(|&i| model.tasks[i].section == s).collect();
-            let (Some(&first), Some(&last)) = (members.first(), members.last()) else {
+        for (s, laid) in sections.iter().enumerate().filter(|(_, l)| !l.is_empty()) {
+            let in_section = |t: &Task| t.section == s;
+            let (Some(first), Some(last)) = (model.tasks.iter().position(in_section), model.tasks.iter().rposition(in_section)) else {
                 continue;
             };
-            if laid.is_empty() {
-                continue;
-            }
             let rect = Rect::new(col_x(first), y, col_x(last) + col_w - col_x(first), band_h);
             out.fill(Geom::rounded(rect, RadiusTier::Sm), series(s, Tone::Solid));
             out.text(laid, [rect.x, rect.y + (rect.h - laid.height) / 2.0], rect.w, Align::Center, series(s, Tone::On));
