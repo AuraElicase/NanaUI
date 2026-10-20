@@ -124,6 +124,18 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 相对 `Button`：Button 是动作。没有 token 的 `selected` / `dismissible`。相对 `StatusBadge`：Badge 只展示。不激活。不关闭。
 
+### 标记与分组（view::marks）
+
+不是控件，是由 `Stack` / `Text` / `IconGlyph` 拼成的视图，只说主题角色和档位：
+
+- `kbd(key)`、`kbd_glyph(icon)`、`chord("Ctrl+B")`、`chord_with(keys, draw_key)`：键帽和组合键，键帽由 `KeycapPainter` 画（表面、边框、强边框色的底边，随明暗模式）。
+- `tag(text)` / `tag_frame()`：不可交互的标签；要能选、能关的用 `Chip`。
+- `callout(icon, tone, text)`：按 `StatusTone` 着色的提示条，图标由调用方给。
+- `settings_group(title, rows)` + `group_row(view).visible(cond)`：标题在上、卡片在下，行间是缩进细线，隐藏的行带走它的分隔线；卡片由 `RaisedSurfacePainter` 画（细边框，亮色下一道短阴影）。
+- `tone_role(tone)`：状态色调对应的颜色角色。
+
+`Avatar` 的空槽仍是 Subtle 占位，不画首字母；需要首字母的应用自己叠一层。
+
 ### ImageViewer
 
 `ImageViewer` 是整窗的大图浮层（`nana.image-viewer`）。它自己画遮罩、表面、舞台与说明行。图片由应用给（`HostTexture` / `CustomRender` 由查看器画在舞台里并按舞台裁剪。`Child` 是应用自己的子节点）。遮罩是主题的 `EffectTokens::media_scrim`。浅色主题下也是深色。图片总是放在深色上看。表面与说明行仍随主题。内置值是黑 0.99，而不是 CSS 里常写的 0.9。画家在线性光里合成。黑色 α 留下背后 `1 - α` 的线性亮度。0.99 在白底上约 `#1a1a1a`（CSS 的 0.9 那么深）。0.9 则是中灰 `#595959`。自定义主题写这个值时按同样的算法取。查看器的**操作是真控件**。关闭钮是 `assemble_image_viewer` 建的 `IconButton` 子节点。可焦点。有无障碍名（`close_label`，默认「关闭」）。有悬停与按下态。激活时查看器发 `ImageViewerEvent::Close`。这些控件总排在查看器所有其他子节点之后。所以 `Child` 内容铺满整个画面也盖不住它们。命中也先落在它们上面。内容晚于控件放进来时（子节点变化）查看器会重新装配，把控件挪回末尾。它是叶子复合件。视图建好时与每次写入后自动装配。`create_component` 手工建的查看器自己调一次 `assemble_image_viewer`。`ImageViewer::geometry(..).close` 仍给出关闭钮的位置，供应用给自己的内容留边。

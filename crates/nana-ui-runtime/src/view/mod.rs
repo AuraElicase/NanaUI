@@ -24,6 +24,7 @@ mod each_virtual;
 mod error;
 mod hot;
 mod labelled;
+mod marks;
 mod node;
 mod panes;
 mod prop;
@@ -58,6 +59,11 @@ pub use error::{ErrorBoundary, error_boundary, report_error};
 #[doc(hidden)]
 pub use hot::{__hot_register, __hot_text};
 pub use hot::{HotReloadError, apply_hot_literals};
+pub use marks::{
+    GroupRow, KeycapPainter, RaisedSurfacePainter, callout, chord, chord_joiner, chord_with,
+    group_row, kbd, kbd_glyph, keycap_face, keycap_label, settings_group, tag, tag_frame,
+    tone_role,
+};
 #[doc(hidden)]
 pub use node::ViewSource;
 pub use node::{
