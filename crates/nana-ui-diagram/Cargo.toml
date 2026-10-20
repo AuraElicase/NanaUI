@@ -1,0 +1,29 @@
+[package]
+name = "nana-ui-diagram"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+description = "Native Mermaid diagrams for NanaUI: parsing, layout and a theme-neutral vector display list"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "nana_ui_diagram"
+path = "src/lib.rs"
+
+[features]
+# The parse/layout benchmark binary.
+benchmark = []
+
+[dependencies]
+nana-ui-core.workspace = true
+nana-ui-charts.workspace = true
+unicode-segmentation.workspace = true
+unicode-linebreak = "0.1.5"
+
+[[bin]]
+name = "nana-diagram-benchmark"
+path = "src/bin/nana-diagram-benchmark.rs"
+required-features = ["benchmark"]
+
+[dev-dependencies]
+nana-ui-core.workspace = true

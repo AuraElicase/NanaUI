@@ -18,6 +18,9 @@ pub(super) fn build(
     };
     for (index, command) in drawing.commands.iter().enumerate() {
         let mut primitive = match command {
+            // Drawn from their tessellated recordings, see
+            // `UiScene::emit_markdown_diagrams`.
+            nana_ui_runtime::MarkdownDrawingCommand::Diagram { .. } => continue,
             nana_ui_runtime::MarkdownDrawingCommand::Image { bounds, source } => {
                 let mut primitive = visual_quad(
                     &visual,

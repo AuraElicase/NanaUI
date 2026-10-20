@@ -39,7 +39,12 @@ ROOT = Path(__file__).resolve().parents[1]
 ICED_PACKAGES = {"iced", "iced-wgpu", "iced-winit"}
 GPUI_PACKAGES = {"gpui"}
 ICED_WINIT_MARKERS = ("iced-rs/winit",)
-BACKEND_NEUTRAL_PACKAGES = {"nana-ui-charts", "nana-ui-runtime", "nana-ui-scene"}
+BACKEND_NEUTRAL_PACKAGES = {
+    "nana-ui-charts",
+    "nana-ui-diagram",
+    "nana-ui-runtime",
+    "nana-ui-scene",
+}
 # Issue #89. `nana-text` owns the text IR, and its *sources* must not name the
 # engine it replaced even in a type position.
 TEXT_NEUTRAL_PACKAGES = {"nana-text"}

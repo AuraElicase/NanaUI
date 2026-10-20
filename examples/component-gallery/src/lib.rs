@@ -1888,7 +1888,7 @@ NanaUI 使用 **Rust 解析** 与 *WGPU 向量渲染*，支持[链接](https://e
 | 能力 | 路径 | 状态 |
 | :--- | :---: | ---: |
 | 数学公式 | RaTeX | Ready |
-| 图表 | Merman | Ready |
+| 图表 | 原生图表引擎 | Ready |
 
 $$\frac{-b \pm \sqrt{b^2-4ac}}{2a}$$
 

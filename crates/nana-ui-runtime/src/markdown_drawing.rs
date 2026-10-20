@@ -35,6 +35,12 @@ pub enum MarkdownDrawingCommand {
         bounds: LayoutBox,
         radius: f32,
     },
+    /// A native diagram, recorded at the size it is shown, drawn at
+    /// `bounds`' origin.
+    Diagram {
+        bounds: LayoutBox,
+        drawing: crate::markdown_diagram::DiagramDrawing,
+    },
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -135,6 +141,14 @@ impl MarkdownDrawing {
                     bounds: transform_box(*bounds, x, y, scale),
                     radius: radius * scale,
                 },
+                // Diagrams are placed once, at the top level, and never
+                // nested in another drawing.
+                MarkdownDrawingCommand::Diagram { bounds, drawing } => {
+                    MarkdownDrawingCommand::Diagram {
+                        bounds: transform_box(*bounds, x, y, 1.0),
+                        drawing: drawing.clone(),
+                    }
+                }
             });
         }
     }
@@ -304,36 +318,69 @@ pub(crate) fn mermaid(source: &str) -> Option<MarkdownDrawing> {
     })
 }
 
+/// A display formula's drawing. Diagrams are laid out by
+/// [`crate::markdown_diagram`] and arrive through the block geometry.
 pub(crate) fn block_drawing(block: &MarkdownBlock) -> Option<MarkdownDrawing> {
     match block {
         MarkdownBlock::DisplayMath(source) => Some(math(source, 19.0)),
-        MarkdownBlock::Mermaid(source) => mermaid(source),
         _ => None,
     }
 }
 
 pub(crate) fn document(blocks: &[MarkdownBlock], bounds: LayoutBox) -> MarkdownDrawing {
     let geometry = crate::rich_text::layout_markdown(blocks, bounds);
-    document_with_geometry(blocks, bounds, &geometry, nana_ui_core::UI_METRICS)
+    let theme = nana_ui_core::builtin_theme(nana_ui_core::ThemeAppearance::Light);
+    document_with_geometry(
+        blocks,
+        bounds,
+        &geometry,
+        nana_ui_core::UI_METRICS,
+        &|scene, scale| crate::markdown_diagram::record(scene, theme, scale),
+    )
 }
+
+/// How a laid-out diagram becomes a recording: against the world's theme,
+/// through its recording cache.
+pub(crate) type DiagramRecorder<'a> = dyn Fn(&Arc<nana_ui_diagram::DiagramScene>, f32) -> crate::markdown_diagram::DiagramDrawing
+    + 'a;
 
 pub(crate) fn document_with_geometry(
     blocks: &[MarkdownBlock],
     bounds: LayoutBox,
     geometry: &crate::rich_text::MarkdownGeometry,
     metrics: nana_ui_core::ThemeMetrics,
+    record: &DiagramRecorder<'_>,
 ) -> MarkdownDrawing {
+    use crate::rich_text::{BlockArt, DiagramArt};
     let mut output = MarkdownDrawing {
         width: bounds.width,
         height: geometry.bounds.height,
         ..Default::default()
     };
     for (block, g) in blocks.iter().zip(&geometry.blocks) {
-        if let Some(drawing) = block_drawing(block) {
-            output.commands.extend(drawing.placed(g.bounds).commands);
-            continue;
+        match &g.art {
+            BlockArt::Diagram(DiagramArt(scene)) => {
+                let scale = (g.bounds.width.max(1.0) / scene.size[0].max(1.0)).min(1.0);
+                let drawing = record(scene, scale);
+                let [width, height] = drawing.size;
+                output.commands.push(MarkdownDrawingCommand::Diagram {
+                    bounds: LayoutBox {
+                        x: g.bounds.x + (g.bounds.width - width).max(0.0) * 0.5,
+                        y: g.bounds.y,
+                        width,
+                        height,
+                    },
+                    drawing,
+                });
+                continue;
+            }
+            BlockArt::Drawing(drawing) => {
+                output.commands.extend(drawing.placed(g.bounds).commands);
+                continue;
+            }
+            BlockArt::None | BlockArt::Code => {}
         }
-        if matches!(block, MarkdownBlock::Code { .. }) {
+        if matches!(block, MarkdownBlock::Code { .. }) || g.art == BlockArt::Code {
             output.commands.push(MarkdownDrawingCommand::Panel {
                 bounds: g.bounds,
                 radius: nana_ui_core::RadiusTier::Sm.resolve(metrics),
@@ -631,13 +678,19 @@ mod tests {
                 })
                 .collect::<Vec<f32>>()
         };
-        let geometry =
-            crate::rich_text::layout_markdown_measured(markdown.blocks(), bounds, Some(&measure));
+        let geometry = crate::rich_text::layout_markdown_measured(
+            markdown.blocks(),
+            bounds,
+            Some(&measure),
+            1,
+        );
+        let theme = nana_ui_core::builtin_theme(nana_ui_core::ThemeAppearance::Light);
         let drawing = document_with_geometry(
             markdown.blocks(),
             bounds,
             &geometry,
             nana_ui_core::UI_METRICS,
+            &|scene, scale| crate::markdown_diagram::record(scene, theme, scale),
         );
         let MarkdownDrawingCommand::Text { bounds: before, .. } = &drawing.commands[0] else {
             panic!("text");
@@ -713,18 +766,65 @@ mod tests {
             height: 2000.0,
         };
         let drawing = markdown.drawing(bounds);
+        let count = |f: fn(&MarkdownDrawingCommand) -> bool| {
+            drawing.commands.iter().filter(|c| f(c)).count()
+        };
         assert_eq!(
-            drawing
-                .commands
-                .iter()
-                .filter(|command| matches!(command, MarkdownDrawingCommand::Svg { .. }))
-                .count(),
-            5
+            count(|c| matches!(c, MarkdownDrawingCommand::Svg { .. })),
+            4
+        );
+        assert_eq!(
+            count(|c| matches!(c, MarkdownDrawingCommand::Diagram { .. })),
+            1
         );
         assert!(markdown.pointer_down(-1.0, -1.0, bounds));
         markdown.pointer_up(430.0, drawing.height + 20.0, bounds);
         let copied = markdown.copy_snapshot().unwrap().text;
         assert_eq!(copied, markdown.plain_text());
+    }
+
+    #[test]
+    fn unreadable_diagrams_read_as_code_blocks() {
+        let markdown = NativeMarkdown::from_source("```mermaid\nnotADiagram\n  x --> y\n```");
+        let drawing = markdown.drawing(LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 400.0,
+            height: 400.0,
+        });
+        assert!(matches!(
+            drawing.commands.first(),
+            Some(MarkdownDrawingCommand::Panel { .. })
+        ));
+        assert!(drawing.commands.iter().any(|c| matches!(c, MarkdownDrawingCommand::Text { text, .. } if text.contains("notADiagram"))));
+    }
+
+    #[test]
+    fn diagrams_scale_down_into_narrow_columns_and_never_up() {
+        let markdown = NativeMarkdown::from_source(
+            "```mermaid\nflowchart LR\nA[A long first label] --> B[A long second label] --> C[A long third label]\n```",
+        );
+        let wide = markdown.drawing(LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 4000.0,
+            height: 400.0,
+        });
+        let narrow = markdown.drawing(LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 400.0,
+        });
+        let scale = |d: &MarkdownDrawing| match d.commands.first() {
+            Some(MarkdownDrawingCommand::Diagram { drawing, bounds }) => {
+                (drawing.scale, bounds.width)
+            }
+            _ => panic!("diagram"),
+        };
+        assert_eq!(scale(&wide).0, 1.0);
+        let (s, w) = scale(&narrow);
+        assert!(s < 1.0 && (w - 200.0).abs() < 0.01);
     }
 
     #[test]

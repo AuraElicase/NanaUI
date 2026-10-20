@@ -80,6 +80,10 @@ framework_strings! {
     toast_percent = "toast.percent" => "{percent}%";
 
     chip_remove = "chip.remove" => "移除";
+    /// What assistive technology calls a Markdown diagram without a title.
+    diagram_label = "diagram.label" => "图表";
+    /// A diagram's element counts. `{nodes}`, `{edges}`.
+    diagram_summary = "diagram.summary" => "{nodes} 个节点，{edges} 条连线";
     file_tab_close = "file_tab.close" => "关闭文件";
     color_field_label = "color_field.label" => "颜色";
     path_field_label = "path_field.label" => "路径";

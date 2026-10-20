@@ -1472,6 +1472,10 @@ pub struct UiScene {
     /// ([`nana_ui_runtime::Dialog::surface_painter`]), kept apart from the
     /// node's own painter's. Empty unless a dialog paints its own card.
     modal_surface_paint: NodeMap<custom_paint::BuiltPaint>,
+    /// Geometry built from each Markdown document's native diagrams, one
+    /// recording per diagram, reused while the runtime hands back the same
+    /// recordings. Empty unless a document holds a diagram.
+    markdown_diagram_paint: NodeMap<Arc<[custom_paint::BuiltPaint]>>,
     /// Nodes that [`may_be_dest_group`] admits. Paint asks
     /// [`UiScene::opacity_groups`] once per primitive, and even the memoized
     /// walk behind it has to read a cold `ExtractedNode` and its style for the
@@ -1523,6 +1527,7 @@ impl Default for UiScene {
             compositor: CompositorRegistry::default(),
             custom_paint: NodeMap::default(),
             modal_surface_paint: NodeMap::default(),
+            markdown_diagram_paint: NodeMap::default(),
             dest_group_candidates: 0,
             glyph_live: NodeMap::default(),
             chart_live: NodeMap::default(),
@@ -1562,6 +1567,7 @@ impl Clone for UiScene {
             compositor: self.compositor.clone(),
             custom_paint: self.custom_paint.clone(),
             modal_surface_paint: self.modal_surface_paint.clone(),
+            markdown_diagram_paint: self.markdown_diagram_paint.clone(),
             dest_group_candidates: self.dest_group_candidates,
             glyph_live: self.glyph_live.clone(),
             chart_live: self.chart_live.clone(),
@@ -1796,6 +1802,9 @@ impl UiScene {
                 }
                 if !self.modal_surface_paint.is_empty() {
                     self.modal_surface_paint.remove(&id);
+                }
+                if !self.markdown_diagram_paint.is_empty() {
+                    self.markdown_diagram_paint.remove(&id);
                 }
             }
         }
@@ -2090,6 +2099,13 @@ impl UiScene {
             "a painted card held for a dialog that no longer paints it"
         );
         assert!(
+            self.markdown_diagram_paint.keys().all(|id| self
+                .nodes
+                .get(id)
+                .is_some_and(|node| node_has_markdown_diagram(node))),
+            "diagram geometry held for a document without diagrams"
+        );
+        assert!(
             self.primitives.values().all(|held| !matches!(
                 held.primitive.kind,
                 ScenePrimitiveKind::Path { .. }
@@ -2098,7 +2114,10 @@ impl UiScene {
             ) || self
                 .custom_paint
                 .contains_key(&held.primitive.node)
-                || self.modal_surface_paint.contains_key(&held.primitive.node)),
+                || self.modal_surface_paint.contains_key(&held.primitive.node)
+                || self
+                    .markdown_diagram_paint
+                    .contains_key(&held.primitive.node)),
             "a painted primitive without its geometry"
         );
         assert!(
@@ -3441,6 +3460,21 @@ fn group_prefix(
     }
     stack.reverse();
     stack
+}
+
+/// Whether a node's Markdown drawing holds a native diagram.
+fn node_has_markdown_diagram(node: &ExtractedNode) -> bool {
+    #[cfg(feature = "rich-text")]
+    if let Some(ComponentGeometry::NativeMarkdown { drawing, .. }) =
+        node.component_geometry.as_deref()
+    {
+        return drawing
+            .commands
+            .iter()
+            .any(|c| matches!(c, nana_ui_runtime::MarkdownDrawingCommand::Diagram { .. }));
+    }
+    let _ = node;
+    false
 }
 
 fn has_custom_paint(nodes: &SceneNodes, node: StableNodeId) -> bool {

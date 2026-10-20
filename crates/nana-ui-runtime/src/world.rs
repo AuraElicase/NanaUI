@@ -695,6 +695,10 @@ pub struct UiWorld {
     /// so an unchanged node is never re-recorded. Only painted nodes have an
     /// entry; despawn drops it.
     paint_recordings: RefCell<crate::NodeMap<PaintCacheEntry>>,
+    /// Markdown diagrams recorded against the theme, by laid-out scene and
+    /// palette epoch. Cleared when the epoch moves; bounded.
+    #[cfg(feature = "rich-text")]
+    diagram_recordings: RefCell<Vec<(u64, crate::markdown_diagram::DiagramDrawing)>>,
     /// Last recording of each modal frame's card surface painter
     /// ([`crate::Dialog::surface_painter`]), apart from the node's own
     /// painter: a frame can have both. Geometry reads through it; despawn
@@ -987,6 +991,8 @@ impl UiWorld {
             scroll_reclamped: HashSet::default(),
             scroll_resized: HashSet::default(),
             paint_recordings: RefCell::new(crate::NodeMap::default()),
+            #[cfg(feature = "rich-text")]
+            diagram_recordings: RefCell::new(Vec::new()),
             modal_surface_recordings: RefCell::new(crate::NodeMap::default()),
             paint_text_engine: None,
             painter_overrides: crate::NodeMap::default(),

@@ -1,0 +1,18 @@
+size 244.9 311.2
+summary nodes=3 edges=2 groups=0
+shape path M122.4,107.4 L122.4,148.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M122.4,155.4 L118.9,147 L122.4,148.5 L126,147 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M122.4,214.6 L122.4,255.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M122.4,262.6 L118.9,254.2 L122.4,255.7 L126,254.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 9 226.9 98.4 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 43.4 19 68.9 19.6 size=14 w=700 ink=Text "Markdown"
+text 112.2 19 89.3 19.6 size=14 w=400 ink=Text " label with"
+text 25 38.6 65 19.6 size=14 w=400 italic ink=Text "emphasis"
+text 90 38.6 129.9 19.6 size=14 w=400 ink=Text " and a long tail"
+text 37.2 58.2 170.5 19.6 size=14 w=400 ink=Text "that should wrap onto"
+text 81.8 77.8 81.2 19.6 size=14 w=400 ink=Text "more lines"
+shape rect 57.7 155.4 129.4 59.2 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 77.8 165.4 89.3 19.6 size=14 w=400 ink=Text "Plain label"
+text 73.7 185 97.4 19.6 size=14 w=400 ink=Text "with a break"
+shape rect 29.3 262.6 186.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 45.3 272.6 154.3 19.6 size=14 w=400 ink=Text "A \"quoted\" entity ♥"

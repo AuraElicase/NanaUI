@@ -105,9 +105,13 @@ fn markdown_fences_keep_host_presenter_identity_without_duplicate_scene_text() {
     for child in children {
         assert!(runtime.scene().primitives().all(|p| p.node != child));
     }
+    let diagram_slot = |p: &ScenePrimitive| {
+        p.id.slot >> 32 == u64::from(crate::scene::custom_paint::MARKDOWN_DIAGRAM_PAINT)
+    };
     let text = runtime
         .scene()
         .primitives()
+        .filter(|p| !diagram_slot(p))
         .filter_map(|p| match &p.kind {
             ScenePrimitiveKind::Text { content, .. } => Some(content.as_str()),
             _ => None,
@@ -117,11 +121,104 @@ fn markdown_fences_keep_host_presenter_identity_without_duplicate_scene_text() {
         text.is_empty(),
         "typeset blocks do not duplicate their fallback text"
     );
+    // The diagram draws its own labels, nothing else.
+    let mut labels = runtime
+        .scene()
+        .primitives()
+        .filter(|p| diagram_slot(p))
+        .filter_map(|p| match &p.kind {
+            ScenePrimitiveKind::Text { content, .. } => Some(content.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    labels.sort_unstable();
+    assert_eq!(labels, ["A", "B"]);
     assert_eq!(
         runtime.context().world().text(markdown.stable_id()),
         Some(expected.as_str())
     );
-    assert_eq!(runtime.scene().primitives().filter(|p| matches!(&p.kind, ScenePrimitiveKind::Quad { surface, .. } if surface.content_image.is_some())).count(), 2);
+    assert_eq!(runtime.scene().primitives().filter(|p| matches!(&p.kind, ScenePrimitiveKind::Quad { surface, .. } if surface.content_image.is_some())).count(), 1);
+}
+
+#[test]
+fn markdown_diagrams_draw_as_vector_geometry_reused_until_dropped() {
+    let document = DocumentId::new(14).unwrap();
+    let mut runtime = crate::RuntimeDocument::new(document);
+    let markdown = runtime
+        .context_mut()
+        .create_component(
+            document,
+            NativeMarkdown::from_source(
+                "Intro\n\n```mermaid\nflowchart LR\nA[Start] -->|go| B{Check} --> C((End))\n```\n\n```mermaid\ngraph TD\nX-->Y\n```",
+            ),
+        )
+        .unwrap();
+    flush(&mut runtime);
+    let id = markdown.stable_id();
+    let in_namespace = |p: &&ScenePrimitive| {
+        p.node == id
+            && p.id.slot >> 32 == u64::from(crate::scene::custom_paint::MARKDOWN_DIAGRAM_PAINT)
+    };
+    let meshes = |runtime: &crate::RuntimeDocument| -> Vec<Arc<PathMesh>> {
+        runtime
+            .scene()
+            .primitives()
+            .filter(in_namespace)
+            .filter_map(|p| match &p.kind {
+                ScenePrimitiveKind::Path { mesh, .. } => Some(Arc::clone(mesh)),
+                _ => None,
+            })
+            .collect()
+    };
+    let first = meshes(&runtime);
+    assert!(!first.is_empty(), "edges and non-rect shapes are meshes");
+    assert!(
+        runtime
+            .scene()
+            .primitives()
+            .filter(in_namespace)
+            .any(|p| matches!(p.kind, ScenePrimitiveKind::Quad { .. }))
+    );
+    // Two diagrams, two slot blocks.
+    let blocks: std::collections::BTreeSet<u64> = runtime
+        .scene()
+        .primitives()
+        .filter(in_namespace)
+        .map(|p| {
+            (p.id.slot & 0xFFFF_FFFF) / crate::scene::custom_paint::MARKDOWN_DIAGRAM_BLOCK as u64
+        })
+        .collect();
+    assert_eq!(blocks.len(), 2);
+    assert_eq!(
+        runtime
+            .scene()
+            .markdown_diagram_paint
+            .get(&id)
+            .map(|b| b.len()),
+        Some(2)
+    );
+    // Selecting text rebuilds the node without re-triangulating anything.
+    runtime
+        .context_mut()
+        .update_component(markdown, |view, _| {
+            *view = NativeMarkdown::from_source(
+                "Intro\n\n```mermaid\nflowchart LR\nA[Start] -->|go| B{Check} --> C((End))\n```\n\n```mermaid\ngraph TD\nX-->Y\n```",
+            )
+        })
+        .unwrap();
+    flush(&mut runtime);
+    let again = meshes(&runtime);
+    assert_eq!(first.len(), again.len());
+    assert!(first.iter().zip(&again).all(|(a, b)| Arc::ptr_eq(a, b)));
+    runtime
+        .context_mut()
+        .update_component(markdown, |view, _| {
+            *view = NativeMarkdown::from_source("plain")
+        })
+        .unwrap();
+    flush(&mut runtime);
+    assert!(meshes(&runtime).is_empty());
+    assert!(runtime.scene().markdown_diagram_paint.is_empty());
 }
 
 #[test]

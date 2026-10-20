@@ -202,6 +202,15 @@ pub(super) const PAINT_OVER_POST: u32 = 0xFFFF_FFF3;
 /// own layer: over the scrim, under the card's dividers and text. See
 /// `primitive_paint_layer`.
 pub(super) const MODAL_SURFACE_PAINT: u32 = 0xFFFF_FFD0;
+/// The namespace Markdown diagrams' primitives live in. Each diagram of a
+/// document takes a block of [`MARKDOWN_DIAGRAM_BLOCK`] slots, in document
+/// order; past every built-in Markdown slot, so diagrams paint over their
+/// block's selection band.
+#[cfg(feature = "rich-text")]
+pub(super) const MARKDOWN_DIAGRAM_PAINT: u32 = 14;
+/// Slots per diagram. A diagram's display list is bounded well below it.
+#[cfg(feature = "rich-text")]
+pub(super) const MARKDOWN_DIAGRAM_BLOCK: usize = 1 << 18;
 
 /// The stacking entry a painted node's primitive sorts under, after the
 /// node's own prefix (a painted node is always a stacking group).
@@ -308,12 +317,91 @@ impl UiScene {
                     (PaintPhaseOps::Over, PAINT_OVER_PRE, PAINT_OVER_POST),
                 ],
                 adjust_default: true,
+                index_base: 0,
             },
             transform,
             clips,
             opacity,
             node_order,
         );
+    }
+
+    /// Emit the native diagrams in a Markdown document's drawing. Each
+    /// diagram's recording is triangulated once and reused for as long as
+    /// the runtime hands the same recording back: scrolling, selection and
+    /// moving the document do not re-triangulate. A document with no
+    /// diagrams left drops what it held.
+    #[cfg(feature = "rich-text")]
+    pub(super) fn emit_markdown_diagrams(
+        &mut self,
+        node: &ExtractedNode,
+        drawing: &nana_ui_runtime::MarkdownDrawing,
+        transform: AffineTransform,
+        clips: &Arc<[ClipRegion]>,
+        opacity: f32,
+        node_order: usize,
+    ) {
+        let held = self.markdown_diagram_paint.get(&node.id).cloned();
+        let mut built = Vec::new();
+        let mut places = Vec::new();
+        for command in &drawing.commands {
+            let nana_ui_runtime::MarkdownDrawingCommand::Diagram { bounds, drawing } = command
+            else {
+                continue;
+            };
+            let recording = &drawing.recording;
+            let reused = held
+                .as_deref()
+                .and_then(|held| held.iter().find(|b| Arc::ptr_eq(&b.recording, recording)))
+                .cloned();
+            built.push(reused.unwrap_or_else(|| BuiltPaint {
+                recording: Arc::clone(recording),
+                node_mask: None,
+                behind: build_ops(&recording.behind_children, false).into(),
+                over: Arc::from([]),
+            }));
+            places.push((
+                [bounds.x, bounds.y],
+                [bounds.width.max(0.0), bounds.height.max(0.0)],
+            ));
+        }
+        if built.is_empty() {
+            if !self.markdown_diagram_paint.is_empty() {
+                self.markdown_diagram_paint.remove(&node.id);
+            }
+            return;
+        }
+        let built: Arc<[BuiltPaint]> = built.into();
+        self.markdown_diagram_paint
+            .insert(node.id, Arc::clone(&built));
+        for (index, (paint, (origin, size))) in built.iter().zip(places).enumerate() {
+            self.emit_built_ops(
+                node,
+                paint,
+                PaintPlacement {
+                    origin,
+                    size,
+                    phases: [
+                        (
+                            PaintPhaseOps::Behind,
+                            MARKDOWN_DIAGRAM_PAINT,
+                            MARKDOWN_DIAGRAM_PAINT,
+                        ),
+                        (
+                            PaintPhaseOps::None,
+                            MARKDOWN_DIAGRAM_PAINT,
+                            MARKDOWN_DIAGRAM_PAINT,
+                        ),
+                    ],
+                    adjust_default: false,
+                    index_base: index * MARKDOWN_DIAGRAM_BLOCK,
+                },
+                transform,
+                clips,
+                opacity,
+                node_order,
+            );
+        }
     }
 
     /// The geometry of a modal frame's card surface recording, built once
@@ -372,6 +460,7 @@ impl UiScene {
                     ),
                 ],
                 adjust_default: false,
+                index_base: 0,
             },
             transform,
             clips,
@@ -594,7 +683,7 @@ impl UiScene {
                 self.insert_primitive(ScenePrimitive {
                     id: PrimitiveId {
                         node: node.id,
-                        slot: collection_slot(namespace, index),
+                        slot: collection_slot(namespace, placement.index_base + index),
                     },
                     node: node.id,
                     bounds,
@@ -626,6 +715,9 @@ struct PaintPlacement {
     size: [f32; 2],
     phases: [(PaintPhaseOps, u32, u32); 2],
     adjust_default: bool,
+    /// Added to every op's slot index, so several recordings can share one
+    /// namespace on one node.
+    index_base: usize,
 }
 
 impl UiScene {

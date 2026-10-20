@@ -11,6 +11,7 @@ title: 外围支撑 crate 一览
 | Crate | 一句话职责 | 关键架构边界 |
 | --- | --- | --- |
 | `nana-ui-charts` | 图表模型：ECharts 形状的 `ChartOption`、刻度、布局、命中与 GPU 标记数组 | 仅依赖 `nana-ui-core` + `bytemuck`；`Chart` 组件在 `runtime`，WGSL 管线在 `nana-ui` |
+| `nana-ui-diagram` | Mermaid 图表：解析、分层布局与正交连线、主题无关的矢量显示列表 | 依赖 `nana-ui-core` 与 `nana-ui-charts` 的刻度；纯 CPU，测宽由调用方传入；Markdown 绘制入口在 `runtime`（`rich-text`），细分走 `scene` 的自绘路径 |
 | `nana-diagnostics` | `event!` / `metric!` / `fault!` / `span!` 宏与静态描述符 | 生产线程零文件 I/O、零字符串格式化、零全局锁、首次注册后零堆分配 |
 | `nana-svg-raster` | CPU 侧 SVG 栅格化（`resvg → pixmap`） | 纯位图光栅化工具，不是绘制器，也不维护 SVG DOM |
 | `nana-app-icon` | 默认应用图标、PNG/ICO/ICNS 编码与 Windows PE 资源嵌入 | 只管图标编码与嵌入；目录打包布局归 `nana-packager` |

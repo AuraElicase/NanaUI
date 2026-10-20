@@ -106,7 +106,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 `InteractionRequestCard` 是中性的请求/审批表面，提供 `prompt`、`body`、`actions` 槽，并按 `InteractionRequestField::key` 保留 `FormField` 包装。字段控件和动作由应用创建并监听，卡片不携带 Pending、MCP 或导航语义。
 
-`GraphCanvas` 默认只画网格、节点框和边（Scene Quad / Stroke）。节点内部内容由应用往子节点里放。`"graph-canvas"` 自定义 GPU renderer 不会自动挂上。要直写 pass，须宿主自己登记并 `set_custom_render`。右键仍然只发 `SecondaryPress`（窗口坐标）。`AppContext::graph_canvas_hit_at` 把它换成画布局部点与命中结果（`GraphCanvasHit`）。菜单开不开、开什么由应用决定。`NativeMarkdown` 解析 mermaid 与公式围栏并给出 presenter 槽。但**不渲染**图和公式。那两样由宿主自己画进槽里。
+`GraphCanvas` 默认只画网格、节点框和边（Scene Quad / Stroke）。节点内部内容由应用往子节点里放。`"graph-canvas"` 自定义 GPU renderer 不会自动挂上。要直写 pass，须宿主自己登记并 `set_custom_render`。右键仍然只发 `SecondaryPress`（窗口坐标）。`AppContext::graph_canvas_hit_at` 把它换成画布局部点与命中结果（`GraphCanvasHit`）。菜单开不开、开什么由应用决定。`NativeMarkdown` 自己绘制公式（RaTeX）与 mermaid 图（原生图表引擎），并给出带源码的 presenter 槽，宿主可按身份接管呈现。
 
 `GraphMinimap` 是图画布的概览小地图。按 `GraphModel::bounds` 等比缩放画节点矩形和视口指示框。点击/拖拽发 `GraphMinimapEvent::ViewportRequested`。由应用写回 `GraphCanvas::set_viewport`。它自己是普通组件。`canvas_size` 传图画布的可见尺寸。位置尺寸由应用布局给定（通常是画布角落的 `PositionSpec::Absolute`）。
 

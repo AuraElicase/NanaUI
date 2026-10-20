@@ -2723,6 +2723,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nana-ui-diagram"
+version = "0.1.0"
+dependencies = [
+ "nana-ui-charts",
+ "nana-ui-core",
+ "unicode-linebreak",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "nana-ui-input"
 version = "0.1.0"
 dependencies = [
@@ -2767,6 +2777,7 @@ dependencies = [
  "nana-text",
  "nana-ui-charts",
  "nana-ui-core",
+ "nana-ui-diagram",
  "nana-ui-input",
  "nana-ui-view-macros",
  "nana-ui-view-schema",

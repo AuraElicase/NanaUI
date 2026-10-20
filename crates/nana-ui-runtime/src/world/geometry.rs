@@ -2760,6 +2760,7 @@ impl UiWorld {
                         content,
                         &geometry,
                         self.style_model.metrics,
+                        &|scene, scale| self.diagram_drawing(scene, scale),
                     ),
                     text,
                     selection: match selection_range {
