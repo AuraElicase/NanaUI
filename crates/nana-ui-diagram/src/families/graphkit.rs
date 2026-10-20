@@ -97,6 +97,36 @@ pub(crate) fn brace_depth(s: &str) -> i32 {
     depth
 }
 
+/// Source lines joined into statements: a statement runs on while a `{`
+/// block or a `` "`...`" `` markdown string is still open. Each comes with
+/// the index of its first line; blank lines are skipped.
+pub(crate) fn statements(body: &str) -> Vec<(usize, String)> {
+    let mut out: Vec<(usize, String)> = Vec::new();
+    let mut open = false;
+    let mut depth = 0i32;
+    let mut ticks = 0usize;
+    for (index, raw) in body.lines().enumerate() {
+        let line = raw.trim();
+        if open {
+            if let Some((_, text)) = out.last_mut() {
+                text.push('\n');
+                text.push_str(line);
+            }
+        } else {
+            if line.is_empty() {
+                continue;
+            }
+            out.push((index, line.to_string()));
+            depth = 0;
+            ticks = 0;
+        }
+        depth += brace_depth(line);
+        ticks += line.matches('`').count();
+        open = depth > 0 || ticks % 2 == 1;
+    }
+    out
+}
+
 /// `key: value` pairs from an `@{ ... }` body, split on commas and line
 /// breaks outside quotes and brackets. Values lose their quotes.
 pub(crate) fn attributes(body: &str) -> Vec<(String, String)> {

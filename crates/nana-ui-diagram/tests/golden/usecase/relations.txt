@@ -1,0 +1,55 @@
+size 606.8 561.8
+summary nodes=10 edges=11 groups=0
+shape path M153.3,77.6 L153.3,94.8 Q153.3,102.8 145.3,102.8 L60.6,102.8 Q52.6,102.8 52.6,110.8 L52.6,182.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M49,174.3 L52.6,182.7 M52.6,182.7 L56.1,174.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M46.5,213.9 L46.5,239.6 Q46.5,244.6 41.5,244.6 L41.5,244.6 Q36.4,244.6 36.4,249.6 L36.4,280.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M50,221.8 L46.5,213.4 M46.5,213.4 L43,221.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M72.6,213.4 L72.6,236.6 Q72.6,244.6 80.6,244.6 L110,244.6 Q118,244.6 118,252.6 L118,260.6 Q118,268.6 126,268.6 L130.7,268.6 Q138.7,268.6 138.7,276.6 L138.7,299.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M153.3,77.6 L153.3,103.2 Q153.3,111.2 145.3,111.2 L126,111.2 Q118,111.2 118,119.2 L118,144 Q118,152 110,152 L80.6,152 Q72.6,152 72.6,160 L72.6,176.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 69.3 176.5 6.7 6.7 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M153.3,77.6 L153.3,82.5 Q153.3,86 156.8,86 L156.8,86 Q160.3,86 160.3,89.5 L160.3,294.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M163.5,291.6 L157.1,298 M157.1,291.6 L163.5,298 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M153.3,77.6 L153.3,86.4 Q153.3,94.4 161.3,94.4 L251.7,94.4 Q259.7,94.4 259.7,102.4 L259.7,181.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M256.2,173.8 L259.7,182.2 M259.7,182.2 L263.2,173.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M367.6,77.6 L367.6,154.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M367.6,164 L363.4,154.3 L371.9,154.3 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M462.9,451.2 L462.9,519.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M459.4,511.2 L462.9,519.6 M462.9,519.6 L466.5,511.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M503.2,331.5 L503.2,353.2 Q503.2,361.2 495.2,361.2 L477.9,361.2 Q469.9,361.2 469.9,369.2 L469.9,403.8 Q469.9,405.6 468.2,405.6 L468.2,405.6 Q466.4,405.6 466.4,407.4 L466.4,417.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M462.9,409.4 L466.4,417.8 M466.4,417.8 L469.9,409.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M546.9,331.5 L546.9,397.6 Q546.9,405.6 538.9,405.6 L482,405.6 Q480.4,405.6 480.4,407.2 L480.4,408.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M480.4,418.4 L476.2,408.8 L484.6,408.8 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M367.6,232.6 L367.6,397.6 Q367.6,405.6 375.6,405.6 L439.3,405.6 Q445.5,405.6 445.5,411.8 L445.5,417.9 stroke=rgba(221,51,51,1)/3/Solid
+shape path M442,410 L445.5,418.4 M445.5,418.4 L449,410 stroke=rgba(221,51,51,1)/3/Solid
+shape rect 174.3 119.6 170.9 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 179.7 121.4 160.1 16.8 size=12 w=400 ink=Muted "include account details"
+shape rect 426.2 475.2 73.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 431.6 477 62.6 16.8 size=12 w=400 ink=Muted "«include»"
+shape rect 436.7 373.2 66.5 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 442.1 375 55.7 16.8 size=12 w=400 ink=Muted "«extend»"
+shape rect 310 304.7 115.2 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 315.4 306.5 104.4 16.8 size=12 w=400 ink=Muted "starts checkout"
+shape ellipse 146.3 9 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M153.3,23 L153.3,35.9 M139.3,26.9 L167.3,26.9 M142.1,52.4 L153.3,35.9 L164.5,52.4 stroke=Text/hairline/Solid
+text 137 58 32.5 19.6 size=14 w=400 ink=Text "User"
+shape ellipse 29.4 280.6 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M36.4,294.6 L36.4,307.5 M22.4,298.5 L50.4,298.5 M25.2,324 L36.4,307.5 L47.6,324 stroke=Text/hairline/Solid
+text 8 329.6 56.8 19.6 size=14 w=400 ink=Text "Support"
+shape ellipse 360.6 9 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M367.6,23 L367.6,35.9 M353.6,26.9 L381.6,26.9 M356.4,52.4 L367.6,35.9 L378.8,52.4 stroke=Text/hairline/Solid
+text 347.3 58 40.6 19.6 size=14 w=400 ink=Text "Admin"
+shape ellipse 360.6 164 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M367.6,178 L367.6,190.9 M353.6,181.9 L381.6,181.9 M356.4,207.4 L367.6,190.9 L378.8,207.4 stroke=Text/hairline/Solid
+text 343.3 213 48.7 19.6 size=14 w=400 ink=Text "Person"
+shape ellipse 16 182.2 87.1 32.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 39.3 188.5 40.6 19.6 size=14 w=400 ink=Text "Start"
+shape ellipse 104.8 298.6 96.9 32.7 fill=Surface stroke=BorderStrong/hairline/Solid
+text 128.9 305.1 48.7 19.6 size=14 w=400 ink=Text "Finish"
+shape ellipse 216.2 182.2 87.1 32.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 239.4 188.5 40.6 19.6 size=14 w=400 ink=Text "Login"
+shape ellipse 404.8 417.6 116.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 430.5 424.6 65 19.6 size=14 w=400 ink=Text "Checkout"
+shape ellipse 409.6 519.6 106.6 33.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 434.5 526.4 56.8 19.6 size=14 w=400 ink=Text "Payment"
+shape ellipse 452.2 297.5 145.6 34.8 fill=Surface stroke=BorderStrong/hairline/Solid
+text 480.4 305.1 89.3 19.6 size=14 w=400 ink=Text "ApplyCoupon"

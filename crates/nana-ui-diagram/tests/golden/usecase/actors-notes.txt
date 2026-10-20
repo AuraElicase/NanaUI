@@ -1,0 +1,50 @@
+size 948.8 429.7
+summary nodes=8 edges=6 groups=0
+shape path M66.5,77.6 L66.5,101.6 Q66.5,109.6 74.5,109.6 L242.4,109.6 Q250.4,109.6 250.4,117.6 L250.4,152.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M246.9,144.6 L250.4,153 M250.4,153 L253.9,144.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M203.9,77.6 L203.9,85.6 Q203.9,93.6 211.9,93.6 L252.1,93.6 Q260.1,93.6 260.1,101.6 L260.1,151.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M256.5,143.9 L260.1,152.3 M260.1,152.3 L263.6,143.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M325.1,77.6 L325.1,85.6 Q325.1,93.6 317.1,93.6 L277.8,93.6 Q269.8,93.6 269.8,101.6 L269.8,151.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M266.2,143.9 L269.8,152.3 M269.8,152.3 L273.3,143.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M477.2,77.6 L477.2,101.6 Q477.2,109.6 469.2,109.6 L287.4,109.6 Q279.4,109.6 279.4,117.6 L279.4,152.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M275.9,144.6 L279.4,153 M279.4,153 L283,144.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M688.8,211 L688.8,227 Q688.8,235 696.8,235 L733.3,235 Q741.3,235 741.3,243 L741.3,259.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M737.7,252 L741.3,260.4 M741.3,260.4 L744.8,252 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M766,316.3 L766,363.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M762.5,355.9 L766,364.3 M766,364.3 L769.5,355.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M790.8,183.7 L790.8,260.4 stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Dotted
+shape path M679.9,67.1 L679.9,125.6 stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Dotted
+shape ellipse 49.7 9 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M56.7,23 L56.7,35.9 M42.7,26.9 L70.7,26.9 M45.5,52.4 L56.7,35.9 L67.9,52.4 stroke=Text/hairline/Solid
+text 8 58 97.4 19.6 size=14 w=400 ink=Text "Normal actor"
+shape ellipse 187.2 9 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M189.7,25 L198.6,25 L198.6,24.2 L208.2,24.2 L208.2,29.6 L198.6,29.6 L198.6,35.9 L206.8,52.4 L197.8,52.4 L194.2,42.6 L190.5,52.4 L181.6,52.4 L189.7,35.9 L189.7,29.6 L180.2,29.6 L180.2,24.2 L189.7,24.2 Z fill=Surface stroke=Text/hairline/Solid
+text 145.4 58 97.4 19.6 size=14 w=400 ink=Text "Hollow actor"
+shape ellipse 328.7 9 14 14 fill=Text
+shape path M321.7,52.4 L321.7,38.2 Q321.7,25.6 335.7,25.6 Q349.7,25.6 349.7,38.2 L349.7,52.4 Z fill=Text
+text 282.9 58 105.6 19.6 size=14 w=400 ink=Text "Awesome actor"
+shape rect 475.3 16.7 28 28 r=Sm fill=Surface stroke=Text/hairline/Solid
+shape ellipse 484.6 21.7 9.5 9.5 fill=Text
+shape path M481.5,39.7 Q489.3,28.5 497.2,39.7 Z fill=Text
+text 428.4 58 121.8 19.6 size=14 w=400 ink=Text "Registered icon"
+shape ellipse 672.9 125.6 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M679.9,139.6 L679.9,152.5 M665.9,143.5 L693.9,143.5 M668.7,169 L679.9,152.5 L691.1,169 stroke=Text/hairline/Solid
+shape path M677.8,141 L689,131.9 stroke=Text/hairline/Solid
+text 645.1 174.6 69.6 16.8 size=12 w=400 ink=Muted "«Employee»"
+text 635.2 191.4 89.3 19.6 size=14 w=400 ink=Text "Sales agent"
+shape ellipse 683.5 259 165.1 57.3 fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M703.3,306 L726.4,265.9 stroke=BorderStrong/hairline/Solid
+text 745.1 269.5 41.8 16.8 size=12 w=400 ink=Muted "«Core»"
+text 713.2 286.3 105.6 19.6 size=14 w=400 ink=Text "Prepare quote"
+shape rect 697.2 364.3 137.6 56.4 r=Sm fill=Surface stroke=BorderStrong/hairline/Solid
+text 738.2 374.3 55.7 16.8 size=12 w=400 ink=Muted "«Record»"
+text 713.2 391.1 105.6 19.6 size=14 w=400 ink=Text "Archive quote"
+shape rect 764.5 152.9 175.2 30.8 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 774.1 159.9 41.8 16.8 size=12 w=400 ink=Text "Needs "
+text 815.9 159.9 51.6 16.8 size=12 w=700 ink=Text "manager"
+text 867.5 159.9 62.6 16.8 size=12 w=400 ink=Text " approval"
+shape rect 590.2 19.5 179.3 47.6 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 599.8 26.5 160.1 16.8 size=12 w=400 ink=Text "Works from the regional"
+text 599.8 43.3 41.8 16.8 size=12 w=400 ink=Text "office"
+shape ellipse 216.5 152 96.9 32.7 fill=Surface stroke=BorderStrong/hairline/Solid
+text 240.6 158.5 48.7 19.6 size=14 w=400 ink=Text "Manage"
