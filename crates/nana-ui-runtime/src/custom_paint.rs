@@ -1149,9 +1149,12 @@ impl PaintRecording {
 
     /// `draw_default()` 录在哪个阶段；没调用则为 `None`。
     pub fn default_phase(&self) -> Option<PaintPhase> {
-        if self.behind_children.contains(&PaintOp::DrawDefault) {
+        // Matched by variant: comparing every op for equality costs as much as
+        // the op is large, and a canvas records thousands.
+        let drawn = |ops: &[PaintOp]| ops.iter().any(|op| matches!(op, PaintOp::DrawDefault));
+        if drawn(&self.behind_children) {
             Some(PaintPhase::BehindChildren)
-        } else if self.over_children.contains(&PaintOp::DrawDefault) {
+        } else if drawn(&self.over_children) {
             Some(PaintPhase::OverChildren)
         } else {
             None
