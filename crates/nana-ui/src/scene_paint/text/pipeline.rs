@@ -855,7 +855,7 @@ impl TextGpu {
                 let native=if dual {TEXT_SHADER_DUAL_SOURCE}else{TEXT_SHADER};
                 let mut source=native.replace("if duration > 0.0 {", "if duration > 0.0 && text_glyph_fx[fx+12u]==0u {");
                 for (i,m) in materials.iter().enumerate() {
-                    source.push_str(&super::super::material::program_source_at(m.program(), &["nm_text_","nm_enter_","nm_exit_"][i],2,i as u32*4)?);
+                    source.push_str(&super::super::material::program_source_at(m.program(), ["nm_text_","nm_enter_","nm_exit_"][i],2,i as u32*4)?);
                 }
                 source=source.replace("out.color = input.color.rgb;", "let nm = nm_text_material(nm_text_MaterialInput(input.material_position,input.glyph_uv,input.glyph_size,input.glyph_uv,vec4<f32>(input.color.rgb,1.),1.,input.text_position,vec2<f32>(1.))); out.color = nm.rgb;")
                     .replace("input.color.a * corrected * clip_cover", "input.color.a * clamp(nm.a,0.,1.) * corrected * clip_cover")

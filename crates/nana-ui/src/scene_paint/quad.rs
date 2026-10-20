@@ -799,10 +799,10 @@ impl QuadPipeline {
         if pair.0 != 0 || pair.1 != 0 {
             for m in [first, second].into_iter().flatten() {
                 self.material_refs.insert(m.key(), m.downgrade());
-                if !self.material_bindings.contains_key(&m.key()) {
-                    if let Some(binding) = self.material_device.prepare(device, queue, m, work) {
-                        self.material_bindings.insert(m.key(), binding);
-                    }
+                if !self.material_bindings.contains_key(&m.key())
+                    && let Some(binding) = self.material_device.prepare(device, queue, m, work)
+                {
+                    self.material_bindings.insert(m.key(), binding);
                 }
             }
             self.prepare_material_pipeline(device, first, second, masked);

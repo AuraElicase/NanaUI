@@ -2489,12 +2489,12 @@ impl UiScene {
         for (node, (presentation, objects)) in &self.glyph_objects {
             for object in objects.iter() {
                 let mut reveal = presentation.reveal.clone();
-                if presentation.transitions.entrance.is_some() {
-                    if let Some(r) = &mut reveal {
-                        r.intro.fade = false;
-                        r.intro.pop = false;
-                        r.intro.rise_px = 0.;
-                    }
+                if presentation.transitions.entrance.is_some()
+                    && let Some(r) = &mut reveal
+                {
+                    r.intro.fade = false;
+                    r.intro.pop = false;
+                    r.intro.rise_px = 0.;
                 }
                 let reveal_now = presentation.transitions.freeze_reveal.unwrap_or(now);
                 let sample = nana_ui_core::evaluate_glyph_chain(
