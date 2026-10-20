@@ -62,6 +62,14 @@ impl Fixture {
     }
 
     fn tab(&mut self) -> Option<StableNodeId> {
+        self.tab_with(false)
+    }
+
+    fn back_tab(&mut self) -> Option<StableNodeId> {
+        self.tab_with(true)
+    }
+
+    fn tab_with(&mut self, shift: bool) -> Option<StableNodeId> {
         self.input
             .dispatch(
                 &mut self.cx,
@@ -72,7 +80,10 @@ impl Fixture {
                     code: "Tab".into(),
                     text: None,
                     repeat: false,
-                    modifiers: InputModifiers::default(),
+                    modifiers: InputModifiers {
+                        shift,
+                        ..InputModifiers::default()
+                    },
                 },
             )
             .unwrap();
@@ -124,6 +135,13 @@ fn yielded_list_item_tools_follow_focus_so_tab_reaches_them() {
     assert!(!f.hidden(), "focus on the tool keeps it shown");
     assert_eq!(f.tab(), Some(f.after));
     assert!(f.hidden(), "focus leaving the row puts the tools away");
+    assert_eq!(
+        f.back_tab(),
+        Some(f.row),
+        "Shift+Tab from below skips the put-away tools"
+    );
+    assert_eq!(f.tab(), Some(f.tool), "and Tab from the row reaches them");
+    f.tab();
 
     f.hover(Some(f.row));
     assert!(!f.hidden(), "the pointer reveals them too");
@@ -158,6 +176,13 @@ fn reserved_list_item_tools_keep_their_place_and_stay_in_tab_order() {
     assert_eq!(f.opacity(), None);
     assert_eq!(f.tab(), Some(f.after));
     assert_eq!(f.opacity(), Some(0.0));
+    assert_eq!(
+        f.back_tab(),
+        Some(f.tool),
+        "reserved tools stay in Tab order"
+    );
+    assert_eq!(f.opacity(), None);
+    f.tab();
 
     let row = Entity::<ListItem>::from_stable_id(f.row);
     f.cx.update_component(row, |item, _| item.keep_tools = true)

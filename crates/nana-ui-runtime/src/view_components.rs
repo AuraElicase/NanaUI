@@ -1554,8 +1554,8 @@ pub struct ListItem {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RowToolsRest {
     /// Out of the layout: the label owns the whole row at rest, and revealing
-    /// the tools reflows it. Focus reaches them once it is on the row, so
-    /// Shift+Tab from below lands on the row before its tools.
+    /// the tools reflows it. Tab reaches them once focus is on the row;
+    /// Shift+Tab from below skips them and lands on the row.
     #[default]
     Yield,
     /// Kept in place but not drawn: revealing them never reflows the row, at
