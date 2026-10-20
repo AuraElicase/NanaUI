@@ -1,0 +1,25 @@
+---
+config:
+  cynefin:
+    showDomainDescriptions: false
+---
+cynefin-beta
+  title 团队事务归类
+  "没有领域的条目"
+  confusion
+    "说不清归属的需求"
+    "反复出现的告警"
+    "历史遗留问题"
+    "新同事的疑问"
+    "第五件事"
+  complex
+    "新产品方向探索（需要小步试错，快速验证用户反馈）"
+    "跨团队协作模式"
+    "团队文化建设"
+  clear
+    "发布流程"
+  complex --> complex : "自环被忽略"
+  confusion --> clear : "归类"
+  complex --> clear : "沉淀"
+  clear --> complex
+  bogus --> clear

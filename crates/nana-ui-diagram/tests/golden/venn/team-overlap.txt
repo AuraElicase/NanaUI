@@ -1,0 +1,13 @@
+size 426.2 303.6
+summary nodes=2 edges=0 groups=1
+shape ellipse 9 42.6 252 252 fill=series0.soft
+shape ellipse 165.2 42.6 252 252 fill=series1.soft
+clip ellipse 9 42.6 252 252
+shape ellipse 165.2 42.6 252 252 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+shape ellipse 9 42.6 252 252 stroke=series0/thick/Solid
+shape ellipse 165.2 42.6 252 252 stroke=series1/thick/Solid
+text 54 144.8 68.9 19.6 size=14 w=600 ink=Text "Frontend"
+text 307.7 144.8 60.3 19.6 size=14 w=600 ink=Text "Backend"
+text 196.9 158.8 32.5 19.6 size=14 w=400 ink=Text "APIs"
+text 154.1 8 118 22.4 size=16 w=600 ink=Text "Team overlap"

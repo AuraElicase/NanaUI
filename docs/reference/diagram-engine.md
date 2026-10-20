@@ -74,14 +74,14 @@
 | gitGraph | `gitGraph` | 迁移中 |
 | journey | `journey` | 迁移中 |
 | xychart | `xychart-beta`、`xychart` | 迁移中 |
-| pie | `pie` | 迁移中 |
-| quadrantChart | `quadrantChart` | 迁移中 |
-| radar | `radar-beta`、`radar` | 迁移中 |
-| sankey | `sankey-beta`、`sankey` | 迁移中 |
-| venn | `venn-beta` | 迁移中 |
-| packet | `packet-beta`、`packet` | 迁移中 |
-| wardley | `wardley-beta` | 迁移中 |
-| cynefin | `cynefin-beta` | 迁移中 |
+| pie | `pie` | 原生 |
+| quadrantChart | `quadrantChart` | 原生 |
+| radar | `radar-beta`、`radar` | 原生 |
+| sankey | `sankey-beta`、`sankey` | 原生 |
+| venn | `venn-beta` | 原生 |
+| packet | `packet-beta`、`packet` | 原生 |
+| wardley | `wardley-beta` | 原生 |
+| cynefin | `cynefin-beta` | 原生 |
 
 「迁移中」的类型在原生实现落地前由 Runtime 交给旧的 SVG 路径（`mermaid-svg`）；全部落地后移除该依赖。
 

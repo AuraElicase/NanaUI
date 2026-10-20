@@ -1,0 +1,29 @@
+size 548.1 492.4
+summary nodes=4 edges=0 groups=4
+shape rect 329.1 42.6 210 210 fill=series0.soft
+shape rect 119.1 42.6 210 210 fill=series1.soft
+shape rect 119.1 252.6 210 210 fill=series2.soft
+shape rect 329.1 252.6 210 210 fill=series3.soft
+shape path M329.1,42.6 L329.1,462.6 M119.1,252.6 L539.1,252.6 stroke=Surface/thick/Solid
+shape rect 119.1 42.6 420 420 stroke=Border/hairline/Solid
+text 408.3 51 51.6 19.6 size=14 w=600 ink=Text "Expand"
+text 194 51 60.3 19.6 size=14 w=600 ink=Text "Promote"
+text 176.8 261 94.7 19.6 size=14 w=600 ink=Text "Re-evaluate"
+text 404 261 60.3 19.6 size=14 w=600 ink=Text "Improve"
+text 192.8 467.6 62.6 16.8 size=12 w=400 ink=Muted "Low Reach"
+text 399.3 467.6 69.6 16.8 size=12 w=400 ink=Muted "High Reach"
+text 15 349.2 97.4 16.8 size=12 w=400 ink=Muted "Low Engagement"
+text 8 139.2 104.4 16.8 size=12 w=400 ink=Muted "High Engagement"
+shape path M316.5,476 L336.3,476 stroke=Muted/hairline/Solid
+shape path M341.7,476 L335,478.9 L336.2,476 L335,473.2 Z fill=Muted stroke=Muted/hairline/Solid
+shape path M115.8,265.2 L115.8,245.4 stroke=Muted/hairline/Solid
+shape path M115.8,240 L118.6,246.7 L115.8,245.5 L112.9,246.7 Z fill=Muted stroke=Muted/hairline/Solid
+shape ellipse 239.8 205.3 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 407.8 121.3 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 281.8 373.3 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 491.8 289.3 10.6 10.6 fill=series0 stroke=Surface/hairline/Solid
+text 210.3 217.9 69.6 16.8 size=12 w=400 ink=Text "Campaign A"
+text 378.3 133.9 69.6 16.8 size=12 w=400 ink=Text "Campaign B"
+text 252.3 385.9 69.6 16.8 size=12 w=400 ink=Text "Campaign C"
+text 462.3 301.9 69.6 16.8 size=12 w=400 ink=Text "Campaign D"
+text 229.8 8 88.5 22.4 size=16 w=600 ink=Text "Campaigns"

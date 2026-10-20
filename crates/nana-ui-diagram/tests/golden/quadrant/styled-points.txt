@@ -1,0 +1,33 @@
+size 548.1 492.4
+summary nodes=6 edges=0 groups=4
+shape rect 329.1 42.6 210 210 fill=series0.soft
+shape rect 119.1 42.6 210 210 fill=series1.soft
+shape rect 119.1 252.6 210 210 fill=series2.soft
+shape rect 329.1 252.6 210 210 fill=series3.soft
+shape path M329.1,42.6 L329.1,462.6 M119.1,252.6 L539.1,252.6 stroke=Surface/thick/Solid
+shape rect 119.1 42.6 420 420 stroke=Border/hairline/Solid
+text 365.3 51 137.7 19.6 size=14 w=600 ink=Text "We should expand"
+text 159.6 51 129.1 19.6 size=14 w=600 ink=Text "Need to promote"
+text 176.8 261 94.7 19.6 size=14 w=600 ink=Text "Re-evaluate"
+text 369.6 261 129.1 19.6 size=14 w=600 ink=Text "May be improved"
+text 192.8 467.6 62.6 16.8 size=12 w=400 ink=Muted "Low Reach"
+text 399.3 467.6 69.6 16.8 size=12 w=400 ink=Muted "High Reach"
+text 15 349.2 97.4 16.8 size=12 w=400 ink=Muted "Low Engagement"
+text 8 139.2 104.4 16.8 size=12 w=400 ink=Muted "High Engagement"
+shape path M316.5,476 L336.3,476 stroke=Muted/hairline/Solid
+shape path M341.7,476 L335,478.9 L336.2,476 L335,473.2 Z fill=Muted stroke=Muted/hairline/Solid
+shape path M115.8,265.2 L115.8,245.4 stroke=Muted/hairline/Solid
+shape path M115.8,240 L118.6,246.7 L115.8,245.5 L112.9,246.7 Z fill=Muted stroke=Muted/hairline/Solid
+shape ellipse 485.1 450.6 24 24 fill=series0 stroke=Surface/hairline/Solid
+shape ellipse 445.1 410.6 20 20 fill=rgba(255,51,0,1) stroke=Surface/hairline/Solid
+shape ellipse 388.1 353.6 50 50 fill=rgba(0,255,51,1) stroke=rgba(16,240,240,1)/hairline/Solid
+shape ellipse 356.1 321.6 30 30 fill=rgba(255,51,240,1) stroke=rgba(0,255,15,1)/5/Solid
+shape ellipse 319.1 284.6 20 20 fill=rgba(144,131,66,1) stroke=rgba(49,0,133,1)/10/Solid
+shape ellipse 277.1 242.6 20 20 fill=rgba(0,0,255,1) stroke=Surface/hairline/Solid
+text 462.3 431.8 69.6 16.8 size=12 w=400 ink=Text "Campaign A"
+text 467.5 412.2 69.6 16.8 size=12 w=400 ink=Text "Campaign B"
+text 442.1 370.2 69.6 16.8 size=12 w=400 ink=Text "Campaign C"
+text 390.1 328.2 69.6 16.8 size=12 w=400 ink=Text "Campaign D"
+text 294.3 265.8 69.6 16.8 size=12 w=400 ink=Text "Campaign E"
+text 252.3 223.8 69.6 16.8 size=12 w=400 ink=Text "Campaign F"
+text 111.8 8 324.6 22.4 size=16 w=600 ink=Text "Reach and engagement of campaigns"
