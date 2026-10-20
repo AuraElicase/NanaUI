@@ -1,0 +1,18 @@
+sequenceDiagram
+    autonumber 10 5
+    participant A as Client
+    participant B as Server
+    A->B: solid, no head
+    A-->B: dotted, no head
+    A->>B: solid arrow
+    B-->>A: dotted arrow
+    A<<->>B: both ways
+    A<<-->>B: both ways, dotted
+    A-xB: cross
+    A--xB: dotted cross
+    A-)B: async
+    A--)B: dotted async
+    B->>B: self call
+    autonumber off
+    A->>B: unnumbered
+    A->>B: I #9829; you#59; #infin; times

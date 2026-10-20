@@ -1,0 +1,30 @@
+zenuml
+    Alice->Bob: Hello Bob, how are you?
+    if(is_sick) {
+      Bob->Alice: Not so good :(
+    } else if(is_tired) {
+      Bob->Alice: A bit tired
+    } else {
+      Bob->Alice: Feeling fresh like a daisy
+    }
+    opt {
+      Bob->Alice: Thanks for asking
+    }
+    while(true) {
+      John->Alice: Great!
+    }
+    forEach(item in list) {
+      Alice->John: next item
+    }
+    par {
+        Alice->Bob: Hello guys!
+        Alice->John: Hello guys!
+    }
+    try {
+      Alice->API: Book something
+      API->BookingService: Start booking process
+    } catch(BookingError e) {
+      API->Alice: show failure
+    } finally {
+      API->BookingService: rollback status
+    }

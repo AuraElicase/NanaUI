@@ -1,0 +1,75 @@
+size 827.5 746.9
+summary nodes=7 edges=13 groups=1
+shape rect 68.3 194.7 239.5 126.6 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape path M13.6,100.9 L13.6,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M83.6,100.9 L83.6,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M194.7,100.9 L194.7,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M292.6,100.9 L292.6,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M413.7,100.9 L413.7,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M598.5,100.9 L598.5,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M694.5,668.2 L694.5,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M790.5,722.5 L790.5,737.9 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape rect 189.5 140.1 10.5 214.3 fill=Surface stroke=BorderStrong/hairline/Solid
+shape rect 287.3 179.3 10.5 143.5 fill=Surface stroke=BorderStrong/hairline/Solid
+shape rect 189.5 393.6 10.5 39.2 fill=Surface stroke=BorderStrong/hairline/Solid
+shape rect 287.3 472 10.5 137.2 fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M68.3,194.7 L102.4,194.7 L102.4,209.5 L94.5,217.5 L68.3,217.5 Z fill=Subtle stroke=Border/hairline/Solid
+text 74.3 197.7 22.1 16.8 size=12 w=600 ink=Text "alt"
+text 108.4 197.7 76.6 16.8 size=12 w=400 ink=Muted "[condition]"
+shape path M83.6,140.1 L182.8,140.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M189.5,140.1 L181.1,143.6 L182.6,140.1 L181.1,136.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 104 116.3 65 19.6 size=14 w=400 ink=Text "method()"
+shape path M200,179.3 L280.6,179.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M287.3,179.3 L278.9,182.8 L280.5,179.3 L278.9,175.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 211.2 155.5 65 19.6 size=14 w=400 ink=Text "method()"
+shape path M287.3,249.3 L200.5,249.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M208.4,245.8 L200,249.3 M200,249.3 L208.4,252.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 235.5 225.5 16.2 19.6 size=14 w=400 ink=Text "x1"
+text 87.6 264.7 83.5 16.8 size=12 w=400 ink=Muted "return early"
+shape path M189.5,307.3 L84.1,307.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M92,303.8 L83.6,307.3 M83.6,307.3 L92,310.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 124.3 283.5 24.4 19.6 size=14 w=400 ink=Text "x11"
+shape path M189.5,354.4 L84.1,354.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M92,350.8 L83.6,354.4 M83.6,354.4 L92,357.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 128.4 330.6 16.2 19.6 size=14 w=400 ink=Text "x2"
+shape path M13.6,393.6 L182.8,393.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M189.5,393.6 L181.1,397.1 L182.6,393.6 L181.1,390 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 48.8 369.8 105.6 19.6 size=14 w=400 ink=Text "SyncMessage()"
+shape path M189.5,432.8 L14.1,432.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M22,429.2 L13.6,432.8 M13.6,432.8 L22,436.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 97.5 409 8.1 19.6 size=14 w=400 ink=Text "a"
+shape path M13.6,472 L280.6,472 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M287.3,472 L278.9,475.5 L280.5,472 L278.9,468.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 32.7 448.2 235.5 19.6 size=14 w=400 ink=Text "SyncMessage(with, parameters)"
+shape path M297.8,511.2 L323.6,511.2 Q331.4,511.2 331.4,519 L331.4,522.9 Q331.4,530.8 323.6,530.8 L304.6,530.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M297.8,530.8 L306.2,527.2 L304.7,530.8 L306.2,534.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 301.8 487.4 89.3 19.6 size=14 w=400 ink=Text "selfCheck()"
+shape path M413.7,570 L598,570 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M590.1,573.5 L598.5,570 M598.5,570 L590.1,566.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 424.9 546.2 162.4 19.6 size=14 w=400 ink=Text "nested async message"
+shape path M287.3,609.2 L14.1,609.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M22,605.6 L13.6,609.2 M13.6,609.2 L22,612.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 146.4 585.4 8.1 19.6 size=14 w=400 ink=Text "b"
+shape path M13.6,648.4 L659.7,648.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M666.5,648.4 L658.1,651.9 L659.6,648.4 L658.1,644.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 307.6 624.6 65 19.6 size=14 w=400 ink=Text "«create»"
+shape path M13.6,702.7 L755.7,702.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M762.5,702.7 L754.1,706.3 L755.6,702.7 L754.1,699.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 282.5 678.9 211.1 19.6 size=14 w=400 ink=Text "«create»(with, parameters)"
+shape ellipse 8 89.7 11.2 11.2 fill=Text
+shape path M83.6,54.3 L83.6,65.2 M71.7,56.8 L95.5,56.8 M74,77.1 L83.6,65.2 L93.1,77.1 stroke=BorderStrong/hairline/Solid
+shape ellipse 78 42.6 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 59.2 81.3 48.7 19.6 size=14 w=400 ink=Text "Client"
+shape rect 166.7 61.3 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 190.7 71.3 8.1 19.6 size=14 w=400 ink=Text "A"
+shape rect 264.6 61.3 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 288.5 71.3 8.1 19.6 size=14 w=400 ink=Text "B"
+shape rect 385.7 61.3 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 409.6 71.3 8.1 19.6 size=14 w=400 ink=Text "C"
+shape rect 570.5 61.3 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 594.4 71.3 8.1 19.6 size=14 w=400 ink=Text "D"
+shape rect 666.5 628.6 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 686.3 638.6 16.2 19.6 size=14 w=400 ink=Text "A1"
+shape rect 762.5 682.9 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 782.3 692.9 16.2 19.6 size=14 w=400 ink=Text "A2"
+text 349.8 8 127.9 22.4 size=16 w=600 ink=Text "Reply message"

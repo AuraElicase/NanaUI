@@ -1,0 +1,37 @@
+size 655.2 381.4
+summary nodes=3 edges=5 groups=1
+shape rect 9 233.9 291.1 85.4 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape path M24.3,100.9 L24.3,372.4 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M238.4,100.9 L238.4,372.4 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M588.2,100.9 L588.2,372.4 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape rect 233.1 140.1 10.5 212.3 fill=Surface stroke=BorderStrong/hairline/Solid
+shape rect 583 179.3 10.5 39.2 fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M9,233.9 L43.1,233.9 L43.1,263.3 L32.9,273.5 L9,273.5 Z fill=Subtle stroke=Border/hairline/Solid
+text 15 245.3 22.1 16.8 size=12 w=600 ink=Text "alt"
+text 49.1 236.9 223 16.8 size=12 w=400 ink=Muted "[結果が見つからない場合はエラーを返し"
+text 49.1 253.7 31 16.8 size=12 w=400 ink=Muted "ます]"
+shape path M24.3,140.1 L226.4,140.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M233.1,140.1 L224.7,143.6 L226.2,140.1 L224.7,136.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 35.4 116.3 186.5 19.6 size=14 w=400 ink=Text "ログイン(名前, パスワード)"
+shape path M243.6,179.3 L576.3,179.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M583,179.3 L574.6,182.8 L576.1,179.3 L574.6,175.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 254.8 155.5 317 19.6 size=14 w=400 ink=Text "조회(사용자_아이디_그리고_아주_긴_인자_목록)"
+shape path M583,218.5 L244.1,218.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M252,215 L243.6,218.5 M243.6,218.5 L252,222 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 399.3 194.7 28 19.6 size=14 w=400 ink=Text "結果"
+shape path M233.1,305.3 L24.8,305.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M32.7,301.8 L24.3,305.3 M24.3,305.3 L32.7,308.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 114.7 281.5 28 19.6 size=14 w=400 ink=Text "拒否"
+shape path M233.1,352.4 L24.8,352.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M32.7,348.8 L24.3,352.4 M24.3,352.4 L32.7,355.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 114.7 328.6 28 19.6 size=14 w=400 ink=Text "令牌"
+shape path M24.3,54.3 L24.3,65.2 M12.3,56.8 L36.2,56.8 M14.7,77.1 L24.3,65.2 L33.8,77.1 stroke=BorderStrong/hairline/Solid
+shape ellipse 18.7 42.6 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 10.3 81.3 28 19.6 size=14 w=400 ink=Text "用户"
+shape ellipse 225.4 50.2 25.9 25.9 fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M239,46.1 L233.9,50.2 L239,54.4 stroke=BorderStrong/hairline/Solid
+text 196.4 81.3 84 19.6 size=14 w=400 ink=Text "認証サービス"
+shape path M530.2,56 C530.2,50.9 556.2,46.7 588.2,46.7 C620.3,46.7 646.2,50.9 646.2,56 L646.2,91.6 C646.2,96.7 620.3,100.9 588.2,100.9 C556.2,100.9 530.2,96.7 530.2,91.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M530.2,56 C530.2,61.1 556.2,65.3 588.2,65.3 C620.3,65.3 646.2,61.1 646.2,56 stroke=BorderStrong/hairline/Solid
+text 546.2 68.7 84 19.6 size=14 w=400 ink=Text "데이터베이스"
+text 276.7 8 101.8 22.4 size=16 w=600 ink=Text "中文与长标签"
