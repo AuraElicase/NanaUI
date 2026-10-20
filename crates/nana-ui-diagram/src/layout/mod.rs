@@ -3,6 +3,8 @@
 pub mod axis;
 pub mod graph;
 pub mod layered;
+pub mod squarify;
+pub mod tree;
 
 pub use graph::{
     ClusterSpec, Direction, EdgeSpec, End, Graph, GraphLayout, NodeSpec, Route, RouteKind, Spacing,
