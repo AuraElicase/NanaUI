@@ -3408,6 +3408,51 @@ fn keys_in_a_switched_branch_resolve_by_path_inside_a_virtual_row() {
     assert_eq!(shown(&cx), "行 0 2");
 }
 
+/// A settings group puts an inset divider between rows, and a hidden row
+/// takes its divider with it; keycaps and a chord name their roles.
+#[test]
+fn a_settings_group_divides_its_rows_and_hides_a_hidden_rows_divider() {
+    let (mut cx, _, parent) = setup();
+    let shown = std::cell::Cell::new(None);
+    let view = cx
+        .mount_view(parent, || {
+            let second = signal(true);
+            shown.set(Some(second));
+            settings_group(
+                Some("Group".into()),
+                vec![
+                    group_row(text("first")),
+                    group_row(text("second")).visible(second),
+                    group_row(chord("Ctrl+B")),
+                ],
+            )
+        })
+        .unwrap();
+    let second = shown.get().unwrap();
+    let root = view.roots()[0];
+    let [title, card] = children(&cx, root)[..] else {
+        panic!("title and card");
+    };
+    assert_eq!(children(&cx, title).len(), 1);
+    let rows = children(&cx, card);
+    assert_eq!(rows.len(), 3);
+    assert_eq!(
+        children(&cx, rows[0]).len(),
+        1,
+        "the first row has no divider"
+    );
+    assert_eq!(children(&cx, rows[1]).len(), 2, "a divider, then the row");
+    let hidden = |cx: &AppContext, id| cx.world().node_style(id).unwrap().layout.hidden;
+    assert!(!hidden(&cx, rows[1]));
+    second.set(false);
+    cx.flush_reactive().unwrap();
+    assert!(hidden(&cx, rows[1]), "the row goes with its divider");
+    let painter = cx.world().node_style(card).unwrap().painter.clone();
+    assert!(painter.is_some(), "the card is a raised surface");
+    let chord = children(&cx, rows[2])[1];
+    assert_eq!(children(&cx, chord).len(), 3, "two keys and the joiner");
+}
+
 /// A `Stack` takes a theme-relative wash and outline, and a fully round
 /// corner that does not need its height, from its own builder.
 #[test]
