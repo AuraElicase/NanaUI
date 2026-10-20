@@ -1,0 +1,11 @@
+railroad-beta
+title Call syntax
+
+call = sequence(
+    nonterminal("name"),
+    terminal("("),
+    optional(oneOrMore(nonterminal("argument"), terminal(","))),
+    terminal(")"),
+    comment("no trailing comma")
+) ;
+block = group(zeroOrMore(choice(0, nonterminal("statement"), skip())), "body") ;

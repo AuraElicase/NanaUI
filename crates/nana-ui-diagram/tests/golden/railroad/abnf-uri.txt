@@ -1,0 +1,105 @@
+size 322.4 671.8
+summary nodes=15 edges=0 groups=4
+text 9 41.6 29.5 16.8 size=12 w=600 ink=Muted "host"
+shape path M9,79.4 L9,96.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M280.6,79.4 L280.6,96.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,87.8 L25.8,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 25.8 73.8 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 35.6 78 40.6 19.6 size=14 w=400 ink=Text "label"
+shape path M86,87.8 L97.2,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M97.2,87.8 L114,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M114,87.8 L130.8,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 130.8 73.8 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 140.6 78 8.4 19.6 size=14 w=400 ink=Text "."
+shape path M158.8,87.8 L170,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 170 73.8 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 179.8 78 40.6 19.6 size=14 w=400 ink=Text "label"
+shape path M230.2,87.8 L247,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M230.2,87.8 Q238.6,87.8 238.6,96.2 L238.6,101.8 Q238.6,110.2 230.2,110.2 L180.5,110.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M180.5,110.2 L130.8,110.2 Q122.4,110.2 122.4,101.8 L122.4,96.2 Q122.4,87.8 130.8,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M177.7,110.2 L183.3,107 L183.3,113.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}
+shape path M247,87.8 L263.8,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M97.2,87.8 Q105.6,87.8 105.6,79.4 L105.6,73.8 Q105.6,65.4 114,65.4 L247,65.4 Q255.4,65.4 255.4,73.8 L255.4,79.4 Q255.4,87.8 263.8,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M263.8,87.8 L280.6,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+text 9 133.6 36.9 16.8 size=12 w=600 ink=Muted "label"
+shape path M9,163 L9,179.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M170,163 L170,179.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,171.4 L25.8,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M25.8,171.4 L42.6,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M42.6,171.4 L59.4,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M119.6,171.4 L136.4,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 59.4 157.4 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 69.2 161.6 40.6 19.6 size=14 w=400 ink=Text "ALPHA"
+shape path M42.6,171.4 Q51,171.4 51,179.8 L51,199.4 Q51,207.8 59.4,207.8 L59.4,207.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M119.6,207.8 L119.6,207.8 Q128,207.8 128,199.4 L128,179.8 Q128,171.4 136.4,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 59.4 193.8 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 69.2 198 40.6 19.6 size=14 w=400 ink=Text "DIGIT"
+shape path M42.6,171.4 Q51,171.4 51,179.8 L51,235.8 Q51,244.2 59.4,244.2 L75.5,244.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M103.5,244.2 L119.6,244.2 Q128,244.2 128,235.8 L128,179.8 Q128,171.4 136.4,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 75.5 230.2 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 85.3 234.4 8.4 19.6 size=14 w=400 ink=Text "-"
+shape path M136.4,171.4 L153.2,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M136.4,171.4 Q144.8,171.4 144.8,179.8 L144.8,258.2 Q144.8,266.6 136.4,266.6 L89.5,266.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M89.5,266.6 L42.6,266.6 Q34.2,266.6 34.2,258.2 L34.2,179.8 Q34.2,171.4 42.6,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M86.7,266.6 L92.3,263.4 L92.3,269.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}
+text 44.3 269.6 90.5 16.8 size=12 w=400 italic ink=Muted "1 to 63 times"
+shape path M153.2,171.4 L170,171.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+text 9 308.8 29.5 16.8 size=12 w=600 ink=Muted "port"
+shape path M9,338.2 L9,355 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M159.7,338.2 L159.7,355 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,346.6 L25.8,346.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M25.8,346.6 L54.3,346.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 54.3 332.6 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 64.1 336.8 40.6 19.6 size=14 w=400 ink=Text "DIGIT"
+shape path M114.5,346.6 L142.9,346.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M126.1,346.6 Q134.5,346.6 134.5,355 L134.5,360.6 Q134.5,369 126.1,369 L84.4,369 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M84.4,369 L42.6,369 Q34.2,369 34.2,360.6 L34.2,355 Q34.2,346.6 42.6,346.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M81.6,369 L87.1,365.8 L87.1,372.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}
+text 42.6 372 83.5 16.8 size=12 w=400 italic ink=Muted "1 to 5 times"
+shape path M142.9,346.6 L159.7,346.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+text 9 411.2 44.3 16.8 size=12 w=600 ink=Muted "scheme"
+shape path M9,449 L9,465.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M313.4,449 L313.4,465.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,457.4 L25.8,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M25.8,457.4 L45,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M277.4,457.4 L296.6,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 45 443.4 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 54.8 447.6 40.6 19.6 size=14 w=400 ink=Text "ALPHA"
+shape path M105.2,457.4 L116.4,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M116.4,457.4 L133.2,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M133.2,457.4 L150,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M150,457.4 L166.8,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M227,457.4 L243.8,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 166.8 443.4 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 176.6 447.6 40.6 19.6 size=14 w=400 ink=Text "ALPHA"
+shape path M150,457.4 Q158.4,457.4 158.4,465.8 L158.4,485.4 Q158.4,493.8 166.8,493.8 L166.8,493.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M227,493.8 L227,493.8 Q235.4,493.8 235.4,485.4 L235.4,465.8 Q235.4,457.4 243.8,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 166.8 479.8 60.2 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 176.6 484 40.6 19.6 size=14 w=400 ink=Text "DIGIT"
+shape path M150,457.4 Q158.4,457.4 158.4,465.8 L158.4,521.8 Q158.4,530.2 166.8,530.2 L182.9,530.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M210.9,530.2 L227,530.2 Q235.4,530.2 235.4,521.8 L235.4,465.8 Q235.4,457.4 243.8,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 182.9 516.2 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 192.7 520.4 8.4 19.6 size=14 w=400 ink=Text "+"
+shape path M150,457.4 Q158.4,457.4 158.4,465.8 L158.4,558.2 Q158.4,566.6 166.8,566.6 L182.9,566.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M210.9,566.6 L227,566.6 Q235.4,566.6 235.4,558.2 L235.4,465.8 Q235.4,457.4 243.8,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 182.9 552.6 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 192.7 556.8 8.4 19.6 size=14 w=400 ink=Text "-"
+shape path M150,457.4 Q158.4,457.4 158.4,465.8 L158.4,594.6 Q158.4,603 166.8,603 L182.9,603 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M210.9,603 L227,603 Q235.4,603 235.4,594.6 L235.4,465.8 Q235.4,457.4 243.8,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 182.9 589 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 192.7 593.2 8.4 19.6 size=14 w=400 ink=Text "."
+shape path M243.8,457.4 L260.6,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M243.8,457.4 Q252.2,457.4 252.2,465.8 L252.2,617 Q252.2,625.4 243.8,625.4 L196.9,625.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M196.9,625.4 L150,625.4 Q141.6,625.4 141.6,617 L141.6,465.8 Q141.6,457.4 150,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M194.1,625.4 L199.7,622.2 L199.7,628.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}
+shape path M260.6,457.4 L277.4,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M116.4,457.4 Q124.8,457.4 124.8,449 L124.8,443.4 Q124.8,435 133.2,435 L260.6,435 Q269,435 269,443.4 L269,449 Q269,457.4 277.4,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M25.8,457.4 Q34.2,457.4 34.2,465.8 L34.2,640.4 Q34.2,648.8 42.6,648.8 L42.6,648.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M279.8,648.8 L279.8,648.8 Q288.2,648.8 288.2,640.4 L288.2,465.8 Q288.2,457.4 296.6,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 42.6 634.8 52.1 28 r=Sm fill=Subtle stroke=Border/hairline/Dashed
+text 52.4 639 32.5 19.6 size=14 w=400 ink=Muted "%x2A"
+shape path M94.7,648.8 L105.9,648.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 105.9 634.8 173.9 28 r=Sm fill=Subtle stroke=Border/hairline/Dashed
+text 115.7 639 154.3 19.6 size=14 w=400 ink=Muted "any registered name"
+shape path M296.6,457.4 L313.4,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+text 112 8 98.4 22.4 size=16 w=600 ink=Text "Host names"
