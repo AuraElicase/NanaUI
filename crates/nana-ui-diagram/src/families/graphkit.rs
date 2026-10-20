@@ -16,8 +16,7 @@ use crate::text::LaidText;
 
 /// The header band of a compartment box.
 pub(crate) const HEADER_FILL: Ink = Ink::Role(R::Subtle);
-/// Lines between compartments and table rows.
-pub(crate) const DIVIDER: Ink = Ink::Role(R::Border);
+/// Lines between table rows.
 pub(crate) const ROW_RULE: Ink = Ink::Mix(SemanticColorMix::alpha(R::BorderSoft, 0.8));
 
 /// The first whitespace-separated word and the rest, trimmed.
@@ -39,6 +38,16 @@ pub(crate) fn first_name(s: &str) -> (&str, &str) {
         return (&body[..end], body[end + 1..].trim_start());
     }
     first_word(s)
+}
+
+/// The end of a quoted label at the start of `s`: past the closing `"`,
+/// or past `` `" `` for a markdown string.
+pub(crate) fn quoted_end(s: &str) -> Option<usize> {
+    if let Some(body) = s.strip_prefix("\"`") {
+        body.find("`\"").map(|e| e + 4)
+    } else {
+        s.strip_prefix('"')?.find('"').map(|e| e + 2)
+    }
 }
 
 /// `"text"` without its quotes; anything else trimmed.
@@ -197,10 +206,6 @@ impl Styles {
         for id in ids.into_iter().map(str::trim).filter(|n| !n.is_empty()) {
             self.direct.push((id.to_string(), decls.to_string()));
         }
-    }
-
-    pub fn has_class(&self, name: &str) -> bool {
-        self.defs.contains_key(name)
     }
 
     /// The style an element ends up with. `inline` are its `:::` classes.
