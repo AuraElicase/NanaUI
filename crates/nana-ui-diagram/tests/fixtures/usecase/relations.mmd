@@ -1,0 +1,20 @@
+usecase-beta
+actor User
+actor Support
+actor Admin
+actor Person
+Start
+Finish
+User --> Start
+Start <-- Support
+Start -- Finish
+User --o Start
+User --x Finish
+User -- "include account details" --> Login
+Admin --|> Person
+Checkout ..> : include Payment
+ApplyCoupon ..> : extend Checkout
+ApplyCoupon --|> Checkout
+Person opens@-- "starts checkout" ---> Checkout
+classDef emphasized stroke:#d33,stroke-width:3px
+class opens emphasized

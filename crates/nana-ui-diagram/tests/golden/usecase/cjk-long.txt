@@ -1,0 +1,33 @@
+size 642.4 387.2
+summary nodes=6 edges=5 groups=1
+shape rect 9 125.6 332.6 252.6 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 137.1 135.2 76.3 16.8 size=12 w=600 ink=Muted "网上商城系统"
+shape path M175.3,77.6 L175.3,105.6 Q175.3,113.6 167.3,113.6 L33,113.6 Q25,113.6 25,121.6 L25,309.1 Q25,317.1 33,317.1 L84.8,317.1 Q91.1,317.1 91.1,323.3 L91.1,329.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M87.5,321.7 L91.1,330.1 M91.1,330.1 L94.6,321.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M175.3,77.6 L175.3,83.6 Q175.3,89.6 181.3,89.6 L182.1,89.6 Q188.8,89.6 188.8,96.4 L188.8,165.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M185.3,158 L188.8,166.4 M188.8,166.4 L192.3,158 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M175.3,77.6 L175.3,93.6 Q175.3,101.6 183.3,101.6 L420.8,101.6 Q428.8,101.6 428.8,109.6 L428.8,235 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M425.3,227.1 L428.8,235.5 M428.8,235.5 L432.3,227.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M592.4,77.6 L592.4,225.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M588.9,217.2 L592.4,225.6 M592.4,225.6 L596,217.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M188.8,260.7 L188.8,309.1 Q188.8,317.1 180.8,317.1 L129,317.1 Q122.7,317.1 122.7,323.3 L122.7,329.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M119.2,321.7 L122.7,330.1 M122.7,330.1 L126.3,321.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 155.6 284.7 66.5 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 161 286.5 55.7 16.8 size=12 w=400 ink=Muted "«extend»"
+shape ellipse 168.3 9 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M175.3,23 L175.3,35.9 M161.3,26.9 L189.3,26.9 M164.1,52.4 L175.3,35.9 L186.5,52.4 stroke=Text/hairline/Solid
+text 161.3 58 28 19.6 size=14 w=400 ink=Text "顾客"
+shape ellipse 585.4 9 14 14 fill=Surface stroke=Text/hairline/Solid
+shape path M592.4,23 L592.4,35.9 M578.4,26.9 L606.4,26.9 M581.2,52.4 L592.4,35.9 L603.6,52.4 stroke=Text/hairline/Solid
+text 550.4 58 84 19.6 size=14 w=400 ink=Text "在线客服人员"
+shape ellipse 54.1 329.1 105.6 33.1 fill=Surface stroke=BorderStrong/hairline/Solid
+text 78.9 335.8 56 19.6 size=14 w=400 ink=Text "浏览商品"
+shape ellipse 52 166.4 273.6 94.3 fill=Surface stroke=BorderStrong/hairline/Solid
+text 90.8 184.1 196 19.6 size=14 w=400 ink=Text "提交订单并完成一个非常长的支"
+text 90.8 203.7 196 19.6 size=14 w=400 ink=Text "付确认流程，包括优惠券与积分"
+text 174.8 223.3 28 19.6 size=14 w=400 ink=Text "抵扣"
+shape ellipse 381.6 234.7 134.8 34.4 fill=Surface stroke=BorderStrong/hairline/Solid
+text 408.8 242.1 80.4 19.6 size=14 w=400 ink=Text "退款 (部分)"
+shape ellipse 556.4 225.6 72 52.5 fill=Surface stroke=BorderStrong/hairline/Solid
+text 578.4 232.3 28 19.6 size=14 w=400 ink=Text "重置"
+text 578.4 251.9 28 19.6 size=14 w=400 ink=Text "密码"
