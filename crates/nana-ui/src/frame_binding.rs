@@ -327,16 +327,27 @@ mod tests {
         );
         assert!(binding.payload().is_none());
         let publish = |exchange: &mut FrameExchange<u64, String>, width, payload: &str| {
-            assert_eq!(
-                exchange.copy_from_with_payload(
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            // A slot the binding gave back is free once the GPU reports the
+            // work that sampled it done. Other tests share this device, so
+            // that report can come after the next copy is asked for: wait for
+            // it, as a producer would retry, rather than treat it as a fault.
+            loop {
+                match exchange.copy_from_with_payload(
                     &source(&gpu, width),
                     1,
                     FrameColorMetadata::unknown(),
-                    payload.into()
-                ),
-                CopyOutcome::Submitted
-            );
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                    payload.into(),
+                ) {
+                    CopyOutcome::Submitted => break,
+                    CopyOutcome::PoolFull => {
+                        assert!(std::time::Instant::now() < deadline, "no slot came back");
+                        exchange.poll();
+                        std::thread::yield_now();
+                    }
+                    other => panic!("copy {other:?}"),
+                }
+            }
             while !exchange.poll() {
                 assert!(std::time::Instant::now() < deadline);
                 std::thread::yield_now();
