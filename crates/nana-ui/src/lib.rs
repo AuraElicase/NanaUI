@@ -112,6 +112,8 @@ mod runtime_host;
 mod scene_gpu;
 #[cfg(feature = "hosted")]
 mod staged;
+#[cfg(feature = "hosted")]
+mod window_registry;
 #[cfg(feature = "gpu")]
 pub use native_content::{NativeContentRegion, NativeContentWork, native_content_regions};
 /// A host with no native window, for offscreen acceptance of a whole program.
@@ -387,6 +389,8 @@ pub use window_chrome::{
     WindowControlMode, apply_title_bar_pointer, title_bar_hits_window_control,
     window_commands_for_chrome_action,
 };
+#[cfg(feature = "hosted")]
+pub use window_registry::WindowRegistry;
 pub use workspace::{WorkspaceAction, WorkspaceController};
 
 pub use nana_ui_scene::DocumentAccessError;

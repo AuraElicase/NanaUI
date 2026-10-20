@@ -681,6 +681,17 @@ hosted 宿主在布局收敛后暂存无障碍变化。在成功呈现后、应�
 
 `RuntimeProgramContext::windows()` 提供线程安全的 `WindowService`。`window()` 提供当前窗口的 `WindowHandle`。窗口描述统一为 `WindowDescriptor`。只放一幅画面的窗口用 `content_aspect_ratio` 锁定客户区宽高比，框架负责拖边、最小尺寸与换比例，见 [内容宽高比](window.md#内容宽高比)。`ApplicationState::build` 在每扇窗口发布前执行。构建失败不显示窗口。窗口事件可在 `ApplicationState::window_event` 中观察。详见 [窗口](window.md#多窗口) 的完成语义、embedded 接口和迁移说明。
 
+### 按种类认领窗口（`WindowRegistry`）
+
+直接实现 `RuntimeProgram`、自己持有多扇窗口文档的程序，用 `WindowRegistry<K>` 记住每个 `WindowId` 是哪一种窗口。`K` 是应用自己的 `Copy` 类型，通常是枚举（主窗口、工具卡、引导卡……）：
+
+- `WindowRegistry::new(primary)`：主窗口由宿主创建，一开始就绑定。
+- 建窗前 `request(key)` 得到一个 tag，放进 `WindowDescriptor::tag`；tag 由注册表生成，应用不写也不解析 tag 字符串。同一 key 的新请求替换还没被认领的旧请求，`withdraw(key)` 撤回。
+- `initialize_window` 里 `claim(id, context)` 把宿主分配的 id 绑到 key；不是本注册表请求的窗口返回 `None`，此时返回错误让宿主回滚。
+- 其余钩子 `key(id)` 取种类再 `match`；`window(key)` 反查，几扇同种窗口并存（旧的还在关、新的已打开）时取最新的。
+- `window_event` 里 `route_event(id, &event)` 取种类，`Closed` 同时解绑；`discard_window` 里 `release(id)`。窗口在关闭前一直绑定，应用放手之后它最后的事件仍能分到认得它的代码。
+- 没有窗口服务的宿主（离屏、测试）用 `bind(id, key)` 直接绑定。
+
 窗口关闭时。`RuntimeApplication` 先移除窗口文档。再调用 `ApplicationState::window_closed` 清理应用状态。最后调用 `window_event(Closed)`。关闭通知的观察者因此看到已完成清理的状态。创建失败回滚仍调用清理钩子。但不发送成功或关闭事件。
 
 `TextArea::auto_grow(min_rows, max_rows)` 提供按软折行伸缩的多行输入；`character_counter(limit)` 显示已提交字符数，`submit_on_enter(true)` 选择 Enter 提交 / Shift+Enter 换行。默认行为保持原样。L3 的 `.trailing_action(view)` 在框内右下角保留 小号控件大小的真实操作槽，`.model(signal)` 与 `.on_submit(...)` 可以一起使用；命令式装配见 `AppContext::assemble_text_area`。`auto_grow` 最小行数为 1 时，计数和操作先与短文本共用紧凑单行；实际显示文本（含 IME）超过该行可用宽度或显式换行后，才展开为完整宽度编辑区及底部操作栏。行数只计文本行。输入法确认不会发出 `TextSubmitted`。
