@@ -14,7 +14,6 @@ use crate::geom::Marker;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-
 /// How a participant is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ParticipantKind {
@@ -215,7 +214,11 @@ impl Builder {
 
     /// The participant named `id`, created with its id as label on first
     /// mention.
-    pub(crate) fn participant(&mut self, cx: &ParseCx<'_>, id: &str) -> Result<usize, DiagramError> {
+    pub(crate) fn participant(
+        &mut self,
+        cx: &ParseCx<'_>,
+        id: &str,
+    ) -> Result<usize, DiagramError> {
         if let Some(&i) = self.index.get(id) {
             return Ok(i);
         }
@@ -275,7 +278,11 @@ impl Builder {
             Event::Close => self.depth = self.depth.saturating_sub(1),
             _ => {}
         }
-        limits.check_count(self.model.events.len() + 1, limits.elements, LimitKind::Elements)?;
+        limits.check_count(
+            self.model.events.len() + 1,
+            limits.elements,
+            LimitKind::Elements,
+        )?;
         self.model.events.push(event);
         Ok(())
     }
@@ -285,7 +292,9 @@ impl Builder {
         if self.depth > 0 {
             cx.warn(line, "unclosed block: closed at the end of the diagram");
         }
-        self.model.events.extend(std::iter::repeat_n(Event::Close, self.depth));
+        self.model
+            .events
+            .extend(std::iter::repeat_n(Event::Close, self.depth));
         self.model
     }
 }
@@ -295,7 +304,12 @@ mod tests {
     use crate::{DiagramError, DiagramMetrics, FixedMeasure, Item, LimitKind, Limits, render};
 
     fn draw(source: &str) -> Result<crate::DiagramScene, DiagramError> {
-        render(source, &FixedMeasure, &DiagramMetrics::DEFAULT, &Limits::DEFAULT)
+        render(
+            source,
+            &FixedMeasure,
+            &DiagramMetrics::DEFAULT,
+            &Limits::DEFAULT,
+        )
     }
 
     #[test]
@@ -304,14 +318,23 @@ mod tests {
         for _ in 0..3_100 {
             many.push_str("A->>B: x\n");
         }
-        assert_eq!(draw(&many).unwrap_err(), DiagramError::TooLarge(LimitKind::Edges));
+        assert_eq!(
+            draw(&many).unwrap_err(),
+            DiagramError::TooLarge(LimitKind::Edges)
+        );
         let deep = format!("sequenceDiagram\n{}A->>B: x\n", "loop again\n".repeat(40));
-        assert_eq!(draw(&deep).unwrap_err(), DiagramError::TooLarge(LimitKind::ClusterDepth));
+        assert_eq!(
+            draw(&deep).unwrap_err(),
+            DiagramError::TooLarge(LimitKind::ClusterDepth)
+        );
         let mut wide = String::from("sequenceDiagram\n");
         for i in 0..1_600 {
             wide.push_str(&format!("participant P{i}\n"));
         }
-        assert_eq!(draw(&wide).unwrap_err(), DiagramError::TooLarge(LimitKind::Nodes));
+        assert_eq!(
+            draw(&wide).unwrap_err(),
+            DiagramError::TooLarge(LimitKind::Nodes)
+        );
     }
 
     #[test]
@@ -332,7 +355,10 @@ mod tests {
         ];
         for source in cases {
             if let Ok(scene) = draw(source) {
-                assert!(scene.size.iter().all(|v| v.is_finite() && *v > 0.0), "{source}");
+                assert!(
+                    scene.size.iter().all(|v| v.is_finite() && *v > 0.0),
+                    "{source}"
+                );
             }
         }
     }
@@ -340,7 +366,11 @@ mod tests {
     #[test]
     fn messages_between_far_columns_widen_the_gaps_they_cross() {
         let short = draw("sequenceDiagram\nA->>B: x\nB->>C: y").unwrap();
-        let long = draw(&format!("sequenceDiagram\nA->>B: x\nB->>C: y\nA->>C: {}", "w".repeat(45))).unwrap();
+        let long = draw(&format!(
+            "sequenceDiagram\nA->>B: x\nB->>C: y\nA->>C: {}",
+            "w".repeat(45)
+        ))
+        .unwrap();
         assert!(long.size[0] > short.size[0] + 150.0);
         let labels = long
             .items

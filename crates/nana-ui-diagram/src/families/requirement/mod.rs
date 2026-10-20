@@ -8,7 +8,6 @@ use crate::layout::Direction;
 use crate::source::directives::AuthorStyle;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BlockKind {
     Requirement,

@@ -46,7 +46,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                     None => Label::plain(&decl.id),
                 };
                 if word == "group" {
-                    cx.limits.check_count(model.groups.len() + 1, cx.limits.clusters, LimitKind::Clusters)?;
+                    cx.limits.check_count(
+                        model.groups.len() + 1,
+                        cx.limits.clusters,
+                        LimitKind::Clusters,
+                    )?;
                     let mut depth = 1;
                     let mut at = parent;
                     while let Some(p) = at {
@@ -57,7 +61,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                         return Err(DiagramError::TooLarge(LimitKind::ClusterDepth));
                     }
                     if groups.contains_key(&decl.id) {
-                        cx.warn(line_no, format!("group `{}` declared twice", truncate(&decl.id)));
+                        cx.warn(
+                            line_no,
+                            format!("group `{}` declared twice", truncate(&decl.id)),
+                        );
                         continue;
                     }
                     groups.insert(decl.id, model.groups.len());
@@ -67,7 +74,11 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                         parent,
                     });
                 } else {
-                    cx.limits.check_count(model.services.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
+                    cx.limits.check_count(
+                        model.services.len() + 1,
+                        cx.limits.nodes,
+                        LimitKind::Nodes,
+                    )?;
                     if services.contains_key(&decl.id) {
                         cx.warn(line_no, format!("`{}` declared twice", truncate(&decl.id)));
                         continue;
@@ -96,7 +107,8 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             }
             _ => match edge(trimmed) {
                 Some(e) => {
-                    cx.limits.check_count(pending.len() + 1, cx.limits.edges, LimitKind::Edges)?;
+                    cx.limits
+                        .check_count(pending.len() + 1, cx.limits.edges, LimitKind::Edges)?;
                     pending.push((line_no, e));
                 }
                 None => cx.warn(line_no, format!("cannot read `{}`", truncate(trimmed))),
@@ -105,7 +117,14 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     }
     for (line_no, e) in pending {
         let (Some(&from), Some(&to)) = (services.get(&e.from), services.get(&e.to)) else {
-            cx.warn(line_no, format!("an edge between unknown services `{}` and `{}`", truncate(&e.from), truncate(&e.to)));
+            cx.warn(
+                line_no,
+                format!(
+                    "an edge between unknown services `{}` and `{}`",
+                    truncate(&e.from),
+                    truncate(&e.to)
+                ),
+            );
             continue;
         };
         let label = match &e.label {
@@ -125,7 +144,10 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         });
     }
     for (line_no, row, names) in aligns {
-        let members: Vec<usize> = names.iter().filter_map(|n| services.get(n).copied()).collect();
+        let members: Vec<usize> = names
+            .iter()
+            .filter_map(|n| services.get(n).copied())
+            .collect();
         if members.len() < 2 || members.len() != names.len() {
             cx.warn(line_no, "`align` needs at least two declared services");
             continue;
@@ -145,7 +167,9 @@ struct Decl {
 /// `id(icon)[title] in parent`; junctions take neither icon nor title.
 fn declaration(rest: &str, junction: bool) -> Option<Decl> {
     let rest = rest.trim();
-    let end = rest.find(|c: char| c.is_whitespace() || c == '(' || c == '[').unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| c.is_whitespace() || c == '(' || c == '[')
+        .unwrap_or(rest.len());
     let id = &rest[..end];
     if id.is_empty() {
         return None;
@@ -156,7 +180,8 @@ fn declaration(rest: &str, junction: bool) -> Option<Decl> {
     if !junction {
         if let Some(body) = tail.strip_prefix('(') {
             let close = body.find(')')?;
-            icon = Some(body[..close].trim().trim_matches('"').to_string()).filter(|s| !s.is_empty());
+            icon =
+                Some(body[..close].trim().trim_matches('"').to_string()).filter(|s| !s.is_empty());
             tail = &body[close + 1..];
         }
         if let Some(body) = tail.strip_prefix('[') {
@@ -273,8 +298,20 @@ mod tests {
         assert!(m.services[2].junction);
         assert_eq!(m.edges.len(), 3);
         let e = &m.edges[1];
-        assert_eq!((e.from_side, e.to_side, e.from_group, e.start_arrow, e.end_arrow), (Side::Bottom, Side::Top, true, true, true));
-        assert_eq!(m.edges[2].label.as_ref().map(|l| l.text()), Some("reads".into()));
+        assert_eq!(
+            (
+                e.from_side,
+                e.to_side,
+                e.from_group,
+                e.start_arrow,
+                e.end_arrow
+            ),
+            (Side::Bottom, Side::Top, true, true, true)
+        );
+        assert_eq!(
+            m.edges[2].label.as_ref().map(|l| l.text()),
+            Some("reads".into())
+        );
         assert!(!m.edges[0].start_arrow && !m.edges[0].end_arrow);
         assert_eq!(m.aligns.len(), 1);
     }

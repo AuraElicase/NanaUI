@@ -11,7 +11,6 @@ use crate::ir::{Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct Slice {
     pub label: Label,
@@ -48,7 +47,11 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         } else {
             match slice(stmt) {
                 Some((label, value)) if value >= 0.0 => {
-                    cx.limits.check_count(model.slices.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+                    cx.limits.check_count(
+                        model.slices.len() + 1,
+                        cx.limits.elements,
+                        LimitKind::Elements,
+                    )?;
                     let label = cx.label(label)?;
                     model.slices.push(Slice { label, value });
                 }
@@ -81,22 +84,42 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let radius = m.font_size * 9.0;
     let center = [radius, radius];
-    let hole = cx.config.get_f32("pie.donutHole").unwrap_or(0.0).clamp(0.0, 0.9) * radius;
-    let text_at = cx.config.get_f32("pie.textPosition").map(|t| t.clamp(0.0, 1.0));
+    let hole = cx
+        .config
+        .get_f32("pie.donutHole")
+        .unwrap_or(0.0)
+        .clamp(0.0, 0.9)
+        * radius;
+    let text_at = cx
+        .config
+        .get_f32("pie.textPosition")
+        .map(|t| t.clamp(0.0, 1.0));
     let mut out = SceneBuilder::new();
 
     let total: f64 = model.slices.iter().map(|s| s.value).sum();
     let separator = Stroke::new(style::NODE_FILL, StrokeWidth::Thick);
-    let drawn: Vec<usize> = (0..model.slices.len()).filter(|&i| model.slices[i].value > 0.0).collect();
+    let drawn: Vec<usize> = (0..model.slices.len())
+        .filter(|&i| model.slices[i].value > 0.0)
+        .collect();
     if total <= 0.0 || drawn.is_empty() {
-        out.stroke(Geom::Ellipse(Rect::new(0.0, 0.0, radius * 2.0, radius * 2.0)), Stroke::hairline(style::GRID));
+        out.stroke(
+            Geom::Ellipse(Rect::new(0.0, 0.0, radius * 2.0, radius * 2.0)),
+            Stroke::hairline(style::GRID),
+        );
     } else if drawn.len() == 1 {
-        out.fill(ring(center, radius, hole), style::series(drawn[0], Tone::Solid));
+        out.fill(
+            ring(center, radius, hole),
+            style::series(drawn[0], Tone::Solid),
+        );
     } else {
         let mut start = -FRAC_PI_2;
         for &i in &drawn {
             let sweep = (model.slices[i].value / total) as f32 * TAU;
-            out.shape(Geom::path(sector(center, radius, hole, start, sweep)), Some(style::series(i, Tone::Solid)), Some(separator));
+            out.shape(
+                Geom::path(sector(center, radius, hole, start, sweep)),
+                Some(style::series(i, Tone::Solid)),
+                Some(separator),
+            );
             start += sweep;
         }
     }
@@ -128,7 +151,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             let at = if drawn.len() == 1 && hole <= 0.0 {
                 center
             } else {
-                [center[0] + r_text * mid.cos(), center[1] + r_text * mid.sin()]
+                [
+                    center[0] + r_text * mid.cos(),
+                    center[1] + r_text * mid.sin(),
+                ]
             };
             out.text_centered(&laid, at, style::series(i, Tone::On));
         }
@@ -142,13 +168,25 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .enumerate()
         .map(|(i, s)| LegendRow {
             index: i as u16,
-            name: cx.text.lay(&s.label, font, Some(cx.wrap_width("pie.legendWidth"))),
-            value: model.show_data.then(|| cx.text.lay_plain(&format!("[{}]", fmt_num(s.value)), font)),
+            name: cx
+                .text
+                .lay(&s.label, font, Some(cx.wrap_width("pie.legendWidth"))),
+            value: model
+                .show_data
+                .then(|| cx.text.lay_plain(&format!("[{}]", fmt_num(s.value)), font)),
         })
         .collect();
-    let legend = kit::legend(&mut out, cx, &rows, radius * 2.0 + m.font_size * 2.0, center[1]);
+    let legend = kit::legend(
+        &mut out,
+        cx,
+        &rows,
+        radius * 2.0 + m.font_size * 2.0,
+        center[1],
+    );
 
-    let content = Rect::new(0.0, 0.0, radius * 2.0, radius * 2.0).union(&legend).union(&out.bounds());
+    let content = Rect::new(0.0, 0.0, radius * 2.0, radius * 2.0)
+        .union(&legend)
+        .union(&out.bounds());
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
 }

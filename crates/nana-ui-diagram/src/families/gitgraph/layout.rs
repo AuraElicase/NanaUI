@@ -10,7 +10,7 @@ use crate::geom::PathData;
 use crate::geom::path::rounded_polyline;
 use crate::ir::{Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::style::{self, series};
-use crate::text::{LaidText, Label};
+use crate::text::{Label, LaidText};
 use crate::{DiagramError, DiagramScene};
 
 const TAG_FILL: Ink = Ink::Mix(SemanticColorMix::alpha(R::Accent, 0.14));
@@ -40,7 +40,12 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Lanes: branches sorted by order, ties by creation.
     let mut lanes: Vec<usize> = (0..model.branches.len()).collect();
-    lanes.sort_by(|&a, &b| model.branches[a].order.total_cmp(&model.branches[b].order).then(a.cmp(&b)));
+    lanes.sort_by(|&a, &b| {
+        model.branches[a]
+            .order
+            .total_cmp(&model.branches[b].order)
+            .then(a.cmp(&b))
+    });
     let mut lane_of = vec![0usize; model.branches.len()];
     for (lane, &b) in lanes.iter().enumerate() {
         lane_of[b] = lane;
@@ -64,7 +69,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let labels: Vec<Option<LaidText>> = model
         .commits
         .iter()
-        .map(|c| model.show_labels.then(|| cx.text.lay(&Label::plain(&c.id), small, Some(label_wrap))))
+        .map(|c| {
+            model
+                .show_labels
+                .then(|| cx.text.lay(&Label::plain(&c.id), small, Some(label_wrap)))
+        })
         .collect();
     let tags: Vec<Vec<LaidText>> = model
         .commits
@@ -72,8 +81,16 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .map(|c| c.tags.iter().map(|t| cx.text.lay_plain(t, small)).collect())
         .collect();
     let chip = |l: &LaidText| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]];
-    let label_w = labels.iter().flatten().map(|l| chip(l)[0]).fold(0.0_f32, f32::max);
-    let label_h = labels.iter().flatten().map(|l| chip(l)[1]).fold(0.0_f32, f32::max);
+    let label_w = labels
+        .iter()
+        .flatten()
+        .map(|l| chip(l)[0])
+        .fold(0.0_f32, f32::max);
+    let label_h = labels
+        .iter()
+        .flatten()
+        .map(|l| chip(l)[1])
+        .fold(0.0_f32, f32::max);
     // Tags stack across the flow (above in LR) or along it (left in TB/BT).
     let tags_across = tags
         .iter()
@@ -83,22 +100,49 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .iter()
         .map(|t| t.iter().map(|l| chip(l)[0] + gap / 2.0).sum::<f32>())
         .fold(0.0_f32, f32::max);
-    let tag_w = tags.iter().flatten().map(|l| chip(l)[0]).fold(0.0_f32, f32::max);
-    let tag_h = tags.iter().flatten().map(|l| chip(l)[1]).fold(0.0_f32, f32::max);
+    let tag_w = tags
+        .iter()
+        .flatten()
+        .map(|l| chip(l)[0])
+        .fold(0.0_f32, f32::max);
+    let tag_h = tags
+        .iter()
+        .flatten()
+        .map(|l| chip(l)[1])
+        .fold(0.0_f32, f32::max);
 
-    let names: Vec<LaidText> = model.branches.iter().map(|b| cx.text.lay_plain(&b.name, font)).collect();
-    let name_chip = |l: &LaidText| [l.width + 2.0 * m.node_pad_x * 0.6, l.height + 2.0 * m.node_pad_y * 0.4];
-    let name_w = names.iter().map(|l| name_chip(l)[0]).fold(0.0_f32, f32::max);
-    let name_h = names.iter().map(|l| name_chip(l)[1]).fold(0.0_f32, f32::max);
+    let names: Vec<LaidText> = model
+        .branches
+        .iter()
+        .map(|b| cx.text.lay_plain(&b.name, font))
+        .collect();
+    let name_chip = |l: &LaidText| {
+        [
+            l.width + 2.0 * m.node_pad_x * 0.6,
+            l.height + 2.0 * m.node_pad_y * 0.4,
+        ]
+    };
+    let name_w = names
+        .iter()
+        .map(|l| name_chip(l)[0])
+        .fold(0.0_f32, f32::max);
+    let name_h = names
+        .iter()
+        .map(|l| name_chip(l)[1])
+        .fold(0.0_f32, f32::max);
 
     // Spacing along the flow and between lanes.
     let (step, lane_gap) = if horizontal {
         let step = (label_w + 2.0 * gap).max(tag_w + gap).max(4.0 * r + gap);
-        let lane = (2.0 * r + 3.0 * gap + label_h + tags_across).max(name_h + 2.0 * gap).max(48.0 * k);
+        let lane = (2.0 * r + 3.0 * gap + label_h + tags_across)
+            .max(name_h + 2.0 * gap)
+            .max(48.0 * k);
         (step, lane)
     } else {
         let step = (label_h.max(tag_h) + 2.0 * gap).max(4.0 * r + gap);
-        let lane = (2.0 * r + 3.0 * gap + label_w + tags_along).max(name_w + 2.0 * gap).max(48.0 * k);
+        let lane = (2.0 * r + 3.0 * gap + label_w + tags_along)
+            .max(name_w + 2.0 * gap)
+            .max(48.0 * k);
         (step, lane)
     };
     // In TB/BT the tags sit on the left of their lane: shift lanes right so
@@ -128,11 +172,26 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             let c = lane_origin + lane_of[b] as f32 * lane_gap;
             let size = name_chip(laid);
             let (from, to, center) = match model.flow {
-                Flow::LeftRight => ([-gap, c], [span_end + 2.0 * r, c], [-lead + size[0] / 2.0, c]),
-                Flow::TopBottom => ([c, -gap], [c, span_end + 2.0 * r], [c, -lead + size[1] / 2.0]),
-                Flow::BottomTop => ([c, -2.0 * r], [c, span_end + gap], [c, span_end + lead - size[1] / 2.0]),
+                Flow::LeftRight => (
+                    [-gap, c],
+                    [span_end + 2.0 * r, c],
+                    [-lead + size[0] / 2.0, c],
+                ),
+                Flow::TopBottom => (
+                    [c, -gap],
+                    [c, span_end + 2.0 * r],
+                    [c, -lead + size[1] / 2.0],
+                ),
+                Flow::BottomTop => (
+                    [c, -2.0 * r],
+                    [c, span_end + gap],
+                    [c, span_end + lead - size[1] / 2.0],
+                ),
             };
-            out.stroke(Geom::path(PathData::polyline(&[from, to])), Stroke::hairline(style::GRID).dash(Dash::Dashed));
+            out.stroke(
+                Geom::path(PathData::polyline(&[from, to])),
+                Stroke::hairline(style::GRID).dash(Dash::Dashed),
+            );
             let rect = Rect::centered(center, size);
             out.shape(
                 Geom::rounded(rect, RadiusTier::Sm),
@@ -156,7 +215,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut lane_extent: Vec<Option<(usize, usize)>> = vec![None; lanes.len()];
     for (i, c) in model.commits.iter().enumerate() {
         let lane = lane_of[c.branch];
-        let lo = c.parents.first().map_or(step_of[i], |&p| step_of[p].min(step_of[i]));
+        let lo = c
+            .parents
+            .first()
+            .map_or(step_of[i], |&p| step_of[p].min(step_of[i]));
         let e = lane_extent[lane].get_or_insert((lo, step_of[i]));
         e.0 = e.0.min(lo);
         e.1 = e.1.max(step_of[i]);
@@ -241,15 +303,29 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     .line_to([p[0] + d, p[1] + d])
                     .move_to([p[0] + d, p[1] - d])
                     .line_to([p[0] - d, p[1] + d]);
-                out.stroke(Geom::path(cross), Stroke::new(series(c.branch, Tone::On), StrokeWidth::Thick));
+                out.stroke(
+                    Geom::path(cross),
+                    Stroke::new(series(c.branch, Tone::On), StrokeWidth::Thick),
+                );
             }
             CommitKind::Highlight => {
                 let square = Rect::centered(p, [2.0 * r * 0.95, 2.0 * r * 0.95]);
-                out.shape(Geom::rounded(square, RadiusTier::Xs), Some(solid), Some(ring));
-                out.fill(Geom::rounded(square.inset(r * 0.45, r * 0.45), RadiusTier::Xs), series(c.branch, Tone::On));
+                out.shape(
+                    Geom::rounded(square, RadiusTier::Xs),
+                    Some(solid),
+                    Some(ring),
+                );
+                out.fill(
+                    Geom::rounded(square.inset(r * 0.45, r * 0.45), RadiusTier::Xs),
+                    series(c.branch, Tone::On),
+                );
             }
             CommitKind::CherryPick => {
-                out.shape(Geom::Ellipse(dot.inset(1.0 * k, 1.0 * k)), Some(style::NODE_FILL), Some(Stroke::new(solid, StrokeWidth::Thick)));
+                out.shape(
+                    Geom::Ellipse(dot.inset(1.0 * k, 1.0 * k)),
+                    Some(style::NODE_FILL),
+                    Some(Stroke::new(solid, StrokeWidth::Thick)),
+                );
                 out.fill(Geom::Ellipse(dot.inset(r * 0.6, r * 0.6)), solid);
             }
         }
@@ -271,7 +347,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 [p[0] - offset - size[0] / 2.0, p[1]]
             };
             let rect = Rect::centered(center, size);
-            out.shape(Geom::rounded(rect, style::CHIP_CORNER), Some(TAG_FILL), Some(Stroke::hairline(TAG_STROKE)));
+            out.shape(
+                Geom::rounded(rect, style::CHIP_CORNER),
+                Some(TAG_FILL),
+                Some(Stroke::hairline(TAG_STROKE)),
+            );
             out.text_centered(laid, center, style::TEXT);
             offset += if horizontal { size[1] } else { size[0] } + gap / 2.0;
         }

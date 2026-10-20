@@ -13,7 +13,6 @@ use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, Summary, style};
 use nana_ui_core::{SemanticColorMix, SemanticColorRole};
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Sourcing {
     Build,
@@ -40,7 +39,10 @@ pub(crate) enum LinkKind {
     Plain,
     Dashed,
     /// Flow with arrowheads at the target, the source, or both.
-    Flow { forward: bool, back: bool },
+    Flow {
+        forward: bool,
+        back: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -95,14 +97,19 @@ impl Default for Model {
     fn default() -> Self {
         Self {
             size: None,
-            stages: ["Genesis", "Custom-Built", "Product<br>(+rental)", "Commodity<br>(+utility)"]
-                .iter()
-                .enumerate()
-                .map(|(i, s)| Stage {
-                    label: Label::plain(s),
-                    end: (i + 1) as f32 * 0.25,
-                })
-                .collect(),
+            stages: [
+                "Genesis",
+                "Custom-Built",
+                "Product<br>(+rental)",
+                "Commodity<br>(+utility)",
+            ]
+            .iter()
+            .enumerate()
+            .map(|(i, s)| Stage {
+                label: Label::plain(s),
+                end: (i + 1) as f32 * 0.25,
+            })
+            .collect(),
             components: Vec::new(),
             links: Vec::new(),
             evolves: Vec::new(),
@@ -128,11 +135,19 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let (w, h) = match model.size {
         Some([w, h]) => {
             let k = (m.font_size * 60.0 / w.max(1.0)).min(m.font_size * 44.0 / h.max(1.0));
-            ((w * k).clamp(m.font_size * 24.0, m.font_size * 64.0), (h * k).clamp(m.font_size * 18.0, m.font_size * 48.0))
+            (
+                (w * k).clamp(m.font_size * 24.0, m.font_size * 64.0),
+                (h * k).clamp(m.font_size * 18.0, m.font_size * 48.0),
+            )
         }
         None => (m.font_size * 60.0, m.font_size * 34.0),
     };
-    let place = |visibility: f32, evolution: f32| [evolution.clamp(0.0, 1.0) * w, (1.0 - visibility.clamp(0.0, 1.0)) * h];
+    let place = |visibility: f32, evolution: f32| {
+        [
+            evolution.clamp(0.0, 1.0) * w,
+            (1.0 - visibility.clamp(0.0, 1.0)) * h,
+        ]
+    };
     let mut out = SceneBuilder::new();
     let gap = m.font_size * 0.5;
 
@@ -145,20 +160,53 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if i > 0 {
             let mut line = PathData::new();
             line.move_to([x0, 0.0]).line_to([x0, h]);
-            out.stroke(Geom::path(line), Stroke::hairline(style::GRID).dash(Dash::Dashed));
+            out.stroke(
+                Geom::path(line),
+                Stroke::hairline(style::GRID).dash(Dash::Dashed),
+            );
         }
-        let laid = cx.text.lay(&stage.label, small, Some((x1 - x0 - gap).max(m.font_size * 3.0)));
-        out.text(&laid, [(x0 + x1) / 2.0 - laid.width / 2.0, h + gap], laid.width, Align::Center, style::MUTED);
+        let laid = cx.text.lay(
+            &stage.label,
+            small,
+            Some((x1 - x0 - gap).max(m.font_size * 3.0)),
+        );
+        out.text(
+            &laid,
+            [(x0 + x1) / 2.0 - laid.width / 2.0, h + gap],
+            laid.width,
+            Align::Center,
+            style::MUTED,
+        );
         prev = stage.end.clamp(prev, 1.0);
     }
     let marker = cx.marker_size();
     let axis = Stroke::hairline(style::AXIS);
-    out.edge(&[[0.0, h], [w + marker, h]], PathData::polyline, axis, None, Some(Marker::Arrow), marker);
-    out.edge(&[[0.0, h], [0.0, -marker]], PathData::polyline, axis, None, Some(Marker::Arrow), marker);
+    out.edge(
+        &[[0.0, h], [w + marker, h]],
+        PathData::polyline,
+        axis,
+        None,
+        Some(Marker::Arrow),
+        marker,
+    );
+    out.edge(
+        &[[0.0, h], [0.0, -marker]],
+        PathData::polyline,
+        axis,
+        None,
+        Some(Marker::Arrow),
+        marker,
+    );
     // Right-aligned to `end`.
     let caption = |out: &mut SceneBuilder, text: &str, end: [f32; 2]| {
         let laid = cx.text.lay_plain(text, small);
-        out.text(&laid, [end[0] - laid.width, end[1]], laid.width, Align::End, style::MUTED);
+        out.text(
+            &laid,
+            [end[0] - laid.width, end[1]],
+            laid.width,
+            Align::End,
+            style::MUTED,
+        );
     };
     let stage_h = model
         .stages
@@ -168,11 +216,19 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     caption(&mut out, "Evolution", [w + marker, h + gap * 2.0 + stage_h]);
     caption(&mut out, "Value Chain", [-gap, -marker]);
     caption(&mut out, "Visible", [-gap, m.font_size * 2.0]);
-    caption(&mut out, "Invisible", [-gap, h - cx.text.line_advance(small)]);
+    caption(
+        &mut out,
+        "Invisible",
+        [-gap, h - cx.text.line_advance(small)],
+    );
 
     let r = m.font_size * 0.36;
     // Pipeline members ride on a band just under their owner.
-    let mut pos: Vec<[f32; 2]> = model.components.iter().map(|c| place(c.visibility, c.evolution)).collect();
+    let mut pos: Vec<[f32; 2]> = model
+        .components
+        .iter()
+        .map(|c| place(c.visibility, c.evolution))
+        .collect();
     for (i, c) in model.components.iter().enumerate() {
         if let Some(owner) = c.pipeline {
             pos[i][1] = pos[owner][1] + r * 3.5;
@@ -194,14 +250,24 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             [at[0] + dir * (len / 2.0 - head), at[1] + thick / 4.0],
             [at[0] - dir * len / 2.0, at[1] + thick / 4.0],
         ];
-        let role = if *accelerate { SemanticColorRole::Success } else { SemanticColorRole::Danger };
+        let role = if *accelerate {
+            SemanticColorRole::Success
+        } else {
+            SemanticColorRole::Danger
+        };
         out.shape(
             Geom::path(PathData::polygon(&pts)),
             Some(Ink::Mix(SemanticColorMix::alpha(role, 0.18))),
             Some(Stroke::hairline(Ink::Role(role))),
         );
         let laid = cx.text.lay(&mark.label, small, Some(m.font_size * 9.0));
-        out.text(&laid, [at[0] - laid.width / 2.0, at[1] + thick / 2.0 + 2.0], laid.width, Align::Center, style::MUTED);
+        out.text(
+            &laid,
+            [at[0] - laid.width / 2.0, at[1] + thick / 2.0 + 2.0],
+            laid.width,
+            Align::Center,
+            style::MUTED,
+        );
     }
 
     // Pipelines: a band under the owner spanning its members.
@@ -209,10 +275,16 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let (lo, hi) = (0..model.components.len())
             .filter(|&i| model.components[i].pipeline == Some(owner))
             .map(|i| pos[i][0])
-            .fold((pos[owner][0], pos[owner][0]), |(a, b), x| (a.min(x), b.max(x)));
+            .fold((pos[owner][0], pos[owner][0]), |(a, b), x| {
+                (a.min(x), b.max(x))
+            });
         let y = pos[owner][1] + r * 3.5;
         let rect = Rect::new(lo - r * 2.5, y - r * 1.4, hi - lo + r * 5.0, r * 2.8);
-        out.shape(Geom::rect(rect), Some(style::CLUSTER_FILL), Some(style::cluster_stroke()));
+        out.shape(
+            Geom::rect(rect),
+            Some(style::CLUSTER_FILL),
+            Some(style::cluster_stroke()),
+        );
     }
 
     // Dependencies and flows.
@@ -231,13 +303,20 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             }
             LinkKind::Flow { forward, back } => {
                 stroke.width = StrokeWidth::Thick;
-                (back.then_some(Marker::Arrow), forward.then_some(Marker::Arrow))
+                (
+                    back.then_some(Marker::Arrow),
+                    forward.then_some(Marker::Arrow),
+                )
             }
         };
         out.edge(&[a, b], PathData::polyline, stroke, start, end, marker);
         if let Some(label) = &link.label {
             let laid = cx.text.lay(label, small, Some(m.font_size * 9.0));
-            out.chip(&laid, [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0], [m.small_size * 0.4, m.small_size * 0.1]);
+            out.chip(
+                &laid,
+                [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0],
+                [m.small_size * 0.4, m.small_size * 0.1],
+            );
         }
     }
 
@@ -247,18 +326,43 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let from = pos[c];
         let to = place(model.components[c].visibility, target);
         if let Some((a, b)) = trim(from, to, r + 2.0) {
-            out.edge(&[a, b], PathData::polyline, Stroke::hairline(evolve_ink).dash(Dash::Dashed), None, Some(Marker::Arrow), marker);
+            out.edge(
+                &[a, b],
+                PathData::polyline,
+                Stroke::hairline(evolve_ink).dash(Dash::Dashed),
+                None,
+                Some(Marker::Arrow),
+                marker,
+            );
         }
-        out.shape(Geom::Ellipse(Rect::centered(to, [r * 2.0, r * 2.0])), Some(style::NODE_FILL), Some(Stroke::hairline(evolve_ink)));
-        let laid = cx.text.lay(&model.components[c].label, small, Some(m.font_size * 10.0));
-        out.text(&laid, [to[0] + r + 4.0, to[1] - laid.height / 2.0], laid.width, Align::Start, evolve_ink);
+        out.shape(
+            Geom::Ellipse(Rect::centered(to, [r * 2.0, r * 2.0])),
+            Some(style::NODE_FILL),
+            Some(Stroke::hairline(evolve_ink)),
+        );
+        let laid = cx
+            .text
+            .lay(&model.components[c].label, small, Some(m.font_size * 10.0));
+        out.text(
+            &laid,
+            [to[0] + r + 4.0, to[1] - laid.height / 2.0],
+            laid.width,
+            Align::Start,
+            evolve_ink,
+        );
     }
     for &(c, x, y) in &model.trends {
         let to = place(y, x);
         if let Some((a, b)) = trim(pos[c], to, r + 2.0) {
-            out.stroke(Geom::path(PathData::polyline(&[a, b])), Stroke::hairline(style::MUTED).dash(Dash::Dotted));
+            out.stroke(
+                Geom::path(PathData::polyline(&[a, b])),
+                Stroke::hairline(style::MUTED).dash(Dash::Dotted),
+            );
         }
-        out.stroke(Geom::Ellipse(Rect::centered(to, [r * 2.0, r * 2.0])), Stroke::hairline(style::MUTED).dash(Dash::Dashed));
+        out.stroke(
+            Geom::Ellipse(Rect::centered(to, [r * 2.0, r * 2.0])),
+            Stroke::hairline(style::MUTED).dash(Dash::Dashed),
+        );
     }
 
     // Components with their sourcing halo and inertia bar.
@@ -266,7 +370,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let at = pos[i];
         if let Some(s) = c.sourcing {
             let halo = r * 2.6;
-            let fill = Some(Ink::Mix(SemanticColorMix::alpha(SemanticColorRole::Text, 0.08)));
+            let fill = Some(Ink::Mix(SemanticColorMix::alpha(
+                SemanticColorRole::Text,
+                0.08,
+            )));
             let stroke = Some(Stroke::hairline(style::NODE_STROKE));
             let geom = match s {
                 Sourcing::Build => Geom::path(PathData::polygon(&[
@@ -287,25 +394,43 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
         if c.inertia {
             let x = at[0] + r * 3.2;
-            out.fill(Geom::rect(Rect::new(x, at[1] - r * 2.2, r * 0.9, r * 4.4)), style::TEXT);
+            out.fill(
+                Geom::rect(Rect::new(x, at[1] - r * 2.2, r * 0.9, r * 4.4)),
+                style::TEXT,
+            );
         }
         if c.anchor {
             continue;
         }
         if c.pipeline.is_some() {
-            out.shape(Geom::rect(Rect::centered(at, [r * 1.8, r * 1.8])), Some(style::NODE_FILL), Some(Stroke::hairline(style::TEXT)));
+            out.shape(
+                Geom::rect(Rect::centered(at, [r * 1.8, r * 1.8])),
+                Some(style::NODE_FILL),
+                Some(Stroke::hairline(style::TEXT)),
+            );
         } else {
-            out.shape(Geom::Ellipse(Rect::centered(at, [r * 2.0, r * 2.0])), Some(style::NODE_FILL), Some(Stroke::new(style::TEXT, StrokeWidth::Thick)));
+            out.shape(
+                Geom::Ellipse(Rect::centered(at, [r * 2.0, r * 2.0])),
+                Some(style::NODE_FILL),
+                Some(Stroke::new(style::TEXT, StrokeWidth::Thick)),
+            );
         }
     }
 
     // Notes, annotation badges and component marks claim their space
     // first; each component label then takes the first free spot around
     // its point.
-    let mut taken: Vec<Rect> = pos.iter().map(|p| Rect::centered(*p, [r * 2.4, r * 2.4])).collect();
+    let mut taken: Vec<Rect> = pos
+        .iter()
+        .map(|p| Rect::centered(*p, [r * 2.4, r * 2.4]))
+        .collect();
     for note in &model.notes {
         let at = place(note.visibility, note.evolution);
-        let laid = cx.text.lay(&note.label, small.weight(m.strong_weight), Some(m.font_size * 12.0));
+        let laid = cx.text.lay(
+            &note.label,
+            small.weight(m.strong_weight),
+            Some(m.font_size * 12.0),
+        );
         let origin = [at[0], at[1] - laid.height / 2.0];
         out.text(&laid, origin, laid.width, Align::Start, style::TEXT);
         taken.push(Rect::new(origin[0], origin[1], laid.width, laid.height));
@@ -379,10 +504,17 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for a in &model.annotations {
         let pts: Vec<[f32; 2]> = a.points.iter().map(|p| place(p[0], p[1])).collect();
         if pts.len() > 1 {
-            out.stroke(Geom::path(PathData::polyline(&pts)), Stroke::hairline(style::MUTED).dash(Dash::Dotted));
+            out.stroke(
+                Geom::path(PathData::polyline(&pts)),
+                Stroke::hairline(style::MUTED).dash(Dash::Dotted),
+            );
         }
         for p in &pts {
-            out.shape(Geom::Ellipse(Rect::centered(*p, [badge, badge])), Some(style::NODE_FILL), Some(Stroke::hairline(style::TEXT)));
+            out.shape(
+                Geom::Ellipse(Rect::centered(*p, [badge, badge])),
+                Some(style::NODE_FILL),
+                Some(Stroke::hairline(style::TEXT)),
+            );
             let laid = cx.text.lay_plain(&a.number.to_string(), badge_font);
             out.text_centered(&laid, *p, style::TEXT);
         }
@@ -401,7 +533,9 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             })
             .collect();
         let pad = m.small_size * 0.6;
-        let title = cx.text.lay_plain("Annotations", small.weight(m.strong_weight));
+        let title = cx
+            .text
+            .lay_plain("Annotations", small.weight(m.strong_weight));
         let width = rows.iter().map(|r| r.width).fold(title.width, f32::max) + 2.0 * pad;
         let height = title.height + rows.iter().map(|r| r.height).sum::<f32>() + 2.0 * pad;
         let origin = match model.annotations_at {
@@ -409,21 +543,43 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 let p = place(v, e);
                 [p[0].min(w - width).max(0.0), p[1].min(h - height).max(0.0)]
             }
-            None => [w - width, h + gap * 3.0 + stage_h + cx.text.line_advance(small)],
+            None => [
+                w - width,
+                h + gap * 3.0 + stage_h + cx.text.line_advance(small),
+            ],
         };
         let rect = Rect::new(origin[0], origin[1], width, height);
-        out.shape(Geom::rounded(rect, style::NOTE_CORNER), Some(style::NODE_FILL), Some(Stroke::hairline(style::CLUSTER_STROKE)));
+        out.shape(
+            Geom::rounded(rect, style::NOTE_CORNER),
+            Some(style::NODE_FILL),
+            Some(Stroke::hairline(style::CLUSTER_STROKE)),
+        );
         let mut y = origin[1] + pad;
-        out.text(&title, [origin[0] + pad, y], title.width, Align::Start, style::TEXT);
+        out.text(
+            &title,
+            [origin[0] + pad, y],
+            title.width,
+            Align::Start,
+            style::TEXT,
+        );
         y += title.height;
         for row in &rows {
-            out.text(row, [origin[0] + pad, y], row.width, Align::Start, style::TEXT);
+            out.text(
+                row,
+                [origin[0] + pad, y],
+                row.width,
+                Align::Start,
+                style::TEXT,
+            );
             y += row.height;
         }
     }
 
     // A thin frame on top.
-    out.stroke(Geom::rect(Rect::new(0.0, 0.0, w, h)), Stroke::hairline(style::GRID));
+    out.stroke(
+        Geom::rect(Rect::new(0.0, 0.0, w, h)),
+        Stroke::hairline(style::GRID),
+    );
     let content = out.bounds();
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))

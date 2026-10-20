@@ -44,7 +44,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             ..font
         };
         let laid = match block.kind {
-            Kind::Node(_) | Kind::Arrow(_) => Some(cx.text.lay(&block.label, face, Some(wrap))).filter(|l| !l.is_empty()),
+            Kind::Node(_) | Kind::Arrow(_) => {
+                Some(cx.text.lay(&block.label, face, Some(wrap))).filter(|l| !l.is_empty())
+            }
             _ => None,
         };
         geo.labels.push(laid);
@@ -57,7 +59,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
     let root_spec = grid_spec(model, &model.root, model.columns, &geo, [0.0, 0.0]);
     let root_grid = grid::solve(&root_spec);
-    place_children(model, &model.root, model.columns, &mut geo, Rect::new(0.0, 0.0, root_grid.size[0], root_grid.size[1]));
+    place_children(
+        model,
+        &model.root,
+        model.columns,
+        &mut geo,
+        Rect::new(0.0, 0.0, root_grid.size[0], root_grid.size[1]),
+    );
 
     let mut out = SceneBuilder::new();
 
@@ -79,7 +87,14 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .filter(|(_, b)| matches!(b.kind, Kind::Node(_) | Kind::Arrow(_)))
         .map(|(i, _)| geo.rects[i])
         .collect();
-    let links: Vec<Connect> = model.edges.iter().map(|e| Connect { from: e.from, to: e.to }).collect();
+    let links: Vec<Connect> = model
+        .edges
+        .iter()
+        .map(|e| Connect {
+            from: e.from,
+            to: e.to,
+        })
+        .collect();
     let routes = grid::connect_all(&geo.rects, &links, &leaves, geo.gap);
     let marker = cx.marker_size();
     let small = cx.small_font();
@@ -98,11 +113,22 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             shared::attach_end(&mut points, shape, geo.rects[edge.to]);
         }
         let stroke = link_stroke(edge.line, &Default::default());
-        graphkit::edge(&mut out, &points, stroke, edge.start, edge.end, marker, m.bend_radius);
+        graphkit::edge(
+            &mut out,
+            &points,
+            stroke,
+            edge.start,
+            edge.end,
+            marker,
+            m.bend_radius,
+        );
         if let Some(label) = &edge.label {
             let laid = cx.text.lay(label, small, Some(wrap));
             if !laid.is_empty() {
-                let size = [laid.width + 2.0 * chip_pad[0], laid.height + 2.0 * chip_pad[1]];
+                let size = [
+                    laid.width + 2.0 * chip_pad[0],
+                    laid.height + 2.0 * chip_pad[1],
+                ];
                 let at = grid::place_label(&points, size, &leaves, &mut taken);
                 chips.push((laid, at));
             }
@@ -118,7 +144,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 graphkit::shape_node(&mut out, shape, rect, paint);
                 if let Some(laid) = &geo.labels[i] {
                     let lr = shape.label_rect(rect, laid.size());
-                    let ink = if shape.label_outside() { style::TEXT } else { paint.text };
+                    let ink = if shape.label_outside() {
+                        style::TEXT
+                    } else {
+                        paint.text
+                    };
                     out.text(laid, [lr.x, lr.y], lr.w, Align::Center, ink);
                 }
             }
@@ -136,12 +166,23 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         out.chip(laid, *center, chip_pad);
     }
 
-    let content = out.bounds().union(&Rect::new(0.0, 0.0, root_grid.size[0].max(1.0), root_grid.size[1].max(1.0)));
+    let content = out.bounds().union(&Rect::new(
+        0.0,
+        0.0,
+        root_grid.size[0].max(1.0),
+        root_grid.size[1].max(1.0),
+    ));
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
 }
 
-fn measure(model: &Model, i: usize, geo: &mut Geometry, pad: [f32; 2], space: [f32; 2]) -> [f32; 2] {
+fn measure(
+    model: &Model,
+    i: usize,
+    geo: &mut Geometry,
+    pad: [f32; 2],
+    space: [f32; 2],
+) -> [f32; 2] {
     let block = &model.blocks[i];
     let label = geo.labels[i].as_ref().map_or([0.0, 0.0], LaidText::size);
     let size = match &block.kind {
@@ -164,7 +205,13 @@ fn measure(model: &Model, i: usize, geo: &mut Geometry, pad: [f32; 2], space: [f
     size
 }
 
-fn grid_spec(model: &Model, children: &[usize], columns: Option<usize>, geo: &Geometry, min: [f32; 2]) -> GridSpec {
+fn grid_spec(
+    model: &Model,
+    children: &[usize],
+    columns: Option<usize>,
+    geo: &Geometry,
+    min: [f32; 2],
+) -> GridSpec {
     let spans: Vec<usize> = children.iter().map(|&c| model.blocks[c].span).collect();
     let columns = columns.unwrap_or_else(|| spans.iter().sum::<usize>().max(1));
     let cells = grid::flow(&spans, columns);
@@ -180,17 +227,30 @@ fn grid_spec(model: &Model, children: &[usize], columns: Option<usize>, geo: &Ge
     }
 }
 
-fn place_children(model: &Model, children: &[usize], columns: Option<usize>, geo: &mut Geometry, area: Rect) {
+fn place_children(
+    model: &Model,
+    children: &[usize],
+    columns: Option<usize>,
+    geo: &mut Geometry,
+    area: Rect,
+) {
     let spec = grid_spec(model, children, columns, geo, [area.w, area.h]);
     let g = grid::solve(&spec);
     for (k, &c) in children.iter().enumerate() {
         let cell = g.cells[k].translated(area.x, area.y);
         let natural = geo.natural[c];
         let rect = match &model.blocks[c].kind {
-            Kind::Node(Shape::Circle | Shape::DoubleCircle | Shape::CrossedCircle | Shape::SmallCircle | Shape::FilledCircle | Shape::FramedCircle) => {
-                Rect::centered(cell.center(), natural)
+            Kind::Node(
+                Shape::Circle
+                | Shape::DoubleCircle
+                | Shape::CrossedCircle
+                | Shape::SmallCircle
+                | Shape::FilledCircle
+                | Shape::FramedCircle,
+            ) => Rect::centered(cell.center(), natural),
+            Kind::Arrow(heads) if heads.horizontal() => {
+                Rect::centered(cell.center(), [cell.w, natural[1]])
             }
-            Kind::Arrow(heads) if heads.horizontal() => Rect::centered(cell.center(), [cell.w, natural[1]]),
             Kind::Arrow(_) => Rect::centered(cell.center(), [natural[0], cell.h]),
             _ => cell,
         };
@@ -212,19 +272,29 @@ fn arrow_size(label: [f32; 2], pad: [f32; 2], heads: Heads) -> [f32; 2] {
         let body = label[1] + 2.0 * pad[1];
         let across = body / BODY;
         let head = across * 0.5;
-        [label[0] + 2.0 * pad[0] + head * count(heads.left, heads.right), across]
+        [
+            label[0] + 2.0 * pad[0] + head * count(heads.left, heads.right),
+            across,
+        ]
     } else {
         let body = label[0] + 2.0 * pad[0];
         let across = body / BODY;
         let head = (across * 0.5).min(label[1] + 2.0 * pad[1]);
-        [across, label[1] + 2.0 * pad[1] + head * count(heads.up, heads.down)]
+        [
+            across,
+            label[1] + 2.0 * pad[1] + head * count(heads.up, heads.down),
+        ]
     }
 }
 
 /// The arrow outline and the rectangle its label sits in.
 fn arrow_outline(r: Rect, heads: Heads) -> (PathData, Rect) {
     if heads.horizontal() {
-        let (left, right) = if heads.left || heads.right { (heads.left, heads.right) } else { (false, true) };
+        let (left, right) = if heads.left || heads.right {
+            (heads.left, heads.right)
+        } else {
+            (false, true)
+        };
         let cy = r.y + r.h / 2.0;
         let half = r.h * BODY / 2.0;
         let head = (r.h * 0.5).min(r.w * 0.45);
@@ -239,7 +309,10 @@ fn arrow_outline(r: Rect, heads: Heads) -> (PathData, Rect) {
         if left {
             pts.extend([[x0, r.bottom()], [r.x, cy], [x0, r.y]]);
         }
-        (PathData::polygon(&pts), Rect::new(x0, cy - half, x1 - x0, 2.0 * half))
+        (
+            PathData::polygon(&pts),
+            Rect::new(x0, cy - half, x1 - x0, 2.0 * half),
+        )
     } else {
         let cx = r.x + r.w / 2.0;
         let half = r.w * BODY / 2.0;
@@ -255,6 +328,9 @@ fn arrow_outline(r: Rect, heads: Heads) -> (PathData, Rect) {
         if heads.up {
             pts.extend([[r.x, y0], [cx, r.y], [r.right(), y0]]);
         }
-        (PathData::polygon(&pts), Rect::new(cx - half, y0, 2.0 * half, y1 - y0))
+        (
+            PathData::polygon(&pts),
+            Rect::new(cx - half, y0, 2.0 * half, y1 - y0),
+        )
     }
 }

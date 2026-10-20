@@ -91,7 +91,13 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
 fn derived_id(label: &str) -> String {
     label
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -179,7 +185,8 @@ fn relation(stmt: &str) -> Option<Rel> {
     let id_len = ident_len(r, "");
     if id_len > 0 && r[id_len..].starts_with('@') {
         let after = &r[id_len + 1..];
-        if after.starts_with(['-', '.', '<']) || after.starts_with("o-") || after.starts_with("x-") {
+        if after.starts_with(['-', '.', '<']) || after.starts_with("o-") || after.starts_with("x-")
+        {
             id = Some(r[..id_len].to_string());
             r = after;
         }
@@ -207,9 +214,13 @@ fn relation(stmt: &str) -> Option<Rel> {
             id,
         });
     }
-    let start = [("<--", Marker::OpenArrow), ("o--", Marker::Circle), ("x--", Marker::Cross)]
-        .into_iter()
-        .find_map(|(head, marker)| r.starts_with(head).then_some(marker));
+    let start = [
+        ("<--", Marker::OpenArrow),
+        ("o--", Marker::Circle),
+        ("x--", Marker::Cross),
+    ]
+    .into_iter()
+    .find_map(|(head, marker)| r.starts_with(head).then_some(marker));
     if start.is_some() {
         r = &r[1..];
     }
@@ -230,7 +241,11 @@ fn relation(stmt: &str) -> Option<Rel> {
         r = t;
         Some(Marker::OpenArrow)
     } else if (r.starts_with('o') || r.starts_with('x')) && ends_word(r) && start.is_none() {
-        let m = if r.starts_with('o') { Marker::Circle } else { Marker::Cross };
+        let m = if r.starts_with('o') {
+            Marker::Circle
+        } else {
+            Marker::Cross
+        };
         r = &r[1..];
         Some(m)
     } else if n == 2 && start.is_none() && r.starts_with(char::is_whitespace) && r.contains("--") {
@@ -278,7 +293,9 @@ fn relation(stmt: &str) -> Option<Rel> {
 
 impl Parser<'_, '_> {
     fn check_nodes(&self) -> Result<(), DiagramError> {
-        self.cx.limits.check_count(self.order.len() + 1, self.cx.limits.nodes, LimitKind::Nodes)
+        self.cx
+            .limits
+            .check_count(self.order.len() + 1, self.cx.limits.nodes, LimitKind::Nodes)
     }
 
     fn draft(&mut self, id: &str) -> Result<&mut Draft, DiagramError> {
@@ -324,7 +341,8 @@ impl Parser<'_, '_> {
 
     fn declare(&mut self, text: &str, actor: bool) -> Result<(), DiagramError> {
         let Some(d) = declaration(text) else {
-            self.cx.warn(self.line, format!("cannot read `{}`", truncate(text)));
+            self.cx
+                .warn(self.line, format!("cannot read `{}`", truncate(text)));
             return Ok(());
         };
         // `id@{ ... }` on its own may configure a boundary or an edge.
@@ -333,11 +351,19 @@ impl Parser<'_, '_> {
                 self.boundary_meta(b, &d.meta);
                 return Ok(());
             }
-            if self.edges.iter().any(|e| e.edge.id.as_deref() == Some(d.id.as_str())) {
+            if self
+                .edges
+                .iter()
+                .any(|e| e.edge.id.as_deref() == Some(d.id.as_str()))
+            {
                 return Ok(());
             }
         }
-        let label = d.label.as_deref().map(|raw| self.cx.label(raw)).transpose()?;
+        let label = d
+            .label
+            .as_deref()
+            .map(|raw| self.cx.label(raw))
+            .transpose()?;
         let boundary = self.open;
         let line = self.line;
         let mut look = ActorLook::Normal;
@@ -388,10 +414,17 @@ impl Parser<'_, '_> {
             self.cx.warn(self.line, "system boundaries do not nest");
         }
         let Some(d) = declaration(rest) else {
-            self.cx.warn(self.line, format!("cannot read boundary `{}`", truncate(rest)));
+            self.cx.warn(
+                self.line,
+                format!("cannot read boundary `{}`", truncate(rest)),
+            );
             return Ok(());
         };
-        self.cx.limits.check_count(self.boundaries.len() + 1, self.cx.limits.clusters, LimitKind::Clusters)?;
+        self.cx.limits.check_count(
+            self.boundaries.len() + 1,
+            self.cx.limits.clusters,
+            LimitKind::Clusters,
+        )?;
         let title = match &d.label {
             Some(raw) => self.cx.label(raw)?,
             None => Label::plain(&d.id),
@@ -434,24 +467,31 @@ impl Parser<'_, '_> {
         let draft = self.draft(&id)?;
         draft.kind = Some(NodeKind::Note);
         draft.label = Some(label);
-        self.push_edge(id, target.to_string(), Edge {
-            from: 0,
-            to: 0,
-            kind: EdgeKind::Note,
-            start: None,
-            end: None,
-            label: None,
-            min_len: 1,
-            id: None,
-            style: Default::default(),
-        })
+        self.push_edge(
+            id,
+            target.to_string(),
+            Edge {
+                from: 0,
+                to: 0,
+                kind: EdgeKind::Note,
+                start: None,
+                end: None,
+                label: None,
+                min_len: 1,
+                id: None,
+                style: Default::default(),
+            },
+        )
     }
 
     fn json(&mut self, rest: &str) -> Result<(), DiagramError> {
         let rest = rest.trim();
         let len = ident_len(rest, "");
         let tail = &rest[len..];
-        let Some(body) = tail.strip_prefix('@').filter(|b| b.starts_with('{') && len > 0) else {
+        let Some(body) = tail
+            .strip_prefix('@')
+            .filter(|b| b.starts_with('{') && len > 0)
+        else {
             self.cx.warn(self.line, "a JSON table needs `id@{ ... }`");
             return Ok(());
         };
@@ -464,7 +504,11 @@ impl Parser<'_, '_> {
             self.cx.warn(self.line, "not a JSON object");
             return Ok(());
         };
-        let classes = body[end + 1..].trim().strip_prefix(":::").map(class_list).unwrap_or_default();
+        let classes = body[end + 1..]
+            .trim()
+            .strip_prefix(":::")
+            .map(class_list)
+            .unwrap_or_default();
         let id = rest[..len].to_string();
         let draft = self.draft(&id)?;
         draft.kind = Some(NodeKind::Json(rows));
@@ -473,7 +517,9 @@ impl Parser<'_, '_> {
     }
 
     fn push_edge(&mut self, from: String, to: String, edge: Edge) -> Result<(), DiagramError> {
-        self.cx.limits.check_count(self.edges.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
+        self.cx
+            .limits
+            .check_count(self.edges.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
         self.edges.push(PendingEdge {
             from,
             to,
@@ -487,19 +533,28 @@ impl Parser<'_, '_> {
         let label = match rel.kind {
             EdgeKind::Include => Some(Label::plain("«include»")),
             EdgeKind::Extend => Some(Label::plain("«extend»")),
-            _ => rel.label.as_deref().map(|raw| self.cx.label(raw)).transpose()?.filter(|l| !l.is_empty()),
+            _ => rel
+                .label
+                .as_deref()
+                .map(|raw| self.cx.label(raw))
+                .transpose()?
+                .filter(|l| !l.is_empty()),
         };
-        self.push_edge(rel.from, rel.to, Edge {
-            from: 0,
-            to: 0,
-            kind: rel.kind,
-            start: rel.start,
-            end: rel.end,
-            label,
-            min_len: rel.min_len,
-            id: rel.id,
-            style: Default::default(),
-        })
+        self.push_edge(
+            rel.from,
+            rel.to,
+            Edge {
+                from: 0,
+                to: 0,
+                kind: rel.kind,
+                start: rel.start,
+                end: rel.end,
+                label,
+                min_len: rel.min_len,
+                id: rel.id,
+                style: Default::default(),
+            },
+        )
     }
 
     fn finish(mut self) -> Result<Model, DiagramError> {
@@ -509,7 +564,9 @@ impl Parser<'_, '_> {
         for e in pending {
             let mut ok = true;
             for id in [&e.from, &e.to] {
-                if !self.drafts.contains_key(id.as_str()) && self.boundary_index.contains_key(id.as_str()) {
+                if !self.drafts.contains_key(id.as_str())
+                    && self.boundary_index.contains_key(id.as_str())
+                {
                     self.cx.warn(e.line, format!("`{id}` is a system boundary"));
                     ok = false;
                 }
@@ -520,7 +577,12 @@ impl Parser<'_, '_> {
                 kept.push(e);
             }
         }
-        let index: HashMap<&str, usize> = self.order.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
+        let index: HashMap<&str, usize> = self
+            .order
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.as_str(), i))
+            .collect();
         let mut nodes = Vec::with_capacity(self.order.len());
         for id in &self.order {
             let d = self.drafts.remove(id).unwrap_or_default();
@@ -536,7 +598,8 @@ impl Parser<'_, '_> {
         }
         let mut edges = Vec::with_capacity(kept.len());
         for e in kept {
-            let (Some(&from), Some(&to)) = (index.get(e.from.as_str()), index.get(e.to.as_str())) else {
+            let (Some(&from), Some(&to)) = (index.get(e.from.as_str()), index.get(e.to.as_str()))
+            else {
                 continue;
             };
             let mut edge = e.edge;
@@ -579,7 +642,10 @@ mod tests {
             "usecase-beta\ndirection LR\nactor Customer\nactor Staff(\"Order staff\")@{ type: hollow, business: true } <<Employee>>\nsystemBoundary ordering[\"Ordering System\"]@{ type: package }:::system\n  Browse(\"Browse products\")\n  Review[Review order]\nend\n\"Reset password\"\nCheckout(\"`Two\nlines`\") <<Core>>:::critical",
         );
         assert_eq!(m.direction, Direction::LR);
-        assert_eq!(node(&m, "Customer").kind, NodeKind::Actor(ActorLook::Normal));
+        assert_eq!(
+            node(&m, "Customer").kind,
+            NodeKind::Actor(ActorLook::Normal)
+        );
         let staff = node(&m, "Staff");
         assert_eq!(staff.kind, NodeKind::Actor(ActorLook::Hollow));
         assert!(staff.business);
@@ -608,7 +674,10 @@ mod tests {
         assert_eq!(e[4].start, Some(Marker::Circle));
         assert_eq!(e[5].end, Some(Marker::Cross));
         assert_eq!(e[6].start, Some(Marker::Cross));
-        assert_eq!(e[7].label.as_ref().map(|l| l.text()), Some("include details".into()));
+        assert_eq!(
+            e[7].label.as_ref().map(|l| l.text()),
+            Some("include details".into())
+        );
         assert_eq!(e[8].kind, EdgeKind::Include);
         assert_eq!(e[9].kind, EdgeKind::Extend);
         assert_eq!(e[10].kind, EdgeKind::Generalization);
@@ -621,9 +690,17 @@ mod tests {
 
     #[test]
     fn json_tables() {
-        let m = parse_src("usecase-beta\njson Payload@{\n  \"a\": 1,\n  \"b\": { \"c\": true }\n}:::data\nInspect --> Payload");
+        let m = parse_src(
+            "usecase-beta\njson Payload@{\n  \"a\": 1,\n  \"b\": { \"c\": true }\n}:::data\nInspect --> Payload",
+        );
         let p = node(&m, "Payload");
-        assert_eq!(p.kind, NodeKind::Json(vec![("a".into(), "1".into()), ("b.c".into(), "true".into())]));
+        assert_eq!(
+            p.kind,
+            NodeKind::Json(vec![
+                ("a".into(), "1".into()),
+                ("b.c".into(), "true".into())
+            ])
+        );
         assert!(p.style.stroke.is_none());
     }
 }

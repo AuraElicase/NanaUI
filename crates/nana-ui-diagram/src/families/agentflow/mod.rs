@@ -10,7 +10,6 @@ use crate::source::directives::AuthorStyle;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct Node {
     /// The author's id, for tests and diagnostics.

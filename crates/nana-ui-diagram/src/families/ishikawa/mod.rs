@@ -18,7 +18,6 @@ use crate::layout::tree::{Outline, indent_width, preorder};
 use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct Node {
     pub label: Label,

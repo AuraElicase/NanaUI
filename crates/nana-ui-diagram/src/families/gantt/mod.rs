@@ -13,7 +13,6 @@ use super::{LayoutCx, ParseCx};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Task {
     pub name: Label,
@@ -91,7 +90,12 @@ mod tests {
     use crate::{DiagramError, DiagramMetrics, FixedMeasure, LimitKind, Limits, render};
 
     fn run(source: &str) -> Result<crate::DiagramScene, DiagramError> {
-        render(source, &FixedMeasure, &DiagramMetrics::DEFAULT, &Limits::DEFAULT)
+        render(
+            source,
+            &FixedMeasure,
+            &DiagramMetrics::DEFAULT,
+            &Limits::DEFAULT,
+        )
     }
 
     #[test]

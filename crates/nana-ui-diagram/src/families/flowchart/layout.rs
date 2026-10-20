@@ -52,7 +52,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         graph.clusters.push(ClusterSpec {
             parent: sub.parent,
             direction: sub.direction,
-            title: if laid.is_empty() { [0.0, 0.0] } else { laid.size() },
+            title: if laid.is_empty() {
+                [0.0, 0.0]
+            } else {
+                laid.size()
+            },
         });
         titles.push(laid);
     }
@@ -65,7 +69,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             .as_ref()
             .map(|l| cx.text.lay(l, small, Some(wrap)))
             .filter(|l| !l.is_empty());
-        let chip = laid.as_ref().map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]);
+        let chip = laid
+            .as_ref()
+            .map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]);
         graph.edges.push(EdgeSpec {
             from: end(edge.from),
             to: end(edge.to),
@@ -124,7 +130,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let marker = cx.marker_size();
     for (i, edge) in model.edges.iter().enumerate() {
         let route = &placed.edges[i];
-        if edge.line == LineKind::Invisible || route.kind == RouteKind::Dropped || route.points.len() < 2 {
+        if edge.line == LineKind::Invisible
+            || route.kind == RouteKind::Dropped
+            || route.points.len() < 2
+        {
             continue;
         }
         let stroke = link_stroke(edge.line, &edge.style);
@@ -175,7 +184,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let laid = &labels[n];
         if !laid.is_empty() {
             let lr = node.shape.label_rect(rect, laid.size());
-            let ink = if node.shape.label_outside() { style::TEXT } else { paint.text };
+            let ink = if node.shape.label_outside() {
+                style::TEXT
+            } else {
+                paint.text
+            };
             out.text(laid, [lr.x, lr.y], lr.w, Align::Center, ink);
         }
         if let Some((url, tooltip)) = &node.link {
@@ -219,10 +232,13 @@ fn through_points(points: &[[f32; 2]]) -> Vec<[f32; 2]> {
         return points.to_vec();
     }
     let mut out = vec![points[0]];
-    for w in points.windows(2).skip(1).take(points.len().saturating_sub(3)) {
+    for w in points
+        .windows(2)
+        .skip(1)
+        .take(points.len().saturating_sub(3))
+    {
         out.push([(w[0][0] + w[1][0]) / 2.0, (w[0][1] + w[1][1]) / 2.0]);
     }
     out.push(points[points.len() - 1]);
     out
 }
-

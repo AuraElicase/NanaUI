@@ -8,9 +8,8 @@ use super::{LayoutCx, ParseCx};
 use crate::geom::path::basis_curve;
 use crate::geom::{Marker, PathData};
 use crate::ir::{Dash, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
-use crate::text::{LaidText, Label};
+use crate::text::{Label, LaidText};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
-
 
 /// The confusion ellipse shows at most this many items.
 const CONFUSION_ITEMS: usize = 3;
@@ -118,7 +117,8 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 (Some(from), Some(to)) if from == to => {}
                 (Some(from), Some(to)) => {
                     count += 1;
-                    cx.limits.check_count(count, cx.limits.elements, LimitKind::Elements)?;
+                    cx.limits
+                        .check_count(count, cx.limits.elements, LimitKind::Elements)?;
                     let label = match label.map(|l| kit::unquote(l.trim()).trim()) {
                         Some(l) if !l.is_empty() => Some(cx.label(l)?),
                         _ => None,
@@ -133,7 +133,8 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 continue;
             };
             count += 1;
-            cx.limits.check_count(count, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits
+                .check_count(count, cx.limits.elements, LimitKind::Elements)?;
             let label = cx.label(kit::unquote(stmt))?;
             if !label.is_empty() {
                 model.items[domain.index()].push(label);
@@ -153,7 +154,9 @@ fn wave(a: [f32; 2], b: [f32; 2], amplitude: f32, waves: f32) -> Vec<[f32; 2]> {
     (0..=32)
         .map(|i| {
             let t = i as f32 / 32.0;
-            let off = amplitude * (t * waves * std::f32::consts::TAU).sin() * (t * std::f32::consts::PI).sin();
+            let off = amplitude
+                * (t * waves * std::f32::consts::TAU).sin()
+                * (t * std::f32::consts::PI).sin();
             [a[0] + d[0] * t + n[0] * off, a[1] + d[1] * t + n[1] * off]
         })
         .collect()
@@ -165,7 +168,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let strong = cx.title_font();
     let pad = m.font_size;
-    let show_desc = cx.config.get_bool("cynefin.showDomainDescriptions").unwrap_or(true);
+    let show_desc = cx
+        .config
+        .get_bool("cynefin.showDomainDescriptions")
+        .unwrap_or(true);
     let item_wrap = m.font_size * 13.0;
     let chip_pad = [m.small_size * 0.6, m.small_size * 0.25];
     let item_gap = m.small_size * 0.5;
@@ -182,16 +188,36 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .map(|&d| {
             let (a, b) = d.description();
             let desc = if show_desc && !a.is_empty() {
-                vec![cx.text.lay_plain(a, small), cx.text.lay_plain(b, small.italic(true))]
+                vec![
+                    cx.text.lay_plain(a, small),
+                    cx.text.lay_plain(b, small.italic(true)),
+                ]
             } else {
                 Vec::new()
             };
             let all = &model.items[d.index()];
-            let shown = if d == Domain::Confusion { all.len().min(CONFUSION_ITEMS) } else { all.len() };
-            let items = all[..shown].iter().map(|l| cx.text.lay(l, small, Some(item_wrap))).collect();
-            let more = (all.len() > shown).then(|| cx.text.lay_plain(&format!("+{} more", all.len() - shown), small));
+            let shown = if d == Domain::Confusion {
+                all.len().min(CONFUSION_ITEMS)
+            } else {
+                all.len()
+            };
+            let items = all[..shown]
+                .iter()
+                .map(|l| cx.text.lay(l, small, Some(item_wrap)))
+                .collect();
+            let more = (all.len() > shown).then(|| {
+                cx.text
+                    .lay_plain(&format!("+{} more", all.len() - shown), small)
+            });
             Block {
-                name: cx.text.lay_plain(d.name(), if d == Domain::Confusion { font.weight(m.strong_weight) } else { strong }),
+                name: cx.text.lay_plain(
+                    d.name(),
+                    if d == Domain::Confusion {
+                        font.weight(m.strong_weight)
+                    } else {
+                        strong
+                    },
+                ),
                 desc,
                 items,
                 more,
@@ -200,16 +226,32 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .collect();
     let chip_size = |l: &LaidText| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]];
     let stack_h = |b: &Block| -> f32 {
-        let chips: Vec<f32> = b.items.iter().chain(b.more.iter()).map(|l| chip_size(l)[1]).collect();
+        let chips: Vec<f32> = b
+            .items
+            .iter()
+            .chain(b.more.iter())
+            .map(|l| chip_size(l)[1])
+            .collect();
         chips.iter().sum::<f32>() + item_gap * chips.len().saturating_sub(1) as f32
     };
-    let stack_w = |b: &Block| b.items.iter().chain(b.more.iter()).map(|l| chip_size(l)[0]).fold(0.0, f32::max);
+    let stack_w = |b: &Block| {
+        b.items
+            .iter()
+            .chain(b.more.iter())
+            .map(|l| chip_size(l)[0])
+            .fold(0.0, f32::max)
+    };
     let header_h = |b: &Block| b.name.height + b.desc.iter().map(|d| d.height).sum::<f32>();
 
     // The confusion ellipse holds its name and items.
     let conf = &blocks[Domain::Confusion.index()];
     let conf_w = stack_w(conf).max(conf.name.width) + 2.0 * pad;
-    let conf_h = conf.name.height + if stack_h(conf) > 0.0 { stack_h(conf) + item_gap } else { 0.0 };
+    let conf_h = conf.name.height
+        + if stack_h(conf) > 0.0 {
+            stack_h(conf) + item_gap
+        } else {
+            0.0
+        };
     let rx = (conf_w * 0.75).max(m.font_size * 6.0);
     let ry = (conf_h * 0.75).max(m.font_size * 2.6);
 
@@ -217,15 +259,32 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let chips: Vec<Option<LaidText>> = model
         .transitions
         .iter()
-        .map(|t| t.label.as_ref().map(|l| cx.text.lay(l, small, Some(m.font_size * 10.0))))
+        .map(|t| {
+            t.label
+                .as_ref()
+                .map(|l| cx.text.lay(l, small, Some(m.font_size * 10.0)))
+        })
         .collect();
-    let chip_w = chips.iter().flatten().map(|l| chip_size(l)[0]).fold(0.0, f32::max);
+    let chip_w = chips
+        .iter()
+        .flatten()
+        .map(|l| chip_size(l)[0])
+        .fold(0.0, f32::max);
     let chip_h = cx.text.line_advance(small) + 2.0 * chip_pad[1];
-    let lane = if model.transitions.is_empty() { 0.0 } else { chip_h * 2.0 + pad * 0.5 };
+    let lane = if model.transitions.is_empty() {
+        0.0
+    } else {
+        chip_h * 2.0 + pad * 0.5
+    };
 
     // Quadrant size: every domain's header and items fit above or below
     // the ellipse and its lanes.
-    let quads = [Domain::Complex, Domain::Complicated, Domain::Chaotic, Domain::Clear];
+    let quads = [
+        Domain::Complex,
+        Domain::Complicated,
+        Domain::Chaotic,
+        Domain::Clear,
+    ];
     let mut qw = m.font_size * 20.0;
     let mut qh = m.font_size * 13.0;
     for d in quads {
@@ -260,7 +319,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let frame = Rect::new(0.0, 0.0, w, h);
     out.clip(Geom::rounded(frame, style::CLUSTER_CORNER));
     for (region, d) in regions.iter().zip(quads) {
-        out.fill(Geom::path(PathData::polygon(region)), style::series(d.index(), Tone::Soft));
+        out.fill(
+            Geom::path(PathData::polygon(region)),
+            style::series(d.index(), Tone::Soft),
+        );
     }
     out.unclip();
     let boundary = Stroke::hairline(style::NODE_STROKE);
@@ -273,8 +335,14 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         cliff.push([end[0], end[1] - pad * 0.8]);
         cliff.push([end[0] - pad * 0.6, end[1] - pad * 0.2]);
     }
-    out.stroke(Geom::path(PathData::polyline(&cliff)), Stroke::new(style::TEXT, StrokeWidth::Thick));
-    out.stroke(Geom::rounded(frame, style::CLUSTER_CORNER), Stroke::hairline(style::CLUSTER_STROKE));
+    out.stroke(
+        Geom::path(PathData::polyline(&cliff)),
+        Stroke::new(style::TEXT, StrokeWidth::Thick),
+    );
+    out.stroke(
+        Geom::rounded(frame, style::CLUSTER_CORNER),
+        Stroke::hairline(style::CLUSTER_STROKE),
+    );
 
     // Headers along the outer edge and item stacks toward the middle.
     for d in quads {
@@ -300,7 +368,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         for l in b.items.iter().chain(b.more.iter()) {
             let size = chip_size(l);
             let rect = Rect::new(mid - size[0] / 2.0, iy, size[0], size[1]);
-            out.shape(Geom::rounded(rect, nana_ui_core::RadiusTier::Full), Some(style::NODE_FILL), Some(Stroke::hairline(style::CHIP_STROKE)));
+            out.shape(
+                Geom::rounded(rect, nana_ui_core::RadiusTier::Full),
+                Some(style::NODE_FILL),
+                Some(Stroke::hairline(style::CHIP_STROKE)),
+            );
             out.text_centered(l, rect.center(), style::TEXT);
             iy += size[1] + item_gap;
         }
@@ -308,7 +380,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Confusion in the middle.
     let ellipse = Rect::centered(c, [rx * 2.0, ry * 2.0]);
-    out.shape(Geom::Ellipse(ellipse), Some(style::NODE_FILL), Some(Stroke::hairline(style::NODE_STROKE).dash(Dash::Dashed)));
+    out.shape(
+        Geom::Ellipse(ellipse),
+        Some(style::NODE_FILL),
+        Some(Stroke::hairline(style::NODE_STROKE).dash(Dash::Dashed)),
+    );
     let mut y = c[1] - conf_h / 2.0;
     out.text_centered(&conf.name, [c[0], y + conf.name.height / 2.0], style::TEXT);
     y += conf.name.height + item_gap;
@@ -328,44 +404,84 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 let (r, b) = d.quadrant();
                 [
                     if r { c[0] + qw * 0.3 } else { c[0] - qw * 0.3 },
-                    if b { c[1] + ry + lane / 2.0 } else { c[1] - ry - lane / 2.0 },
+                    if b {
+                        c[1] + ry + lane / 2.0
+                    } else {
+                        c[1] - ry - lane / 2.0
+                    },
                 ]
             }
         }
     };
     let mut seen: Vec<(Domain, Domain)> = Vec::new();
     for (t, chip) in model.transitions.iter().zip(&chips) {
-        let repeat = seen.iter().filter(|&&(a, b)| (a, b) == (t.from, t.to) || (a, b) == (t.to, t.from)).count();
+        let repeat = seen
+            .iter()
+            .filter(|&&(a, b)| (a, b) == (t.from, t.to) || (a, b) == (t.to, t.from))
+            .count();
         seen.push((t.from, t.to));
         let (fq, tq) = (t.from.quadrant(), t.to.quadrant());
         let sign = if repeat % 2 == 0 { 1.0 } else { -1.0 };
         let shift = (repeat / 2) as f32 * chip_h;
         // Only the diagonal route is smoothed.
-        let (points, label_at, smooth) = if t.from == Domain::Confusion || t.to == Domain::Confusion {
+        let (points, label_at, smooth) = if t.from == Domain::Confusion || t.to == Domain::Confusion
+        {
             // Straight from the ellipse's rim out toward the domain.
-            let other = if t.from == Domain::Confusion { t.to } else { t.from };
+            let other = if t.from == Domain::Confusion {
+                t.to
+            } else {
+                t.from
+            };
             let target = anchor(other);
             let d = [target[0] - c[0], target[1] - c[1]];
             let len = (d[0] * d[0] + d[1] * d[1]).sqrt().max(1.0);
             let k = 1.0 / ((d[0] / len / rx).powi(2) + (d[1] / len / ry).powi(2)).sqrt();
             let rim = [c[0] + d[0] / len * k, c[1] + d[1] / len * k];
-            let pts = if t.from == Domain::Confusion { vec![rim, target] } else { vec![target, rim] };
+            let pts = if t.from == Domain::Confusion {
+                vec![rim, target]
+            } else {
+                vec![target, rim]
+            };
             let mid = [(rim[0] + target[0]) / 2.0, (rim[1] + target[1]) / 2.0];
             (pts, mid, false)
         } else if fq.1 == tq.1 {
             // Across the vertical boundary, in the lane beside the ellipse.
-            let y = if fq.1 { c[1] + ry + lane / 2.0 } else { c[1] - ry - lane / 2.0 } + sign * shift;
+            let y = if fq.1 {
+                c[1] + ry + lane / 2.0
+            } else {
+                c[1] - ry - lane / 2.0
+            } + sign * shift;
             let dx = qw * 0.3;
-            let (x0, x1) = if fq.0 { (c[0] + dx, c[0] - dx) } else { (c[0] - dx, c[0] + dx) };
+            let (x0, x1) = if fq.0 {
+                (c[0] + dx, c[0] - dx)
+            } else {
+                (c[0] - dx, c[0] + dx)
+            };
             let bow = if fq.1 { chip_h * 0.6 } else { -chip_h * 0.6 } * sign;
-            (bezier([x0, y], [c[0], y + bow * 2.0], [x1, y]), [c[0], y + bow], false)
+            (
+                bezier([x0, y], [c[0], y + bow * 2.0], [x1, y]),
+                [c[0], y + bow],
+                false,
+            )
         } else if fq.0 == tq.0 {
             // Across the horizontal boundary, beside the ellipse.
-            let x = if fq.0 { c[0] + rx + pad + chip_w / 2.0 } else { c[0] - rx - pad - chip_w / 2.0 } + sign * shift;
+            let x = if fq.0 {
+                c[0] + rx + pad + chip_w / 2.0
+            } else {
+                c[0] - rx - pad - chip_w / 2.0
+            } + sign * shift;
             let dy = ry;
-            let (y0, y1) = if fq.1 { (c[1] + dy, c[1] - dy) } else { (c[1] - dy, c[1] + dy) };
+            let (y0, y1) = if fq.1 {
+                (c[1] + dy, c[1] - dy)
+            } else {
+                (c[1] - dy, c[1] + dy)
+            };
             let bow = if fq.0 { pad * 0.6 } else { -pad * 0.6 } * sign;
-            (bezier([x, y0], [x + bow * 2.0, c[1]], [x, y1]), [x + bow, c[1]], false)
+            (
+                bezier([x, y0], [x + bow * 2.0, c[1]], [x, y1]),
+                [x + bow, c[1]],
+                false,
+            )
         } else {
             // Diagonal: out along the lane, down the side of the ellipse
             // facing the target's column, and in again.
@@ -374,7 +490,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             let x = c[0] + side * (rx + pad + chip_w / 2.0) + sign * shift;
             (vec![a, [x, a[1]], [x, b[1]], b], [x, c[1]], true)
         };
-        let build: fn(&[[f32; 2]]) -> PathData = if smooth { basis_curve } else { PathData::polyline };
+        let build: fn(&[[f32; 2]]) -> PathData = if smooth {
+            basis_curve
+        } else {
+            PathData::polyline
+        };
         out.edge(&points, build, stroke, None, Some(Marker::Arrow), marker);
         if let Some(l) = chip {
             out.chip(l, label_at, chip_pad);

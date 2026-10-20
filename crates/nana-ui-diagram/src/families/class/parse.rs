@@ -113,10 +113,12 @@ pub(super) fn member(raw: &str) -> Member {
         text.pop();
     }
     let mut display = generics(text.trim());
-    if method
-        && let Some(close) = display.rfind(')')
-    {
-        let ret = display[close + 1..].trim().trim_start_matches(':').trim().to_string();
+    if method && let Some(close) = display.rfind(')') {
+        let ret = display[close + 1..]
+            .trim()
+            .trim_start_matches(':')
+            .trim()
+            .to_string();
         display.truncate(close + 1);
         if !ret.is_empty() {
             display.push_str(" : ");
@@ -200,7 +202,8 @@ fn relation_parts(stmt: &str) -> Option<RelationParts<'_>> {
         (None, before)
     };
     let after = &head[i + 2..];
-    let ends_word = |r: &str| r.is_empty() || r.starts_with(char::is_whitespace) || r.starts_with('"');
+    let ends_word =
+        |r: &str| r.is_empty() || r.starts_with(char::is_whitespace) || r.starts_with('"');
     let (end, right) = if let Some(r) = after.strip_prefix("|>") {
         (Some(Marker::Triangle), r)
     } else if let Some(r) = after.strip_prefix("()") {
@@ -264,7 +267,11 @@ impl Parser<'_, '_> {
                 c
             }
             None => {
-                self.cx.limits.check_count(self.classes.len() + 1, self.cx.limits.nodes, LimitKind::Nodes)?;
+                self.cx.limits.check_count(
+                    self.classes.len() + 1,
+                    self.cx.limits.nodes,
+                    LimitKind::Nodes,
+                )?;
                 self.cx.limits.check_label(&name)?;
                 let c = self.classes.len();
                 self.index.insert(id.clone(), c);
@@ -297,7 +304,9 @@ impl Parser<'_, '_> {
         }
         self.cx.limits.check_label(raw)?;
         self.members += 1;
-        self.cx.limits.check_count(self.members, self.cx.limits.elements, LimitKind::Elements)?;
+        self.cx
+            .limits
+            .check_count(self.members, self.cx.limits.elements, LimitKind::Elements)?;
         let m = member(raw);
         let class = &mut self.classes[c];
         if m.method {
@@ -362,7 +371,9 @@ impl Parser<'_, '_> {
             "callback" => return Ok(()),
             "note" => return self.note(rest),
             "namespace" => return self.namespace(rest),
-            "class" if !rest.is_empty() && relation_parts(stmt).is_none() => return self.declare(rest),
+            "class" if !rest.is_empty() && relation_parts(stmt).is_none() => {
+                return self.declare(rest);
+            }
             _ => {}
         }
         if let Some(body) = stmt.strip_prefix("<<")
@@ -385,7 +396,8 @@ impl Parser<'_, '_> {
             }
         }
         if self.class(stmt)?.is_none() {
-            self.cx.warn(self.line, format!("cannot read `{}`", truncate(stmt)));
+            self.cx
+                .warn(self.line, format!("cannot read `{}`", truncate(stmt)));
         }
         Ok(())
     }
@@ -417,7 +429,8 @@ impl Parser<'_, '_> {
             format!("{head}:::{}", inline.join(","))
         };
         let Some(c) = self.class(&joined)? else {
-            self.cx.warn(self.line, format!("cannot read class `{}`", truncate(rest)));
+            self.cx
+                .warn(self.line, format!("cannot read class `{}`", truncate(rest)));
             if open {
                 // Swallow the body so its members do not read as statements.
                 self.stack.push(Block::Skip);
@@ -448,9 +461,17 @@ impl Parser<'_, '_> {
             self.cx.warn(self.line, "a namespace without a name");
             return Ok(());
         }
-        self.cx.limits.check_count(self.namespaces.len() + 1, self.cx.limits.clusters, LimitKind::Clusters)?;
+        self.cx.limits.check_count(
+            self.namespaces.len() + 1,
+            self.cx.limits.clusters,
+            LimitKind::Clusters,
+        )?;
         self.cx.limits.check_label(name)?;
-        let depth = self.stack.iter().filter(|b| matches!(b, Block::Namespace(_))).count();
+        let depth = self
+            .stack
+            .iter()
+            .filter(|b| matches!(b, Block::Namespace(_)))
+            .count();
         if depth + 1 > self.cx.limits.cluster_depth {
             return Err(DiagramError::TooLarge(LimitKind::ClusterDepth));
         }
@@ -482,7 +503,11 @@ impl Parser<'_, '_> {
             return Ok(());
         }
         self.cx.limits.check_label(&text)?;
-        self.cx.limits.check_count(self.classes.len() + self.notes.len() + 1, self.cx.limits.nodes, LimitKind::Nodes)?;
+        self.cx.limits.check_count(
+            self.classes.len() + self.notes.len() + 1,
+            self.cx.limits.nodes,
+            LimitKind::Nodes,
+        )?;
         self.notes.push(Note {
             text: Label::plain(&text),
             target,
@@ -514,11 +539,21 @@ impl Parser<'_, '_> {
         let (left, from_card) = split_card(parts.left, false);
         let (right, to_card) = split_card(parts.right, true);
         let (Some(from), Some(to)) = (self.class(left)?, self.class(right)?) else {
-            self.cx.warn(self.line, "a relation needs a class on each side");
+            self.cx
+                .warn(self.line, "a relation needs a class on each side");
             return Ok(());
         };
-        self.cx.limits.check_count(self.relations.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
-        let label = parts.label.map(unquote).filter(|l| !l.is_empty()).map(|l| self.cx.label(l)).transpose()?;
+        self.cx.limits.check_count(
+            self.relations.len() + 1,
+            self.cx.limits.edges,
+            LimitKind::Edges,
+        )?;
+        let label = parts
+            .label
+            .map(unquote)
+            .filter(|l| !l.is_empty())
+            .map(|l| self.cx.label(l))
+            .transpose()?;
         for card in [&from_card, &to_card].into_iter().flatten() {
             self.cx.limits.check_label(card)?;
         }
@@ -605,7 +640,10 @@ mod tests {
         assert_eq!(r[9].from_card.as_deref(), Some("1"));
         assert_eq!(r[9].to_card.as_deref(), Some("*"));
         assert_eq!(r[9].label.as_ref().map(|l| l.text()), Some("owns".into()));
-        assert_eq!((r[10].start, r[10].end), (Some(Marker::Triangle), Some(Marker::Triangle)));
+        assert_eq!(
+            (r[10].start, r[10].end),
+            (Some(Marker::Triangle), Some(Marker::Triangle))
+        );
         assert_eq!(r[11].end, Some(Marker::Lollipop));
         assert_eq!(m.classes.len(), 24);
     }
@@ -619,7 +657,10 @@ mod tests {
         assert_eq!(m.notes.len(), 2);
         assert_eq!(m.notes[0].target, Some(0));
         assert_eq!(m.notes[0].text.lines.len(), 2);
-        assert_eq!(m.classes[0].link.as_ref().map(|l| l.0.as_str()), Some("https://example.com"));
+        assert_eq!(
+            m.classes[0].link.as_ref().map(|l| l.0.as_str()),
+            Some("https://example.com")
+        );
         assert!(m.classes[0].style.stroke.is_some());
         assert_eq!(m.classes[0].style.stroke_width, Some(3.0));
     }

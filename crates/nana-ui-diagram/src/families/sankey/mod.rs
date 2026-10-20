@@ -15,7 +15,6 @@ use crate::source::color;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct Link {
     pub source: usize,
@@ -40,7 +39,13 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             continue;
         };
         if fields.len() != 3 {
-            cx.warn(line, format!("expected source,target,value, found {} fields", fields.len()));
+            cx.warn(
+                line,
+                format!(
+                    "expected source,target,value, found {} fields",
+                    fields.len()
+                ),
+            );
             continue;
         }
         let Some(value) = kit::number(&fields[2]).filter(|v| *v >= 0.0) else {
@@ -62,20 +67,29 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             if let Some(&i) = ids.get(name) {
                 return Ok(i);
             }
-            cx.limits.check_count(model.nodes.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
+            cx.limits
+                .check_count(model.nodes.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
             ids.insert(name.to_string(), model.nodes.len());
             model.nodes.push(name.to_string());
             Ok(model.nodes.len() - 1)
         };
         let source = id(s, &mut model)?;
         let target = id(t, &mut model)?;
-        cx.limits.check_count(model.links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
-        model.links.push(Link { source, target, value });
+        cx.limits
+            .check_count(model.links.len() + 1, cx.limits.edges, LimitKind::Edges)?;
+        model.links.push(Link {
+            source,
+            target,
+            value,
+        });
     }
     // Flows must run one way: drop the links that close a cycle.
     let back = back_links(&model);
     if !back.is_empty() {
-        cx.warn(header, format!("{} flow(s) close a cycle and were dropped", back.len()));
+        cx.warn(
+            header,
+            format!("{} flow(s) close a cycle and were dropped", back.len()),
+        );
         let mut i = 0;
         model.links.retain(|_| {
             let keep = !back.contains(&i);
@@ -175,8 +189,16 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let content = cx.title_above(&mut out, Rect::new(0.0, 0.0, 1.0, 1.0));
         return Ok(out.finish(content, m.margin));
     }
-    let node_w = cx.config.get_f32("sankey.nodeWidth").unwrap_or(m.font_size * 0.75).clamp(2.0, 60.0);
-    let pad = cx.config.get_f32("sankey.nodePadding").unwrap_or(m.font_size).clamp(2.0, 120.0);
+    let node_w = cx
+        .config
+        .get_f32("sankey.nodeWidth")
+        .unwrap_or(m.font_size * 0.75)
+        .clamp(2.0, 60.0);
+    let pad = cx
+        .config
+        .get_f32("sankey.nodePadding")
+        .unwrap_or(m.font_size)
+        .clamp(2.0, 120.0);
     let show_values = cx.config.get_bool("sankey.showValues").unwrap_or(true);
 
     // Columns by longest path.
@@ -212,7 +234,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 } else if outs[v].is_empty() {
                     0
                 } else {
-                    outs[v].iter().map(|&li| depth[model.links[li].target]).min().unwrap_or(1).saturating_sub(1)
+                    outs[v]
+                        .iter()
+                        .map(|&li| depth[model.links[li].target])
+                        .min()
+                        .unwrap_or(1)
+                        .saturating_sub(1)
                 }
             }
             _ => {
@@ -241,7 +268,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             } else {
                 model.nodes[v].clone()
             };
-            cx.text.lay(&Label::plain(&text), small, Some(cx.wrap_width("sankey.labelWidth")))
+            cx.text.lay(
+                &Label::plain(&text),
+                small,
+                Some(cx.wrap_width("sankey.labelWidth")),
+            )
         })
         .collect();
     let mut members: Vec<Vec<usize>> = vec![Vec::new(); columns];
@@ -262,7 +293,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .map(|c| {
             let sum: f64 = c.iter().map(|&v| value[v]).sum();
             let room = total_h - pad * (c.len() - 1) as f32;
-            if sum > 0.0 { room.max(1.0) / sum as f32 } else { f32::INFINITY }
+            if sum > 0.0 {
+                room.max(1.0) / sum as f32
+            } else {
+                f32::INFINITY
+            }
         })
         .fold(f32::INFINITY, f32::min);
     let ky = if ky.is_finite() { ky } else { 0.0 };
@@ -275,18 +310,25 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut x = vec![0.0f32; columns];
     for c in 1..columns {
         let right_labels = if c == 1 {
-            members[0].iter().map(|&v| labels[v].width).fold(0.0, f32::max)
+            members[0]
+                .iter()
+                .map(|&v| labels[v].width)
+                .fold(0.0, f32::max)
         } else {
             0.0
         };
-        let left_labels = members[c].iter().map(|&v| labels[v].width).fold(0.0, f32::max);
+        let left_labels = members[c]
+            .iter()
+            .map(|&v| labels[v].width)
+            .fold(0.0, f32::max);
         x[c] = x[c - 1] + node_w + right_labels + left_labels + 4.0 * gap + m.font_size * 4.0;
     }
 
     // Initial stacking, centred in the height.
     let mut y = vec![0.0f32; n];
     for col in &members {
-        let used: f32 = col.iter().map(|&v| slot[v]).sum::<f32>() + pad * col.len().saturating_sub(1) as f32;
+        let used: f32 =
+            col.iter().map(|&v| slot[v]).sum::<f32>() + pad * col.len().saturating_sub(1) as f32;
         let mut top = ((total_h - used) / 2.0).max(0.0);
         for &v in col {
             y[v] = top + (slot[v] - h[v]) / 2.0;
@@ -301,7 +343,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for _ in 0..8 {
         alpha *= 0.85;
         for forward in [true, false] {
-            let cols: Vec<usize> = if forward { (1..columns).collect() } else { (0..columns.saturating_sub(1)).rev().collect() };
+            let cols: Vec<usize> = if forward {
+                (1..columns).collect()
+            } else {
+                (0..columns.saturating_sub(1)).rev().collect()
+            };
             for c in cols {
                 for &v in &members[c] {
                     let links = if forward { &ins[v] } else { &outs[v] };
@@ -327,7 +373,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Link attachment: outgoing sorted by target height, incoming by source.
     let mut sy = vec![0.0f32; model.links.len()];
     let mut ty = vec![0.0f32; model.links.len()];
-    let link_h: Vec<f32> = model.links.iter().map(|l| (l.value as f32 * ky).max(0.5)).collect();
+    let link_h: Vec<f32> = model
+        .links
+        .iter()
+        .map(|l| (l.value as f32 * ky).max(0.5))
+        .collect();
     let attach = |links: &[usize], other: fn(&Link) -> usize, top: f32, ends: &mut [f32]| {
         let key = |li: usize| center(other(&model.links[li]), &y);
         let mut sorted = links.to_vec();
@@ -344,14 +394,19 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
 
     let node_ink = |v: usize, tone: Tone| -> Ink {
-        match cx.config.get(&format!("sankey.nodeColors.{}", model.nodes[v])).and_then(color::parse) {
+        match cx
+            .config
+            .get(&format!("sankey.nodeColors.{}", model.nodes[v]))
+            .and_then(color::parse)
+        {
             Some(c) if tone == Tone::Solid => Ink::Rgba(c),
             Some(c) => Ink::Rgba([c[0], c[1], c[2], c[3] * 0.4]),
             None => style::series(v, tone),
         }
     };
     let link_color = cx.config.get("sankey.linkColor").unwrap_or("source");
-    let fixed_link = color::parse(link_color).filter(|_| link_color.starts_with('#') || link_color.starts_with("rgb"));
+    let fixed_link = color::parse(link_color)
+        .filter(|_| link_color.starts_with('#') || link_color.starts_with("rgb"));
 
     // Ribbons, widest first so narrow ones stay on top.
     let mut by_width: Vec<usize> = (0..model.links.len()).collect();
@@ -385,9 +440,21 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let laid = &labels[v];
         let ly = y[v] + h[v] / 2.0 - laid.height / 2.0;
         if c == 0 && columns > 1 {
-            out.text(laid, [rect.right() + gap, ly], laid.width, Align::Start, style::TEXT);
+            out.text(
+                laid,
+                [rect.right() + gap, ly],
+                laid.width,
+                Align::Start,
+                style::TEXT,
+            );
         } else {
-            out.text(laid, [rect.x - gap - laid.width, ly], laid.width, Align::End, style::TEXT);
+            out.text(
+                laid,
+                [rect.x - gap - laid.width, ly],
+                laid.width,
+                Align::End,
+                style::TEXT,
+            );
         }
     }
 
@@ -419,7 +486,11 @@ fn topo(model: &Model, ins: &[Vec<usize>], outs: &[Vec<usize>]) -> Vec<usize> {
 /// the bottom, never above the top.
 fn resolve(col: &[usize], y: &mut [f32], h: &[f32], slot: &[f32], pad: f32, total_h: f32) {
     let mut sorted = col.to_vec();
-    sorted.sort_by(|&a, &b| (y[a] + h[a] / 2.0).total_cmp(&(y[b] + h[b] / 2.0)).then(a.cmp(&b)));
+    sorted.sort_by(|&a, &b| {
+        (y[a] + h[a] / 2.0)
+            .total_cmp(&(y[b] + h[b] / 2.0))
+            .then(a.cmp(&b))
+    });
     // Work in slot space: a slot is centred on its node.
     let top_of = |v: usize, y: &[f32]| y[v] + h[v] / 2.0 - slot[v] / 2.0;
     let set_top = |v: usize, t: f32, y: &mut [f32]| y[v] = t + slot[v] / 2.0 - h[v] / 2.0;

@@ -9,7 +9,6 @@ use crate::source::directives::AuthorStyle;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
     Normal,
@@ -87,7 +86,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
 pub(crate) fn summary(model: &Model) -> Summary {
     Summary {
-        nodes: model.states.iter().filter(|s| s.composite.is_none()).count() as u32,
+        nodes: model
+            .states
+            .iter()
+            .filter(|s| s.composite.is_none())
+            .count() as u32,
         edges: model.transitions.len() as u32,
         groups: model.composites.len() as u32,
     }

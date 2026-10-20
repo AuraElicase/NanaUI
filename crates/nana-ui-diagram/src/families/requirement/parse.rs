@@ -107,11 +107,19 @@ impl Parser<'_, '_> {
         }
         if let Some((from, kind, to)) = relation(stmt) {
             let Some(kind) = RelKind::parse(kind) else {
-                self.cx.warn(self.line, format!("unknown relationship `{}`", truncate(kind)));
+                self.cx.warn(
+                    self.line,
+                    format!("unknown relationship `{}`", truncate(kind)),
+                );
                 return Ok(());
             };
-            self.cx.limits.check_count(self.pending.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
-            self.pending.push((name_of(from).0, name_of(to).0, kind, self.line));
+            self.cx.limits.check_count(
+                self.pending.len() + 1,
+                self.cx.limits.edges,
+                LimitKind::Edges,
+            )?;
+            self.pending
+                .push((name_of(from).0, name_of(to).0, kind, self.line));
             return Ok(());
         }
         // `name:::class` on its own assigns classes.
@@ -120,7 +128,8 @@ impl Parser<'_, '_> {
             self.styles.assign(unquote(name), &classes.join(","));
             return Ok(());
         }
-        self.cx.warn(self.line, format!("cannot read `{}`", truncate(stmt)));
+        self.cx
+            .warn(self.line, format!("cannot read `{}`", truncate(stmt)));
         Ok(())
     }
 
@@ -142,7 +151,11 @@ impl Parser<'_, '_> {
                 b
             }
             None => {
-                self.cx.limits.check_count(self.blocks.len() + 1, self.cx.limits.nodes, LimitKind::Nodes)?;
+                self.cx.limits.check_count(
+                    self.blocks.len() + 1,
+                    self.cx.limits.nodes,
+                    LimitKind::Nodes,
+                )?;
                 let b = self.blocks.len();
                 self.index.insert(name.clone(), b);
                 self.blocks.push(Block {
@@ -179,7 +192,8 @@ impl Parser<'_, '_> {
             return Ok(());
         }
         let Some((key, value)) = line.split_once(':') else {
-            self.cx.warn(self.line, format!("cannot read field `{}`", truncate(line)));
+            self.cx
+                .warn(self.line, format!("cannot read field `{}`", truncate(line)));
             return Ok(());
         };
         let value = unquote(value);
@@ -193,12 +207,15 @@ impl Parser<'_, '_> {
             ("type", true) => ("Type", value.to_string()),
             ("docref", true) => ("Doc Ref", value.to_string()),
             _ => {
-                self.cx.warn(self.line, format!("unknown field `{}`", truncate(key)));
+                self.cx
+                    .warn(self.line, format!("unknown field `{}`", truncate(key)));
                 return Ok(());
             }
         };
         self.fields += 1;
-        self.cx.limits.check_count(self.fields, self.cx.limits.elements, LimitKind::Elements)?;
+        self.cx
+            .limits
+            .check_count(self.fields, self.cx.limits.elements, LimitKind::Elements)?;
         let fields = &mut self.blocks[b].fields;
         match fields.iter_mut().find(|(k, _)| k == name) {
             Some(slot) => slot.1 = value,
@@ -212,7 +229,9 @@ impl Parser<'_, '_> {
         for (from, to, kind, line) in std::mem::take(&mut self.pending) {
             match (self.index.get(&from), self.index.get(&to)) {
                 (Some(&from), Some(&to)) => relations.push(Relation { from, to, kind }),
-                _ => self.cx.warn(line, format!("`{}` names an undeclared block", kind.name())),
+                _ => self
+                    .cx
+                    .warn(line, format!("`{}` names an undeclared block", kind.name())),
             }
         }
         for b in &mut self.blocks {
@@ -251,12 +270,21 @@ mod tests {
         let r = &m.blocks[0];
         assert_eq!(r.id, "test req");
         assert_eq!(r.fields[2], ("Risk".to_string(), "High".to_string()));
-        assert_eq!(r.fields[3], ("Verification".to_string(), "Test".to_string()));
+        assert_eq!(
+            r.fields[3],
+            ("Verification".to_string(), "Test".to_string())
+        );
         assert!(r.style.fill.is_some());
         assert_eq!(m.blocks[1].fields[1].0, "Doc Ref");
         assert_eq!(m.blocks[2].kind, BlockKind::DesignConstraint);
         assert_eq!(m.relations.len(), 2);
-        assert_eq!((m.relations[0].from, m.relations[0].to, m.relations[0].kind), (1, 0, RelKind::Satisfies));
-        assert_eq!((m.relations[1].from, m.relations[1].to, m.relations[1].kind), (2, 0, RelKind::Contains));
+        assert_eq!(
+            (m.relations[0].from, m.relations[0].to, m.relations[0].kind),
+            (1, 0, RelKind::Satisfies)
+        );
+        assert_eq!(
+            (m.relations[1].from, m.relations[1].to, m.relations[1].kind),
+            (2, 0, RelKind::Contains)
+        );
     }
 }

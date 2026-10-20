@@ -52,7 +52,9 @@ pub(crate) fn weekday_named(name: &str) -> Option<u32> {
     let name = name.trim();
     WEEKDAYS
         .iter()
-        .position(|w| w.eq_ignore_ascii_case(name) || (name.len() == 3 && w[..3].eq_ignore_ascii_case(name)))
+        .position(|w| {
+            w.eq_ignore_ascii_case(name) || (name.len() == 3 && w[..3].eq_ignore_ascii_case(name))
+        })
         .map(|i| i as u32)
 }
 
@@ -192,9 +194,13 @@ pub(crate) fn parse_with(input: &str, fmt: &str) -> Option<i64> {
             Tok::Day { width } => f.day = Some(digits(&mut s, usize::from(width), 2)?),
             Tok::DayOrdinal => {
                 f.day = Some(digits(&mut s, 1, 2)?);
-                s = ["st", "nd", "rd", "th"].iter().find_map(|x| s.strip_prefix(x))?;
+                s = ["st", "nd", "rd", "th"]
+                    .iter()
+                    .find_map(|x| s.strip_prefix(x))?;
             }
-            Tok::Hour24 { width } | Tok::Hour12 { width } => f.hour = digits(&mut s, usize::from(width), 2)?,
+            Tok::Hour24 { width } | Tok::Hour12 { width } => {
+                f.hour = digits(&mut s, usize::from(width), 2)?
+            }
             Tok::Meridiem => {
                 f.pm = Some(match s.get(..2)?.to_ascii_lowercase().as_str() {
                     "am" => false,
@@ -261,7 +267,11 @@ pub(crate) fn parse_with(input: &str, fmt: &str) -> Option<i64> {
     }
     let month = f.month.unwrap_or(1);
     let day = f.day.unwrap_or(1);
-    CivilDate::new(year as i32, u8::try_from(month).ok()?, u8::try_from(day).ok()?)?;
+    CivilDate::new(
+        year as i32,
+        u8::try_from(month).ok()?,
+        u8::try_from(day).ok()?,
+    )?;
     let mut hour = f.hour;
     if let Some(pm) = f.pm {
         if !(1..=12).contains(&hour) {
@@ -317,7 +327,10 @@ pub(crate) fn parse_duration(input: &str) -> Option<Span> {
     let s = input.trim();
     let split = s.find(|c: char| !(c.is_ascii_digit() || c == '.'))?;
     let (num, unit) = s.split_at(split);
-    let value: f64 = num.parse().ok().filter(|v: &f64| v.is_finite() && *v >= 0.0)?;
+    let value: f64 = num
+        .parse()
+        .ok()
+        .filter(|v: &f64| v.is_finite() && *v >= 0.0)?;
     if value > 1.0e6 {
         return None;
     }
@@ -470,7 +483,16 @@ pub(crate) fn interval_ticks(
             let mut index = year * 12 + i64::from(month) - 1;
             index -= index.rem_euclid(n);
             loop {
-                let t = unix_ms_from_civil(index.div_euclid(12), index.rem_euclid(12) as u32 + 1, 1, 0, 0, 0, 0, 0);
+                let t = unix_ms_from_civil(
+                    index.div_euclid(12),
+                    index.rem_euclid(12) as u32 + 1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                );
                 if t > max {
                     break;
                 }
@@ -491,7 +513,10 @@ pub(crate) fn interval_ticks(
                 TickUnit::Hour => (fixed(HOUR)?, 0),
                 TickUnit::Day => (fixed(DAY)?, 0),
                 // 1970-01-01 was a Thursday (3 when Monday = 0).
-                _ => (fixed(WEEK)?, (i64::from(week_start) - 3).rem_euclid(7) * DAY),
+                _ => (
+                    fixed(WEEK)?,
+                    (i64::from(week_start) - 3).rem_euclid(7) * DAY,
+                ),
             };
             if (max - min) / step > cap as i64 {
                 return None;
@@ -519,18 +544,36 @@ mod tests {
 
     #[test]
     fn day_js_formats_parse_strictly() {
-        assert_eq!(parse_with("2024-03-07", "YYYY-MM-DD"), Some(utc(2024, 3, 7, 0, 0)));
-        assert_eq!(parse_with("07/03/24 14:05", "DD/MM/YY HH:mm"), Some(utc(2024, 3, 7, 14, 5)));
+        assert_eq!(
+            parse_with("2024-03-07", "YYYY-MM-DD"),
+            Some(utc(2024, 3, 7, 0, 0))
+        );
+        assert_eq!(
+            parse_with("07/03/24 14:05", "DD/MM/YY HH:mm"),
+            Some(utc(2024, 3, 7, 14, 5))
+        );
         assert_eq!(parse_with("2024-02-30", "YYYY-MM-DD"), None);
         assert_eq!(parse_with("2024-3-7", "YYYY-MM-DD"), None);
-        assert_eq!(parse_with("2024-3-7", "YYYY-M-D"), Some(utc(2024, 3, 7, 0, 0)));
-        assert_eq!(parse_with("Mar 7th 2024 2:30 pm", "MMM Do YYYY h:mm a"), Some(utc(2024, 3, 7, 14, 30)));
+        assert_eq!(
+            parse_with("2024-3-7", "YYYY-M-D"),
+            Some(utc(2024, 3, 7, 0, 0))
+        );
+        assert_eq!(
+            parse_with("Mar 7th 2024 2:30 pm", "MMM Do YYYY h:mm a"),
+            Some(utc(2024, 3, 7, 14, 30))
+        );
         assert_eq!(parse_with("1700000000", "X"), Some(1_700_000_000_000));
         assert_eq!(parse_with("1700000000.5", "X"), Some(1_700_000_000_500));
-        assert_eq!(parse_with("2024-03-07T08:00:00+02:00", "YYYY-MM-DDTHH:mm:ssZ"), Some(utc(2024, 3, 7, 6, 0)));
+        assert_eq!(
+            parse_with("2024-03-07T08:00:00+02:00", "YYYY-MM-DDTHH:mm:ssZ"),
+            Some(utc(2024, 3, 7, 6, 0))
+        );
         assert_eq!(parse_with("7xx", "Do"), None);
         assert_eq!(parse_with("10:30", "HH:mm"), Some(utc(1970, 1, 1, 10, 30)));
-        assert_eq!(parse_date("2024-03-07T08:00", "HH:mm"), Some(utc(2024, 3, 7, 8, 0)));
+        assert_eq!(
+            parse_date("2024-03-07T08:00", "HH:mm"),
+            Some(utc(2024, 3, 7, 8, 0))
+        );
     }
 
     #[test]
@@ -539,7 +582,10 @@ mod tests {
         assert_eq!(parse_duration("1.5h"), Some(Span::Fixed(90 * MINUTE)));
         assert_eq!(parse_duration("2w"), Some(Span::Fixed(14 * DAY)));
         assert_eq!(parse_duration("3x"), None);
-        assert_eq!(add(utc(2024, 1, 31, 0, 0), Span::Months(1.0)), utc(2024, 2, 29, 0, 0));
+        assert_eq!(
+            add(utc(2024, 1, 31, 0, 0), Span::Months(1.0)),
+            utc(2024, 2, 29, 0, 0)
+        );
     }
 
     #[test]
@@ -560,8 +606,16 @@ mod tests {
         let weeks = interval_ticks(min, max, 1, TickUnit::Week, 0, 100).unwrap();
         assert_eq!(weeks[0], utc(2024, 3, 11, 0, 0));
         assert!(weeks.iter().all(|&t| weekday(t) == 0));
-        let months = interval_ticks(min, utc(2024, 9, 1, 0, 0), 2, TickUnit::Month, 0, 100).unwrap();
-        assert_eq!(months, vec![utc(2024, 5, 1, 0, 0), utc(2024, 7, 1, 0, 0), utc(2024, 9, 1, 0, 0)]);
+        let months =
+            interval_ticks(min, utc(2024, 9, 1, 0, 0), 2, TickUnit::Month, 0, 100).unwrap();
+        assert_eq!(
+            months,
+            vec![
+                utc(2024, 5, 1, 0, 0),
+                utc(2024, 7, 1, 0, 0),
+                utc(2024, 9, 1, 0, 0)
+            ]
+        );
         assert!(interval_ticks(0, 1_000_000_000, 1, TickUnit::Millisecond, 0, 100).is_none());
     }
 }

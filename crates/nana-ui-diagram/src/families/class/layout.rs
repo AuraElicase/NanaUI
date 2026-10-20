@@ -37,7 +37,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let chip_pad = cx.chip_pad();
     let note_pad = graphkit::note_pad(&m);
 
-    let lay_member = |mem: &Member| cx.text.lay(&verbatim(mem.text.as_str()), member_font.italic(mem.is_abstract), None);
+    let lay_member = |mem: &Member| {
+        cx.text.lay(
+            &verbatim(mem.text.as_str()),
+            member_font.italic(mem.is_abstract),
+            None,
+        )
+    };
 
     let mut boxes = Vec::with_capacity(model.classes.len());
     let mut graph = Graph {
@@ -54,7 +60,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             .annotations
             .iter()
             .any(|a| a.eq_ignore_ascii_case("abstract"));
-        let name = cx.text.lay(&verbatim(class.name.as_str()), name_font.italic(is_abstract), Some(wrap * 1.5));
+        let name = cx.text.lay(
+            &verbatim(class.name.as_str()),
+            name_font.italic(is_abstract),
+            Some(wrap * 1.5),
+        );
         let attributes: Vec<LaidText> = class.attributes.iter().map(&lay_member).collect();
         let methods: Vec<LaidText> = class.methods.iter().map(&lay_member).collect();
         let widest = annotations
@@ -162,9 +172,15 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for i in 0..placed.edges.len() {
         let Some(points) = drawn(i) else { continue };
         let (stroke, start, end) = match model.relations.get(i) {
-            Some(rel) if rel.dashed => (style::edge_stroke().dash(Dash::Dashed), rel.start, rel.end),
+            Some(rel) if rel.dashed => {
+                (style::edge_stroke().dash(Dash::Dashed), rel.start, rel.end)
+            }
             Some(rel) => (style::edge_stroke(), rel.start, rel.end),
-            None => (Stroke::hairline(style::NOTE_STROKE).dash(Dash::Dashed), None, None),
+            None => (
+                Stroke::hairline(style::NOTE_STROKE).dash(Dash::Dashed),
+                None,
+                None,
+            ),
         };
         graphkit::edge(&mut out, points, stroke, start, end, marker, m.bend_radius);
     }
@@ -174,11 +190,16 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if let (Some(laid), Some(center)) = (&edge_labels[i], placed.edges[i].label) {
             avoid.push(out.chip(laid, center, chip_pad));
         }
-        for (card, at_start, head) in [(&rel.from_card, true, rel.start), (&rel.to_card, false, rel.end)] {
+        for (card, at_start, head) in [
+            (&rel.from_card, true, rel.start),
+            (&rel.to_card, false, rel.end),
+        ] {
             let Some(card) = card else { continue };
             let laid = cx.text.lay_plain(card, small);
             let clear = if head.is_some() { marker * 1.2 } else { 2.0 };
-            if let Some(origin) = graphkit::end_label_origin(points, laid.size(), at_start, clear, &avoid) {
+            if let Some(origin) =
+                graphkit::end_label_origin(points, laid.size(), at_start, clear, &avoid)
+            {
                 out.text(&laid, origin, laid.width, Align::Start, style::MUTED);
             }
         }
@@ -201,8 +222,20 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             let split = rect.y + b.header + b.attr_h;
             graphkit::divider(&mut out, rect.x, rect.right(), split, paint.stroke.ink);
             let x = rect.x + pad_x;
-            draw_members(&mut out, &class.attributes, &b.attributes, [x, rect.y + b.header + row_pad], paint.text);
-            draw_members(&mut out, &class.methods, &b.methods, [x, split + row_pad], paint.text);
+            draw_members(
+                &mut out,
+                &class.attributes,
+                &b.attributes,
+                [x, rect.y + b.header + row_pad],
+                paint.text,
+            );
+            draw_members(
+                &mut out,
+                &class.methods,
+                &b.methods,
+                [x, split + row_pad],
+                paint.text,
+            );
         }
         if let Some((url, tooltip)) = &class.link {
             out.link(rect, url, tooltip.as_deref());
@@ -211,7 +244,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     let note_paint = graphkit::note_paint(&Default::default());
     for (i, laid) in notes.iter().enumerate() {
-        graphkit::note(&mut out, placed.nodes[first_note + i], laid, note_pad, &note_paint);
+        graphkit::note(
+            &mut out,
+            placed.nodes[first_note + i],
+            laid,
+            note_pad,
+            &note_paint,
+        );
     }
 
     let content = out.bounds().union(&placed.bounds);
@@ -220,13 +259,24 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 }
 
 /// Member lines down from `[x, y]`.
-fn draw_members(out: &mut SceneBuilder, members: &[Member], laid: &[LaidText], [x, mut y]: [f32; 2], ink: Ink) {
+fn draw_members(
+    out: &mut SceneBuilder,
+    members: &[Member],
+    laid: &[LaidText],
+    [x, mut y]: [f32; 2],
+    ink: Ink,
+) {
     for (mem, text) in members.iter().zip(laid) {
         out.text(text, [x, y], text.width, Align::Start, ink);
         if mem.is_static {
             // UML underlines static members.
             let base = y + text.line_height * 0.5 + text.font.size * 0.55;
-            graphkit::line(out, [x, base], [x + text.width, base], Stroke::hairline(ink));
+            graphkit::line(
+                out,
+                [x, base],
+                [x + text.width, base],
+                Stroke::hairline(ink),
+            );
         }
         y += text.height;
     }

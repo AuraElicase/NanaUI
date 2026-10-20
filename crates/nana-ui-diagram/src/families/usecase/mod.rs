@@ -11,7 +11,6 @@ use crate::source::directives::AuthorStyle;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ActorLook {
     /// The stick figure.
@@ -98,8 +97,16 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
 pub(crate) fn summary(model: &Model) -> Summary {
     Summary {
-        nodes: model.nodes.iter().filter(|n| n.kind != NodeKind::Note).count() as u32,
-        edges: model.edges.iter().filter(|e| e.kind != EdgeKind::Note).count() as u32,
+        nodes: model
+            .nodes
+            .iter()
+            .filter(|n| n.kind != NodeKind::Note)
+            .count() as u32,
+        edges: model
+            .edges
+            .iter()
+            .filter(|e| e.kind != EdgeKind::Note)
+            .count() as u32,
         groups: model.boundaries.len() as u32,
     }
 }

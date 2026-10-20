@@ -12,10 +12,9 @@ use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
 use crate::ir::{Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::source::directives::AuthorStyle;
-use crate::text::{FontSpec, LaidText, Label};
+use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 use nana_ui_core::{SemanticColorMix, SemanticColorRole};
-
 
 /// At most this many sets are drawn; later ones are skipped with a warning.
 const MAX_SETS: usize = 4;
@@ -77,7 +76,10 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 continue;
             }
             if model.sets >= MAX_SETS {
-                cx.warn(line, format!("only {MAX_SETS} sets are drawn; `{id}` is skipped"));
+                cx.warn(
+                    line,
+                    format!("only {MAX_SETS} sets are drawn; `{id}` is skipped"),
+                );
                 continue;
             }
             set_ids.insert(id.clone(), model.sets);
@@ -117,7 +119,11 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 current = Some(existing);
                 continue;
             }
-            cx.limits.check_count(model.areas.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits.check_count(
+                model.areas.len() + 1,
+                cx.limits.elements,
+                LimitKind::Elements,
+            )?;
             model.areas.push(Area {
                 id: ids.join(","),
                 label,
@@ -134,7 +140,8 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let (ids, label, _) = area_head(cx, def)?;
             let id = ids.first().cloned().unwrap_or_default();
             notes += 1;
-            cx.limits.check_count(notes, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits
+                .check_count(notes, cx.limits.elements, LimitKind::Elements)?;
             let label = label.unwrap_or_else(|| Label::plain(&id));
             model.areas[area].notes.push(Note { id, label });
         } else if let Some(def) = keyword(stmt, "style") {
@@ -143,7 +150,10 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 author: AuthorStyle::parse(decls),
                 fill_opacity: fill_opacity(decls),
             };
-            let targets: Vec<String> = split_top(targets, ',').iter().map(|t| kit::unquote(t).to_string()).collect();
+            let targets: Vec<String> = split_top(targets, ',')
+                .iter()
+                .map(|t| kit::unquote(t).to_string())
+                .collect();
             // `style A,B` styles the union of A and B when one exists,
             // otherwise each named set or note.
             let joined = targets.join(",");
@@ -250,7 +260,9 @@ impl Outline {
         if k < 1e-6 {
             return -self.rx.min(self.ry);
         }
-        let grad = ((local[0] / (self.rx * self.rx)).powi(2) + (local[1] / (self.ry * self.ry)).powi(2)).sqrt();
+        let grad = ((local[0] / (self.rx * self.rx)).powi(2)
+            + (local[1] / (self.ry * self.ry)).powi(2))
+        .sqrt();
         k * (k - 1.0) / grad.max(1e-6)
     }
 
@@ -354,7 +366,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut out = SceneBuilder::new();
 
     // Author sizes shrink a set a little, never enough to lose a region.
-    let max_size = model.areas[..model.sets].iter().filter_map(|a| a.size).fold(0.0f64, f64::max);
+    let max_size = model.areas[..model.sets]
+        .iter()
+        .filter_map(|a| a.size)
+        .fold(0.0f64, f64::max);
     let scale: Vec<f32> = model.areas[..model.sets]
         .iter()
         .map(|a| match a.size {
@@ -386,14 +401,22 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (i, s) in shapes.iter().enumerate() {
         let st = style_of(&model.areas[i].id);
         let stroke = Stroke::new(
-            st.author.stroke.map_or(style::series(i, Tone::Solid), Ink::Rgba),
-            st.author.stroke_width.map_or(StrokeWidth::Thick, StrokeWidth::Px),
+            st.author
+                .stroke
+                .map_or(style::series(i, Tone::Solid), Ink::Rgba),
+            st.author
+                .stroke_width
+                .map_or(StrokeWidth::Thick, StrokeWidth::Px),
         );
         out.stroke(s.geom(), stroke);
     }
 
     // Labels: each area's name over its notes at the region's deepest point.
-    let bounds = shapes.iter().map(Outline::bounds).reduce(|a, b| a.union(&b)).unwrap_or_default();
+    let bounds = shapes
+        .iter()
+        .map(Outline::bounds)
+        .reduce(|a, b| a.union(&b))
+        .unwrap_or_default();
     for area in &model.areas {
         if area.label.is_none() && area.notes.is_empty() {
             continue;
@@ -405,20 +428,32 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let st = style_of(&area.id);
         let mut block: Vec<(LaidText, Ink)> = Vec::new();
         if let Some(label) = &area.label {
-            let face = if area.mask.count_ones() == 1 { strong } else { font };
+            let face = if area.mask.count_ones() == 1 {
+                strong
+            } else {
+                font
+            };
             let face = FontSpec {
                 weight: st.author.font_weight.unwrap_or(face.weight),
                 ..face
             };
-            block.push((cx.text.lay(label, face, Some(wrap)), st.author.color.map_or(style::TEXT, Ink::Rgba)));
+            block.push((
+                cx.text.lay(label, face, Some(wrap)),
+                st.author.color.map_or(style::TEXT, Ink::Rgba),
+            ));
         }
         for note in &area.notes {
             let nst = style_of(&note.id);
-            let ink = nst.author.color.or(st.author.color).map_or(style::MUTED, Ink::Rgba);
+            let ink = nst
+                .author
+                .color
+                .or(st.author.color)
+                .map_or(style::MUTED, Ink::Rgba);
             block.push((cx.text.lay(&note.label, small, Some(wrap)), ink));
         }
         let gap = m.font_size * 0.2;
-        let total: f32 = block.iter().map(|(l, _)| l.height).sum::<f32>() + gap * (block.len() - 1) as f32;
+        let total: f32 =
+            block.iter().map(|(l, _)| l.height).sum::<f32>() + gap * (block.len() - 1) as f32;
         let mut y = at[1] - total / 2.0;
         for (laid, ink) in &block {
             out.text_centered(laid, [at[0], y + laid.height / 2.0], *ink);
@@ -446,18 +481,32 @@ mod tests {
     #[test]
     fn every_region_of_four_ellipses_exists() {
         let shapes = outlines(4, 100.0, &[1.0; 4]);
-        let bounds = shapes.iter().map(Outline::bounds).reduce(|a, b| a.union(&b)).unwrap();
+        let bounds = shapes
+            .iter()
+            .map(Outline::bounds)
+            .reduce(|a, b| a.union(&b))
+            .unwrap();
         for mask in 1u8..16 {
-            assert!(region_anchor(&shapes, mask, bounds).is_some(), "region {mask:04b} missing");
+            assert!(
+                region_anchor(&shapes, mask, bounds).is_some(),
+                "region {mask:04b} missing"
+            );
         }
     }
 
     #[test]
     fn every_region_of_three_circles_exists() {
         let shapes = outlines(3, 100.0, &[0.85, 1.0, 0.85]);
-        let bounds = shapes.iter().map(Outline::bounds).reduce(|a, b| a.union(&b)).unwrap();
+        let bounds = shapes
+            .iter()
+            .map(Outline::bounds)
+            .reduce(|a, b| a.union(&b))
+            .unwrap();
         for mask in 1u8..8 {
-            assert!(region_anchor(&shapes, mask, bounds).is_some(), "region {mask:03b} missing");
+            assert!(
+                region_anchor(&shapes, mask, bounds).is_some(),
+                "region {mask:03b} missing"
+            );
         }
     }
 }

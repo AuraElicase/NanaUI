@@ -11,7 +11,6 @@ use crate::source::color;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-
 /// Point labels look for a free spot only up to this many points.
 const AVOID_LIMIT: usize = 300;
 
@@ -38,7 +37,8 @@ impl PointStyle {
                 "color" => style.color = color::parse(value),
                 "stroke-color" => style.stroke_color = color::parse(value),
                 "stroke-width" => {
-                    style.stroke_width = kit::number(value.trim_end_matches("px")).map(|w| w.clamp(0.0, 12.0) as f32)
+                    style.stroke_width =
+                        kit::number(value.trim_end_matches("px")).map(|w| w.clamp(0.0, 12.0) as f32)
                 }
                 _ => {}
             }
@@ -101,7 +101,8 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             let (name, decls) = def.split_once(char::is_whitespace).unwrap_or((def, ""));
             classes.insert(name.to_string(), PointStyle::parse(decls));
         } else if let Some((point, names)) = point(cx, stmt)? {
-            cx.limits.check_count(pending.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+            cx.limits
+                .check_count(pending.len() + 1, cx.limits.elements, LimitKind::Elements)?;
             pending.push((point, names));
         } else {
             cx.warn(line, format!("unreadable quadrant statement `{stmt}`"));
@@ -122,7 +123,8 @@ fn quadrant_number(stmt: &str) -> Option<usize> {
     let rest = stmt.strip_prefix("quadrant-")?;
     let digit = rest.chars().next()?.to_digit(10)?;
     let after = &rest[1..];
-    ((1..=4).contains(&digit) && (after.is_empty() || after.starts_with(char::is_whitespace))).then_some(digit as usize - 1)
+    ((1..=4).contains(&digit) && (after.is_empty() || after.starts_with(char::is_whitespace)))
+        .then_some(digit as usize - 1)
 }
 
 fn label(cx: &ParseCx<'_>, text: &str) -> Result<Option<Label>, DiagramError> {
@@ -159,7 +161,12 @@ fn point(cx: &mut ParseCx<'_>, stmt: &str) -> Result<Option<(Point, Vec<String>)
         _ => (head, None),
     };
     let names: Vec<String> = class_list
-        .map(|c| c.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .map(|c| {
+            c.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
         .unwrap_or_default();
     let label = cx.label(name.trim())?;
     let style = PointStyle::parse(&stmt[close + 1..]);
@@ -200,12 +207,25 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Quadrant washes: 2 | 1 over 3 | 4.
     let origins = [[half, 0.0], [0.0, 0.0], [0.0, half], [half, half]];
     for (q, o) in origins.iter().enumerate() {
-        out.fill(Geom::rect(Rect::new(o[0], o[1], half, half)), style::series(q, Tone::Soft));
+        out.fill(
+            Geom::rect(Rect::new(o[0], o[1], half, half)),
+            style::series(q, Tone::Soft),
+        );
     }
     let mut cross = PathData::new();
-    cross.move_to([half, 0.0]).line_to([half, side]).move_to([0.0, half]).line_to([side, half]);
-    out.stroke(Geom::path(cross), Stroke::new(style::NODE_FILL, StrokeWidth::Thick));
-    out.stroke(Geom::rect(Rect::new(0.0, 0.0, side, side)), Stroke::hairline(style::AXIS));
+    cross
+        .move_to([half, 0.0])
+        .line_to([half, side])
+        .move_to([0.0, half])
+        .line_to([side, half]);
+    out.stroke(
+        Geom::path(cross),
+        Stroke::new(style::NODE_FILL, StrokeWidth::Thick),
+    );
+    out.stroke(
+        Geom::rect(Rect::new(0.0, 0.0, side, side)),
+        Stroke::hairline(style::AXIS),
+    );
 
     // Quadrant titles: centred, or along the top edge once points share
     // the space.
@@ -230,7 +250,13 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if let Some(l) = l {
             let laid = cx.text.lay(l, small, Some(half - 4.0 * pad));
             let cxp = half * i as f32 + half / 2.0;
-            out.text(&laid, [cxp - laid.width / 2.0, side + pad * 0.6], laid.width, Align::Center, style::MUTED);
+            out.text(
+                &laid,
+                [cxp - laid.width / 2.0, side + pad * 0.6],
+                laid.width,
+                Align::Center,
+                style::MUTED,
+            );
         }
     }
     let y_wrap = m.font_size * 9.0;
@@ -238,19 +264,39 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if let Some(l) = l {
             let laid = cx.text.lay(l, small, Some(y_wrap));
             // Bottom caption on the lower half, top caption on the upper.
-            let cy = if i == 0 { half + half / 2.0 } else { half / 2.0 };
+            let cy = if i == 0 {
+                half + half / 2.0
+            } else {
+                half / 2.0
+            };
             let x = -pad * 0.8 - laid.width;
-            out.text(&laid, [x, cy - laid.height / 2.0], laid.width, Align::End, style::MUTED);
+            out.text(
+                &laid,
+                [x, cy - laid.height / 2.0],
+                laid.width,
+                Align::End,
+                style::MUTED,
+            );
         }
     }
     if model.x_axis.iter().all(Option::is_some) {
         // A small arrow between the two captions reads as "low → high".
         let y = side + pad * 0.6 + cx.text.line_advance(small) / 2.0;
-        arrow(&mut out, [half - pad * 1.5, y], [half + pad * 1.5, y], cx.marker_size() * 0.8);
+        arrow(
+            &mut out,
+            [half - pad * 1.5, y],
+            [half + pad * 1.5, y],
+            cx.marker_size() * 0.8,
+        );
     }
     if model.y_axis.iter().all(Option::is_some) {
         let x = -pad * 0.4;
-        arrow(&mut out, [x, half + pad * 1.5], [x, half - pad * 1.5], cx.marker_size() * 0.8);
+        arrow(
+            &mut out,
+            [x, half + pad * 1.5],
+            [x, half - pad * 1.5],
+            cx.marker_size() * 0.8,
+        );
     }
 
     // Points over everything; each label takes the first free spot of
@@ -261,10 +307,17 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .iter()
         .map(|p| p.style.radius.unwrap_or(default_r).max(1.0))
         .collect();
-    let centers: Vec<[f32; 2]> = model.points.iter().map(|p| [p.x * side, (1.0 - p.y) * side]).collect();
+    let centers: Vec<[f32; 2]> = model
+        .points
+        .iter()
+        .map(|p| [p.x * side, (1.0 - p.y) * side])
+        .collect();
     for (i, p) in model.points.iter().enumerate() {
         let (at, r) = (centers[i], radii[i]);
-        let fill = p.style.color.map_or(style::series(0, Tone::Solid), Ink::Rgba);
+        let fill = p
+            .style
+            .color
+            .map_or(style::series(0, Tone::Solid), Ink::Rgba);
         let stroke = match (p.style.stroke_color, p.style.stroke_width) {
             (None, None) => Stroke::hairline(style::NODE_FILL),
             (c, w) => Stroke::new(
@@ -303,12 +356,20 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             candidates.push(fit(at[0] - w / 2.0, at[1] + r + step));
             candidates.push(fit(at[0] - w / 2.0, at[1] - r - h - step));
         }
-        let free = |c: &Rect| !taken.iter().any(|t| t.inset(0.5, 0.5).intersects(&c.inset(0.5, 0.5)));
+        let free = |c: &Rect| {
+            !taken
+                .iter()
+                .any(|t| t.inset(0.5, 0.5).intersects(&c.inset(0.5, 0.5)))
+        };
         // Past a few hundred points the chart is a cloud; skip the search.
         let rect = if model.points.len() > AVOID_LIMIT {
             candidates[0]
         } else {
-            candidates.iter().copied().find(free).unwrap_or(candidates[0])
+            candidates
+                .iter()
+                .copied()
+                .find(free)
+                .unwrap_or(candidates[0])
         };
         out.text(&laid, [rect.x, rect.y], w, Align::Center, style::TEXT);
         taken.push(rect);

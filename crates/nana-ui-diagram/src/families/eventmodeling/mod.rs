@@ -13,12 +13,11 @@ use super::swimlane::{draw_lanes, lane_titles, spacing};
 use super::{LayoutCx, ParseCx, graphkit};
 use crate::geom::Marker;
 use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke};
-use crate::layout::lanes::{self, LaneEdge, LaneGraph, LaneNode, LaneSpec};
 use crate::layout::Direction;
+use crate::layout::lanes::{self, LaneEdge, LaneGraph, LaneNode, LaneSpec};
 use crate::style;
-use crate::text::{FontSpec, LaidText, Label};
+use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, Summary};
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum EntityKind {
@@ -134,7 +133,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let m = *cx.metrics;
     let font = cx.font();
     let small = cx.small_font();
-    let mono = FontSpec { mono: true, ..small };
+    let mono = FontSpec {
+        mono: true,
+        ..small
+    };
     let wrap = cx.wrap_width("eventmodeling.wrappingWidth") * 0.8;
     let gap = m.small_size * 0.3;
 
@@ -164,8 +166,25 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .iter()
         .map(|f| {
             let tag = cx.text.lay_plain(f.kind.tag(), small);
-            let name = cx.text.lay(&Label::plain(&f.name), font.weight(m.strong_weight), Some(wrap));
-            let data = (!f.data.is_empty()).then(|| cx.text.lay(&Label { lines: f.data.iter().map(|d| vec![crate::text::Run::plain(d.clone())]).collect(), markdown: false }, mono, Some(wrap)));
+            let name = cx.text.lay(
+                &Label::plain(&f.name),
+                font.weight(m.strong_weight),
+                Some(wrap),
+            );
+            let data = (!f.data.is_empty()).then(|| {
+                cx.text.lay(
+                    &Label {
+                        lines: f
+                            .data
+                            .iter()
+                            .map(|d| vec![crate::text::Run::plain(d.clone())])
+                            .collect(),
+                        markdown: false,
+                    },
+                    mono,
+                    Some(wrap),
+                )
+            });
             let mut w = tag.width.max(name.width);
             let mut h = tag.height + gap + name.height;
             if let Some(d) = &data {
@@ -173,7 +192,10 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 h += gap * 2.0 + d.height;
             }
             Card {
-                size: [w.max(m.font_size * 5.0) + 2.0 * m.node_pad_x, h + 2.0 * m.node_pad_y],
+                size: [
+                    w.max(m.font_size * 5.0) + 2.0 * m.node_pad_x,
+                    h + 2.0 * m.node_pad_y,
+                ],
                 tag,
                 name,
                 data,
@@ -184,18 +206,33 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let relations = model.relations();
     let graph = LaneGraph {
         direction: Direction::LR,
-        lanes: titles.iter().map(|t| LaneSpec { title: t.as_ref().map_or([0.0, 0.0], LaidText::size) }).collect(),
+        lanes: titles
+            .iter()
+            .map(|t| LaneSpec {
+                title: t.as_ref().map_or([0.0, 0.0], LaidText::size),
+            })
+            .collect(),
         nodes: model
             .frames
             .iter()
             .enumerate()
             .map(|(i, f)| LaneNode {
-                lane: lanes.iter().position(|(b, ns)| *b == f.kind.band() && *ns == f.namespace).unwrap_or(0),
+                lane: lanes
+                    .iter()
+                    .position(|(b, ns)| *b == f.kind.band() && *ns == f.namespace)
+                    .unwrap_or(0),
                 size: cards[i].size,
                 rank: Some(i),
             })
             .collect(),
-        edges: relations.iter().map(|&(a, b)| LaneEdge { from: a, to: b, label: None }).collect(),
+        edges: relations
+            .iter()
+            .map(|&(a, b)| LaneEdge {
+                from: a,
+                to: b,
+                label: None,
+            })
+            .collect(),
     };
     let placed = lanes::layout(&graph, &spacing(cx), cx.limits)?;
 
@@ -206,24 +243,49 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if route.points.len() < 2 {
             continue;
         }
-        graphkit::edge(&mut out, &route.points, style::edge_stroke(), None, Some(Marker::Arrow), marker, m.bend_radius);
+        graphkit::edge(
+            &mut out,
+            &route.points,
+            style::edge_stroke(),
+            None,
+            Some(Marker::Arrow),
+            marker,
+            m.bend_radius,
+        );
     }
     for (i, f) in model.frames.iter().enumerate() {
         let rect = placed.nodes[i];
         let card = &cards[i];
         let (fill, stroke) = f.kind.colors();
-        out.shape(Geom::Rect { rect, corner: Corner::Tier(nana_ui_core::RadiusTier::Sm) }, Some(fill), Some(Stroke::hairline(stroke)));
+        out.shape(
+            Geom::Rect {
+                rect,
+                corner: Corner::Tier(nana_ui_core::RadiusTier::Sm),
+            },
+            Some(fill),
+            Some(Stroke::hairline(stroke)),
+        );
         let mut y = rect.y + m.node_pad_y;
         out.text(&card.tag, [rect.x, y], rect.w, Align::Center, style::MUTED);
         y += card.tag.height + gap;
         out.text(&card.name, [rect.x, y], rect.w, Align::Center, style::TEXT);
         y += card.name.height + gap * 2.0;
         if let Some(d) = &card.data {
-            out.text(d, [rect.x + m.node_pad_x, y], d.width, Align::Start, style::MUTED);
+            out.text(
+                d,
+                [rect.x + m.node_pad_x, y],
+                d.width,
+                Align::Start,
+                style::MUTED,
+            );
         }
     }
     let content = out.bounds().union(&placed.bounds);
-    let content = if content.w <= 0.0 { Rect::new(0.0, 0.0, 1.0, 1.0) } else { content };
+    let content = if content.w <= 0.0 {
+        Rect::new(0.0, 0.0, 1.0, 1.0)
+    } else {
+        content
+    };
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
 }

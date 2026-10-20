@@ -75,7 +75,9 @@ impl Parser<'_, '_> {
 
     fn check_nodes(&self) -> Result<(), DiagramError> {
         let count = self.states.len() + self.notes.len() + 1;
-        self.cx.limits.check_count(count, self.cx.limits.nodes, LimitKind::Nodes)
+        self.cx
+            .limits
+            .check_count(count, self.cx.limits.nodes, LimitKind::Nodes)
     }
 
     /// The state `raw` names (`[*]` is the scope's start or end).
@@ -184,13 +186,15 @@ impl Parser<'_, '_> {
         if let Some(colon) = plain_colon(stmt) {
             let (id, desc) = (&stmt[..colon], &stmt[colon + 1..]);
             let Some(s) = self.state(id.trim(), false)? else {
-                self.cx.warn(self.line, format!("cannot read `{}`", truncate(stmt)));
+                self.cx
+                    .warn(self.line, format!("cannot read `{}`", truncate(stmt)));
                 return Ok(());
             };
             return self.describe(s, desc);
         }
         if self.state(stmt, false)?.is_none() {
-            self.cx.warn(self.line, format!("cannot read `{}`", truncate(stmt)));
+            self.cx
+                .warn(self.line, format!("cannot read `{}`", truncate(stmt)));
         }
         Ok(())
     }
@@ -212,13 +216,23 @@ impl Parser<'_, '_> {
             Some(i) => (&right[..i], Some(right[i + 1..].trim())),
             None => (right, None),
         };
-        let (Some(from), Some(to)) = (self.state(left.trim(), false)?, self.state(right.trim(), true)?)
-        else {
-            self.cx.warn(self.line, "a transition needs a state on each side");
+        let (Some(from), Some(to)) = (
+            self.state(left.trim(), false)?,
+            self.state(right.trim(), true)?,
+        ) else {
+            self.cx
+                .warn(self.line, "a transition needs a state on each side");
             return Ok(());
         };
-        self.cx.limits.check_count(self.transitions.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
-        let label = label.filter(|l| !l.is_empty()).map(|l| self.cx.label(l)).transpose()?;
+        self.cx.limits.check_count(
+            self.transitions.len() + 1,
+            self.cx.limits.edges,
+            LimitKind::Edges,
+        )?;
+        let label = label
+            .filter(|l| !l.is_empty())
+            .map(|l| self.cx.label(l))
+            .transpose()?;
         self.transitions.push(Transition { from, to, label });
         Ok(())
     }
@@ -253,7 +267,10 @@ impl Parser<'_, '_> {
         };
         let (id_part, kind) = match id_part.find("<<") {
             Some(i) => {
-                let tag = id_part[i + 2..].trim_end_matches(">>").trim().to_ascii_lowercase();
+                let tag = id_part[i + 2..]
+                    .trim_end_matches(">>")
+                    .trim()
+                    .to_ascii_lowercase();
                 let kind = match tag.as_str() {
                     "fork" => Some(Kind::Fork),
                     "join" => Some(Kind::Join),
@@ -280,7 +297,8 @@ impl Parser<'_, '_> {
             _ => id_part,
         };
         let Some(s) = self.state(id_part, false)? else {
-            self.cx.warn(self.line, format!("cannot read state `{}`", truncate(rest)));
+            self.cx
+                .warn(self.line, format!("cannot read state `{}`", truncate(rest)));
             if open {
                 // Still open a scope so the matching `}` closes something.
                 self.stack.push(self.scope());
@@ -303,7 +321,11 @@ impl Parser<'_, '_> {
                     if self.stack.len() + 1 > self.cx.limits.cluster_depth {
                         return Err(DiagramError::TooLarge(LimitKind::ClusterDepth));
                     }
-                    self.cx.limits.check_count(self.composites.len() + 1, self.cx.limits.clusters, LimitKind::Clusters)?;
+                    self.cx.limits.check_count(
+                        self.composites.len() + 1,
+                        self.cx.limits.clusters,
+                        LimitKind::Clusters,
+                    )?;
                     let c = self.composites.len();
                     self.composites.push(Composite {
                         state: s,
@@ -317,7 +339,11 @@ impl Parser<'_, '_> {
                 }
             };
             if self.stack.iter().any(|scope| scope.composite == Some(c)) {
-                return Err(DiagramError::syntax(self.line as u32 + 1, 1, "a state cannot contain itself"));
+                return Err(DiagramError::syntax(
+                    self.line as u32 + 1,
+                    1,
+                    "a state cannot contain itself",
+                ));
             }
             self.stack.push(Scope {
                 composite: Some(c),
@@ -427,9 +453,15 @@ mod tests {
         assert_eq!(kinds[2], Kind::End);
         assert_eq!(m.states.iter().filter(|s| s.kind == Kind::End).count(), 1);
         assert_eq!(m.transitions.len(), 5);
-        assert_eq!(m.transitions[2].label.as_ref().map(|l| l.text()), Some("push".into()));
+        assert_eq!(
+            m.transitions[2].label.as_ref().map(|l| l.text()),
+            Some("push".into())
+        );
         let ln = m.states.iter().find(|s| s.id == "LN").unwrap();
-        assert_eq!(ln.label.as_ref().map(|l| l.text()), Some("Long name".into()));
+        assert_eq!(
+            ln.label.as_ref().map(|l| l.text()),
+            Some("Long name".into())
+        );
         assert_eq!(ln.descriptions.len(), 2);
     }
 
@@ -442,11 +474,20 @@ mod tests {
         assert_eq!(m.composites.len(), 2);
         assert_eq!(m.composites[0].regions, 1);
         assert_eq!(m.composites[0].direction, Some(Direction::TB));
-        assert_eq!(m.composites[1].scope, Scope { composite: Some(0), region: 1 });
+        assert_eq!(
+            m.composites[1].scope,
+            Scope {
+                composite: Some(0),
+                region: 1
+            }
+        );
         let starts = m.states.iter().filter(|s| s.kind == Kind::Start).count();
         assert_eq!(starts, 2, "each region has its own start");
         let kind = |id: &str| m.states.iter().find(|s| s.id == id).unwrap().kind;
-        assert_eq!((kind("f"), kind("j"), kind("c")), (Kind::Fork, Kind::Join, Kind::Choice));
+        assert_eq!(
+            (kind("f"), kind("j"), kind("c")),
+            (Kind::Fork, Kind::Join, Kind::Choice)
+        );
         assert_eq!(m.notes.len(), 2);
         assert!(m.notes[1].left);
         assert_eq!(m.notes[1].text.lines.len(), 2);

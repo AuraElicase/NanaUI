@@ -9,7 +9,7 @@ use crate::geom::{Marker, Shape};
 use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::layout::grid::{self, Connect, GridItem, GridSpec};
 use crate::style;
-use crate::text::{LaidText, Label};
+use crate::text::{Label, LaidText};
 use crate::{DiagramError, DiagramScene};
 
 const INTERNAL_FILL: Ink = Ink::Mix(SemanticColorMix::new(R::Accent, R::Surface, 0.14));
@@ -70,8 +70,15 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .map(|e| {
             let stereotype = cx.text.lay_plain(&e.stereotype(), small);
             let name = cx.text.lay(&e.label, strong, Some(wrap));
-            let techn = e.techn.as_ref().map(|t| cx.text.lay(&bracketed(t), small, Some(wrap)));
-            let descr = e.descr.as_ref().map(|d| cx.text.lay(d, small, Some(wrap))).filter(|d| !d.is_empty());
+            let techn = e
+                .techn
+                .as_ref()
+                .map(|t| cx.text.lay(&bracketed(t), small, Some(wrap)));
+            let descr = e
+                .descr
+                .as_ref()
+                .map(|d| cx.text.lay(d, small, Some(wrap)))
+                .filter(|d| !d.is_empty());
             let person = e.kind == ElemKind::Person;
             let mut w = stereotype.width.max(name.width);
             let mut h = stereotype.height + line_gap + name.height;
@@ -105,14 +112,25 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .iter()
         .map(|b| {
             let label = cx.text.lay(&b.label, strong, Some(wrap * 1.5));
-            let kind = b.type_text.as_deref().map(|t| cx.text.lay_plain(&format!("[{t}]"), small));
-            let descr = b.descr.as_ref().map(|d| cx.text.lay(d, small, Some(wrap * 1.5)));
+            let kind = b
+                .type_text
+                .as_deref()
+                .map(|t| cx.text.lay_plain(&format!("[{t}]"), small));
+            let descr = b
+                .descr
+                .as_ref()
+                .map(|d| cx.text.lay(d, small, Some(wrap * 1.5)));
             let mut size = label.size();
             for part in [&kind, &descr].into_iter().flatten() {
                 size[0] = size[0].max(part.width);
                 size[1] += line_gap + part.height;
             }
-            Head { label, kind, descr, size }
+            Head {
+                label,
+                kind,
+                descr,
+                size,
+            }
         })
         .collect();
 
@@ -123,8 +141,13 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         .iter()
         .map(|r| {
             (
-                r.label.as_ref().map(|l| cx.text.lay(l, small, Some(rel_wrap))).filter(|l| !l.is_empty()),
-                r.techn.as_ref().map(|t| cx.text.lay(&bracketed(t), small, Some(rel_wrap))),
+                r.label
+                    .as_ref()
+                    .map(|l| cx.text.lay(l, small, Some(rel_wrap)))
+                    .filter(|l| !l.is_empty()),
+                r.techn
+                    .as_ref()
+                    .map(|t| cx.text.lay(&bracketed(t), small, Some(rel_wrap))),
             )
         })
         .collect();
@@ -137,7 +160,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
         [s[0] + 2.0 * chip_pad[0], s[1] + 2.0 * chip_pad[1]]
     };
-    let widest = (0..model.rels.len()).map(chip_size).fold([0.0f32, 0.0f32], |a, b| [a[0].max(b[0]), a[1].max(b[1])]);
+    let widest = (0..model.rels.len())
+        .map(chip_size)
+        .fold([0.0f32, 0.0f32], |a, b| [a[0].max(b[0]), a[1].max(b[1])]);
     let containers = model.boundaries.len() + 1;
     let container = |p: Option<usize>| p.map_or(0, |b| b + 1);
     let mut elements = vec![Vec::new(); containers];
@@ -167,7 +192,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for b in (0..model.boundaries.len()).rev() {
         let content = content_size(&geo, b + 1);
         let head = geo.heads[b].size;
-        geo.boundary_size[b] = [content[0].max(head[0]) + 2.0 * geo.pad, head[1] + geo.pad * 0.75 + content[1] + 2.0 * geo.pad];
+        geo.boundary_size[b] = [
+            content[0].max(head[0]) + 2.0 * geo.pad,
+            head[1] + geo.pad * 0.75 + content[1] + 2.0 * geo.pad,
+        ];
     }
     let root = content_size(&geo, 0);
     place(&mut geo, 0, Rect::new(0.0, 0.0, root[0], root[1]));
@@ -180,24 +208,51 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let boundary = &model.boundaries[b];
         let rect = geo.boundary_rect[b];
         let node = boundary.kind == BoundaryKind::Node;
-        let mut stroke = Stroke::hairline(if node { style::NODE_STROKE } else { style::MUTED });
+        let mut stroke = Stroke::hairline(if node {
+            style::NODE_STROKE
+        } else {
+            style::MUTED
+        });
         if !node {
             stroke = stroke.dash(Dash::Dashed);
         }
         if let Some(c) = boundary.colors.border {
             stroke.ink = Ink::Rgba(c);
         }
-        let fill = boundary.colors.bg.map(Ink::Rgba).or(node.then_some(style::CLUSTER_FILL));
-        out.shape(Geom::Rect { rect, corner: Corner::Tier(style::CLUSTER_CORNER) }, fill, Some(stroke));
+        let fill = boundary
+            .colors
+            .bg
+            .map(Ink::Rgba)
+            .or(node.then_some(style::CLUSTER_FILL));
+        out.shape(
+            Geom::Rect {
+                rect,
+                corner: Corner::Tier(style::CLUSTER_CORNER),
+            },
+            fill,
+            Some(stroke),
+        );
         let head = &geo.heads[b];
         let ink = boundary.colors.font.map(Ink::Rgba);
         let mut y = rect.y + geo.pad * 0.75;
         let x = rect.x + geo.pad;
-        out.text(&head.label, [x, y], head.label.width, Align::Start, ink.unwrap_or(style::TEXT));
+        out.text(
+            &head.label,
+            [x, y],
+            head.label.width,
+            Align::Start,
+            ink.unwrap_or(style::TEXT),
+        );
         y += head.label.height;
         for part in [&head.kind, &head.descr].into_iter().flatten() {
             y += line_gap;
-            out.text(part, [x, y], part.width, Align::Start, ink.unwrap_or(style::MUTED));
+            out.text(
+                part,
+                [x, y],
+                part.width,
+                Align::Start,
+                ink.unwrap_or(style::MUTED),
+            );
             y += part.height;
         }
     }
@@ -210,10 +265,22 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         End::Element(i) => i,
         End::Boundary(b) => n + b,
     };
-    let links: Vec<Connect> = model.rels.iter().map(|r| Connect { from: index(r.from), to: index(r.to) }).collect();
+    let links: Vec<Connect> = model
+        .rels
+        .iter()
+        .map(|r| Connect {
+            from: index(r.from),
+            to: index(r.to),
+        })
+        .collect();
     // Boundary titles count as obstacles for lines and labels alike.
     let mut obstacles = geo.element_rect.clone();
-    obstacles.extend(geo.boundary_rect.iter().zip(&geo.heads).map(|(r, h)| Rect::new(r.x + geo.pad, r.y + geo.pad * 0.75, h.size[0], h.size[1])));
+    obstacles.extend(
+        geo.boundary_rect
+            .iter()
+            .zip(&geo.heads)
+            .map(|(r, h)| Rect::new(r.x + geo.pad, r.y + geo.pad * 0.75, h.size[0], h.size[1])),
+    );
     let routes = grid::connect_all(&boxes, &links, &obstacles, geo.col_gap.min(geo.row_gap));
     let marker = cx.marker_size();
     let mut chips = Vec::new();
@@ -233,15 +300,33 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if let Some(c) = rel.line_color {
             stroke.ink = Ink::Rgba(c);
         }
-        graphkit::edge(&mut out, &points, stroke, rel.both.then_some(Marker::Arrow), Some(Marker::Arrow), marker, m.bend_radius);
+        graphkit::edge(
+            &mut out,
+            &points,
+            stroke,
+            rel.both.then_some(Marker::Arrow),
+            Some(Marker::Arrow),
+            marker,
+            m.bend_radius,
+        );
         if rel_texts[i].0.is_some() || rel_texts[i].1.is_some() {
-            chips.push((i, grid::place_label(&points, chip_size(i), &obstacles, &mut taken)));
+            chips.push((
+                i,
+                grid::place_label(&points, chip_size(i), &obstacles, &mut taken),
+            ));
         }
     }
 
     // Cards.
     for (i, e) in model.elements.iter().enumerate() {
-        draw_card(&mut out, e, &geo.cards[i], geo.element_rect[i], line_gap, glyph);
+        draw_card(
+            &mut out,
+            e,
+            &geo.cards[i],
+            geo.element_rect[i],
+            line_gap,
+            glyph,
+        );
         if let Some(link) = &e.link {
             out.link(geo.element_rect[i], link, None);
         }
@@ -251,21 +336,41 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (i, center) in chips {
         let size = chip_size(i);
         let rect = Rect::centered(center, size);
-        out.shape(Geom::rounded(rect, style::CHIP_CORNER), Some(style::CHIP_FILL), Some(Stroke::hairline(style::CHIP_STROKE)));
+        out.shape(
+            Geom::rounded(rect, style::CHIP_CORNER),
+            Some(style::CHIP_FILL),
+            Some(Stroke::hairline(style::CHIP_STROKE)),
+        );
         let ink = model.rels[i].text_color.map_or(style::MUTED, Ink::Rgba);
         let mut y = rect.y + chip_pad[1];
         let (label, techn) = &rel_texts[i];
         if let Some(l) = label {
-            out.text(l, [rect.x + chip_pad[0], y], size[0] - 2.0 * chip_pad[0], Align::Center, ink);
+            out.text(
+                l,
+                [rect.x + chip_pad[0], y],
+                size[0] - 2.0 * chip_pad[0],
+                Align::Center,
+                ink,
+            );
             y += l.height;
         }
         if let Some(t) = techn {
-            out.text(t, [rect.x + chip_pad[0], y], size[0] - 2.0 * chip_pad[0], Align::Center, style::MUTED);
+            out.text(
+                t,
+                [rect.x + chip_pad[0], y],
+                size[0] - 2.0 * chip_pad[0],
+                Align::Center,
+                style::MUTED,
+            );
         }
     }
 
     let content = out.bounds();
-    let content = if content.w <= 0.0 { Rect::new(0.0, 0.0, 1.0, 1.0) } else { content };
+    let content = if content.w <= 0.0 {
+        Rect::new(0.0, 0.0, 1.0, 1.0)
+    } else {
+        content
+    };
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
 }
@@ -285,7 +390,11 @@ fn bracketed(label: &Label) -> Label {
 fn row_grid(geo: &Geo, sizes: Vec<[f32; 2]>, per_row: usize, min_w: f32) -> grid::GridLayout {
     let cells = grid::flow(&vec![1; sizes.len()], per_row);
     grid::solve(&GridSpec {
-        items: sizes.iter().zip(&cells).map(|(&size, &(col, row, _))| GridItem::new(col, row, size)).collect(),
+        items: sizes
+            .iter()
+            .zip(&cells)
+            .map(|(&size, &(col, row, _))| GridItem::new(col, row, size))
+            .collect(),
         col_gap: geo.col_gap,
         row_gap: geo.row_gap,
         min_size: [min_w, 0.0],
@@ -298,7 +407,10 @@ fn element_grid(geo: &Geo, c: usize) -> grid::GridLayout {
 }
 
 fn boundary_grid(geo: &Geo, c: usize, min_w: f32) -> grid::GridLayout {
-    let sizes = geo.boundaries[c].iter().map(|&b| geo.boundary_size[b]).collect();
+    let sizes = geo.boundaries[c]
+        .iter()
+        .map(|&b| geo.boundary_size[b])
+        .collect();
     row_grid(geo, sizes, geo.boundary_in_row, min_w)
 }
 
@@ -306,7 +418,11 @@ fn boundary_grid(geo: &Geo, c: usize, min_w: f32) -> grid::GridLayout {
 fn content_size(geo: &Geo, c: usize) -> [f32; 2] {
     let e = element_grid(geo, c).size;
     let b = boundary_grid(geo, c, 0.0).size;
-    let between = if e[1] > 0.0 && b[1] > 0.0 { geo.row_gap } else { 0.0 };
+    let between = if e[1] > 0.0 && b[1] > 0.0 {
+        geo.row_gap
+    } else {
+        0.0
+    };
     [e[0].max(b[0]), e[1] + between + b[1]]
 }
 
@@ -316,20 +432,42 @@ fn place(geo: &mut Geo, c: usize, area: Rect) {
     for (k, &e) in geo.elements[c].clone().iter().enumerate() {
         geo.element_rect[e] = eg.cells[k].translated(ex, area.y);
     }
-    let top = if eg.size[1] > 0.0 { area.y + eg.size[1] + geo.row_gap } else { area.y };
+    let top = if eg.size[1] > 0.0 {
+        area.y + eg.size[1] + geo.row_gap
+    } else {
+        area.y
+    };
     let bg = boundary_grid(geo, c, area.w);
     for (k, &b) in geo.boundaries[c].clone().iter().enumerate() {
         let rect = bg.cells[k].translated(area.x, top);
         geo.boundary_rect[b] = rect;
         let head = geo.heads[b].size;
         let inner_top = rect.y + geo.pad * 0.75 + head[1] + geo.pad;
-        let inner = Rect::new(rect.x + geo.pad, inner_top, rect.w - 2.0 * geo.pad, (rect.bottom() - geo.pad - inner_top).max(0.0));
+        let inner = Rect::new(
+            rect.x + geo.pad,
+            inner_top,
+            rect.w - 2.0 * geo.pad,
+            (rect.bottom() - geo.pad - inner_top).max(0.0),
+        );
         place(geo, b + 1, inner);
     }
 }
 
-fn draw_card(out: &mut SceneBuilder, e: &Element, card: &Card, rect: Rect, line_gap: f32, glyph: f32) {
-    let (mut fill, mut stroke_ink) = if e.external { (EXTERNAL_FILL, EXTERNAL_STROKE) } else if e.kind == ElemKind::Person { (PERSON_FILL, INTERNAL_STROKE) } else { (INTERNAL_FILL, INTERNAL_STROKE) };
+fn draw_card(
+    out: &mut SceneBuilder,
+    e: &Element,
+    card: &Card,
+    rect: Rect,
+    line_gap: f32,
+    glyph: f32,
+) {
+    let (mut fill, mut stroke_ink) = if e.external {
+        (EXTERNAL_FILL, EXTERNAL_STROKE)
+    } else if e.kind == ElemKind::Person {
+        (PERSON_FILL, INTERNAL_STROKE)
+    } else {
+        (INTERNAL_FILL, INTERNAL_STROKE)
+    };
     if let Some(c) = e.colors.bg {
         fill = Ink::Rgba(c);
     }
@@ -337,9 +475,17 @@ fn draw_card(out: &mut SceneBuilder, e: &Element, card: &Card, rect: Rect, line_
         stroke_ink = Ink::Rgba(c);
     }
     let stroke = Stroke::hairline(stroke_ink);
-    let text = e.colors.font.map(Ink::Rgba).or_else(|| e.colors.bg.map(style::text_on));
+    let text = e
+        .colors
+        .font
+        .map(Ink::Rgba)
+        .or_else(|| e.colors.bg.map(style::text_on));
     match card.shape {
-        Shape::Rect => out.shape(Geom::rounded(rect, RadiusTier::Md), Some(fill), Some(stroke)),
+        Shape::Rect => out.shape(
+            Geom::rounded(rect, RadiusTier::Md),
+            Some(fill),
+            Some(stroke),
+        ),
         shape => {
             out.shape(shape.outline(rect), Some(fill), Some(stroke));
             for path in shape.decorations(rect).1 {
@@ -352,9 +498,25 @@ fn draw_card(out: &mut SceneBuilder, e: &Element, card: &Card, rect: Rect, line_
     if card.person {
         let c = [area.x + area.w / 2.0, y];
         let head = glyph * 0.42;
-        out.shape(Geom::Ellipse(Rect::new(c[0] - head / 2.0, c[1], head, head)), Some(stroke_ink), None);
-        let body = Rect::new(c[0] - glyph * 0.42, c[1] + head + glyph * 0.06, glyph * 0.84, glyph - head - glyph * 0.06);
-        out.shape(Geom::Rect { rect: body, corner: Corner::Px(body.h * 0.6) }, Some(stroke_ink), None);
+        out.shape(
+            Geom::Ellipse(Rect::new(c[0] - head / 2.0, c[1], head, head)),
+            Some(stroke_ink),
+            None,
+        );
+        let body = Rect::new(
+            c[0] - glyph * 0.42,
+            c[1] + head + glyph * 0.06,
+            glyph * 0.84,
+            glyph - head - glyph * 0.06,
+        );
+        out.shape(
+            Geom::Rect {
+                rect: body,
+                corner: Corner::Px(body.h * 0.6),
+            },
+            Some(stroke_ink),
+            None,
+        );
         y += glyph + line_gap;
     }
     let lines: [(Option<&LaidText>, Ink); 4] = [

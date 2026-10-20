@@ -7,11 +7,10 @@ use super::{LayoutCx, ParseCx, graphkit};
 use crate::geom::{Marker, Shape};
 use crate::ir::{Dash, Stroke};
 use crate::layout::Direction;
-use crate::style;
 use crate::source::directives::AuthorStyle;
+use crate::style;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LineKind {
@@ -41,7 +40,8 @@ impl Curve {
             "rounded" => Self::Rounded,
             "step" | "stepBefore" | "stepAfter" => Self::Step,
             "linear" => Self::Linear,
-            "basis" | "cardinal" | "natural" | "monotoneX" | "monotoneY" | "catmullRom" | "bumpX" | "bumpY" => Self::Smooth,
+            "basis" | "cardinal" | "natural" | "monotoneX" | "monotoneY" | "catmullRom"
+            | "bumpX" | "bumpY" => Self::Smooth,
             _ => return None,
         })
     }
@@ -109,7 +109,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 pub(crate) fn summary(model: &Model) -> Summary {
     Summary {
         nodes: model.nodes.len() as u32,
-        edges: model.edges.iter().filter(|e| e.line != LineKind::Invisible).count() as u32,
+        edges: model
+            .edges
+            .iter()
+            .filter(|e| e.line != LineKind::Invisible)
+            .count() as u32,
         groups: model.subgraphs.len() as u32,
     }
 }

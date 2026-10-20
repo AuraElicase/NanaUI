@@ -8,8 +8,8 @@ use crate::families::LayoutCx;
 use crate::geom::{PathData, Shape};
 use crate::ir::{Align, Corner, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::layout::tree::{TidyGaps, TidyNode, preorder, tidy};
-use crate::text::{FontSpec, LaidText};
 use crate::style::{self, series};
+use crate::text::{FontSpec, LaidText};
 use crate::{DiagramError, DiagramScene};
 
 #[derive(Clone, Copy, PartialEq, Eq)]

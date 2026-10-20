@@ -7,9 +7,8 @@ use unicode_segmentation::UnicodeSegmentation;
 use super::kit::{self, keyword};
 use super::{LayoutCx, ParseCx};
 use crate::ir::{Align, Geom, Rect, SceneBuilder};
-use crate::text::{FontSpec, LaidText, Label, Measurer};
+use crate::text::{FontSpec, Label, LaidText, Measurer};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct Field {
@@ -32,7 +31,13 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     let mut model = Model::default();
     let mut next = 0u32;
     let elements = cx.limits.elements as u64;
-    let bound = |v: u64| if v >= elements { Err(DiagramError::TooLarge(LimitKind::Elements)) } else { Ok(v as u32) };
+    let bound = |v: u64| {
+        if v >= elements {
+            Err(DiagramError::TooLarge(LimitKind::Elements))
+        } else {
+            Ok(v as u32)
+        }
+    };
     for (line, stmt) in kit::statements(body, header) {
         if let Some(title) = keyword(stmt, "title") {
             let title = kit::unquote(title).trim();
@@ -47,9 +52,17 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         };
         let range = range.trim();
         let parsed = if let Some(count) = range.strip_prefix('+') {
-            count.trim().parse::<u64>().ok().filter(|c| *c > 0).map(|c| (u64::from(next), u64::from(next) + c - 1))
+            count
+                .trim()
+                .parse::<u64>()
+                .ok()
+                .filter(|c| *c > 0)
+                .map(|c| (u64::from(next), u64::from(next) + c - 1))
         } else if let Some((a, b)) = range.split_once('-') {
-            a.trim().parse::<u64>().ok().zip(b.trim().parse::<u64>().ok())
+            a.trim()
+                .parse::<u64>()
+                .ok()
+                .zip(b.trim().parse::<u64>().ok())
         } else {
             range.parse::<u64>().ok().map(|a| (a, a))
         };
@@ -88,7 +101,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let number_font = FontSpec::new(m.small_size * 0.85);
     let bit_w = m.font_size * 1.85;
     let pad = m.font_size * 0.3;
-    let number_h = if show_bits { cx.text.line_advance(number_font) } else { 0.0 };
+    let number_h = if show_bits {
+        cx.text.line_advance(number_font)
+    } else {
+        0.0
+    };
     let min_row = m.font_size * 2.4;
     let row_gap = if show_bits { 0.0 } else { m.font_size * 0.2 };
 
@@ -105,12 +122,18 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         while s <= f.end {
             let row = s / per_row;
             let e = f.end.min((row + 1) * per_row - 1);
-            segments.push(Segment { row, start: s, end: e, field: i });
+            segments.push(Segment {
+                row,
+                start: s,
+                end: e,
+                field: i,
+            });
             s = e + 1;
         }
     }
     let rows = segments.last().map_or(0, |s| s.row + 1);
-    cx.limits.check_count(segments.len(), cx.limits.elements, LimitKind::Elements)?;
+    cx.limits
+        .check_count(segments.len(), cx.limits.elements, LimitKind::Elements)?;
 
     let laid: Vec<LaidText> = segments
         .iter()
@@ -138,20 +161,49 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         col as f32 * bit_w
     };
     for (s, l) in segments.iter().zip(&laid) {
-        let (a, b) = if descending { (x_of(s.end), x_of(s.start)) } else { (x_of(s.start), x_of(s.end)) };
-        let rect = Rect::new(a, row_top[s.row as usize], b + bit_w - a, row_h[s.row as usize]);
-        out.shape(Geom::rect(rect), Some(style::NODE_FILL), Some(style::node_stroke()));
+        let (a, b) = if descending {
+            (x_of(s.end), x_of(s.start))
+        } else {
+            (x_of(s.start), x_of(s.end))
+        };
+        let rect = Rect::new(
+            a,
+            row_top[s.row as usize],
+            b + bit_w - a,
+            row_h[s.row as usize],
+        );
+        out.shape(
+            Geom::rect(rect),
+            Some(style::NODE_FILL),
+            Some(style::node_stroke()),
+        );
         out.text_centered(l, rect.center(), style::TEXT);
         if show_bits {
             let ny = rect.y - number_h;
-            let (left, right) = if descending { (s.end, s.start) } else { (s.start, s.end) };
+            let (left, right) = if descending {
+                (s.end, s.start)
+            } else {
+                (s.start, s.end)
+            };
             let t = cx.text.lay_plain(&left.to_string(), number_font);
             if s.start == s.end {
-                out.text(&t, [rect.center()[0] - t.width / 2.0, ny], t.width, Align::Center, style::MUTED);
+                out.text(
+                    &t,
+                    [rect.center()[0] - t.width / 2.0, ny],
+                    t.width,
+                    Align::Center,
+                    style::MUTED,
+                );
             } else {
                 out.text(&t, [rect.x + 2.0, ny], t.width, Align::Start, style::MUTED);
                 let t = cx.text.lay_plain(&right.to_string(), number_font);
-                out.text(&t, [rect.right() - 2.0 - t.width, ny], t.width, Align::End, style::MUTED);
+                out.text(
+                    &t,
+                    [rect.right() - 2.0 - t.width, ny],
+                    t.width,
+                    Align::End,
+                    style::MUTED,
+                );
             }
         }
     }
@@ -194,7 +246,11 @@ fn fit(text: &Measurer<'_>, label: &Label, font: FontSpec, width: f32) -> LaidTe
         used += a;
         kept.push_str(g);
     }
-    let shown = if kept.trim().is_empty() { String::new() } else { format!("{}…", kept.trim_end()) };
+    let shown = if kept.trim().is_empty() {
+        String::new()
+    } else {
+        format!("{}…", kept.trim_end())
+    };
     text.lay_plain(&shown, smaller)
 }
 

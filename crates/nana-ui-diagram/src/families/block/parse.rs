@@ -71,7 +71,10 @@ impl Parser<'_, '_> {
                 } else if let Ok(n) = value.parse::<usize>() {
                     Some(n.clamp(1, MAX_SPAN))
                 } else {
-                    self.cx.warn(self.line, format!("cannot read `columns {}`", truncate(value)));
+                    self.cx.warn(
+                        self.line,
+                        format!("cannot read `columns {}`", truncate(value)),
+                    );
                     return Ok(());
                 };
                 match self.stack.last() {
@@ -83,14 +86,18 @@ impl Parser<'_, '_> {
             "classDef" => {
                 let (names, decls) = first_word(rest);
                 for name in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                    self.class_defs.entry(name.to_string()).or_default().apply(decls);
+                    self.class_defs
+                        .entry(name.to_string())
+                        .or_default()
+                        .apply(decls);
                 }
                 return Ok(());
             }
             "class" => {
                 let (ids, class) = first_word(rest);
                 for id in ids.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                    self.class_assign.push((id.to_string(), class.trim().to_string()));
+                    self.class_assign
+                        .push((id.to_string(), class.trim().to_string()));
                 }
                 return Ok(());
             }
@@ -110,7 +117,11 @@ impl Parser<'_, '_> {
 
     fn add(&mut self, block: Block) -> Result<usize, DiagramError> {
         let limits = self.cx.limits;
-        limits.check_count(self.model.blocks.len() + 1, limits.nodes.min(crate::layout::grid::MAX_ROUTED), LimitKind::Nodes)?;
+        limits.check_count(
+            self.model.blocks.len() + 1,
+            limits.nodes.min(crate::layout::grid::MAX_ROUTED),
+            LimitKind::Nodes,
+        )?;
         let i = self.model.blocks.len();
         match self.container() {
             Some(g) => self.model.blocks[g].children.push(i),
@@ -130,7 +141,12 @@ impl Parser<'_, '_> {
             }
             if let Some(span) = cur.space() {
                 self.spaces += 1;
-                self.add(block(format!("space-{}", self.spaces), Label::default(), Kind::Space, span))?;
+                self.add(block(
+                    format!("space-{}", self.spaces),
+                    Label::default(),
+                    Kind::Space,
+                    span,
+                ))?;
                 continue;
             }
             if cur.word_is("end") {
@@ -144,7 +160,8 @@ impl Parser<'_, '_> {
                 continue;
             }
             let Some(first) = cur.node() else {
-                self.cx.warn(self.line, format!("cannot read `{}`", truncate(cur.rest())));
+                self.cx
+                    .warn(self.line, format!("cannot read `{}`", truncate(cur.rest())));
                 break;
             };
             let mut left = self.mention(&first, true)?;
@@ -167,7 +184,11 @@ impl Parser<'_, '_> {
                     None => None,
                 };
                 let limits = self.cx.limits;
-                limits.check_count(self.pending.len() + 1, limits.edges.min(crate::layout::grid::MAX_ROUTED), LimitKind::Edges)?;
+                limits.check_count(
+                    self.pending.len() + 1,
+                    limits.edges.min(crate::layout::grid::MAX_ROUTED),
+                    LimitKind::Edges,
+                )?;
                 self.pending.push((
                     left.clone(),
                     right.clone(),
@@ -211,7 +232,12 @@ impl Parser<'_, '_> {
                 span = cur.number().unwrap_or(1);
             }
         }
-        let g = self.add(block(id.clone(), Label::default(), Kind::Group { columns: None }, span))?;
+        let g = self.add(block(
+            id.clone(),
+            Label::default(),
+            Kind::Group { columns: None },
+            span,
+        ))?;
         self.index.entry(id).or_insert(g);
         self.stack.push(g);
         Ok(())
@@ -261,7 +287,10 @@ impl Parser<'_, '_> {
                     edge.to = b;
                     self.model.edges.push(edge);
                 }
-                _ => self.cx.warn(self.line, format!("a link to an unknown block `{from}` / `{to}`")),
+                _ => self.cx.warn(
+                    self.line,
+                    format!("a link to an unknown block `{from}` / `{to}`"),
+                ),
             }
         }
         for (id, class) in &self.class_assign {
@@ -271,7 +300,11 @@ impl Parser<'_, '_> {
         }
         let default = self.class_defs.get("default").copied().unwrap_or_default();
         for block in &mut self.model.blocks {
-            let mut style = if matches!(block.kind, Kind::Group { .. } | Kind::Space) { AuthorStyle::default() } else { default };
+            let mut style = if matches!(block.kind, Kind::Group { .. } | Kind::Space) {
+                AuthorStyle::default()
+            } else {
+                default
+            };
             for class in &block.classes {
                 if let Some(def) = self.class_defs.get(class) {
                     style = style.merged(def);
@@ -327,8 +360,14 @@ const OPENERS: &[(&str, &[(&str, Shape)])] = &[
     ("([", &[("])", Shape::Stadium)]),
     ("[[", &[("]]", Shape::Subroutine)]),
     ("[(", &[(")]", Shape::Cylinder)]),
-    ("[/", &[("/]", Shape::LeanRight), ("\\]", Shape::TrapezoidBottom)]),
-    ("[\\", &[("\\]", Shape::LeanLeft), ("/]", Shape::TrapezoidTop)]),
+    (
+        "[/",
+        &[("/]", Shape::LeanRight), ("\\]", Shape::TrapezoidBottom)],
+    ),
+    (
+        "[\\",
+        &[("\\]", Shape::LeanLeft), ("/]", Shape::TrapezoidTop)],
+    ),
     ("{{", &[("}}", Shape::Hexagon)]),
     ("[", &[("]", Shape::Rect)]),
     ("(", &[(")", Shape::Rounded)]),
@@ -372,7 +411,10 @@ impl<'s> Cur<'s> {
         if digits == 0 {
             return None;
         }
-        let n = self.rest()[..digits].parse::<usize>().ok().map(|n| n.min(MAX_SPAN));
+        let n = self.rest()[..digits]
+            .parse::<usize>()
+            .ok()
+            .map(|n| n.min(MAX_SPAN));
         self.i += digits;
         n
     }
@@ -380,7 +422,12 @@ impl<'s> Cur<'s> {
     /// `word` as a whole word at the cursor.
     fn word_is(&mut self, word: &str) -> bool {
         let r = self.rest();
-        if r.starts_with(word) && r[word.len()..].chars().next().is_none_or(char::is_whitespace) {
+        if r.starts_with(word)
+            && r[word.len()..]
+                .chars()
+                .next()
+                .is_none_or(char::is_whitespace)
+        {
             self.i += word.len();
             true
         } else {
@@ -391,7 +438,12 @@ impl<'s> Cur<'s> {
     /// `word` followed by the end, whitespace or `:`.
     fn word_is_prefix(&mut self, word: &str) -> bool {
         let r = self.rest();
-        if r.starts_with(word) && r[word.len()..].chars().next().is_none_or(|c| c.is_whitespace() || c == ':') {
+        if r.starts_with(word)
+            && r[word.len()..]
+                .chars()
+                .next()
+                .is_none_or(|c| c.is_whitespace() || c == ':')
+        {
             self.i += word.len();
             true
         } else {
@@ -473,9 +525,16 @@ impl<'s> Cur<'s> {
                 }
                 self.i += c.len_utf8();
             }
-            node.classes.extend(self.s[start..self.i].split(',').filter(|c| !c.is_empty()).map(str::to_string));
+            node.classes.extend(
+                self.s[start..self.i]
+                    .split(',')
+                    .filter(|c| !c.is_empty())
+                    .map(str::to_string),
+            );
         }
-        if self.rest().starts_with(':') && self.rest()[1..].starts_with(|c: char| c.is_ascii_digit()) {
+        if self.rest().starts_with(':')
+            && self.rest()[1..].starts_with(|c: char| c.is_ascii_digit())
+        {
             self.i += 1;
             node.span = self.number();
         }
@@ -557,7 +616,9 @@ impl<'s> Cur<'s> {
             let mut chars = r.chars();
             if let Some(c) = chars.next()
                 && matches!(c, '<' | 'o' | 'x')
-                && (r[1..].starts_with("--") || r[1..].starts_with("==") || r[1..].starts_with("-."))
+                && (r[1..].starts_with("--")
+                    || r[1..].starts_with("==")
+                    || r[1..].starts_with("-."))
             {
                 start = head(c);
                 self.i += 1;
@@ -565,7 +626,10 @@ impl<'s> Cur<'s> {
         }
         let r = self.rest();
         let end_head = |cur: &mut Self| {
-            let h = cur.peek().filter(|c| matches!(c, '>' | 'o' | 'x')).and_then(head);
+            let h = cur
+                .peek()
+                .filter(|c| matches!(c, '>' | 'o' | 'x'))
+                .and_then(head);
             if h.is_some() {
                 cur.i += 1;
             }
@@ -610,12 +674,18 @@ impl<'s> Cur<'s> {
             }
         } else if r.starts_with("--") || r.starts_with("==") {
             let ch = r.chars().next()?;
-            let line = if ch == '-' { LineKind::Solid } else { LineKind::Thick };
+            let line = if ch == '-' {
+                LineKind::Solid
+            } else {
+                LineKind::Thick
+            };
             let n = r.chars().take_while(|&c| c == ch).count();
             self.i += n;
             let head_next = match self.peek() {
                 Some('>') => true,
-                Some('o' | 'x') => !self.rest()[1..].starts_with(|c: char| c.is_alphanumeric() || c == '_'),
+                Some('o' | 'x') => {
+                    !self.rest()[1..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+                }
                 _ => false,
             };
             match self.peek() {
@@ -663,7 +733,8 @@ impl<'s> Cur<'s> {
         if self.eat("|") {
             match self.rest().find('|') {
                 Some(end) => {
-                    link.label = Some(self.rest()[..end].trim().to_string()).filter(|t| !t.is_empty());
+                    link.label =
+                        Some(self.rest()[..end].trim().to_string()).filter(|t| !t.is_empty());
                     self.i += end + 1;
                 }
                 None => self.i = save,
@@ -687,10 +758,15 @@ mod tests {
 
     #[test]
     fn columns_widths_spaces_and_groups() {
-        let m = parse_src("block-beta\ncolumns 3\na[\"A label\"] b:2 c:2 d\nspace:2 e\nblock:g1:2\n  columns 2\n  h i\nend\nblock\n  x\nend");
+        let m = parse_src(
+            "block-beta\ncolumns 3\na[\"A label\"] b:2 c:2 d\nspace:2 e\nblock:g1:2\n  columns 2\n  h i\nend\nblock\n  x\nend",
+        );
         assert_eq!(m.columns, Some(3));
         let names: Vec<&str> = m.root.iter().map(|&i| m.blocks[i].id.as_str()).collect();
-        assert_eq!(names, vec!["a", "b", "c", "d", "space-1", "e", "g1", "block-2"]);
+        assert_eq!(
+            names,
+            vec!["a", "b", "c", "d", "space-1", "e", "g1", "block-2"]
+        );
         let b = &m.blocks[m.root[1]];
         assert_eq!(b.span, 2);
         assert_eq!(m.blocks[m.root[4]].span, 2);
@@ -711,18 +787,36 @@ mod tests {
         assert_eq!(kind("C"), Kind::Node(Shape::Hexagon));
         assert_eq!(kind("D"), Kind::Node(Shape::Odd));
         assert_eq!(kind("E"), Kind::Node(Shape::TrapezoidBottom));
-        assert_eq!(kind("ar"), Kind::Arrow(Heads { down: true, ..Heads::default() }));
-        assert_eq!(kind("ar2"), Kind::Arrow(Heads { left: true, right: true, ..Heads::default() }));
+        assert_eq!(
+            kind("ar"),
+            Kind::Arrow(Heads {
+                down: true,
+                ..Heads::default()
+            })
+        );
+        assert_eq!(
+            kind("ar2"),
+            Kind::Arrow(Heads {
+                left: true,
+                right: true,
+                ..Heads::default()
+            })
+        );
         assert_eq!(kind("id1"), Kind::Node(Shape::Rounded));
         assert_eq!(m.edges.len(), 4);
-        assert_eq!(m.edges[1].label.as_ref().map(|l| l.text()), Some("X".into()));
+        assert_eq!(
+            m.edges[1].label.as_ref().map(|l| l.text()),
+            Some("X".into())
+        );
         assert_eq!(m.edges[2].end, None);
         assert_eq!(m.edges[0].end, Some(Marker::Arrow));
     }
 
     #[test]
     fn styles_and_classes() {
-        let m = parse_src("block-beta\nA B\nclassDef blue fill:#6e6ce6,stroke:#333;\nclass A blue\nstyle B fill:#bbf,stroke-dasharray: 5 5");
+        let m = parse_src(
+            "block-beta\nA B\nclassDef blue fill:#6e6ce6,stroke:#333;\nclass A blue\nstyle B fill:#bbf,stroke-dasharray: 5 5",
+        );
         assert!(m.blocks[0].style.fill.is_some());
         assert_eq!(m.blocks[1].style.dashed, Some(true));
     }
