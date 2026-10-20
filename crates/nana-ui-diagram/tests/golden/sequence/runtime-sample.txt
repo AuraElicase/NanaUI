@@ -1,0 +1,64 @@
+size 378.2 570.6
+summary nodes=3 edges=6 groups=2
+shape rect 9 233.9 360.2 178.2 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape rect 185.1 421.4 173.5 68.6 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape path M28,100.9 L28,503.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M204.1,100.9 L204.1,503.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M339.6,100.9 L339.6,503.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape rect 198.8 140.1 10.5 78.4 fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M9,233.9 L43.1,233.9 L43.1,248.7 L35.2,256.7 L9,256.7 Z fill=Subtle stroke=Border/hairline/Solid
+text 15 236.9 22.1 16.8 size=12 w=600 ink=Text "alt"
+text 49.1 236.9 55.7 16.8 size=12 w=400 ink=Muted "[cached]"
+shape path M9,298.5 L369.2,298.5 stroke=Border/hairline/Dashed
+text 168.2 304.5 41.8 16.8 size=12 w=400 ink=Muted "[miss]"
+shape path M185.1,421.4 L226.6,421.4 L226.6,436.2 L218.6,444.2 L185.1,444.2 Z fill=Subtle stroke=Border/hairline/Solid
+text 191.1 424.4 29.5 16.8 size=12 w=600 ink=Text "loop"
+text 232.6 424.4 76.6 16.8 size=12 w=400 ink=Muted "[every 30s]"
+shape path M28,140.1 L197.4,140.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M204.1,140.1 L195.7,143.6 L197.2,140.1 L195.7,136.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 75.4 116.3 81.2 19.6 size=14 w=400 ink=Text "GET /users"
+shape ellipse 19 131.1 18 18 fill=Accent
+text 24.9 133 6.3 14.3 size=10.2 w=600 ink=AccentText "1"
+shape path M209.3,179.3 L332.8,179.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M339.6,179.3 L331.2,182.8 L332.7,179.3 L331.2,175.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 250.1 155.5 48.7 19.6 size=14 w=400 ink=Text "SELECT"
+shape ellipse 200.3 170.3 18 18 fill=Accent
+text 206.2 172.2 6.3 14.3 size=10.2 w=600 ink=AccentText "2"
+shape path M339.6,218.5 L216.1,218.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M209.3,218.5 L217.7,215 L216.2,218.5 L217.7,222 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 258.2 194.7 32.5 19.6 size=14 w=400 ink=Text "rows"
+shape ellipse 330.6 209.5 18 18 fill=Accent
+text 336.4 211.4 6.3 14.3 size=10.2 w=600 ink=AccentText "3"
+shape path M204.1,288.5 L34.7,288.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M28,288.5 L36.4,285 L34.9,288.5 L36.4,292 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 59.2 264.7 113.7 19.6 size=14 w=400 ink=Text "200 OK (cache)"
+shape ellipse 195.1 279.5 18 18 fill=Accent
+text 200.9 281.4 6.3 14.3 size=10.2 w=600 ink=AccentText "4"
+shape path M204.1,398.1 L34.7,398.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M28,398.1 L36.4,394.6 L34.9,398.1 L36.4,401.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 91.7 374.3 48.7 19.6 size=14 w=400 ink=Text "200 OK"
+shape ellipse 195.1 389.1 18 18 fill=Accent
+text 200.9 391 6.3 14.3 size=10.2 w=600 ink=AccentText "5"
+shape path M204.1,476 L332.8,476 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M339.6,476 L331.2,479.5 L332.7,476 L331.2,472.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 235.3 452.2 73.1 19.6 size=14 w=400 ink=Text "heartbeat"
+shape ellipse 195.1 467 18 18 fill=Accent
+text 200.9 468.8 6.3 14.3 size=10.2 w=600 ink=AccentText "6"
+shape rect 184.5 327.3 174.7 31.6 r=Xs fill=Surface
+shape rect 184.5 327.3 174.7 31.6 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 231.2 333.3 81.2 19.6 size=14 w=400 ink=Text "warm cache"
+shape path M28,54.3 L28,65.2 M16.1,56.8 L39.9,56.8 M18.5,77.1 L28,65.2 L37.5,77.1 stroke=BorderStrong/hairline/Solid
+shape ellipse 22.4 42.6 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 11.8 81.3 32.5 19.6 size=14 w=400 ink=Text "User"
+shape path M28,516 L28,526.9 M16.1,518.5 L39.9,518.5 M18.5,538.8 L28,526.9 L37.5,538.8 stroke=BorderStrong/hairline/Solid
+shape ellipse 22.4 504.3 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 11.8 543 32.5 19.6 size=14 w=400 ink=Text "User"
+shape rect 175.9 61.3 56.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 191.9 71.3 24.4 19.6 size=14 w=400 ink=Text "API"
+shape rect 175.9 503.8 56.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 191.9 513.8 24.4 19.6 size=14 w=400 ink=Text "API"
+shape rect 311.6 61.3 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 331.4 71.3 16.2 19.6 size=14 w=400 ink=Text "DB"
+shape rect 311.6 503.8 56 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 331.4 513.8 16.2 19.6 size=14 w=400 ink=Text "DB"
+text 90.7 8 196.7 22.4 size=16 w=600 ink=Text "API call with blocks"

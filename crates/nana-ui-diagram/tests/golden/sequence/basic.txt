@@ -1,0 +1,58 @@
+size 631.5 436.3
+summary nodes=4 edges=6 groups=0
+shape path M40.5,67.3 L40.5,369.5 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M224.7,67.3 L224.7,369.5 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M384.5,67.3 L384.5,369.5 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M590.2,67.3 L590.2,369.5 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape rect 379.3 145.7 10.5 117.6 fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M40.5,106.5 L218,106.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M224.7,106.5 L216.3,110 L217.8,106.5 L216.3,103 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 87.9 82.7 89.3 19.6 size=14 w=400 ink=Text "Place order"
+shape ellipse 31.5 97.5 18 18 fill=Accent
+text 37.3 99.4 6.3 14.3 size=10.2 w=600 ink=AccentText "1"
+shape path M224.7,145.7 L377.8,145.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M384.5,145.7 L376.1,149.2 L377.6,145.7 L376.1,142.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 255.9 121.9 97.4 19.6 size=14 w=400 ink=Text "POST /orders"
+shape ellipse 215.7 136.7 18 18 fill=Accent
+text 221.5 138.6 6.3 14.3 size=10.2 w=600 ink=AccentText "2"
+shape path M389.8,184.9 L583.5,184.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M590.2,184.9 L581.8,188.4 L583.3,184.9 L581.8,181.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 421 161.1 138 19.6 size=14 w=400 ink=Text "Authorise payment"
+shape ellipse 380.8 175.9 18 18 fill=Accent
+text 386.6 177.8 6.3 14.3 size=10.2 w=600 ink=AccentText "3"
+shape path M590.2,224.1 L396.5,224.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M389.8,224.1 L398.2,220.6 L396.7,224.1 L398.2,227.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 457.5 200.3 65 19.6 size=14 w=400 ink=Text "Approved"
+shape ellipse 581.2 215.1 18 18 fill=Accent
+text 587.1 217 6.3 14.3 size=10.2 w=600 ink=AccentText "4"
+shape path M379.3,263.3 L231.4,263.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M224.7,263.3 L233.1,259.8 L231.6,263.3 L233.1,266.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 257.3 239.5 89.3 19.6 size=14 w=400 ink=Text "201 Created"
+shape ellipse 370.3 254.3 18 18 fill=Accent
+text 376.1 256.2 6.3 14.3 size=10.2 w=600 ink=AccentText "5"
+shape path M224.7,302.5 L47.2,302.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M40.5,302.5 L48.9,299 L47.4,302.5 L48.9,306 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 71.7 278.7 121.8 19.6 size=14 w=400 ink=Text "Order confirmed"
+shape ellipse 215.7 293.5 18 18 fill=Accent
+text 221.5 295.4 6.3 14.3 size=10.2 w=600 ink=AccentText "6"
+shape rect 20.9 317.9 588.9 31.6 r=Xs fill=Surface
+shape rect 20.9 317.9 588.9 31.6 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 209.8 323.9 211.1 19.6 size=14 w=400 ink=Text "One order, one transaction"
+shape path M40.5,20.7 L40.5,31.6 M28.6,23.2 L52.4,23.2 M31,43.5 L40.5,31.6 L50,43.5 stroke=BorderStrong/hairline/Solid
+shape ellipse 34.9 9 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 8 47.7 65 19.6 size=14 w=400 ink=Text "Customer"
+shape path M40.5,381.7 L40.5,392.6 M28.6,384.2 L52.4,384.2 M31,404.5 L40.5,392.6 L50,404.5 stroke=BorderStrong/hairline/Solid
+shape ellipse 34.9 370 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 8 408.7 65 19.6 size=14 w=400 ink=Text "Customer"
+shape rect 180.3 27.7 88.8 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 196.3 37.7 56.8 19.6 size=14 w=400 ink=Text "Web app"
+shape rect 180.3 369.5 88.8 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 196.3 379.5 56.8 19.6 size=14 w=400 ink=Text "Web app"
+shape rect 323.9 27.7 121.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 339.9 37.7 89.3 19.6 size=14 w=400 ink=Text "API gateway"
+shape rect 323.9 369.5 121.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 339.9 379.5 89.3 19.6 size=14 w=400 ink=Text "API gateway"
+shape rect 558 27.7 64.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 574 37.7 32.5 19.6 size=14 w=400 ink=Text "Bank"
+shape rect 558 369.5 64.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 574 379.5 32.5 19.6 size=14 w=400 ink=Text "Bank"

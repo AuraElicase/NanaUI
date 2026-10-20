@@ -1,0 +1,40 @@
+size 500.1 416.2
+summary nodes=4 edges=6 groups=0
+shape path M45.3,48.6 L45.3,349.4 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M270.7,48.6 L270.7,329.4 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M371.1,186 L371.1,290.2 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M467.7,255.6 L467.7,349.4 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M45.3,87.8 L264,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M270.7,87.8 L262.3,91.3 L263.8,87.8 L262.3,84.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 60.6 64 194.9 19.6 size=14 w=400 ink=Text "Hello Bob, how are you ?"
+shape path M270.7,127 L52,127 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M45.3,127 L53.7,123.5 L52.2,127 L53.7,130.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 56.5 103.2 203 19.6 size=14 w=400 ink=Text "Fine, thank you. And you?"
+shape path M45.3,166.2 L332.2,166.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M338.9,166.2 L330.5,169.7 L332,166.2 L330.5,162.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 159.6 142.4 65 19.6 size=14 w=400 ink=Text "Hi Carl!"
+shape path M371.1,226.2 L436.6,226.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M443.4,226.2 L435,229.7 L436.5,226.2 L435,222.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 395.1 196.8 24.4 19.6 size=14 w=400 ink=Text "Hi!"
+shape path M45.3,290.2 L366.9,290.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M363.7,287 L370.1,293.4 M363.7,293.4 L370.1,287 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 147.3 266.4 121.8 19.6 size=14 w=400 ink=Text "We are too many"
+shape path M270.7,329.4 L52,329.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M45.3,329.4 L53.7,325.8 L52.2,329.4 L53.7,332.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 129.6 305.6 56.8 19.6 size=14 w=400 ink=Text "I agree"
+shape rect 9 9 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 19 40.6 19.6 size=14 w=400 ink=Text "Alice"
+shape rect 9 349.4 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 359.4 40.6 19.6 size=14 w=400 ink=Text "Alice"
+shape rect 242.5 9 56.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 258.5 19 24.4 19.6 size=14 w=400 ink=Text "Bob"
+shape rect 338.9 146.4 64.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 354.9 156.4 32.5 19.6 size=14 w=400 ink=Text "Carl"
+shape path M467.7,209 L467.7,219.9 M455.8,211.5 L479.6,211.5 M458.2,231.8 L467.7,219.9 L477.2,231.8 stroke=BorderStrong/hairline/Solid
+shape ellipse 462.1 197.3 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 443.4 236 48.7 19.6 size=14 w=400 ink=Text "Donald"
+shape path M467.7,361.6 L467.7,372.5 M455.8,364.1 L479.6,364.1 M458.2,384.4 L467.7,372.5 L477.2,384.4 stroke=BorderStrong/hairline/Solid
+shape ellipse 462.1 349.9 11.2 11.2 fill=Surface stroke=BorderStrong/hairline/Solid
+text 443.4 388.6 48.7 19.6 size=14 w=400 ink=Text "Donald"
+shape path M364.8,283.9 L377.4,296.5 M364.8,296.5 L377.4,283.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M264.4,323.1 L277,335.7 M264.4,335.7 L277,323.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid

@@ -50,8 +50,8 @@
 | --- | --- | --- |
 | flowchart | `flowchart`、`graph`、`flowchart-elk` | 原生 |
 | info | `info` | 原生 |
-| sequence | `sequenceDiagram` | 迁移中（暂走旧路径） |
-| zenuml | `zenuml` | 迁移中 |
+| sequence | `sequenceDiagram` | 原生 |
+| zenuml | `zenuml` | 原生 |
 | class | `classDiagram`、`classDiagram-v2` | 迁移中 |
 | state | `stateDiagram`、`stateDiagram-v2` | 迁移中 |
 | er | `erDiagram` | 迁移中 |

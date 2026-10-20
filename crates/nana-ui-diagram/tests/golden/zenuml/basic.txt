@@ -1,0 +1,18 @@
+size 303.8 228.8
+summary nodes=2 edges=3 groups=0
+shape path M45.3,82.2 L45.3,219.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M262.6,82.2 L262.6,219.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M45.3,121.4 L262.1,121.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M254.2,124.9 L262.6,121.4 M262.6,121.4 L254.2,117.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 56.5 97.6 194.9 19.6 size=14 w=400 ink=Text "Hello John, how are you?"
+shape path M262.6,160.6 L45.8,160.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M53.7,157.1 L45.3,160.6 M45.3,160.6 L53.7,164.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 129.6 136.8 48.7 19.6 size=14 w=400 ink=Text "Great!"
+shape path M45.3,199.8 L262.1,199.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M254.2,203.3 L262.6,199.8 M262.6,199.8 L254.2,196.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 97.1 176 113.7 19.6 size=14 w=400 ink=Text "See you later!"
+shape rect 9 42.6 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 52.6 40.6 19.6 size=14 w=400 ink=Text "Alice"
+shape rect 230.3 42.6 64.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 246.3 52.6 32.5 19.6 size=14 w=400 ink=Text "John"
+text 117.5 8 68.9 22.4 size=16 w=600 ink=Text "Aliases"

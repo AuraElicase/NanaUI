@@ -1,0 +1,22 @@
+zenuml
+    title Comments and groups
+    // a comment on a participant will not be rendered
+    group Frontend {
+      @Boundary Page
+      @Control Router
+    }
+    group "Data tier" {
+      @Database Store
+      @Entity Order
+      @Queue Events
+    }
+    // a comment on a message.
+    // **Markdown** is supported.
+    Page.submit() {
+      Router.route(order) {
+        // persist first
+        order = new Order(items)
+        Store.save(order)
+        Router->Events: order.created
+      }
+    }

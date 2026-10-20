@@ -1,0 +1,21 @@
+sequenceDiagram
+    box Aqua Edge
+    participant API@{ "type": "boundary" } as Public API
+    participant Svc@{ "type": "control", "alias": "Auth Service" }
+    end
+    box rgb(200, 150, 255) Storage
+    actor DB@{ "type": "database" } as User Database
+    participant Cache@{ "type": "collections" }
+    participant Q@{ "type": "queue" }
+    end
+    participant E@{ "type" : "entity" }
+    actor User
+    User->>API: Sign in
+    API->>Svc: Authenticate
+    Svc->>DB: Query user
+    DB-->>Svc: User data
+    Svc-)Q: Audit event
+    Svc->>Cache: Store session
+    Cache->>E: Persist
+    Svc-->>API: Token
+    API-->>User: Welcome

@@ -1,0 +1,85 @@
+size 754.4 912.8
+summary nodes=5 edges=13 groups=6
+shape rect 30.1 103.2 264 193.8 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape rect 30.1 306.3 264 68.6 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape rect 30.1 384.1 364.4 68.6 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape rect 30.1 462 364.4 68.6 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape rect 30.1 539.8 364.4 107.8 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape rect 30.1 656.9 657.8 233 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape path M45.3,48.6 L45.3,903.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M278.8,48.6 L278.8,903.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M379.2,48.6 L379.2,903.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M479.7,48.6 L479.7,903.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M672.6,48.6 L672.6,903.8 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M30.1,103.2 L64.2,103.2 L64.2,118 L56.2,126 L30.1,126 Z fill=Subtle stroke=Border/hairline/Solid
+text 36.1 106.2 22.1 16.8 size=12 w=600 ink=Text "alt"
+text 70.2 106.2 62.6 16.8 size=12 w=400 ink=Muted "[is_sick]"
+shape path M30.1,167.8 L294.1,167.8 stroke=Border/hairline/Dashed
+text 99.4 173.8 125.3 16.8 size=12 w=400 ink=Muted "[else if is_tired]"
+shape path M30.1,230.4 L294.1,230.4 stroke=Border/hairline/Dashed
+text 141.2 236.4 41.8 16.8 size=12 w=400 ink=Muted "[else]"
+shape path M30.1,306.3 L64.2,306.3 L64.2,321.1 L56.2,329.1 L30.1,329.1 Z fill=Subtle stroke=Border/hairline/Solid
+text 36.1 309.3 22.1 16.8 size=12 w=600 ink=Text "opt"
+shape path M30.1,384.1 L71.6,384.1 L71.6,398.9 L63.6,406.9 L30.1,406.9 Z fill=Subtle stroke=Border/hairline/Solid
+text 36.1 387.1 29.5 16.8 size=12 w=600 ink=Text "loop"
+text 77.6 387.1 41.8 16.8 size=12 w=400 ink=Muted "[true]"
+shape path M30.1,462 L71.6,462 L71.6,476.8 L63.6,484.8 L30.1,484.8 Z fill=Subtle stroke=Border/hairline/Solid
+text 36.1 465 29.5 16.8 size=12 w=600 ink=Text "loop"
+text 77.6 465 97.4 16.8 size=12 w=400 ink=Muted "[item in list]"
+shape path M30.1,539.8 L64.2,539.8 L64.2,554.6 L56.2,562.6 L30.1,562.6 Z fill=Subtle stroke=Border/hairline/Solid
+text 36.1 542.8 22.1 16.8 size=12 w=600 ink=Text "par"
+shape path M30.1,656.9 L64.2,656.9 L64.2,671.7 L56.2,679.7 L30.1,679.7 Z fill=Subtle stroke=Border/hairline/Solid
+text 36.1 659.9 22.1 16.8 size=12 w=600 ink=Text "try"
+shape path M30.1,760.7 L687.8,760.7 stroke=Border/hairline/Dashed
+text 278.9 766.7 160.1 16.8 size=12 w=400 ink=Muted "[catch(BookingError e)]"
+shape path M30.1,823.3 L687.8,823.3 stroke=Border/hairline/Dashed
+text 327.6 829.3 62.6 16.8 size=12 w=400 ink=Muted "[finally]"
+shape path M45.3,87.8 L278.3,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M270.4,91.3 L278.8,87.8 M278.8,87.8 L270.4,84.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 68.7 64 186.8 19.6 size=14 w=400 ink=Text "Hello Bob, how are you?"
+shape path M278.8,157.8 L45.8,157.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M53.7,154.3 L45.3,157.8 M45.3,157.8 L53.7,161.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 105.2 134 113.7 19.6 size=14 w=400 ink=Text "Not so good :("
+shape path M278.8,220.4 L45.8,220.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M53.7,216.9 L45.3,220.4 M45.3,220.4 L53.7,223.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 117.4 196.6 89.3 19.6 size=14 w=400 ink=Text "A bit tired"
+shape path M278.8,283 L45.8,283 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M53.7,279.5 L45.3,283 M45.3,283 L53.7,286.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 56.5 259.2 211.1 19.6 size=14 w=400 ink=Text "Feeling fresh like a daisy"
+shape path M278.8,360.9 L45.8,360.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M53.7,357.3 L45.3,360.9 M45.3,360.9 L53.7,364.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 93 337.1 138 19.6 size=14 w=400 ink=Text "Thanks for asking"
+shape path M379.2,438.7 L45.8,438.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M53.7,435.2 L45.3,438.7 M45.3,438.7 L53.7,442.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 187.9 414.9 48.7 19.6 size=14 w=400 ink=Text "Great!"
+shape path M45.3,516.6 L378.7,516.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M370.8,520.1 L379.2,516.6 M379.2,516.6 L370.8,513 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 175.7 492.8 73.1 19.6 size=14 w=400 ink=Text "next item"
+shape path M45.3,594.4 L278.3,594.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M270.4,597.9 L278.8,594.4 M278.8,594.4 L270.4,590.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 117.4 570.6 89.3 19.6 size=14 w=400 ink=Text "Hello guys!"
+shape path M45.3,633.6 L378.7,633.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M370.8,637.1 L379.2,633.6 M379.2,633.6 L370.8,630.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 167.6 609.8 89.3 19.6 size=14 w=400 ink=Text "Hello guys!"
+shape path M45.3,711.5 L479.2,711.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M471.3,715 L479.7,711.5 M479.7,711.5 L471.3,707.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 205.6 687.7 113.7 19.6 size=14 w=400 ink=Text "Book something"
+shape path M479.7,750.7 L672.1,750.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M664.2,754.2 L672.6,750.7 M672.6,750.7 L664.2,747.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 490.9 726.9 170.5 19.6 size=14 w=400 ink=Text "Start booking process"
+shape path M479.7,813.3 L45.8,813.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M53.7,809.8 L45.3,813.3 M45.3,813.3 L53.7,816.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 213.8 789.5 97.4 19.6 size=14 w=400 ink=Text "show failure"
+shape path M479.7,875.9 L672.1,875.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M664.2,879.4 L672.6,875.9 M672.6,875.9 L664.2,872.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 515.2 852.1 121.8 19.6 size=14 w=400 ink=Text "rollback status"
+shape rect 9 9 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 19 40.6 19.6 size=14 w=400 ink=Text "Alice"
+shape rect 250.6 9 56.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 266.6 19 24.4 19.6 size=14 w=400 ink=Text "Bob"
+shape rect 347 9 64.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 363 19 32.5 19.6 size=14 w=400 ink=Text "John"
+shape rect 451.5 9 56.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 467.5 19 24.4 19.6 size=14 w=400 ink=Text "API"
+shape rect 599.7 9 145.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 615.7 19 113.7 19.6 size=14 w=400 ink=Text "BookingService"
