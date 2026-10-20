@@ -29,6 +29,22 @@ pub fn derive_store(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
+/// `#[component]`: lets a template pass this function's arguments by name
+/// and leave out the ones marked `#[prop(default)]` /
+/// `#[prop(default = expression)]`. Use it through
+/// `nana_ui_runtime::view::component`.
+#[proc_macro_attribute]
+pub fn component(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    syn::parse::<syn::ItemFn>(item)
+        .and_then(|item| component::expand(args.into(), item, &store::runtime_path()))
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+mod component;
 mod css_tokens;
 mod store;
 
@@ -625,6 +641,31 @@ mod tests {
         );
         let unnamed = expand("crate = x; <Column><template>\"a\"</template></Column>");
         assert!(unnamed.contains("#slot-name"), "{unnamed}");
+    }
+
+    #[test]
+    fn a_component_sets_its_properties_by_name_on_its_builder() {
+        let expanded = flat(
+            "crate = x; <kit::SwitchRow on={f} label=\"静音\" compact>\
+             <Text>\"内容\"</Text></kit::SwitchRow>",
+        );
+        assert!(
+            expanded
+                .contains("kit::switch_row::Props::__new().on(f).label(\"静音\").compact(true)"),
+            "attributes in the order written, a bare one is true: {expanded}"
+        );
+        assert!(
+            expanded.contains(".children(") && expanded.ends_with(".__build()"),
+            "children are the `children` property: {expanded}"
+        );
+        for (source, token) in [
+            ("<Badge label=\"a\" label=\"b\"/>", "given twice"),
+            ("<Badge children={x}>\"y\"</Badge>", "given twice"),
+        ] {
+            let expanded = expand(source);
+            assert!(expanded.contains("compile_error"), "{source}: {expanded}");
+            assert!(expanded.contains(token), "{source}: {expanded}");
+        }
     }
 
     /// `<T>` is `t(…)`: literals make a constant message, any expression a

@@ -101,8 +101,8 @@ let shared = signal(1u8);
     );
     assert!(code.contains(&squash("let shared = signal(1u8)")), "{code}");
     assert!(
-        code.contains(&squash("other(shared)")),
-        "a Rust component gets its arguments in order: {code}"
+        code.contains(&squash("other::Props::__new().value(shared).__build()")),
+        "a Rust component gets its arguments by name: {code}"
     );
 }
 

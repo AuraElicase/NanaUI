@@ -981,6 +981,13 @@ impl Rewrite<'_> {
             )));
         }
         ordered.extend(kept);
+        ordered.push(Attr {
+            name: AttrName::Directive(
+                nana_ui_view_codegen::POSITIONAL.to_owned(),
+                element.name.span(),
+            ),
+            value: AttrValue::None,
+        });
         element.attrs = ordered;
         Ok(())
     }
