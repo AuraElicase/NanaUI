@@ -10,6 +10,8 @@ use crate::{
     DiagramError, DiagramKind, DiagramMetrics, DiagramScene, Limits, Meta, Summary, Warning, style,
 };
 
+pub(crate) mod graphkit;
+
 macro_rules! families {
     ($($kind:ident => $module:ident),* $(,)?) => {
         $(pub(crate) mod $module;)*
