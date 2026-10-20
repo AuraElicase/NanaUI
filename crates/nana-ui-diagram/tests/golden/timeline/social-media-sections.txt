@@ -1,0 +1,47 @@
+size 722 243
+summary nodes=13 edges=0 groups=2
+shape rect 17 41.6 332 35.6 r=Sm fill=series0
+text 161.5 49.6 43 19.6 size=14 w=600 ink=series0.on "2000s"
+shape rect 365 41.6 332 35.6 r=Sm fill=series1
+text 509.5 49.6 43 19.6 size=14 w=600 ink=series1.on "2010s"
+shape path M67,122.8 L67,152.8 stroke=series0/hairline/Dashed
+shape path M183,122.8 L183,198.4 stroke=series0/hairline/Dashed
+shape path M299,122.8 L299,152.8 stroke=series0/hairline/Dashed
+shape path M415,122.8 L415,152.8 stroke=series1/hairline/Dashed
+shape path M531,122.8 L531,152.8 stroke=series1/hairline/Dashed
+shape path M647,122.8 L647,152.8 stroke=series1/hairline/Dashed
+shape path M9,137.8 L706.3,137.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M713,137.8 L704.6,141.3 L706.1,137.8 L704.6,134.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 17 87.2 100 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 49.8 95.2 34.4 19.6 size=14 w=600 ink=Text "2002"
+shape ellipse 62.5 133.3 9 9 fill=series0
+shape rect 17 152.8 100 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 34.5 160.8 65 19.6 size=14 w=400 ink=Text "LinkedIn"
+shape rect 133 87.2 100 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 165.8 95.2 34.4 19.6 size=14 w=600 ink=Text "2004"
+shape ellipse 178.5 133.3 9 9 fill=series0
+shape rect 133 152.8 100 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 150.5 160.8 65 19.6 size=14 w=400 ink=Text "Facebook"
+shape rect 133 198.4 100 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 158.6 206.4 48.7 19.6 size=14 w=400 ink=Text "Google"
+shape rect 249 87.2 100 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 281.8 95.2 34.4 19.6 size=14 w=600 ink=Text "2005"
+shape ellipse 294.5 133.3 9 9 fill=series0
+shape rect 249 152.8 100 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 270.6 160.8 56.8 19.6 size=14 w=400 ink=Text "YouTube"
+shape rect 365 87.2 100 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 397.8 95.2 34.4 19.6 size=14 w=600 ink=Text "2010"
+shape ellipse 410.5 133.3 9 9 fill=series1
+shape rect 365 152.8 100 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 378.5 160.8 73.1 19.6 size=14 w=400 ink=Text "Instagram"
+shape rect 481 87.2 100 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 513.8 95.2 34.4 19.6 size=14 w=600 ink=Text "2011"
+shape ellipse 526.5 133.3 9 9 fill=series1
+shape rect 481 152.8 100 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 498.5 160.8 65 19.6 size=14 w=400 ink=Text "Snapchat"
+shape rect 597 87.2 100 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 629.8 95.2 34.4 19.6 size=14 w=600 ink=Text "2016"
+shape ellipse 642.5 133.3 9 9 fill=series1
+shape rect 597 152.8 100 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 622.6 160.8 48.7 19.6 size=14 w=400 ink=Text "TikTok"
+text 247.9 8 226.2 22.4 size=16 w=600 ink=Text "History of Social Media"

@@ -1,0 +1,40 @@
+size 746 288.6
+summary nodes=11 edges=0 groups=2
+shape rect 17 41.6 344 35.6 r=Sm fill=series0
+text 159.3 49.6 59.4 19.6 size=14 w=600 ink=series0.on "第一阶段"
+shape rect 377 41.6 344 35.6 r=Sm fill=series1
+text 519.3 49.6 59.4 19.6 size=14 w=600 ink=series1.on "第二阶段"
+shape path M99,122.8 L99,198.4 stroke=series0/hairline/Dashed
+shape path M279,122.8 L279,198.4 stroke=series0/hairline/Dashed
+shape path M639,122.8 L639,244 stroke=series1/hairline/Dashed
+shape path M9,137.8 L730.3,137.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M737,137.8 L728.6,141.3 L730.1,137.8 L728.6,134.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 17 87.2 164 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 68.9 95.2 60.3 19.6 size=14 w=600 ink=Text "2024 Q1"
+shape ellipse 94.5 133.3 9 9 fill=series0
+shape rect 17 152.8 164 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 85 160.8 28 19.6 size=14 w=400 ink=Text "立项"
+shape rect 17 198.4 164 74.8 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 29 206.4 140 19.6 size=14 w=400 ink=Text "招募核心团队并完成第"
+text 29 226 140 19.6 size=14 w=400 ink=Text "一轮用户访谈，整理需"
+text 78 245.6 42 19.6 size=14 w=400 ink=Text "求清单"
+shape rect 197 87.2 164 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 248.9 95.2 60.3 19.6 size=14 w=600 ink=Text "2024 Q2"
+shape ellipse 274.5 133.3 9 9 fill=series0
+shape rect 197 152.8 164 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 265 160.8 28 19.6 size=14 w=400 ink=Text "原型"
+shape rect 197 198.4 164 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 226.6 206.4 104.7 19.6 size=14 w=400 ink=Text "10:30 每日站会"
+shape rect 377 87.2 164 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 428.9 95.2 60.3 19.6 size=14 w=600 ink=Text "2024 Q3"
+shape ellipse 454.5 133.3 9 9 fill=series1
+shape rect 557 87.2 164 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 608.9 95.2 60.3 19.6 size=14 w=600 ink=Text "2024 Q4"
+shape ellipse 634.5 133.3 9 9 fill=series1
+shape rect 557 152.8 164 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 625 160.8 28 19.6 size=14 w=400 ink=Text "公测"
+shape rect 557 198.4 164 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 611 206.4 56 19.6 size=14 w=400 ink=Text "正式发布"
+shape rect 557 244 164 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 604 252 70 19.6 size=14 w=400 ink=Text "发布后复盘"
+text 339.1 8 67.8 22.4 size=16 w=600 ink=Text "产品路线"
