@@ -31,7 +31,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let wrap = cx.wrap_width("usecase.wrappingWidth");
     let pad = [m.node_pad_x, m.node_pad_y];
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
     let note_pad = graphkit::note_pad(&m);
     let figure = [m.font_size * 2.0, m.font_size * 3.1];
     let fig_gap = m.font_size * 0.4;

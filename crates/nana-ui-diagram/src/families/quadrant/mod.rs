@@ -11,7 +11,6 @@ use crate::source::color;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-pub(crate) const NATIVE: bool = true;
 
 /// Point labels look for a free spot only up to this many points.
 const AVOID_LIMIT: usize = 300;

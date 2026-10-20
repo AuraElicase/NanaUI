@@ -1,11 +1,11 @@
 //! Flowchart drawing: measure labels, size shapes, lay the graph out with
 //! nested subgraphs and draw it with the shared role table.
 
-use super::{Curve, EndRef, LineKind, Model};
-use crate::families::LayoutCx;
+use super::{Curve, EndRef, LineKind, Model, link_stroke};
+use crate::families::{LayoutCx, graphkit};
 use crate::geom::path::{basis_curve, rounded_polyline};
 use crate::geom::{PathData, Shape};
-use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth};
+use crate::ir::{Align, Corner, Dash, Geom, Ink, SceneBuilder, StrokeWidth};
 use crate::layout::{self, ClusterSpec, EdgeSpec, End, Graph, NodeSpec, RouteKind, layered};
 use crate::style::{self, Paint};
 use crate::text::{FontSpec, LaidText};
@@ -17,7 +17,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let wrap = cx.wrap_width("flowchart.wrappingWidth");
     let pad = [m.node_pad_x, m.node_pad_y];
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
 
     // Nodes.
     let mut paints = Vec::with_capacity(model.nodes.len());
@@ -127,21 +127,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if edge.line == LineKind::Invisible || route.kind == RouteKind::Dropped || route.points.len() < 2 {
             continue;
         }
-        let mut stroke = style::edge_stroke();
-        match edge.line {
-            LineKind::Thick => stroke.width = StrokeWidth::Thick,
-            LineKind::Dotted => stroke = stroke.dash(Dash::Dotted),
-            _ => {}
-        }
-        if let Some(c) = edge.style.stroke {
-            stroke.ink = Ink::Rgba(c);
-        }
-        if let Some(w) = edge.style.stroke_width {
-            stroke.width = StrokeWidth::Px(w);
-        }
-        if let Some(d) = edge.style.dashed {
-            stroke.dash = if d { Dash::Dashed } else { Dash::Solid };
-        }
+        let stroke = link_stroke(edge.line, &edge.style);
         let curve = edge.curve.or(model.default_curve).unwrap_or(Curve::Rounded);
         let mut points = if route.kind == RouteKind::SelfLoop {
             route.points.clone()
@@ -185,7 +171,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (n, node) in model.nodes.iter().enumerate() {
         let rect = placed.nodes[n];
         let paint = paints[n];
-        draw_node(&mut out, node.shape, rect, &paint);
+        graphkit::shape_node(&mut out, node.shape, rect, &paint);
         let laid = &labels[n];
         if !laid.is_empty() {
             let lr = node.shape.label_rect(rect, laid.size());
@@ -240,29 +226,3 @@ fn through_points(points: &[[f32; 2]]) -> Vec<[f32; 2]> {
     out
 }
 
-pub(crate) fn draw_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint: &Paint) {
-    let (behind, over) = shape.decorations(rect);
-    for geom in behind {
-        out.shape(geom, Some(paint.fill), Some(paint.stroke));
-    }
-    if shape.solid() {
-        let ink = match paint.fill {
-            Ink::Rgba(_) => paint.fill,
-            _ => style::TEXT,
-        };
-        out.shape(shape.outline(rect), Some(ink), None);
-    } else if shape == Shape::FramedCircle {
-        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
-        out.shape(Geom::Ellipse(rect.inset(4.0, 4.0)), Some(style::TEXT), None);
-        return;
-    } else if shape.has_body() {
-        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
-    }
-    let line = Stroke {
-        dash: Dash::Solid,
-        ..paint.stroke
-    };
-    for path in over {
-        out.stroke(Geom::path(path), line);
-    }
-}

@@ -14,7 +14,6 @@ use crate::geom::Marker;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 /// How a participant is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -15,7 +15,6 @@ use crate::style::{self, Paint};
 use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Node {

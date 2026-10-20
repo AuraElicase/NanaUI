@@ -29,7 +29,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let name_font = cx.font().weight(m.strong_weight);
     let pad_x = m.node_pad_x * 0.75;
     let pad_y = m.node_pad_y * 0.8;
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
 
     let plain = |text: String, font, max| cx.text.lay(&verbatim(text), font, max);
 

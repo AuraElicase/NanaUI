@@ -7,7 +7,6 @@ use super::sequence;
 use super::{LayoutCx, ParseCx};
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 pub(crate) type Model = sequence::Model;
 

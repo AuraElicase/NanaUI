@@ -35,7 +35,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let pad_y = m.node_pad_y * 0.8;
     let row_pad = m.node_pad_y * 0.4;
     let col_gap = m.font_size * 0.9;
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
 
     let plain = |text: &str, font| cx.text.lay(&verbatim(text), font, None);
 

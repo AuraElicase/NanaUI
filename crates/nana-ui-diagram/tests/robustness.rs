@@ -16,7 +16,7 @@ fn run(source: &str) {
 
 #[test]
 fn every_line_prefix_renders_or_fails_cleanly() {
-    for (_, _, source) in common::native_fixtures() {
+    for (_, _, source) in common::fixtures() {
         let lines: Vec<&str> = source.lines().collect();
         for n in 0..=lines.len() {
             run(&lines[..n].join("\n"));
@@ -38,7 +38,7 @@ fn byte_mutations_never_panic() {
         seed
     };
     let alphabet = b"[](){}<>|&;:-=.~ox\"`@#\n AZaz09";
-    for (_, _, source) in common::native_fixtures() {
+    for (_, _, source) in common::fixtures() {
         for _ in 0..40 {
             let mut bytes = source.clone().into_bytes();
             for _ in 0..(1 + next() % 4) {

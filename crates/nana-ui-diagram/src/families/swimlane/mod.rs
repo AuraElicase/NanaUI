@@ -2,8 +2,7 @@
 //! every top-level `subgraph` is a lane and its nested subgraphs fold into
 //! it. Steps share ranks across lanes and never leave their own lane.
 
-use super::block::{draw_node, link_stroke};
-use super::flowchart::{self, EndRef, LineKind};
+use super::flowchart::{self, EndRef, LineKind, link_stroke};
 use super::{LayoutCx, ParseCx, graphkit};
 use crate::ir::{Align, Geom, Ink, SceneBuilder, Stroke};
 use crate::layout::lanes::{self, LaneEdge, LaneGraph, LaneLayout, LaneNode, LaneSpacing, LaneSpec};
@@ -13,7 +12,6 @@ use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, Summary};
 use nana_ui_core::{SemanticColorMix, SemanticColorRole as R};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Model {
@@ -65,7 +63,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let small = cx.small_font();
     let wrap = cx.wrap_width("swimlane.wrappingWidth");
     let pad = [m.node_pad_x, m.node_pad_y];
-    let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
+    let chip_pad = cx.chip_pad();
     let chart = &model.chart;
 
     let titles = lane_titles(cx, &model.lanes, wrap);
@@ -132,7 +130,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
     for (n, node) in chart.nodes.iter().enumerate() {
         let rect = placed.nodes[n];
-        draw_node(&mut out, node.shape, rect, &paints[n]);
+        graphkit::shape_node(&mut out, node.shape, rect, &paints[n]);
         let laid = &labels[n];
         if !laid.is_empty() {
             let lr = node.shape.label_rect(rect, laid.size());

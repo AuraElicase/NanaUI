@@ -16,7 +16,6 @@ use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 use nana_ui_core::{SemanticColorMix, SemanticColorRole};
 
-pub(crate) const NATIVE: bool = true;
 
 /// At most this many sets are drawn; later ones are skipped with a warning.
 const MAX_SETS: usize = 4;

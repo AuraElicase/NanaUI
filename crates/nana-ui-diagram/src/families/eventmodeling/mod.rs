@@ -19,7 +19,6 @@ use crate::style;
 use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum EntityKind {

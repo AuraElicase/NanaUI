@@ -3,14 +3,15 @@
 mod layout;
 mod parse;
 
-use super::{LayoutCx, ParseCx};
+use super::{LayoutCx, ParseCx, graphkit};
 use crate::geom::{Marker, Shape};
+use crate::ir::{Dash, Stroke};
 use crate::layout::Direction;
+use crate::style;
 use crate::source::directives::AuthorStyle;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LineKind {
@@ -111,4 +112,16 @@ pub(crate) fn summary(model: &Model) -> Summary {
         edges: model.edges.iter().filter(|e| e.line != LineKind::Invisible).count() as u32,
         groups: model.subgraphs.len() as u32,
     }
+}
+
+/// The stroke of a flowchart-style link after its line kind and the
+/// author's `linkStyle`.
+pub(crate) fn link_stroke(line: LineKind, author: &AuthorStyle) -> Stroke {
+    let mut base = style::edge_stroke();
+    match line {
+        LineKind::Thick => base.width = crate::ir::StrokeWidth::Thick,
+        LineKind::Dotted => base = base.dash(Dash::Dotted),
+        _ => {}
+    }
+    graphkit::line_stroke(base, author)
 }

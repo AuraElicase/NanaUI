@@ -9,7 +9,6 @@ use super::{LayoutCx, ParseCx};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Plot {

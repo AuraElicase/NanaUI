@@ -11,7 +11,6 @@ use crate::ir::{Align, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Graticule {

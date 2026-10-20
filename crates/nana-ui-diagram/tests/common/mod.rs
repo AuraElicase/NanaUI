@@ -3,20 +3,17 @@
 
 use std::path::{Path, PathBuf};
 
-use nana_ui_diagram::{DiagramKind, native};
+use nana_ui_diagram::DiagramKind;
 
 pub fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
 }
 
-/// Every fixture of a type that has its native implementation:
+/// Every fixture:
 /// `(family, name, source)`.
-pub fn native_fixtures() -> Vec<(String, String, String)> {
+pub fn fixtures() -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     for kind in DiagramKind::ALL {
-        if !native(kind) {
-            continue;
-        }
         let dir = root().join("fixtures").join(kind.name());
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;

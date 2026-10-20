@@ -10,7 +10,6 @@ use crate::ir::{Align, Geom, Rect, SceneBuilder};
 use crate::text::{FontSpec, LaidText, Label, Measurer};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Field {

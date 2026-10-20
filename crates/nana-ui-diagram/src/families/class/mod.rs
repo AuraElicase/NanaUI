@@ -10,7 +10,6 @@ use crate::source::directives::AuthorStyle;
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, Summary};
 
-pub(crate) const NATIVE: bool = true;
 
 /// One attribute or method line.
 #[derive(Debug, Clone, PartialEq, Eq)]

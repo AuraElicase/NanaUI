@@ -429,26 +429,6 @@ pub(crate) fn end_label_origin(
     Some([rect.x, rect.y])
 }
 
-/// A flowchart-style shape with its decorations.
-pub(crate) fn shape_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint: &Paint) {
-    let (behind, over) = shape.decorations(rect);
-    for geom in behind {
-        out.shape(geom, Some(paint.fill), Some(paint.stroke));
-    }
-    if shape.solid() {
-        out.shape(shape.outline(rect), Some(solid_ink(paint.fill)), None);
-    } else if shape.has_body() {
-        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
-    }
-    let line = Stroke {
-        dash: Dash::Solid,
-        ..paint.stroke
-    };
-    for path in over {
-        out.stroke(Geom::path(path), line);
-    }
-}
-
 /// A box with a tinted header band: the body, then the band clipped to the
 /// rounded outline, then a divider under it and the outline again on top so
 /// the band never covers it.
@@ -554,5 +534,34 @@ mod tests {
         let c = s.resolve("C", &["warm".into()]);
         assert!(c.fill.is_some() && c.stroke.is_some());
         assert_eq!(split_classes("X:::a,b").1.len(), 2);
+    }
+}
+
+/// A node body in one of the shared shapes, with its decorations, painted
+/// with the shared role table after the author's style.
+pub(crate) fn shape_node(out: &mut SceneBuilder, shape: Shape, rect: Rect, paint: &Paint) {
+    let (behind, over) = shape.decorations(rect);
+    for geom in behind {
+        out.shape(geom, Some(paint.fill), Some(paint.stroke));
+    }
+    if shape.solid() {
+        let ink = match paint.fill {
+            Ink::Rgba(_) => paint.fill,
+            _ => style::TEXT,
+        };
+        out.shape(shape.outline(rect), Some(ink), None);
+    } else if shape == Shape::FramedCircle {
+        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
+        out.shape(Geom::Ellipse(rect.inset(4.0, 4.0)), Some(style::TEXT), None);
+        return;
+    } else if shape.has_body() {
+        out.shape(shape.outline(rect), Some(paint.fill), Some(paint.stroke));
+    }
+    let line = Stroke {
+        dash: Dash::Solid,
+        ..paint.stroke
+    };
+    for path in over {
+        out.stroke(Geom::path(path), line);
     }
 }

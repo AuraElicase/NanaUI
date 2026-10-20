@@ -13,7 +13,6 @@ use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, Summary, style};
 use nana_ui_core::{SemanticColorMix, SemanticColorRole};
 
-pub(crate) const NATIVE: bool = true;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Sourcing {

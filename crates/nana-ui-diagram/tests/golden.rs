@@ -1,4 +1,4 @@
-//! Display-list goldens: every native fixture laid out with the fixed
+//! Display-list goldens: every fixture laid out with the fixed
 //! measure, dumped as text. Re-bless with `NANA_DIAGRAM_BLESS=1`.
 
 mod common;
@@ -9,7 +9,7 @@ use nana_ui_diagram::{DiagramMetrics, FixedMeasure, Limits, dump, render};
 fn display_lists_match_their_goldens() {
     let bless = std::env::var_os("NANA_DIAGRAM_BLESS").is_some();
     let mut failures = Vec::new();
-    let fixtures = common::native_fixtures();
+    let fixtures = common::fixtures();
     assert!(!fixtures.is_empty());
     for (family, name, source) in fixtures {
         let scene = render(

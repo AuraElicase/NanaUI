@@ -2,8 +2,6 @@
 
 use std::fmt;
 
-use crate::DiagramKind;
-
 /// Why a diagram has no drawing. The caller shows the source instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagramError {
@@ -19,8 +17,6 @@ pub enum DiagramError {
     },
     /// The source or the drawing grew past a [`crate::Limits`] bound.
     TooLarge(LimitKind),
-    /// A known type whose native parser has not landed.
-    Unsupported(DiagramKind),
 }
 
 impl DiagramError {
@@ -44,7 +40,6 @@ impl fmt::Display for DiagramError {
                 message,
             } => write!(f, "{line}:{column}: {message}"),
             Self::TooLarge(kind) => write!(f, "diagram exceeds the {kind:?} limit"),
-            Self::Unsupported(kind) => write!(f, "{} diagrams are not supported yet", kind.name()),
         }
     }
 }
