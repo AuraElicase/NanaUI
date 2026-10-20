@@ -7,10 +7,11 @@ use nana_ui_core::RadiusTier;
 use super::{Model, Plot, XAxis};
 use crate::families::LayoutCx;
 use crate::geom::PathData;
-use crate::ir::{Align, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::ir::{Align, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::layout::axis::{BandScale, LinearScale};
+use crate::style::{self, series};
 use crate::text::{LaidText, Label};
-use crate::{DiagramError, DiagramScene, style};
+use crate::{DiagramError, DiagramScene};
 
 /// Keep tick labels that clear the previous kept one along the axis:
 /// widths on a horizontal axis, heights on a vertical one.
@@ -26,13 +27,6 @@ fn thin(ticks: Vec<(f32, LaidText)>, along_x: bool, gap: f32) -> Vec<(f32, LaidT
         }
     }
     out
-}
-
-fn series(index: usize, tone: Tone) -> Ink {
-    Ink::Series {
-        index: index.min(u16::MAX as usize) as u16,
-        tone,
-    }
 }
 
 pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScene, DiagramError> {
@@ -108,11 +102,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // A numeric x axis: points spread evenly over min..max, ticks from a
     // linear scale through the band centres.
-    let x_numeric = match model.x {
-        XAxis::Range(a, b) => Some((a, b)),
-        _ => None,
-    };
-    let x_scale = x_numeric.map(|(a, b)| {
+    let x_scale = if let XAxis::Range(a, b) = model.x {
         let ends = [band.center(0), band.center(n.max(1) - 1)];
         let along = (ends[1] - ends[0]).abs();
         let count = ((along / (60.0 * k)) as usize).clamp(1, 10);
@@ -122,8 +112,10 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let (lo, hi) = (a.min(b), a.max(b));
         scale.ticks.ticks = round.ticks.ticks.into_iter().filter(|t| (lo..=hi).contains(t)).collect();
         scale.ticks.step = round.ticks.step;
-        scale
-    });
+        Some(scale)
+    } else {
+        None
+    };
 
     // Value tick labels.
     let value_labels: Vec<(f32, LaidText)> = scale
@@ -147,10 +139,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Titles and legend above the plot.
     let x_title = model.x_title.as_ref().map(|t| cx.text.lay(t, font, Some(plot_w.max(plot_h))));
     let y_title = model.y_title.as_ref().map(|t| cx.text.lay(t, font, Some(plot_w.max(plot_h))));
-    let (category_title, value_title) = if horizontal { (x_title, y_title) } else { (y_title, x_title) };
     // Vertical: y (value) title above the left axis, x (category) title below.
     // Horizontal: x (category) title above the left axis, y (value) below.
-    let (top_title, bottom_title) = (category_title, value_title);
+    let (top_title, bottom_title) = if horizontal { (x_title, y_title) } else { (y_title, x_title) };
 
     let swatch = 12.0 * k;
     let legend: Vec<(usize, LaidText)> = model
@@ -217,33 +208,22 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Category or numeric labels on the band axis.
     let tick = 4.0 * k;
     let mut band_axis_extent: f32 = 0.0;
-    if x_ticks.is_empty() {
-        for (i, laid) in labels.iter().enumerate() {
-            let c = band.center(i);
-            if horizontal {
-                let yc = py(c);
-                out.stroke(Geom::path(PathData::polyline(&[[plot.x - tick, yc], [plot.x, yc]])), axis);
-                out.text(laid, [plot.x - gap - laid.width, yc - laid.height / 2.0], laid.width, Align::End, style::MUTED);
-            } else {
-                let xc = px(c);
-                out.stroke(Geom::path(PathData::polyline(&[[xc, plot.bottom()], [xc, plot.bottom() + tick]])), axis);
-                let w = laid.width.max(label_wrap);
-                out.text(laid, [xc - w / 2.0, plot.bottom() + tick + 2.0 * k], w, Align::Center, style::MUTED);
-                band_axis_extent = band_axis_extent.max(laid.height);
-            }
-        }
+    // Category labels centre in a wrap-wide box; numeric ones in their own.
+    let band_labels: Vec<(f32, &LaidText, f32)> = if x_ticks.is_empty() {
+        labels.iter().enumerate().map(|(i, l)| (band.center(i), l, l.width.max(label_wrap))).collect()
     } else {
-        for (v, laid) in &x_ticks {
-            if horizontal {
-                let yc = py(*v);
-                out.stroke(Geom::path(PathData::polyline(&[[plot.x - tick, yc], [plot.x, yc]])), axis);
-                out.text(laid, [plot.x - gap - laid.width, yc - laid.height / 2.0], laid.width, Align::End, style::MUTED);
-            } else {
-                let xc = px(*v);
-                out.stroke(Geom::path(PathData::polyline(&[[xc, plot.bottom()], [xc, plot.bottom() + tick]])), axis);
-                out.text(laid, [xc - laid.width / 2.0, plot.bottom() + tick + 2.0 * k], laid.width, Align::Center, style::MUTED);
-                band_axis_extent = band_axis_extent.max(laid.height);
-            }
+        x_ticks.iter().map(|(v, l)| (*v, l, l.width)).collect()
+    };
+    for (v, laid, w) in band_labels {
+        if horizontal {
+            let yc = py(v);
+            out.stroke(Geom::path(PathData::polyline(&[[plot.x - tick, yc], [plot.x, yc]])), axis);
+            out.text(laid, [plot.x - gap - laid.width, yc - laid.height / 2.0], laid.width, Align::End, style::MUTED);
+        } else {
+            let xc = px(v);
+            out.stroke(Geom::path(PathData::polyline(&[[xc, plot.bottom()], [xc, plot.bottom() + tick]])), axis);
+            out.text(laid, [xc - w / 2.0, plot.bottom() + tick + 2.0 * k], w, Align::Center, style::MUTED);
+            band_axis_extent = band_axis_extent.max(laid.height);
         }
     }
 
