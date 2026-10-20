@@ -69,7 +69,7 @@ let style = NodeStyle::default()
 
 - `SemanticColorMix::new(first_role, second_role, first_weight)`：在预乘 alpha 的 sRGB 空间对当前主题的两种语义色做混合（`first_weight` 取值 `0.0..=1.0`，精度至万分之一；切换主题时自动按新调色板重新解析）。
 - `SemanticColorMix::alpha(role, alpha)`：仅降低该表面或描边颜色自身的 alpha，**不会降低后代文本的不透明度**。
-- 通过 `NodeStyle::surface_mix(mix)` 与 `outline_mix(mix, width)` 设置基态混色（与 `surface` / `outline` 后调用者生效）；`InteractionStyle` 的各状态（`base` → `selected` → `hovered` → `pressed` → `focused` → `disabled`）可按优先级覆盖基态。
+- 通过 `NodeStyle::surface_mix(mix)` 与 `outline_mix(mix, width)` 设置基态混色（与 `surface` / `outline` 后调用者生效；`Stack` 上同名方法直接可用）；在 `bind` 闭包里改容器布局用 `Stack::layout_mut()`，不必整个替换容器；`InteractionStyle` 的各状态（`base` → `selected` → `hovered` → `pressed` → `focused` → `disabled`）可按优先级覆盖基态。
 
 ## 与 Web CSS 默认值的关键差异
 

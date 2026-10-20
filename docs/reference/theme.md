@@ -758,7 +758,7 @@ cargo test -p component-gallery --bin ui-snapshots --features snapshots --locked
 
 #100 §2 要 foundation 层。本轮**只**给了 accent 一族。因为那是调色板里唯一真的在派生的地方：`accent_soft` / `accent_soft_hover` / `accent_soft_pressed` 就是 base accent 的三个 alpha。以前是三个字面 RGBA 常量。
 
-后果是一个真 bug 消失了：以前只设 `palette.accent`（`theme-accent-only` 场景、`--nana-custom-accent`）会留下上一个色相的三个软填充。派生规则只存在于「当初谁选的那几个常量」里。现在 `ThemeDefinition::with_accent(ramp)` 一次移动整族。
+后果是一个真 bug 消失了：以前只设 `palette.accent`（`theme-accent-only` 场景、`--nana-custom-accent`）会留下上一个色相的三个软填充。派生规则只存在于「当初谁选的那几个常量」里。现在 `ThemeDefinition::with_accent(ramp)` 一次移动整族；焦点（`focus_*`）与高亮（`highlight*`）角色若原本跟随旧强调色，也一并移到新色相，主题自己另设的颜色保持不变。宿主在 `RuntimeProgram::theme()` 返回新的 `Arc` 后，会把它装进所有已打开窗口的文档，不必逐窗口调用 `set_theme_tokens`。
 
 反过来。`with_palette(p)` 仍然逐字写入 `p`。只是**顺带把 foundation 的 ramp 按 `p` 重读一遍**（`AccentRamp::from_palette`）。记录。不修正。一个 `accent_soft` 和 `accent` 色相不一致的调色板。读出来的 ramp 就照实说它不一致。
 
