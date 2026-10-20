@@ -35,10 +35,11 @@ pub const fn tone_role(tone: StatusTone) -> SemanticColorRole {
     }
 }
 
-/// A keycap's height: the small control step's text line plus its edge.
-const KEYCAP_HEIGHT: f32 = 24.0;
+/// A keycap's height: a body line box with an extra-small inset above and
+/// below.
+const KEYCAP_HEIGHT: f32 = nana_ui_core::type_scale::LINE + 2.0 * nana_ui_core::space::XS;
 /// The keycap's bottom edge, drawn inside the cap.
-const KEYCAP_EDGE: f32 = 2.0;
+const KEYCAP_EDGE: f32 = nana_ui_core::space::XXS;
 
 /// A raised key: the surface, a border and a bottom edge in the strong
 /// border colour, so the cap reads as raised in either appearance.
