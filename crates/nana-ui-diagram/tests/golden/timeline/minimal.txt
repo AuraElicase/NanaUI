@@ -1,0 +1,10 @@
+size 142 119.2
+summary nodes=2 edges=0 groups=0
+shape path M67,44.6 L67,74.6 stroke=series0/hairline/Dashed
+shape path M9,59.6 L126.3,59.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M133,59.6 L124.6,63.1 L126.1,59.6 L124.6,56.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 17 9 100 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 49.8 17 34.4 19.6 size=14 w=600 ink=Text "2024"
+shape ellipse 62.5 55.1 9 9 fill=series0
+shape rect 17 74.6 100 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 42.6 82.6 48.7 19.6 size=14 w=400 ink=Text "Launch"
