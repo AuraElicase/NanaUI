@@ -96,6 +96,7 @@ Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-sh
 
 - **`RadiusTier::Xl`（默认 20 px）**：用于浮在页面之上的轨道表面，始终比卡片圆一档。
 - **`RadiusTier::Xxl`（默认 24 px，`ThemeMetrics::radius_xxl`）**：用于媒体播放条、详情大卡片等独立大块表面（对应 CSS `--radius-2xl`，Paint 脚本中名为 `"xxl"`）。
+- **`RadiusTier::Full`（`FULL_RADIUS`，不随主题）**：胶囊、圆点、头像。解析为一个大于任何盒子的值，绘制时按短边一半收紧，所以不必知道高度（Paint 脚本中名为 `"full"`）。
 
 应用可通过 `save_to_store` 与 `restore_from_store` 将外观设置持久化到独立的 `Settings` 命名空间。当主区域紧贴展开的侧栏时，靠近侧栏的那两个角会由工作区表面自动收成直角，另一侧保留页面圆角。
 

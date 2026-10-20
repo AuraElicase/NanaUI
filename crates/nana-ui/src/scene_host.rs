@@ -323,6 +323,10 @@ struct WindowManager<Program: RuntimeProgram> {
     next_gpu_retry: Option<Instant>,
     render_suspended: bool,
     last_theme: crate::ThemeAppearance,
+    /// The tokens every window document holds: [`RuntimeProgram::theme`] as
+    /// last installed. A program that hands back a different theme gets it
+    /// installed in every open window (see `sync_appearance`).
+    installed_theme: Arc<crate::CompiledTheme>,
     /// System reduce-motion preference, as last delivered to the program.
     reduced_motion: bool,
     /// System high-contrast flag, as last delivered to the program.
@@ -1168,7 +1172,8 @@ fn complete_startup<Program: RuntimeProgram>(
     // Locals drop in reverse order: if the remaining host setup fails, close
     // the inbox before the initialized program can join request-waiting workers.
     let startup_requests = window_requests;
-    let last_theme = program.theme().appearance();
+    let installed_theme = program.theme();
+    let last_theme = installed_theme.appearance();
     let last_material_mode = program.window_material_mode_for(WindowId::PRIMARY);
     let backdrop_opacity = program.appearance_backdrop_opacity_for(WindowId::PRIMARY);
     let window_background = program.window_background();
@@ -1318,6 +1323,7 @@ fn complete_startup<Program: RuntimeProgram>(
         next_gpu_retry: None,
         render_suspended: false,
         last_theme,
+        installed_theme,
         reduced_motion,
         high_contrast,
         settings,

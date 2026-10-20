@@ -5264,6 +5264,12 @@ impl Stack {
         self
     }
 
+    /// [`Self::with_layout`] 的借用版：`bind` 闭包里拿到的是 `&mut Stack`，
+    /// 直接改字段，不必把整个容器换掉再重建。
+    pub fn layout_mut(&mut self) -> &mut nana_ui_core::LayoutStyle {
+        Arc::make_mut(&mut self.style.layout)
+    }
+
     pub(crate) fn style_ref(&self) -> &NodeStyle {
         &self.style
     }
@@ -5457,6 +5463,18 @@ impl Stack {
     /// 一次性写全边框：语义色角色与宽度必须同时给出，缺一边框不会绘制。
     pub fn outline(mut self, role: nana_ui_core::SemanticColorRole, width: f32) -> Self {
         self.style = self.style.outline(role, width);
+        self
+    }
+
+    /// 跟随主题的混合背景（如强调色 12% 的淡底），见 [`NodeStyle::surface_mix`]。
+    pub fn surface_mix(mut self, mix: nana_ui_core::SemanticColorMix) -> Self {
+        self.style = self.style.surface_mix(mix);
+        self
+    }
+
+    /// 跟随主题的混合边框色与宽度，见 [`NodeStyle::outline_mix`]。
+    pub fn outline_mix(mut self, mix: nana_ui_core::SemanticColorMix, width: f32) -> Self {
+        self.style = self.style.outline_mix(mix, width);
         self
     }
 

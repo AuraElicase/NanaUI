@@ -1357,7 +1357,19 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         })
     }
     pub(super) fn sync_appearance(&mut self) {
-        self.last_theme = self.program.theme().appearance();
+        let theme = self.program.theme();
+        self.last_theme = theme.appearance();
+        // A new theme reaches the documents of windows already open, as it
+        // reaches new ones when they are created; an unchanged `Arc` costs
+        // nothing.
+        if !Arc::ptr_eq(&theme, &self.installed_theme) {
+            for id in self.known_window_ids() {
+                let _ = self.program.with_document_mut(id, |document| {
+                    document.context_mut().set_theme_tokens(Arc::clone(&theme))
+                });
+            }
+            self.installed_theme = theme;
+        }
         if self.render_suspended {
             return;
         }

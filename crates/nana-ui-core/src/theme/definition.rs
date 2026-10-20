@@ -1388,6 +1388,33 @@ mod tests {
     /// The foundation layer's reason to exist. Setting `palette.accent` alone
     /// leaves the three soft fills on the old hue; going through the ramp does
     /// not. This is the bug the accent-only theme path had.
+    /// Focus and highlight follow the accent in the built-in palettes, so
+    /// re-accenting moves them too; a highlight of its own stays.
+    #[test]
+    fn re_accenting_moves_focus_and_highlight_that_followed_the_accent() {
+        let coral = AccentRamp {
+            base: SemanticColor::rgb8(240, 145, 123),
+            strong: SemanticColor::rgb8(220, 120, 100),
+            focus: SemanticColor::rgba8(240, 145, 123, 0.6),
+            ..AccentRamp::DARK
+        };
+        for base in [dark(), ThemeDefinition::NANA_LIGHT.clone()] {
+            let palette = base.with_accent(coral).tokens.palette;
+            assert_eq!(palette.highlight, coral.base);
+            assert_eq!(palette.highlight_hover, coral.strong);
+            assert_eq!(palette.highlight_pressed, coral.strong);
+            assert_eq!(palette.focus_surface, coral.focus);
+            assert!(
+                palette.focus_border == coral.base || palette.focus_border == coral.strong,
+                "focus border follows the ramp"
+            );
+        }
+        let gold = SemanticColor::rgb8(230, 180, 40);
+        let mut own = dark();
+        own.tokens.palette.highlight = gold;
+        assert_eq!(own.with_accent(coral).tokens.palette.highlight, gold);
+    }
+
     #[test]
     fn re_accenting_through_the_ramp_moves_the_whole_accent_family() {
         let coral = AccentRamp {

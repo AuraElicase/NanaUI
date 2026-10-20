@@ -65,7 +65,7 @@ impl PaintScript {
     ///   x, y, w, h], ["roundedRect", x, y, w, h, 圆角或四个圆角], ["ellipse", x, y,
     ///   w, h], ["Z"]]`，分段里的长度可以写相对值；要指定填充规则时写成
     ///   `{ "d": 上面任一种, "fillRule": "nonzero" | "evenodd" }`。
-    /// - 圆角：长度，档位名 `"xs" | "sm" | "md" | "lg" | "xl" | "xxl"`（`"xxl"` 是
+    /// - 圆角：长度，档位名 `"xs" | "sm" | "md" | "lg" | "xl" | "xxl" | "full"`（`"xxl"` 是
     ///   2xl 档），或四个这样的值（左上、右上、右下、左下）。
     /// - 混合方式：CSS `mix-blend-mode` 的全部取值（`"normal"`、`"multiply"`、
     ///   `"screen"`、`"overlay"`、`"darken"`、`"lighten"`、`"color-dodge"`、
@@ -1107,6 +1107,7 @@ fn parse_radius(value: &Value) -> Result<ScriptRadius, String> {
         Some("lg") => Ok(ScriptRadius::Tier(RadiusTier::Lg)),
         Some("xl") => Ok(ScriptRadius::Tier(RadiusTier::Xl)),
         Some("xxl") => Ok(ScriptRadius::Tier(RadiusTier::Xxl)),
+        Some("full") => Ok(ScriptRadius::Tier(RadiusTier::Full)),
         _ => parse_len(value)
             .map(ScriptRadius::Len)
             .map_err(|_| "a radius is a length or xs / sm / md / lg / xl / xxl".into()),

@@ -3408,6 +3408,68 @@ fn keys_in_a_switched_branch_resolve_by_path_inside_a_virtual_row() {
     assert_eq!(shown(&cx), "行 0 2");
 }
 
+/// A `Stack` takes a theme-relative wash and outline, and a fully round
+/// corner that does not need its height, from its own builder.
+#[test]
+fn a_stack_takes_mixes_and_a_full_radius_from_its_builder() {
+    use nana_ui_core::{RadiusTier, SemanticColorMix, SemanticColorRole};
+    let (mut cx, _, parent) = setup();
+    let wash = SemanticColorMix::alpha(SemanticColorRole::Accent, 0.12);
+    let rim = SemanticColorMix::alpha(SemanticColorRole::Accent, 0.4);
+    let view = cx
+        .mount_view(parent, move || {
+            widget(
+                Stack::row(0.0)
+                    .surface_mix(wash)
+                    .outline_mix(rim, 1.0)
+                    .radius(RadiusTier::Full),
+            )
+            .key("pill")
+        })
+        .unwrap();
+    let id = view.roots()[0];
+    let style = cx.world().node_style(id).unwrap();
+    assert_eq!(style.interaction.base.background_mix, Some(wash));
+    assert_eq!(style.interaction.base.border_mix, Some(rim));
+    assert_eq!(style.layout.border_width, Some(1.0));
+    assert_eq!(style.radius, Some(RadiusTier::Full));
+    assert_eq!(
+        RadiusTier::Full.resolve(nana_ui_core::UI_METRICS),
+        nana_ui_core::FULL_RADIUS
+    );
+}
+
+/// `.grow()` gives a switching block's container the rest of its parent's
+/// main axis, so a branch that fills has room to fill; without it the
+/// container takes its content's size.
+#[test]
+fn a_growing_switch_container_takes_the_space_left() {
+    let (mut cx, _, parent) = setup();
+    let view = cx
+        .mount_view(parent, || {
+            column().key("page").children((
+                dynamic(signal(0u32), |_: &u32| text("a")).key("plain"),
+                dynamic(signal(0u32), |_: &u32| text("b"))
+                    .grow()
+                    .key("grown"),
+                when(signal(true), || text("c")).grow().key("when"),
+            ))
+        })
+        .unwrap();
+    let root = view.roots()[0];
+    let layout = |cx: &AppContext, path: &str| {
+        let id = cx.resolve_assembly_path(root, path).unwrap();
+        cx.world().node_style(id).unwrap().layout.clone()
+    };
+    for path in ["grown", "when"] {
+        let grown = layout(&cx, path);
+        assert_eq!(grown.flex_grow, Some(1.0), "{path}");
+        assert_eq!(grown.flex_basis, Some(LengthSpec::Px(0.0)), "{path}");
+        assert_eq!(grown.min_height, Some(LengthSpec::Px(0.0)), "{path}");
+    }
+    assert_ne!(layout(&cx, "plain").flex_grow, Some(1.0));
+}
+
 /// The same outside a virtual list: a `dynamic` at the top of a view, a
 /// kept-alive one switching back to a branch it kept, and rows an `each`
 /// adds after it was built, each keyed under its container.

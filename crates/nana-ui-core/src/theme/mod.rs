@@ -353,7 +353,15 @@ pub enum RadiusTier {
     /// The 2xl step: large standalone surfaces — a player bar, a detail
     /// card — one step rounder than the rails.
     Xxl,
+    /// Fully round: a pill, a dot, an avatar. Resolves to [`FULL_RADIUS`],
+    /// which every painter clamps to half the box's shorter side, so it
+    /// stays round at any size without the caller knowing the height.
+    Full,
 }
+
+/// What [`RadiusTier::Full`] resolves to: larger than any box, so the
+/// half-side clamp decides the corner.
+pub const FULL_RADIUS: f32 = 9999.0;
 
 impl RadiusTier {
     pub const fn resolve(self, metrics: ThemeMetrics) -> f32 {
@@ -364,6 +372,7 @@ impl RadiusTier {
             Self::Lg => metrics.radius_lg,
             Self::Xl => metrics.radius_xl,
             Self::Xxl => metrics.radius_xxl,
+            Self::Full => FULL_RADIUS,
         }
     }
 }
