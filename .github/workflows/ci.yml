@@ -172,6 +172,7 @@ jobs:
           lifecycle embedded-window-lifecycle
           lifecycle embedded-window-lifecycle --probe-device-loss
           lifecycle embedded-window-lifecycle --probe-host-stop
+          lifecycle theme-switch-probe
       # The Gallery *pixel* gate cannot run here: it compares exactly against a
       # baseline recorded by one GPU adapter, and no hosted runner matches a
       # committed adapter key. These tests cover the parts that are
