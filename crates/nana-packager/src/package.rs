@@ -217,6 +217,7 @@ fn package_into(options: &PackageOptions, prepared: &mut bool) -> Result<Package
         };
     copy_runtime(&config.runtime.bin, &layout.runtime_bin)?;
     copy_runtime(&config.runtime.tools, &layout.runtime_tools)?;
+    copy_runtime(&config.runtime.resources, &layout.runtime_resources)?;
     for plugin in &config.runtime.plugins {
         if !ships_on(&plugin.platforms, platform) {
             continue;
@@ -594,8 +595,22 @@ fn copy_into(source: &Path, dir: &Path) -> Result<String, String> {
     if dest.exists() {
         return Err(format!("two runtime files are named {name}"));
     }
-    std::fs::copy(source, &dest)
-        .map_err(|error| format!("cannot copy {}: {error}", source.display()))?;
+    if source.is_dir() {
+        let escaping = crate::util::escaping_links(source)?;
+        if !escaping.is_empty() {
+            let list: Vec<_> = escaping.iter().map(|p| p.display().to_string()).collect();
+            return Err(format!(
+                "{} has symlinks pointing outside it: {}",
+                source.display(),
+                list.join(", ")
+            ));
+        }
+        crate::util::copy_tree(source, &dest)
+            .map_err(|error| format!("cannot copy {}: {error}", source.display()))?;
+    } else {
+        std::fs::copy(source, &dest)
+            .map_err(|error| format!("cannot copy {}: {error}", source.display()))?;
+    }
     Ok(name.to_owned())
 }
 

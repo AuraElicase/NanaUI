@@ -152,6 +152,10 @@ pub struct RuntimeConfig {
     pub bin: Vec<RuntimeFileConfig>,
     #[serde(default)]
     pub tools: Vec<RuntimeFileConfig>,
+    /// Loose files read from `RuntimeResources` (`Contents/Resources` in a
+    /// bundle), such as licence texts; resource packs are separate.
+    #[serde(default)]
+    pub resources: Vec<RuntimeFileConfig>,
     #[serde(default)]
     pub plugins: Vec<PluginConfig>,
 }
@@ -159,6 +163,8 @@ pub struct RuntimeConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeFileConfig {
+    /// A file, or a directory copied whole with its symlinks (a macOS
+    /// `.framework`); a symlink in it may not point outside it.
     pub source: PathBuf,
     /// Platforms this file ships on; all when empty.
     #[serde(default)]
@@ -353,6 +359,7 @@ impl PackageConfig {
             .bin
             .iter()
             .chain(&self.runtime.tools)
+            .chain(&self.runtime.resources)
             .map(|file| &file.platforms)
             .chain(self.runtime.plugins.iter().map(|plugin| &plugin.platforms));
         for list in platform_lists {
