@@ -7,22 +7,16 @@ use std::f32::consts::{FRAC_PI_2, TAU};
 use super::kit::{self, LegendRow, keyword, split_top};
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
-use crate::ir::{Align, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::ir::{Align, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
 pub(crate) const NATIVE: bool = true;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Graticule {
-    #[default]
     Circle,
     Polygon,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Axis {
-    pub label: Label,
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +28,8 @@ pub(crate) struct Curve {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Model {
-    pub axes: Vec<Axis>,
+    /// Axis labels, clockwise from twelve o'clock.
+    pub axes: Vec<Label>,
     pub curves: Vec<Curve>,
     pub max: Option<f64>,
     pub min: Option<f64>,
@@ -77,22 +72,14 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 cx.meta.title = Some(title.to_string());
             }
         } else if let Some(list) = keyword(stmt, "axis") {
-            for item in split_top(list, ',') {
-                let item = item.trim();
-                if item.is_empty() {
-                    continue;
-                }
+            for item in items(list) {
                 let (id, label) = id_label(cx, item)?;
                 cx.limits.check_count(model.axes.len() + 1, cx.limits.elements, LimitKind::Elements)?;
                 ids.entry(id).or_insert(model.axes.len());
-                model.axes.push(Axis { label });
+                model.axes.push(label);
             }
         } else if let Some(list) = keyword(stmt, "curve") {
-            for item in split_top(list, ',') {
-                let item = item.trim();
-                if item.is_empty() {
-                    continue;
-                }
+            for item in items(list) {
                 let Some(open) = item.find('{') else {
                     cx.warn(line, format!("curve `{item}` has no values"));
                     continue;
@@ -158,6 +145,11 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         model.curves.push(Curve { label, values });
     }
     Ok(model)
+}
+
+/// The non-empty items of a comma list.
+fn items(list: &str) -> impl Iterator<Item = &str> {
+    split_top(list, ',').into_iter().map(str::trim).filter(|i| !i.is_empty())
 }
 
 fn option_number(cx: &mut ParseCx<'_>, line: usize, v: &str) -> Option<f64> {
@@ -252,12 +244,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     order.sort_by(|&a, &b| shapes[b].0.total_cmp(&shapes[a].0).then(a.cmp(&b)));
     if n >= 3 {
         for &c in &order {
-            out.fill(Geom::path(closed_curve(&shapes[c].1, tension)), series(c, Tone::Soft));
+            out.fill(Geom::path(closed_curve(&shapes[c].1, tension)), style::series(c, Tone::Soft));
         }
         grid(&mut out);
     }
     for (c, (_, pts)) in shapes.iter().enumerate() {
-        let stroke = Stroke::new(series(c, Tone::Solid), StrokeWidth::Thick);
+        let stroke = Stroke::new(style::series(c, Tone::Solid), StrokeWidth::Thick);
         if n >= 3 {
             out.stroke(Geom::path(closed_curve(pts, tension)), stroke);
         } else {
@@ -265,32 +257,20 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
         let dot = m.font_size * 0.22;
         for p in pts {
-            out.fill(Geom::Ellipse(Rect::centered(*p, [dot * 2.0, dot * 2.0])), series(c, Tone::Solid));
+            out.fill(Geom::Ellipse(Rect::centered(*p, [dot * 2.0, dot * 2.0])), style::series(c, Tone::Solid));
         }
     }
 
     // Axis labels just outside the rim, anchored by direction.
     let gap = m.font_size * 0.6;
     let wrap = cx.wrap_width("radar.axisLabelWidth").min(m.font_size * 10.0);
-    for (i, axis) in model.axes.iter().enumerate() {
-        let laid = cx.text.lay(&axis.label, small, Some(wrap));
+    // How much of the label sits back toward the centre along one axis.
+    let back = |d: f32| if d > 0.3 { 0.0 } else if d < -0.3 { 1.0 } else { 0.5 };
+    for (i, label) in model.axes.iter().enumerate() {
+        let laid = cx.text.lay(label, small, Some(wrap));
         let a = angle(i);
         let (c, s) = (a.cos(), a.sin());
         let p = [center[0] + (radius + gap) * c, center[1] + (radius + gap) * s];
-        let x = if c > 0.3 {
-            p[0]
-        } else if c < -0.3 {
-            p[0] - laid.width
-        } else {
-            p[0] - laid.width / 2.0
-        };
-        let y = if s > 0.3 {
-            p[1]
-        } else if s < -0.3 {
-            p[1] - laid.height
-        } else {
-            p[1] - laid.height / 2.0
-        };
         let align = if c > 0.3 {
             Align::Start
         } else if c < -0.3 {
@@ -298,7 +278,8 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         } else {
             Align::Center
         };
-        out.text(&laid, [x, y], laid.width, align, style::MUTED);
+        let origin = [p[0] - laid.width * back(c), p[1] - laid.height * back(s)];
+        out.text(&laid, origin, laid.width, align, style::MUTED);
     }
 
     let mut content = Rect::centered(center, [radius * 2.0, radius * 2.0]).union(&out.bounds());
@@ -319,13 +300,6 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
-}
-
-fn series(i: usize, tone: Tone) -> Ink {
-    Ink::Series {
-        index: i as u16,
-        tone,
-    }
 }
 
 fn polygon_area(pts: &[[f32; 2]]) -> f32 {

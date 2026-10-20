@@ -2,13 +2,12 @@
 //! Slices run clockwise from twelve o'clock in source order; the legend
 //! sits on the right.
 
-
 use std::f32::consts::{FRAC_PI_2, TAU};
 
 use super::kit::{self, LegendRow, fmt_num, keyword};
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
-use crate::ir::{Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
+use crate::ir::{Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
@@ -45,20 +44,18 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             if let Some(title) = keyword(rest, "title") {
                 set_title(cx, title);
             }
-            continue;
-        }
-        if let Some(title) = keyword(stmt, "title") {
+        } else if let Some(title) = keyword(stmt, "title") {
             set_title(cx, title);
-            continue;
-        }
-        match slice(stmt) {
-            Some((label, value)) if value >= 0.0 => {
-                cx.limits.check_count(model.slices.len() + 1, cx.limits.elements, LimitKind::Elements)?;
-                let label = cx.label(label)?;
-                model.slices.push(Slice { label, value });
+        } else {
+            match slice(stmt) {
+                Some((label, value)) if value >= 0.0 => {
+                    cx.limits.check_count(model.slices.len() + 1, cx.limits.elements, LimitKind::Elements)?;
+                    let label = cx.label(label)?;
+                    model.slices.push(Slice { label, value });
+                }
+                Some(_) => cx.warn(line, "pie values must not be negative"),
+                None => cx.warn(line, format!("unreadable pie row `{stmt}`")),
             }
-            Some(_) => cx.warn(line, "pie values must not be negative"),
-            None => cx.warn(line, format!("unreadable pie row `{stmt}`")),
         }
     }
     Ok(model)
@@ -95,13 +92,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     if total <= 0.0 || drawn.is_empty() {
         out.stroke(Geom::Ellipse(Rect::new(0.0, 0.0, radius * 2.0, radius * 2.0)), Stroke::hairline(style::GRID));
     } else if drawn.len() == 1 {
-        let i = drawn[0];
-        out.fill(ring(center, radius, hole), series(i, Tone::Solid));
+        out.fill(ring(center, radius, hole), style::series(drawn[0], Tone::Solid));
     } else {
         let mut start = -FRAC_PI_2;
         for &i in &drawn {
             let sweep = (model.slices[i].value / total) as f32 * TAU;
-            out.shape(Geom::path(sector(center, radius, hole, start, sweep)), Some(series(i, Tone::Solid)), Some(separator));
+            out.shape(Geom::path(sector(center, radius, hole, start, sweep)), Some(style::series(i, Tone::Solid)), Some(separator));
             start += sweep;
         }
     }
@@ -121,10 +117,8 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             start += sweep;
             let pct = format!("{}%", (share * 100.0).round());
             let laid = cx.text.lay_plain(&pct, small);
-            let fits = if drawn.len() == 1 {
-                true
-            } else {
-                // Chord room at the label radius and radial room to the rim.
+            // Chord room at the label radius and radial room to the rim.
+            let fits = drawn.len() == 1 || {
                 let chord = 2.0 * r_text * (sweep / 2.0).min(FRAC_PI_2).sin();
                 let need = (laid.width.powi(2) + laid.height.powi(2)).sqrt() + 4.0;
                 chord >= need && radius - r_text >= laid.height * 0.6 && share >= 0.02
@@ -137,7 +131,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             } else {
                 [center[0] + r_text * mid.cos(), center[1] + r_text * mid.sin()]
             };
-            out.text_centered(&laid, at, series(i, Tone::On));
+            out.text_centered(&laid, at, style::series(i, Tone::On));
         }
     }
 
@@ -158,13 +152,6 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let content = Rect::new(0.0, 0.0, radius * 2.0, radius * 2.0).union(&legend).union(&out.bounds());
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
-}
-
-fn series(i: usize, tone: Tone) -> Ink {
-    Ink::Series {
-        index: i as u16,
-        tone,
-    }
 }
 
 /// A full disc or annulus.

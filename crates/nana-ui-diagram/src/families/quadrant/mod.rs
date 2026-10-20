@@ -5,10 +5,10 @@ use std::collections::HashMap;
 
 use super::kit::{self, keyword};
 use super::{LayoutCx, ParseCx};
+use crate::geom::{Marker, PathData};
 use crate::ir::{Align, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
-use crate::geom::PathData;
 use crate::source::color;
-use crate::text::{Label, LaidText};
+use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
 pub(crate) const NATIVE: bool = true;
@@ -127,11 +127,7 @@ fn quadrant_number(stmt: &str) -> Option<usize> {
 }
 
 fn label(cx: &ParseCx<'_>, text: &str) -> Result<Option<Label>, DiagramError> {
-    let text = text.trim();
-    if text.is_empty() {
-        return Ok(None);
-    }
-    let label = cx.label(text)?;
+    let label = cx.label(text.trim())?;
     Ok((!label.is_empty()).then_some(label))
 }
 
@@ -145,12 +141,10 @@ fn axis_pair(cx: &ParseCx<'_>, text: &str) -> Result<[Option<Label>; 2], Diagram
 /// `Name[:::class]: [x, y] style...`.
 fn point(cx: &mut ParseCx<'_>, stmt: &str) -> Result<Option<(Point, Vec<String>)>, DiagramError> {
     // The coordinates follow the last `:` before the first `[` outside quotes.
-    let open = match find_unquoted(stmt, '[') {
-        Some(i) => i,
-        None => return Ok(None),
+    let Some(open) = find_unquoted(stmt, '[') else {
+        return Ok(None);
     };
-    let head = stmt[..open].trim_end();
-    let Some(head) = head.strip_suffix(':') else {
+    let Some(head) = stmt[..open].trim_end().strip_suffix(':') else {
         return Ok(None);
     };
     let Some(close) = stmt[open..].find(']').map(|i| i + open) else {
@@ -207,13 +201,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Quadrant washes: 2 | 1 over 3 | 4.
     let origins = [[half, 0.0], [0.0, 0.0], [0.0, half], [half, half]];
     for (q, o) in origins.iter().enumerate() {
-        out.fill(
-            Geom::rect(Rect::new(o[0], o[1], half, half)),
-            Ink::Series {
-                index: q as u16,
-                tone: Tone::Soft,
-            },
-        );
+        out.fill(Geom::rect(Rect::new(o[0], o[1], half, half)), style::series(q, Tone::Soft));
     }
     let mut cross = PathData::new();
     cross.move_to([half, 0.0]).line_to([half, side]).move_to([0.0, half]).line_to([side, half]);
@@ -239,15 +227,11 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     }
 
     // Axis captions: x under each half, y left of each half.
-    let x_lay: Vec<Option<LaidText>> = model
-        .x_axis
-        .iter()
-        .map(|l| l.as_ref().map(|l| cx.text.lay(l, small, Some(half - 4.0 * pad))))
-        .collect();
-    for (i, laid) in x_lay.iter().enumerate() {
-        if let Some(laid) = laid {
+    for (i, l) in model.x_axis.iter().enumerate() {
+        if let Some(l) = l {
+            let laid = cx.text.lay(l, small, Some(half - 4.0 * pad));
             let cxp = half * i as f32 + half / 2.0;
-            out.text(laid, [cxp - laid.width / 2.0, side + pad * 0.6], laid.width, Align::Center, style::MUTED);
+            out.text(&laid, [cxp - laid.width / 2.0, side + pad * 0.6], laid.width, Align::Center, style::MUTED);
         }
     }
     let y_wrap = m.font_size * 9.0;
@@ -260,7 +244,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             out.text(&laid, [x, cy - laid.height / 2.0], laid.width, Align::End, style::MUTED);
         }
     }
-    if x_lay.iter().all(Option::is_some) {
+    if model.x_axis.iter().all(Option::is_some) {
         // A small arrow between the two captions reads as "low → high".
         let y = side + pad * 0.6 + cx.text.line_advance(small) / 2.0;
         arrow(&mut out, [half - pad * 1.5, y], [half + pad * 1.5, y], cx.marker_size() * 0.8);
@@ -281,13 +265,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let centers: Vec<[f32; 2]> = model.points.iter().map(|p| [p.x * side, (1.0 - p.y) * side]).collect();
     for (i, p) in model.points.iter().enumerate() {
         let (at, r) = (centers[i], radii[i]);
-        let fill = p.style.color.map_or(
-            Ink::Series {
-                index: 0,
-                tone: Tone::Solid,
-            },
-            Ink::Rgba,
-        );
+        let fill = p.style.color.map_or(style::series(0, Tone::Solid), Ink::Rgba);
         let stroke = match (p.style.stroke_color, p.style.stroke_width) {
             (None, None) => Stroke::hairline(style::NODE_FILL),
             (c, w) => Stroke::new(
@@ -348,7 +326,7 @@ fn arrow(out: &mut SceneBuilder, from: [f32; 2], to: [f32; 2], size: f32) {
         PathData::polyline,
         Stroke::hairline(style::MUTED),
         None,
-        Some(crate::geom::Marker::Arrow),
+        Some(Marker::Arrow),
         size,
     );
 }

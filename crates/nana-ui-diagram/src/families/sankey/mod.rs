@@ -5,13 +5,14 @@
 //! relaxed toward their neighbours over a few sweeps; links are ribbons
 //! bounded by two cubic curves.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use super::kit;
 use super::{LayoutCx, ParseCx};
 use crate::geom::PathData;
 use crate::ir::{Align, Geom, Ink, Rect, SceneBuilder, Tone};
 use crate::source::color;
+use crate::text::Label;
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
 pub(crate) const NATIVE: bool = true;
@@ -201,8 +202,9 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
     }
     let last = depth.iter().copied().max().unwrap_or(0);
+    let align = cx.config.get("sankey.nodeAlignment").unwrap_or("justify");
     let column: Vec<usize> = (0..n)
-        .map(|v| match cx.config.get("sankey.nodeAlignment").unwrap_or("justify") {
+        .map(|v| match align {
             "left" => depth[v],
             "right" => last - height[v],
             "center" => {
@@ -240,7 +242,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             } else {
                 model.nodes[v].clone()
             };
-            cx.text.lay(&crate::text::Label::plain(&text), small, Some(cx.wrap_width("sankey.labelWidth")))
+            cx.text.lay(&Label::plain(&text), small, Some(cx.wrap_width("sankey.labelWidth")))
         })
         .collect();
     let mut members: Vec<Vec<usize>> = vec![Vec::new(); columns];
@@ -273,7 +275,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let gap = m.font_size * 0.4;
     let mut x = vec![0.0f32; columns];
     for c in 1..columns {
-        let right_labels = if c - 1 == 0 {
+        let right_labels = if c == 1 {
             members[0].iter().map(|&v| labels[v].width).fold(0.0, f32::max)
         } else {
             0.0
@@ -299,15 +301,16 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut alpha = 1.0f32;
     for _ in 0..8 {
         alpha *= 0.85;
-        for (pass, cols) in [(0, (1..columns).collect::<Vec<_>>()), (1, (0..columns.saturating_sub(1)).rev().collect())] {
+        for forward in [true, false] {
+            let cols: Vec<usize> = if forward { (1..columns).collect() } else { (0..columns.saturating_sub(1)).rev().collect() };
             for c in cols {
                 for &v in &members[c] {
-                    let links = if pass == 0 { &ins[v] } else { &outs[v] };
+                    let links = if forward { &ins[v] } else { &outs[v] };
                     let mut wsum = 0.0f32;
                     let mut acc = 0.0f32;
                     for &li in links {
                         let l = &model.links[li];
-                        let other = if pass == 0 { l.source } else { l.target };
+                        let other = if forward { l.source } else { l.target };
                         let w = l.value as f32;
                         acc += center(other, &y) * w;
                         wsum += w;
@@ -326,28 +329,26 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut sy = vec![0.0f32; model.links.len()];
     let mut ty = vec![0.0f32; model.links.len()];
     let link_h: Vec<f32> = model.links.iter().map(|l| (l.value as f32 * ky).max(0.5)).collect();
+    let attach = |links: &[usize], other: fn(&Link) -> usize, top: f32, ends: &mut [f32]| {
+        let key = |li: usize| center(other(&model.links[li]), &y);
+        let mut sorted = links.to_vec();
+        sorted.sort_by(|&a, &b| key(a).total_cmp(&key(b)).then(a.cmp(&b)));
+        let mut at = top;
+        for li in sorted {
+            ends[li] = at;
+            at += link_h[li];
+        }
+    };
     for v in 0..n {
-        let mut o = outs[v].clone();
-        o.sort_by(|&a, &b| center(model.links[a].target, &y).total_cmp(&center(model.links[b].target, &y)).then(a.cmp(&b)));
-        let mut at = y[v];
-        for li in o {
-            sy[li] = at;
-            at += link_h[li];
-        }
-        let mut i = ins[v].clone();
-        i.sort_by(|&a, &b| center(model.links[a].source, &y).total_cmp(&center(model.links[b].source, &y)).then(a.cmp(&b)));
-        let mut at = y[v];
-        for li in i {
-            ty[li] = at;
-            at += link_h[li];
-        }
+        attach(&outs[v], |l| l.target, y[v], &mut sy);
+        attach(&ins[v], |l| l.source, y[v], &mut ty);
     }
 
     let node_ink = |v: usize, tone: Tone| -> Ink {
         match cx.config.get(&format!("sankey.nodeColors.{}", model.nodes[v])).and_then(color::parse) {
             Some(c) if tone == Tone::Solid => Ink::Rgba(c),
             Some(c) => Ink::Rgba([c[0], c[1], c[2], c[3] * 0.4]),
-            None => Ink::Series { index: v as u16, tone },
+            None => style::series(v, tone),
         }
     };
     let link_color = cx.config.get("sankey.linkColor").unwrap_or("source");
@@ -400,7 +401,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 fn topo(model: &Model, ins: &[Vec<usize>], outs: &[Vec<usize>]) -> Vec<usize> {
     let n = model.nodes.len();
     let mut indeg: Vec<usize> = ins.iter().map(Vec::len).collect();
-    let mut queue: std::collections::VecDeque<usize> = (0..n).filter(|&v| indeg[v] == 0).collect();
+    let mut queue: VecDeque<usize> = (0..n).filter(|&v| indeg[v] == 0).collect();
     let mut order = Vec::with_capacity(n);
     while let Some(v) = queue.pop_front() {
         order.push(v);
@@ -418,21 +419,22 @@ fn topo(model: &Model, ins: &[Vec<usize>], outs: &[Vec<usize>]) -> Vec<usize> {
 /// Keep a column in order without overlaps: push down, then back up from
 /// the bottom, never above the top.
 fn resolve(col: &[usize], y: &mut [f32], h: &[f32], slot: &[f32], pad: f32, total_h: f32) {
-    if col.is_empty() {
-        return;
-    }
     let mut sorted = col.to_vec();
     sorted.sort_by(|&a, &b| (y[a] + h[a] / 2.0).total_cmp(&(y[b] + h[b] / 2.0)).then(a.cmp(&b)));
     // Work in slot space: a slot is centred on its node.
     let top_of = |v: usize, y: &[f32]| y[v] + h[v] / 2.0 - slot[v] / 2.0;
     let set_top = |v: usize, t: f32, y: &mut [f32]| y[v] = t + slot[v] / 2.0 - h[v] / 2.0;
-    let mut floor = 0.0f32;
-    for &v in &sorted {
-        let t = top_of(v, y).max(floor);
-        set_top(v, t, y);
-        floor = t + slot[v] + pad;
-    }
-    let mut ceiling = total_h.max(floor - pad);
+    // Stack downward without overlaps; returns the floor under the last slot.
+    let push_down = |y: &mut [f32]| {
+        let mut floor = 0.0f32;
+        for &v in &sorted {
+            let t = top_of(v, y).max(floor);
+            set_top(v, t, y);
+            floor = t + slot[v] + pad;
+        }
+        floor
+    };
+    let mut ceiling = total_h.max(push_down(y) - pad);
     for &v in sorted.iter().rev() {
         let t = top_of(v, y);
         let bottom = t + slot[v];
@@ -441,12 +443,7 @@ fn resolve(col: &[usize], y: &mut [f32], h: &[f32], slot: &[f32], pad: f32, tota
         }
         ceiling = top_of(v, y) - pad;
     }
-    let mut floor = 0.0f32;
-    for &v in &sorted {
-        let t = top_of(v, y).max(floor);
-        set_top(v, t, y);
-        floor = t + slot[v] + pad;
-    }
+    push_down(y);
 }
 
 pub(crate) fn summary(model: &Model) -> Summary {

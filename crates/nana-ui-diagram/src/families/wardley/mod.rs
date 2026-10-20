@@ -6,8 +6,9 @@
 mod parse;
 
 use super::{LayoutCx, ParseCx};
+use crate::geom::path::{dist, lerp};
 use crate::geom::{Marker, PathData};
-use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth};
+use crate::ir::{Align, Dash, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth};
 use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, Summary, style};
 use nana_ui_core::{SemanticColorMix, SemanticColorRole};
@@ -24,9 +25,6 @@ pub(crate) enum Sourcing {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Component {
-    /// The author's name, for tests and diagnostics.
-    #[allow(dead_code)]
-    pub name: String,
     pub label: Label,
     pub visibility: f32,
     pub evolution: f32,
@@ -98,11 +96,11 @@ impl Default for Model {
     fn default() -> Self {
         Self {
             size: None,
-            stages: ["Genesis", "Custom-Built", "Product\n(+rental)", "Commodity\n(+utility)"]
+            stages: ["Genesis", "Custom-Built", "Product<br>(+rental)", "Commodity<br>(+utility)"]
                 .iter()
                 .enumerate()
                 .map(|(i, s)| Stage {
-                    label: Label::plain(&s.replace('\n', "<br>")),
+                    label: Label::plain(s),
                     end: (i + 1) as f32 * 0.25,
                 })
                 .collect(),
@@ -123,20 +121,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
     parse::parse(body, cx)
 }
 
-struct Frame {
-    w: f32,
-    h: f32,
-}
-
-impl Frame {
-    fn at(&self, visibility: f32, evolution: f32) -> [f32; 2] {
-        [
-            evolution.clamp(0.0, 1.0) * self.w,
-            (1.0 - visibility.clamp(0.0, 1.0)) * self.h,
-        ]
-    }
-}
-
 pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScene, DiagramError> {
     let m = *cx.metrics;
     let font = cx.font();
@@ -149,7 +133,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
         None => (m.font_size * 60.0, m.font_size * 34.0),
     };
-    let frame = Frame { w, h };
+    let place = |visibility: f32, evolution: f32| [evolution.clamp(0.0, 1.0) * w, (1.0 - visibility.clamp(0.0, 1.0)) * h];
     let mut out = SceneBuilder::new();
     let gap = m.font_size * 0.5;
 
@@ -172,30 +156,24 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let axis = Stroke::hairline(style::AXIS);
     out.edge(&[[0.0, h], [w + marker, h]], PathData::polyline, axis, None, Some(Marker::Arrow), marker);
     out.edge(&[[0.0, h], [0.0, -marker]], PathData::polyline, axis, None, Some(Marker::Arrow), marker);
-    let caption = |out: &mut SceneBuilder, text: &str, at: [f32; 2], align: Align| {
+    // Right-aligned to `end`.
+    let caption = |out: &mut SceneBuilder, text: &str, end: [f32; 2]| {
         let laid = cx.text.lay_plain(text, small);
-        let x = match align {
-            Align::Start => at[0],
-            Align::Center => at[0] - laid.width / 2.0,
-            Align::End => at[0] - laid.width,
-        };
-        out.text(&laid, [x, at[1]], laid.width, align, style::MUTED);
-        laid
+        out.text(&laid, [end[0] - laid.width, end[1]], laid.width, Align::End, style::MUTED);
     };
     let stage_h = model
         .stages
         .iter()
         .map(|s| cx.text.lay(&s.label, small, None).height)
         .fold(0.0, f32::max);
-    caption(&mut out, "Evolution", [w + marker, h + gap * 2.0 + stage_h], Align::End);
-    let vc = cx.text.lay_plain("Value Chain", small);
-    out.text(&vc, [-gap - vc.width, -marker], vc.width, Align::End, style::MUTED);
-    caption(&mut out, "Visible", [-gap, m.font_size * 2.0], Align::End);
-    caption(&mut out, "Invisible", [-gap, h - cx.text.line_advance(small)], Align::End);
+    caption(&mut out, "Evolution", [w + marker, h + gap * 2.0 + stage_h]);
+    caption(&mut out, "Value Chain", [-gap, -marker]);
+    caption(&mut out, "Visible", [-gap, m.font_size * 2.0]);
+    caption(&mut out, "Invisible", [-gap, h - cx.text.line_advance(small)]);
 
     let r = m.font_size * 0.36;
     // Pipeline members ride on a band just under their owner.
-    let mut pos: Vec<[f32; 2]> = model.components.iter().map(|c| frame.at(c.visibility, c.evolution)).collect();
+    let mut pos: Vec<[f32; 2]> = model.components.iter().map(|c| place(c.visibility, c.evolution)).collect();
     for (i, c) in model.components.iter().enumerate() {
         if let Some(owner) = c.pipeline {
             pos[i][1] = pos[owner][1] + r * 3.5;
@@ -204,7 +182,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Accelerators: broad arrows behind everything else on the map.
     for (mark, accelerate) in &model.accelerators {
-        let at = frame.at(mark.visibility, mark.evolution);
+        let at = place(mark.visibility, mark.evolution);
         let (len, thick) = (m.font_size * 4.0, m.font_size * 1.2);
         let dir = if *accelerate { 1.0 } else { -1.0 };
         let head = thick * 0.9;
@@ -229,10 +207,9 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Pipelines: a band under the owner spanning its members.
     for &owner in &model.pipelines {
-        let members: Vec<usize> = (0..model.components.len()).filter(|&i| model.components[i].pipeline == Some(owner)).collect();
-        let (lo, hi) = members
-            .iter()
-            .map(|&i| pos[i][0])
+        let (lo, hi) = (0..model.components.len())
+            .filter(|&i| model.components[i].pipeline == Some(owner))
+            .map(|i| pos[i][0])
             .fold((pos[owner][0], pos[owner][0]), |(a, b), x| (a.min(x), b.max(x)));
         let y = pos[owner][1] + r * 3.5;
         let rect = Rect::new(lo - r * 2.5, y - r * 1.4, hi - lo + r * 5.0, r * 2.8);
@@ -269,7 +246,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let evolve_ink = style::DANGER;
     for &(c, target) in &model.evolves {
         let from = pos[c];
-        let to = frame.at(model.components[c].visibility, target);
+        let to = place(model.components[c].visibility, target);
         if let Some((a, b)) = trim(from, to, r + 2.0) {
             out.edge(&[a, b], PathData::polyline, Stroke::hairline(evolve_ink).dash(Dash::Dashed), None, Some(Marker::Arrow), marker);
         }
@@ -278,7 +255,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         out.text(&laid, [to[0] + r + 4.0, to[1] - laid.height / 2.0], laid.width, Align::Start, evolve_ink);
     }
     for &(c, x, y) in &model.trends {
-        let to = frame.at(y, x);
+        let to = place(y, x);
         if let Some((a, b)) = trim(pos[c], to, r + 2.0) {
             out.stroke(Geom::path(PathData::polyline(&[a, b])), Stroke::hairline(style::MUTED).dash(Dash::Dotted));
         }
@@ -311,13 +288,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         }
         if c.inertia {
             let x = at[0] + r * 3.2;
-            out.fill(
-                Geom::Rect {
-                    rect: Rect::new(x, at[1] - r * 2.2, r * 0.9, r * 4.4),
-                    corner: Corner::None,
-                },
-                style::TEXT,
-            );
+            out.fill(Geom::rect(Rect::new(x, at[1] - r * 2.2, r * 0.9, r * 4.4)), style::TEXT);
         }
         if c.anchor {
             continue;
@@ -334,7 +305,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // its point.
     let mut taken: Vec<Rect> = pos.iter().map(|p| Rect::centered(*p, [r * 2.4, r * 2.4])).collect();
     for note in &model.notes {
-        let at = frame.at(note.visibility, note.evolution);
+        let at = place(note.visibility, note.evolution);
         let laid = cx.text.lay(&note.label, small.weight(m.strong_weight), Some(m.font_size * 12.0));
         let origin = [at[0], at[1] - laid.height / 2.0];
         out.text(&laid, origin, laid.width, Align::Start, style::TEXT);
@@ -343,12 +314,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let badge = m.small_size * 1.5;
     for a in &model.annotations {
         for p in &a.points {
-            taken.push(Rect::centered(frame.at(p[0], p[1]), [badge, badge]));
+            taken.push(Rect::centered(place(p[0], p[1]), [badge, badge]));
         }
     }
     for (i, c) in model.components.iter().enumerate() {
         let at = pos[i];
-        let face: FontSpec = if c.anchor { strong } else { small };
+        let face = if c.anchor { strong } else { small };
         let laid = cx.text.lay(&c.label, face, Some(m.font_size * 10.0));
         let [lw, lh] = laid.size();
         let origin = if c.anchor {
@@ -407,7 +378,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Numbered annotations and their key.
     let badge_font = FontSpec::new(m.small_size * 0.85).weight(m.strong_weight);
     for a in &model.annotations {
-        let pts: Vec<[f32; 2]> = a.points.iter().map(|p| frame.at(p[0], p[1])).collect();
+        let pts: Vec<[f32; 2]> = a.points.iter().map(|p| place(p[0], p[1])).collect();
         if pts.len() > 1 {
             out.stroke(Geom::path(PathData::polyline(&pts)), Stroke::hairline(style::MUTED).dash(Dash::Dotted));
         }
@@ -436,7 +407,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let height = title.height + rows.iter().map(|r| r.height).sum::<f32>() + 2.0 * pad;
         let origin = match model.annotations_at {
             Some([v, e]) => {
-                let p = frame.at(v, e);
+                let p = place(v, e);
                 [p[0].min(w - width).max(0.0), p[1].min(h - height).max(0.0)]
             }
             None => [w - width, h + gap * 3.0 + stage_h + cx.text.line_advance(small)],
@@ -461,12 +432,12 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
 /// Pull both ends of a segment in by `by`; `None` when nothing is left.
 fn trim(a: [f32; 2], b: [f32; 2], by: f32) -> Option<([f32; 2], [f32; 2])> {
-    let d = crate::geom::path::dist(a, b);
+    let d = dist(a, b);
     if d <= 2.0 * by + 1.0 {
         return None;
     }
     let t = by / d;
-    Some((crate::geom::path::lerp(a, b, t), crate::geom::path::lerp(b, a, t)))
+    Some((lerp(a, b, t), lerp(b, a, t)))
 }
 
 pub(crate) fn summary(model: &Model) -> Summary {
