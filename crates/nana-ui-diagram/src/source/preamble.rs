@@ -90,7 +90,7 @@ pub fn preprocess(source: &str) -> Result<Preprocessed, DiagramError> {
 
     let body = out.join("\n");
     if body.trim().is_empty() {
-        return Err(super::empty_error());
+        return Err(DiagramError::Empty);
     }
     Ok(Preprocessed {
         body,
