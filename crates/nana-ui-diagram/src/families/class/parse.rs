@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use super::{Class, Member, Model, Namespace, Note, Relation};
 use crate::families::ParseCx;
-use crate::families::graphkit::{Styles, first_word, ident_len, split_classes, unquote};
+use crate::families::graphkit::{Styles, first_word, ident_len, plain_colon, split_classes, unquote};
 use crate::geom::Marker;
 use crate::kind;
 use crate::layout::Direction;
@@ -167,31 +167,6 @@ fn class_ref(raw: &str) -> Option<(String, String)> {
     None
 }
 
-/// The first `:` that is not part of `:::`, outside quotes.
-fn label_colon(s: &str) -> Option<usize> {
-    let bytes = s.as_bytes();
-    let mut quote = false;
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'"' => quote = !quote,
-            b':' if !quote => {
-                if bytes[i..].starts_with(b":::") {
-                    i += 3;
-                    while i < bytes.len() && bytes[i] == b':' {
-                        i += 1;
-                    }
-                    continue;
-                }
-                return Some(i);
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-    None
-}
-
 struct RelationParts<'s> {
     left: &'s str,
     right: &'s str,
@@ -203,7 +178,7 @@ struct RelationParts<'s> {
 
 /// `A "1" <|-- "*" B : label` split into its parts.
 fn relation_parts(stmt: &str) -> Option<RelationParts<'_>> {
-    let head_end = label_colon(stmt).unwrap_or(stmt.len());
+    let head_end = plain_colon(stmt).unwrap_or(stmt.len());
     let head = &stmt[..head_end];
     let bytes = head.as_bytes();
     let mut quote = false;
@@ -428,7 +403,7 @@ impl Parser<'_, '_> {
         if let Some(parts) = relation_parts(stmt) {
             return self.relation(parts);
         }
-        if let Some(colon) = label_colon(stmt) {
+        if let Some(colon) = plain_colon(stmt) {
             let (name, member) = (&stmt[..colon], &stmt[colon + 1..]);
             if let Some(c) = self.class(name)? {
                 return self.add_member(c, member);

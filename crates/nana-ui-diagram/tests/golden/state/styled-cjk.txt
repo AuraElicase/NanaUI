@@ -1,0 +1,41 @@
+size 804.1 212.2
+summary nodes=6 edges=7 groups=0
+shape path M22,79.9 L63.3,79.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M70,79.9 L61.6,83.4 L63.1,79.9 L61.6,76.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M130,66 L136,66 Q142,66 142,60 L142,27.2 Q142,19.2 150,19.2 L365,19.2 Q368.8,19.2 368.8,23 L368.8,24.1 Q368.8,26.7 371.4,26.7 L374.1,26.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M380.8,26.7 L372.4,30.3 L373.9,26.7 L372.4,23.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M380.8,54.5 L374.8,54.5 Q368.8,54.5 368.8,60.5 L368.8,71.9 Q368.8,79.9 360.8,79.9 L136.7,79.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M130,79.9 L138.4,76.4 L136.9,79.9 L138.4,83.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M454.8,40.6 L571,40.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M577.7,40.6 L569.3,44.1 L570.9,40.6 L569.3,37.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M652.8,40.6 L752.1,40.6 Q760.1,40.6 760.1,48.6 L760.1,91.2 Q760.1,96.2 765.2,96.2 L770.2,96.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M776.9,96.2 L768.5,99.7 L770,96.2 L768.5,92.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M130,93.8 L136,93.8 Q142,93.8 142,99.8 L142,111.6 Q142,119.6 150,119.6 L496.1,119.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M502.8,119.6 L494.4,123.1 L495.9,119.6 L494.4,116.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M727.7,151.8 L760.5,151.8 Q768.5,151.8 768.5,143.8 L768.5,97 Q768.5,96.2 769.4,96.2 L770.2,96.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M776.9,96.2 L768.5,99.7 L770,96.2 L768.5,92.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M451.4,177.2 L502.8,177.2 stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Dashed
+shape rect 232 9 46.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 237.4 10.8 36 16.8 size=12 w=400 ink=Muted "推一下"
+shape rect 154 61.3 202.8 37.2 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 159.4 63.1 192 16.8 size=12 w=400 ink=Muted "摩擦力让物体慢慢停下来，这个过程"
+text 207.4 79.9 96 16.8 size=12 w=400 ink=Muted "可能需要很长时间"
+shape ellipse 8 72.9 14 14 fill=Text
+shape rect 70 60.1 60 39.6 r=Md fill=rgba(255,255,255,1) stroke=BorderStrong/hairline/Solid
+text 86 70.1 28 19.6 size=14 w=400 ink=rgba(28.1,28.1,30.6,1) "静止"
+shape rect 380.8 20.8 74 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 396.8 30.8 42 19.6 size=14 w=400 italic ink=Text "移动中"
+shape rect 577.7 20.8 75 39.6 r=Md fill=rgba(255,0,0,1) stroke=rgba(255,255,0,1)/2/Solid
+text 593.7 30.8 43 19.6 size=14 w=700 ink=rgba(255,255,255,1) "Crash"
+shape ellipse 776.9 87.1 18.2 18.2 fill=Surface stroke=BorderStrong/hairline/Solid
+shape ellipse 780.9 91.1 10.2 10.2 fill=Text
+shape rect 502.8 100.4 224.9 102.8 r=Md fill=Surface
+shape path M502.8,154.6 L727.7,154.6 stroke=BorderStrong/hairline/Solid
+shape rect 502.8 100.4 224.9 102.8 r=Md stroke=BorderStrong/hairline/Solid
+text 518.8 107.9 192.9 19.6 size=14 w=600 ink=Text "等待用户确认的一个很长很长"
+text 578.2 127.5 74.2 19.6 size=14 w=600 ink=Text "的状态名称"
+text 518.8 162.1 63.8 16.8 size=12 w=400 ink=Text "超时 30 秒"
+text 518.8 178.9 48 16.8 size=12 w=400 ink=Text "可以取消"
+shape rect 384.2 153.4 67.2 47.6 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 393.8 160.4 48 16.8 size=12 w=400 ink=Text "多行注释"
+text 393.8 177.2 36 16.8 size=12 w=400 ink=Text "第二行"
