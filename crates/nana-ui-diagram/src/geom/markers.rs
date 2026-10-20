@@ -24,6 +24,8 @@ pub enum Marker {
     DiamondHollow,
     /// A hollow circle on a short stem: a provided interface.
     Lollipop,
+    /// A hollow circle with a plus: UML containment (requirement `contains`).
+    Containment,
     /// ER cardinalities, read from the entity outward.
     ErExactlyOne,
     ErZeroOrOne,
@@ -138,6 +140,19 @@ impl Marker {
                 let r = l * 0.45;
                 Placed {
                     items: vec![circle(at(r, 0.0), r)],
+                    inset: 2.0 * r,
+                }
+            }
+            Self::Containment => {
+                let r = l * 0.5;
+                let c = at(r, 0.0);
+                let p =
+                    |a: f32, b: f32| [c[0] + dir[0] * a + n[0] * b, c[1] + dir[1] * a + n[1] * b];
+                Placed {
+                    items: vec![
+                        circle(c, r),
+                        lines(&[[p(-r, 0.0), p(r, 0.0)], [p(0.0, -r), p(0.0, r)]]),
+                    ],
                     inset: 2.0 * r,
                 }
             }
