@@ -24,7 +24,7 @@ use nana_ui_scene::{DocumentAccessError, RuntimeDocument};
 use crate::{
     FrameDemand, HostFailure, HostTextureRegistry, MaterialEffect, RoutedInput, RuntimeProgram,
     RuntimeProgramContext, RuntimeProgramUpdate, SceneGpuRendererRegistry, StartupTakeover,
-    ThemeMode,
+    ThemeAppearance,
 };
 
 /// The message type a launch shares with the program it builds.
@@ -71,8 +71,8 @@ pub trait Launch: Sized + 'static {
 
     /// The appearance the splash and the hidden primary window use before the
     /// program exists.
-    fn theme_mode(&self) -> ThemeMode {
-        ThemeMode::Dark
+    fn theme_mode(&self) -> ThemeAppearance {
+        ThemeAppearance::Dark
     }
 
     fn window_material_mode(&self) -> MaterialEffect {
@@ -346,7 +346,7 @@ impl<L: Launch> RuntimeProgram for Staged<L> {
         }
     }
 
-    fn theme_mode(&self) -> ThemeMode {
+    fn theme_mode(&self) -> ThemeAppearance {
         match &self.stage {
             Stage::Running(program) => program.theme_mode(),
             Stage::Launching(launch) => launch.theme_mode(),
@@ -645,8 +645,8 @@ mod tests {
             RuntimeProgramUpdate::redraw(WindowId::PRIMARY)
         }
 
-        fn theme_mode(&self) -> ThemeMode {
-            ThemeMode::Light
+        fn theme_mode(&self) -> ThemeAppearance {
+            ThemeAppearance::Light
         }
 
         fn window_background(&self) -> Option<SemanticColor> {
@@ -705,8 +705,8 @@ mod tests {
             &mut self.placeholder
         }
 
-        fn theme_mode(&self) -> ThemeMode {
-            ThemeMode::Dark
+        fn theme_mode(&self) -> ThemeAppearance {
+            ThemeAppearance::Dark
         }
 
         fn window_background(&self) -> Option<SemanticColor> {
@@ -748,7 +748,7 @@ mod tests {
         assert_eq!(document_id(&staged), Some(31));
         assert!(staged.with_document(WindowId(9), |_| ()).unwrap().is_none());
         assert_eq!(staged.window_background(), Some(PLACEHOLDER));
-        assert_eq!(staged.theme_mode(), ThemeMode::Dark);
+        assert_eq!(staged.theme_mode(), ThemeAppearance::Dark);
         assert_eq!(
             staged.frame_demand(WindowId::PRIMARY),
             FrameDemand::OnDemand
@@ -766,7 +766,7 @@ mod tests {
         assert_eq!(program.clock, Some(epoch), "the clock reaches the program");
         assert_eq!(document_id(&staged), Some(1));
         assert_eq!(staged.window_background(), Some(SCENE));
-        assert_eq!(staged.theme_mode(), ThemeMode::Light);
+        assert_eq!(staged.theme_mode(), ThemeAppearance::Light);
         assert_eq!(staged.frame_demand(WindowId::PRIMARY), EVERY_FRAME);
         staged.update(0, &context);
         assert_eq!(staged.program().unwrap().updates, 1, "messages are its now");

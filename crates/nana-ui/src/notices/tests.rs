@@ -45,8 +45,8 @@ impl Window {
             .context_mut()
             .create_component(document_id, Stack::fill_column(0.0))
             .unwrap();
-        let host = NoticeHost::mount(document.context_mut(), document_id, root.stable_id(), 10)
-            .unwrap();
+        let host =
+            NoticeHost::mount(document.context_mut(), document_id, root.stable_id(), 10).unwrap();
         Self {
             id,
             document,
@@ -107,7 +107,11 @@ fn sources_and_global_focus_choose_one_window_and_stay_there() {
     center.focus_changed(MAIN, true);
     center.set_visible(vec![MAIN, TOOL], None);
     center.show(NoticeSource::Global, key("a"), running(), now);
-    assert_eq!(center.entries()[0].owner, Some(TOOL), "focus never moves it");
+    assert_eq!(
+        center.entries()[0].owner,
+        Some(TOOL),
+        "focus never moves it"
+    );
     let mut main = Window::new(MAIN);
     let mut tool = Window::new(TOOL);
     main.sync(&mut center);
@@ -121,7 +125,12 @@ fn sources_and_global_focus_choose_one_window_and_stay_there() {
 fn an_unavailable_window_uses_main_then_the_priority_window_then_recent_ones() {
     let mut center = center();
     center.focus_changed(TOOL, true);
-    center.show(NoticeSource::Window(TOOL), Key::Operation, running(), Instant::now());
+    center.show(
+        NoticeSource::Window(TOOL),
+        Key::Operation,
+        running(),
+        Instant::now(),
+    );
     center.set_visible(vec![MAIN, GUIDE], Some(GUIDE));
     assert_eq!(center.entries()[0].owner, Some(MAIN));
     center.set_visible(vec![GUIDE, SECOND_TOOL], Some(GUIDE));
@@ -185,7 +194,10 @@ fn a_task_updates_and_settles_in_place_even_after_it_moved() {
     );
     main.sync(&mut center);
     assert_eq!(main.toast(), moved);
-    assert!(!center.contains(&Key::Operation), "a result is a message now");
+    assert!(
+        !center.contains(&Key::Operation),
+        "a result is a message now"
+    );
     assert_eq!(
         main.document
             .context()
@@ -209,7 +221,12 @@ fn a_moved_notice_does_not_repeat_what_was_said_but_new_words_are_live() {
     let mut center = center();
     let mut tool = Window::new(TOOL);
     let mut main = Window::new(MAIN);
-    center.show(NoticeSource::Window(TOOL), Key::Operation, running(), Instant::now());
+    center.show(
+        NoticeSource::Window(TOOL),
+        Key::Operation,
+        running(),
+        Instant::now(),
+    );
     for ms in [0, 16, 500, 516, 1000] {
         tool.frame(&mut center, ms);
     }
@@ -221,16 +238,35 @@ fn a_moved_notice_does_not_repeat_what_was_said_but_new_words_are_live() {
     for ms in [1000, 1016, 1500, 1516] {
         main.frame(&mut center, ms);
     }
-    let live = |main: &Window| main.document.context().world().live(main.toast().stable_id());
+    let live = |main: &Window| {
+        main.document
+            .context()
+            .world()
+            .live(main.toast().stable_id())
+    };
     assert_eq!(live(&main), Some(AccessibilityLive::Off));
     let mut progress = running();
     progress.progress = Some(ToastProgress::Determinate(0.25));
-    center.show(NoticeSource::Window(TOOL), Key::Operation, progress, Instant::now());
+    center.show(
+        NoticeSource::Window(TOOL),
+        Key::Operation,
+        progress,
+        Instant::now(),
+    );
     main.frame(&mut center, 1540);
-    assert_eq!(live(&main), Some(AccessibilityLive::Off), "progress alone says nothing new");
+    assert_eq!(
+        live(&main),
+        Some(AccessibilityLive::Off),
+        "progress alone says nothing new"
+    );
     let mut updated = running().description("工作量已经确认");
     updated.progress = Some(ToastProgress::Determinate(0.5));
-    center.show(NoticeSource::Window(TOOL), Key::Operation, updated, Instant::now());
+    center.show(
+        NoticeSource::Window(TOOL),
+        Key::Operation,
+        updated,
+        Instant::now(),
+    );
     main.frame(&mut center, 1550);
     assert_eq!(live(&main), Some(AccessibilityLive::Polite));
     center.settle(
@@ -312,7 +348,12 @@ fn a_repeat_counts_once_per_window_and_the_budget_drops_old_messages_first() {
     }
     assert_eq!(center.len(), max);
     assert!(center.contains(&key("a")), "a running task keeps its place");
-    assert!(!center.entries().iter().any(|entry| entry.notice.title == "消息 0"));
+    assert!(
+        !center
+            .entries()
+            .iter()
+            .any(|entry| entry.notice.title == "消息 0")
+    );
 }
 
 #[test]
@@ -366,7 +407,12 @@ fn a_key_shown_elsewhere_leaves_the_corner_and_comes_back_fresh() {
     center.set_visible(vec![MAIN, GUIDE], Some(GUIDE));
     let mut guide = Window::new(GUIDE);
     for id in ["a", "b"] {
-        center.show(NoticeSource::Window(GUIDE), key(id), running(), Instant::now());
+        center.show(
+            NoticeSource::Window(GUIDE),
+            key(id),
+            running(),
+            Instant::now(),
+        );
     }
     guide.frame(&mut center, 500);
     let stale = guide.host.toasts().next().unwrap().1;

@@ -2987,6 +2987,37 @@ fn a_child_slot_keeps_the_keys_its_view_declared() {
     assert_eq!(cx.world().text(count), Some("尾"));
 }
 
+/// A view mounted before a sibling lands in front of it, its roots in order;
+/// a node that is not a child of the parent is refused.
+#[test]
+fn a_view_mounts_before_a_sibling() {
+    let (mut cx, _, parent) = setup();
+    let (_, (first, last)) = cx
+        .mount_view(parent, || {
+            let first = entity_ref::<Text>();
+            let last = entity_ref::<Text>();
+            with_refs(
+                (text("头").entity_ref(first), text("尾").entity_ref(last)),
+                (first, last),
+            )
+        })
+        .unwrap();
+    let view = cx
+        .mount_view_before(parent, last.stable_id(), || (text("一"), text("二")))
+        .unwrap();
+    let order: Vec<_> = children(&cx, parent)
+        .into_iter()
+        .map(|id| cx.world().text(id).unwrap_or_default().to_owned())
+        .collect();
+    assert_eq!(order, ["头", "一", "二", "尾"]);
+    assert_eq!(view.roots().len(), 2);
+    assert_eq!(
+        cx.mount_view_before(first.stable_id(), last.stable_id(), || text("外"))
+            .err(),
+        Some(crate::FrameworkError::InvalidInput)
+    );
+}
+
 #[test]
 fn list_item_slots_in_a_view_are_the_slots_set_by_hand() {
     use crate::{ListItem, ListItemSlots};
