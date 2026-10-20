@@ -213,7 +213,7 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                 cx.warn(line_no, format!("`{name}` needs an alias and a label"));
                 continue;
             };
-            cx.limits.check_count(model.elements.len() + 1, cx.limits.nodes, LimitKind::Nodes)?;
+            cx.limits.check_count(model.elements.len() + 1, cx.limits.nodes.min(crate::layout::grid::MAX_ROUTED), LimitKind::Nodes)?;
             let with_techn = matches!(kind, ElemKind::Container | ElemKind::Component);
             let techn = if with_techn { args.get(2, "techn") } else { args.named.get("techn").map(String::as_str) };
             let descr = args.get(if with_techn { 3 } else { 2 }, "descr");
@@ -282,7 +282,7 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
                     cx.warn(line_no, format!("`{name}` needs two aliases"));
                     continue;
                 };
-                cx.limits.check_count(rels.len() + 1, cx.limits.edges, LimitKind::Edges)?;
+                cx.limits.check_count(rels.len() + 1, cx.limits.edges.min(crate::layout::grid::MAX_ROUTED), LimitKind::Edges)?;
                 let label = args.get(shift + 2, "label").map(|l| cx.label(l)).transpose()?;
                 let techn = args.get(shift + 3, "techn").map(|l| cx.label(l)).transpose()?;
                 let written = (a.to_string(), b.to_string());

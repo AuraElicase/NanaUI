@@ -177,8 +177,6 @@ fn transform_box(b: LayoutBox, x: f32, y: f32, scale: f32) -> LayoutBox {
     }
 }
 
-const THEME_INK: &str = "#010203";
-
 fn cached(
     key: String,
     render: impl FnOnce() -> Option<MarkdownDrawing>,
@@ -255,67 +253,6 @@ fn math_fallback(source: &str, size: f32) -> MarkdownDrawing {
     d.width = source.chars().count() as f32 * size * 0.6;
     d.height = size * 1.35;
     d
-}
-
-fn svg_dimensions(svg: &str) -> Option<(f32, f32)> {
-    let root = svg.split('>').next()?;
-    if let Some(rest) = root.split("viewBox=\"").nth(1) {
-        let values = rest
-            .split('"')
-            .next()?
-            .split_whitespace()
-            .map(str::parse::<f32>)
-            .collect::<Result<Vec<_>, _>>()
-            .ok()?;
-        if values.len() == 4 && values[2] > 0.0 && values[3] > 0.0 {
-            return Some((values[2], values[3]));
-        }
-    }
-    let value = |name: &str| -> Option<f32> {
-        root.split(&format!("{name}=\""))
-            .nth(1)?
-            .split('"')
-            .next()?
-            .trim_end_matches("px")
-            .parse()
-            .ok()
-    };
-    Some((value("width")?, value("height")?))
-}
-
-pub(crate) fn mermaid(source: &str) -> Option<MarkdownDrawing> {
-    if source.len() > 128_000 {
-        return None;
-    }
-    cached(format!("mermaid:{source}"), || {
-        let mut theme = mermaid_svg::Theme::neutral();
-        theme.fg = THEME_INK.into();
-        theme.fg_muted = THEME_INK.into();
-        theme.bg = "transparent".into();
-        theme.actor_fill = "transparent".into();
-        theme.actor_stroke = THEME_INK.into();
-        theme.lifeline = THEME_INK.into();
-        theme.arrow_stroke = THEME_INK.into();
-        theme.flow_node_fill = "transparent".into();
-        theme.flow_node_stroke = THEME_INK.into();
-        theme.flow_edge_stroke = THEME_INK.into();
-        theme.flow_label_bg = "transparent".into();
-        let svg = mermaid_svg::render_with(source, &theme).ok()?;
-        let (width, height) = svg_dimensions(&svg)?;
-        Some(MarkdownDrawing {
-            width,
-            height,
-            commands: vec![MarkdownDrawingCommand::Svg {
-                bounds: LayoutBox {
-                    x: 0.0,
-                    y: 0.0,
-                    width,
-                    height,
-                },
-                source: svg.into(),
-            }],
-        })
-    })
 }
 
 /// A display formula's drawing. Diagrams are laid out by
@@ -728,7 +665,7 @@ mod tests {
     }
 
     #[test]
-    fn all_mermaid_diagram_families_produce_measured_svg() {
+    fn every_mermaid_family_lays_out_natively() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mermaid");
         let mut count = 0;
         for entry in std::fs::read_dir(root).unwrap() {
@@ -737,18 +674,17 @@ mod tests {
                 continue;
             }
             let source = std::fs::read_to_string(&path).unwrap();
-            let drawing =
-                mermaid(&source).unwrap_or_else(|| panic!("cannot render {}", path.display()));
-            assert!(
-                drawing.width.is_finite()
-                    && drawing.width > 0.0
-                    && drawing.height.is_finite()
-                    && drawing.height > 0.0
-            );
-            assert!(matches!(
-                drawing.commands.first(),
-                Some(MarkdownDrawingCommand::Svg { .. })
-            ));
+            let measurer = crate::markdown_diagram::Measurer {
+                advances: None,
+                key: 0,
+            };
+            let crate::markdown_diagram::Outcome::Native(scene) =
+                crate::markdown_diagram::layout(&source, &measurer)
+            else {
+                panic!("cannot lay out {}", path.display());
+            };
+            assert!(scene.size.iter().all(|v| v.is_finite() && *v > 0.0));
+            assert!(!scene.items.is_empty());
             count += 1;
         }
         assert!(count >= 23);

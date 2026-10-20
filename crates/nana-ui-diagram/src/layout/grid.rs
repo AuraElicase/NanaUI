@@ -310,10 +310,38 @@ pub fn place_label(
     taken: &mut Vec<Rect>,
 ) -> [f32; 2] {
     let fallback = label_point(points);
-    let overlap = |r: &Rect| -> f32 {
-        obstacles
+    // Candidates stay within a label's size of the route, so only boxes
+    // near it can clash: filter once, then compare candidates to those.
+    let reach = Rect::new(
+        points.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min) - size[0] - 4.0,
+        points.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min) - size[1] - 4.0,
+        0.0,
+        0.0,
+    );
+    let far = [
+        points
             .iter()
-            .chain(taken.iter())
+            .map(|p| p[0])
+            .fold(f32::NEG_INFINITY, f32::max)
+            + size[0]
+            + 4.0,
+        points
+            .iter()
+            .map(|p| p[1])
+            .fold(f32::NEG_INFINITY, f32::max)
+            + size[1]
+            + 4.0,
+    ];
+    let reach = Rect::new(reach.x, reach.y, far[0] - reach.x, far[1] - reach.y);
+    let nearby: Vec<Rect> = obstacles
+        .iter()
+        .chain(taken.iter())
+        .filter(|o| o.intersects(&reach))
+        .copied()
+        .collect();
+    let overlap = |r: &Rect| -> f32 {
+        nearby
+            .iter()
             .map(|o| {
                 let ix = (r.right().min(o.right()) - r.x.max(o.x)).max(0.0);
                 let iy = (r.bottom().min(o.bottom()) - r.y.max(o.y)).max(0.0);
@@ -545,11 +573,25 @@ pub fn connect_all(
             continue;
         };
         let (a, b) = (boxes[l.from], boxes[l.to]);
+        // Only boxes near the link can block it or shape a detour: keeping
+        // the search local keeps big diagrams linear in their size.
+        let span = a.union(&b);
+        let reach = gap * 4.0 + span.w.max(span.h) * 0.25;
+        let near = Rect::new(
+            span.x - reach,
+            span.y - reach,
+            span.w + 2.0 * reach,
+            span.h + 2.0 * reach,
+        );
         let obstacles: Vec<Rect> = obstacles
             .iter()
             .copied()
             .filter(|o| {
-                !same(o, &a) && !same(o, &b) && !o.contains(a.center()) && !o.contains(b.center())
+                o.intersects(&near)
+                    && !same(o, &a)
+                    && !same(o, &b)
+                    && !o.contains(a.center())
+                    && !o.contains(b.center())
             })
             .collect();
         let ta = ends[i][0].unwrap_or(0.5);
@@ -625,16 +667,31 @@ pub fn connect_all(
 }
 
 /// Segments earlier routes took, so later ones prefer a parallel line.
+/// Horizontal runs are filed by their y, vertical runs by their x, in
+/// buckets as wide as the overlap tolerance.
 #[derive(Debug, Clone, Default)]
 pub struct Used {
-    segments: Vec<([f32; 2], [f32; 2])>,
+    horizontal: HashMap<i32, Vec<(f32, f32, f32)>>,
+    vertical: HashMap<i32, Vec<(f32, f32, f32)>>,
     /// Grid work spent by [`route_around`] so far; past [`ROUTE_BUDGET`]
     /// routes fall back to the simple candidates.
     spent: u64,
 }
 
+/// Boxes and connectors a routed grid diagram may hold: obstacle routing
+/// and label placement stay near-linear well past this, but a fully
+/// interlinked grid does not, so grid families cap their counts here.
+pub const MAX_ROUTED: usize = 500;
+
+/// Runs closer than this count as sharing a line.
+const OVERLAP_TOLERANCE: f32 = 5.0;
+
+fn bucket(at: f32) -> i32 {
+    (at / OVERLAP_TOLERANCE).floor() as i32
+}
+
 /// Total search work the obstacle router may spend on one diagram.
-const ROUTE_BUDGET: u64 = 30_000_000;
+const ROUTE_BUDGET: u64 = 4_000_000;
 
 impl Used {
     pub fn new() -> Self {
@@ -643,26 +700,39 @@ impl Used {
 
     pub fn add(&mut self, points: &[[f32; 2]]) {
         for w in points.windows(2) {
-            self.segments.push((w[0], w[1]));
+            let (a, b) = (w[0], w[1]);
+            if (a[1] - b[1]).abs() < 0.01 {
+                self.horizontal.entry(bucket(a[1])).or_default().push((
+                    a[0].min(b[0]),
+                    a[0].max(b[0]),
+                    a[1],
+                ));
+            } else if (a[0] - b[0]).abs() < 0.01 {
+                self.vertical.entry(bucket(a[0])).or_default().push((
+                    a[1].min(b[1]),
+                    a[1].max(b[1]),
+                    a[0],
+                ));
+            }
         }
     }
 
     /// How far `a`–`b` runs along a segment already taken.
     fn overlap(&self, a: [f32; 2], b: [f32; 2]) -> f32 {
+        let (map, at, lo, hi) = if (a[1] - b[1]).abs() < 0.01 {
+            (&self.horizontal, a[1], a[0].min(b[0]), a[0].max(b[0]))
+        } else if (a[0] - b[0]).abs() < 0.01 {
+            (&self.vertical, a[0], a[1].min(b[1]), a[1].max(b[1]))
+        } else {
+            return 0.0;
+        };
         let mut total = 0.0;
-        for &(c, d) in &self.segments {
-            if (a[1] - b[1]).abs() < 0.01 && (c[1] - d[1]).abs() < 0.01 && (a[1] - c[1]).abs() < 5.0
-            {
-                let lo = a[0].min(b[0]).max(c[0].min(d[0]));
-                let hi = a[0].max(b[0]).min(c[0].max(d[0]));
-                total += (hi - lo).max(0.0);
-            } else if (a[0] - b[0]).abs() < 0.01
-                && (c[0] - d[0]).abs() < 0.01
-                && (a[0] - c[0]).abs() < 5.0
-            {
-                let lo = a[1].min(b[1]).max(c[1].min(d[1]));
-                let hi = a[1].max(b[1]).min(c[1].max(d[1]));
-                total += (hi - lo).max(0.0);
+        let k = bucket(at);
+        for key in k - 1..=k + 1 {
+            for &(c0, c1, c) in map.get(&key).into_iter().flatten() {
+                if (at - c).abs() < OVERLAP_TOLERANCE {
+                    total += (hi.min(c1) - lo.max(c0)).max(0.0);
+                }
             }
         }
         total
@@ -683,6 +753,9 @@ pub fn route_around(
     gap: f32,
     used: &mut Used,
 ) -> Option<Vec<[f32; 2]>> {
+    if used.spent >= ROUTE_BUDGET {
+        return None;
+    }
     let margin = (gap * 0.3).clamp(2.0, 6.0);
     let inflated: Vec<Rect> = walls
         .iter()
