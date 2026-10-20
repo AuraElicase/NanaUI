@@ -110,6 +110,8 @@ mod runtime_dock;
 mod runtime_host;
 #[cfg(feature = "gpu")]
 mod scene_gpu;
+#[cfg(feature = "hosted")]
+mod staged;
 #[cfg(feature = "gpu")]
 pub use native_content::{NativeContentRegion, NativeContentWork, native_content_regions};
 #[cfg(feature = "hosted")]
@@ -356,6 +358,8 @@ pub use settings::{
 #[cfg(feature = "hosted")]
 pub use settings::{hosted_window_material_modes, window_material_effect};
 pub use split_pane::{SplitAxis, SplitPaneAction, SplitPaneController};
+#[cfg(feature = "hosted")]
+pub use staged::{Launch, LaunchError, LaunchMessage, LaunchUpdate, Staged};
 pub use theme::{
     Color, CompiledTheme, HAIRLINE, SemanticColor, SemanticPalette, ThemeAppearance,
     ThemeAppearanceExt, ThemeChoice, ThemeId, ThemeMetrics, ThemeMode, ThemeModeExt, ThemeRegistry,

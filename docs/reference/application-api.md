@@ -182,6 +182,15 @@ device/surface 丢失后宿主调用 `RuntimeDocument::set_surface_generation`�
 
 `RuntimeProgramContext` 提供 `window_id`、`geometry`、`gpu()`、`material()`、`dispatch`、`run_task`、`startup()`（启动记录与接管请求）。原生窗口句柄不穿过这条边界。
 
+### 分阶段构建的程序（`Staged`）
+
+有的程序在宿主启动时还建不出来：要在工作线程读设置、开设备，再一轮一页地挂页面，让启动画面在中间照常呈现。这时实现 `Launch`（`type Program` 是最终的程序），运行 `run_runtime::<Staged<MyLaunch>>(..)`：
+
+- 构建期间，`Staged` 用 `Launch::document` 回答主窗口的文档（其他窗口这时不会打开），用 `Launch::theme_mode` / `window_material_mode` / `window_background` 回答外观，消息交给 `Launch::update`。
+- `Launch::update` 返回 `LaunchUpdate::Ready(program, update)` 后，`Staged` 把动画时钟交给程序，此后**所有**钩子原样转给它；`RuntimeProgram` 以后新增的钩子也一样，应用不必逐个转发。
+- 启动画面：`Staged` 对宿主回答 `Deferred`；程序建好、且它自己的 `startup_takeover()` 是 `Immediate` 时，由 `Staged` 代它申请接管，宿主还没发票据就每 50 ms 再问一次，超过 `Launch::TAKEOVER_TIMEOUT`（默认 30 s）调用 `Launch::takeover_failed`（默认退出）。程序回答 `Deferred` 时自己去接管。
+- 关联函数 `gpu_backend_policy` / `startup_window_material_mode` 取最终程序的。
+
 `run_task` 的任务在宿主的工作线程上执行。任务 panic 时不交回消息：宿主记一条 `host.task_panicked` 故障，工作线程继续处理队列。等着结果的调用方要在任务里接住失败，交回一条失败消息。
 
 `ApplicationState` 透传下列钩子。`RuntimeApplication<State>` 原样转给 `RuntimeProgram`，所以透明叠加窗口、需要合成器路径的应用不必再手写一层 `RuntimeProgram`：
