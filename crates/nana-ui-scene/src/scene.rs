@@ -246,6 +246,25 @@ fn is_triggered_overlay_surface(id: PrimitiveId) -> bool {
     id.slot == TRIGGERED_OVERLAY_SURFACE_SLOT
 }
 
+/// Whether `node` is a triggered menu. Its node is the trigger, and its
+/// presentation layers are the hanging surface's: they fade the surface and
+/// the items it places, and move them about the surface's pivot
+/// ([`UiScene::hanging_transform`]); the trigger and its trigger content keep
+/// their logical opacity and transform.
+fn is_triggered_menu(node: &ExtractedNode) -> bool {
+    node.standard_visual
+        .as_ref()
+        .is_some_and(|visual| visual.triggered_menu_overlay().is_some())
+}
+
+/// Whether `child` draws the trigger of the triggered menu `menu`.
+fn is_trigger_content(menu: &ExtractedNode, child: StableNodeId) -> bool {
+    menu.standard_visual
+        .as_ref()
+        .and_then(StandardVisual::triggered_menu_overlay)
+        .is_some_and(|overlay| overlay.trigger_content == Some(child))
+}
+
 /// A triggered surface's paint-order key: its own `(z_index, document_order)`
 /// at the root, where `z_index` is the menu content's level, so it sits under
 /// the content (later in document order) and over its trigger and the rest
@@ -1692,7 +1711,8 @@ impl UiScene {
                     .opacity_group_cache
                     .lock()
                     .expect("scene opacity groups");
-                self.ancestor_opacity_groups(&mut cache, parent, 0)
+                let groups = self.ancestor_opacity_groups(&mut cache, parent, 0);
+                self.trigger_content_groups(parent, node, groups)
             }
             None => empty_opacity_groups(),
         };
@@ -1722,7 +1742,10 @@ impl UiScene {
             return empty_opacity_groups();
         };
         let base = match candidate.parent {
-            Some(parent) => self.ancestor_opacity_groups(cache, parent, depth + 1),
+            Some(parent) => {
+                let groups = self.ancestor_opacity_groups(cache, parent, depth + 1);
+                self.trigger_content_groups(parent, id, groups)
+            }
             None => empty_opacity_groups(),
         };
         let groups = if is_dest_group(&self.nodes, candidate) {
@@ -1738,6 +1761,8 @@ impl UiScene {
 
     /// Destination groups for this draw. A modal scrim inherits outer groups,
     /// but never the card's own opacity: it has an independent presence track.
+    /// A triggered menu's trigger is outside its menu's fade the same way:
+    /// only the hanging surface and its items fade in.
     pub fn primitive_opacity_groups(&self, primitive: &ScenePrimitive) -> Arc<[OpacityGroup]> {
         if self.is_modal_scrim(primitive) {
             return self
@@ -1746,7 +1771,56 @@ impl UiScene {
                 .and_then(|node| node.parent)
                 .map_or_else(empty_opacity_groups, |parent| self.opacity_groups(parent));
         }
-        self.opacity_groups(primitive.node)
+        let groups = self.opacity_groups(primitive.node);
+        if is_triggered_overlay_surface(primitive.id) {
+            return groups;
+        }
+        match self.nodes.get(&primitive.node) {
+            Some(menu) if is_triggered_menu(menu) => self.without_menu_fade(menu, groups),
+            _ => groups,
+        }
+    }
+
+    /// `groups`, inherited by `child` from `parent`, outside `parent`'s fade
+    /// when `child` draws the trigger of a triggered menu `parent`.
+    fn trigger_content_groups(
+        &self,
+        parent: StableNodeId,
+        child: StableNodeId,
+        groups: Arc<[OpacityGroup]>,
+    ) -> Arc<[OpacityGroup]> {
+        match self.nodes.get(&parent) {
+            Some(menu) if is_trigger_content(menu, child) => self.without_menu_fade(menu, groups),
+            _ => groups,
+        }
+    }
+
+    /// `groups`, ending with `menu`'s own, with that group reduced to what
+    /// the menu's logical style composites: its presentation fades only its
+    /// hanging surface and items. Dropped when that leaves nothing to
+    /// composite.
+    fn without_menu_fade(
+        &self,
+        menu: &ExtractedNode,
+        groups: Arc<[OpacityGroup]>,
+    ) -> Arc<[OpacityGroup]> {
+        let Some((own, outer)) = groups.split_last().filter(|(own, _)| own.node == menu.id) else {
+            return groups;
+        };
+        let logical = dest_group(&self.nodes, menu.id, menu);
+        if logical.opacity == 1.0
+            && logical.filter.is_identity()
+            && logical.mix_blend.is_normal()
+            && logical.inset_shadow.is_none()
+        {
+            return Arc::from(outer);
+        }
+        if *own == logical {
+            return groups;
+        }
+        let mut groups = outer.to_vec();
+        groups.push(logical);
+        Arc::from(groups)
     }
 
     fn presented_dest_group(&self, id: StableNodeId, node: &ExtractedNode) -> OpacityGroup {
@@ -2378,7 +2452,29 @@ impl UiScene {
                 })
                 .unwrap_or(0)
         };
-        let mut transform = AffineTransform::IDENTITY;
+        // The items a triggered menu places hang with its surface: their
+        // branch starts from the menu's presentation, not the bare viewport.
+        let fixed_root = if fixed {
+            Some(node)
+        } else {
+            ancestors.get(geometry_start).copied().filter(|ancestor| {
+                ancestor.source_style.layout.position == nana_ui_core::PositionSpec::Fixed
+            })
+        };
+        let mut transform = match fixed_root {
+            Some(root) if visual => {
+                // Whether a fixed node starts its menu's branch depends on
+                // whether it is the menu's trigger content, which its
+                // siblings do not share.
+                node_dependent |= fixed
+                    && node
+                        .parent
+                        .and_then(|parent| self.nodes.get(&parent))
+                        .is_some_and(|parent| is_triggered_menu(parent));
+                self.hanging_branch_transform(root)
+            }
+            _ => AffineTransform::IDENTITY,
+        };
         let mut opacity = 1.0;
         let mut clips = Vec::new();
         let mut blocks_3d = false;

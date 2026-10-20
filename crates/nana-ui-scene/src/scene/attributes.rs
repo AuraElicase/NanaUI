@@ -83,13 +83,17 @@ impl UiScene {
 
     /// [`Self::node_projection`] of the primitive's node, except for a
     /// triggered menu surface: it is viewport-fixed like the content it wraps,
-    /// so nothing its trigger inherits moves or cuts it.
+    /// so nothing its trigger inherits moves or cuts it. Only the menu's own
+    /// presentation moves it, with its items ([`Self::hanging_transform`]).
     fn primitive_projection(&self, primitive: &ScenePrimitive) -> Option<NodeProjection> {
         if super::is_triggered_overlay_surface(primitive.id) {
-            return self
-                .nodes
-                .contains_key(&primitive.node)
-                .then_some(NodeProjection::Retained);
+            if !self.nodes.contains_key(&primitive.node) {
+                return None;
+            }
+            return Some(
+                self.hanging_transform(primitive.node)
+                    .map_or(NodeProjection::Retained, NodeProjection::Moved),
+            );
         }
         self.node_projection(primitive.node)
     }
@@ -159,6 +163,13 @@ impl UiScene {
                 paint_opacity,
                 revision,
             }),
+            NodeProjection::Moved(delta) => Some(SceneDraw {
+                primitive,
+                transform: delta.then(primitive.transform),
+                clips: Arc::clone(&primitive.clips),
+                paint_opacity,
+                revision,
+            }),
             NodeProjection::Rebased {
                 attributes,
                 parent_clip_count,
@@ -199,6 +210,7 @@ impl UiScene {
     pub(super) fn draw_transform(&self, primitive: &ScenePrimitive) -> Option<AffineTransform> {
         Some(match self.primitive_projection(primitive)? {
             NodeProjection::Retained => primitive.transform,
+            NodeProjection::Moved(delta) => delta.then(primitive.transform),
             NodeProjection::Rebased { attributes, .. } => {
                 attributes.delta.then(primitive.transform)
             }
@@ -209,6 +221,8 @@ impl UiScene {
 enum NodeProjection {
     /// The retained transform and clips are already current.
     Retained,
+    /// The retained clips are current; the transform moves by this delta.
+    Moved(AffineTransform),
     /// Rebase them by `attributes.delta`, keeping `parent_clip_count` inherited
     /// clips from the projection they were retained against.
     Rebased {

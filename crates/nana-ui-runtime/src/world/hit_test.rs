@@ -923,15 +923,16 @@ impl UiWorld {
         } else {
             self.nodes.get(target)?.hierarchy.parent
         };
+        let mut transform = (IDENTITY_AFFINE, [0.0, 0.0]);
         while let Some(id) = cursor {
             let node = self.nodes.get(id)?;
             chain.push(id);
             if self.hit_motion_layout(id).position == PositionSpec::Fixed {
+                transform = self.hanging_branch_transform(id);
                 break;
             }
             cursor = node.hierarchy.parent;
         }
-        let mut transform = (IDENTITY_AFFINE, [0.0, 0.0]);
         let mut blocks_3d = false;
         for id in chain.into_iter().rev() {
             let node = self.nodes.get(id)?;
@@ -1270,7 +1271,7 @@ impl UiWorld {
         };
         let style = self.hit_motion_layout(id);
         let (parent_hit, parent_blocks_3d) = if style.position == PositionSpec::Fixed {
-            ((IDENTITY_AFFINE, [0.0, 0.0]), false)
+            (self.hanging_branch_transform(id), false)
         } else {
             (parent_hit, parent_blocks_3d)
         };
@@ -1427,7 +1428,12 @@ impl UiWorld {
     }
 
     pub(crate) fn hanging_surface_contains(&self, id: StableNodeId, x: f32, y: f32) -> bool {
-        crate::popover::hanging_surface(self, id).is_some_and(|surface| surface.contains(x, y))
+        crate::popover::hanging_surface(self, id).is_some_and(|surface| {
+            match self.hanging_surface_transform(id) {
+                Some((transform, persp)) => transformed_contains(surface, transform, persp, x, y),
+                None => surface.contains(x, y),
+            }
+        })
     }
 
     /// Hit-test queries answered since the world was created: one per

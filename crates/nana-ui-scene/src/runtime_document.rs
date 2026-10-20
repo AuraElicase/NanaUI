@@ -799,6 +799,12 @@ mod tests {
         document.flush(viewport, &mut MeasureTextShaper).unwrap();
         open(document.context_mut(), menu);
         document.flush(viewport, &mut MeasureTextShaper).unwrap();
+        // Past the entrance: the surface and its items paint and hit at full
+        // size, not scaled down about the surface's pivot.
+        document
+            .context_mut()
+            .advance_animations(std::time::Duration::from_secs(1));
+        document.flush(viewport, &mut MeasureTextShaper).unwrap();
 
         let world = document.context().world();
         let trigger = world.layout_box(menu).unwrap();
