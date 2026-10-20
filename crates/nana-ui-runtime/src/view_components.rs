@@ -1537,7 +1537,62 @@ pub struct ListItem {
     /// and ArrowUp / ArrowDown on it raise [`SecondaryPress`] with
     /// `keyboard` set. See [`AccessibilityState::has_popup`].
     pub has_popup: bool,
+    /// The trailing slot holds row tools: shown while the pointer is on the
+    /// row or keyboard focus is inside it, so Tab reaches them. Set by
+    /// `El::tools`; see [`RowToolsRest`] for how they sit while put away.
+    pub trailing_tools: bool,
+    pub tools_rest: RowToolsRest,
+    /// Row tools stay shown at rest too (a pin that is on).
+    pub keep_tools: bool,
+    /// Kept by the framework from the pointer and keyboard focus.
+    pub tools_presence: RowToolsPresence,
     pub style: NodeStyle,
+}
+
+/// How a row's tools sit while they are put away (the pointer is elsewhere
+/// and keyboard focus is outside the row).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RowToolsRest {
+    /// Out of the layout: the label owns the whole row at rest, and revealing
+    /// the tools reflows it. Focus reaches them once it is on the row, so
+    /// Shift+Tab from below lands on the row before its tools.
+    #[default]
+    Yield,
+    /// Kept in place but not drawn: revealing them never reflows the row, at
+    /// the cost of the width they hold. Tab order includes them throughout.
+    Reserve,
+}
+
+/// What reveals a row's tools; the framework keeps it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RowToolsPresence {
+    /// The pointer is on the row.
+    pub hovered: bool,
+    /// Keyboard focus is on the row or inside it.
+    pub focus_within: bool,
+}
+
+impl RowToolsPresence {
+    pub fn revealed(self) -> bool {
+        self.hovered || self.focus_within
+    }
+}
+
+/// Puts a row's tools node away or back without touching the rest of its
+/// style. Returns whether anything changed.
+pub(crate) fn place_row_tools(
+    layout: &mut nana_ui_core::LayoutStyle,
+    shown: bool,
+    rest: RowToolsRest,
+) -> bool {
+    let (hidden, opacity) = match rest {
+        RowToolsRest::Yield => (!shown, layout.opacity),
+        RowToolsRest::Reserve => (false, (!shown).then_some(0.0)),
+    };
+    let changed = layout.hidden != hidden || layout.opacity != opacity;
+    layout.hidden = hidden;
+    layout.opacity = opacity;
+    changed
 }
 
 /// What a [`ListItem`] says it is, independent of how it looks. A row that
@@ -1588,6 +1643,10 @@ impl ListItem {
             pill_bleed: false,
             role: ListItemRole::ListItem,
             has_popup: false,
+            trailing_tools: false,
+            tools_rest: RowToolsRest::Yield,
+            keep_tools: false,
+            tools_presence: RowToolsPresence::default(),
             style: NodeStyle {
                 layout: Arc::new(layout),
                 background: None,
@@ -1710,6 +1769,48 @@ impl ListItem {
         self
     }
 
+    /// How the row tools sit while put away; see [`RowToolsRest`].
+    pub fn tools_rest(mut self, rest: RowToolsRest) -> Self {
+        self.tools_rest = rest;
+        self
+    }
+
+    /// Keep the row tools shown at rest too.
+    pub fn keep_tools(mut self, keep: bool) -> Self {
+        self.keep_tools = keep;
+        self
+    }
+
+    fn tools_shown(&self) -> bool {
+        self.keep_tools || self.tools_presence.revealed()
+    }
+
+    /// The trailing slot as laid out: row tools that yield their width are
+    /// out of the row while put away.
+    fn visible_trailing(&self) -> Option<StableNodeId> {
+        self.slots.trailing.filter(|_| {
+            !self.trailing_tools || self.tools_rest == RowToolsRest::Reserve || self.tools_shown()
+        })
+    }
+
+    /// Patches the tools slot, which another component owns.
+    fn project_tools(&self, world: &UiWorld, mutations: &mut MutationQueue) {
+        let Some(tools) = self.slots.trailing.filter(|_| self.trailing_tools) else {
+            return;
+        };
+        if world.node(tools).is_none() {
+            return;
+        }
+        let mut style = world.node_style(tools).cloned().unwrap_or_default();
+        if place_row_tools(
+            Arc::make_mut(&mut style.layout),
+            self.tools_shown(),
+            self.tools_rest,
+        ) {
+            mutations.set_style(tools, style);
+        }
+    }
+
     /// 行内子节点的对齐语义：有 trailing 槽时按钮簇贴行尾（与 SidebarRow
     /// 的行工具同款规则），否则按 start 排。隐藏的槽位子节点不参与 flex 流，
     /// 不影响其余子节点的分布。
@@ -1724,7 +1825,7 @@ impl ListItem {
             .control_padding_x
             .map(|padding| padding.resolve(metrics));
         let layout = Arc::make_mut(&mut style.layout);
-        layout.justify_content = if self.slots.trailing.is_some() {
+        layout.justify_content = if self.visible_trailing().is_some() {
             if self.slots.leading.is_some() {
                 nana_ui_core::JustifySpec::SpaceBetween
             } else {
@@ -1750,9 +1851,22 @@ impl ListItem {
     }
 }
 
+/// A view builds a row's slots before the row, so their nodes join the world
+/// after its first projection; the tools are put away once they have.
+fn assemble_list_item_tools(
+    cx: &mut crate::AppContext,
+    item: crate::Entity<ListItem>,
+) -> Result<bool, crate::FrameworkError> {
+    if cx.read(item, |item| item.trailing_tools)? {
+        cx.reproject_component(item)?;
+    }
+    Ok(false)
+}
+
 impl ComponentView for ListItem {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         activation: Some(crate::AppContext::activate_list_item),
+        slot_assembler: Some(assemble_list_item_tools),
         ..crate::TypeBehavior::NONE
     };
 
@@ -1791,7 +1905,7 @@ impl ComponentView for ListItem {
         let visual = StandardVisual::ListItem {
             leading: self.slots.leading,
             content: self.slots.content,
-            trailing: self.slots.trailing,
+            trailing: self.visible_trailing(),
             note: has_note.then(|| Arc::from(self.note.as_str())),
             detail: has_detail.then(|| Arc::from(self.detail.as_str())),
         };
@@ -1835,6 +1949,7 @@ impl ComponentView for ListItem {
                 ..AccessibilityState::default()
             },
         );
+        self.project_tools(world, mutations);
     }
 }
 
