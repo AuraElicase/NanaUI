@@ -1,0 +1,13 @@
+agentflow-beta LR
+  需求["用户提交的需求文档，可能非常长并且需要拆分成多个子任务"]@{ shape: input }
+  flow 规划["规划智能体"]
+    拆分["拆分任务"]@{ shape: task }
+    检索["search_docs"]@{ shape: tool }:::hot
+    拆分 --> 检索
+  end
+  审核{"是否通过？"}
+  需求 --> 拆分
+  检索 --> 审核
+  审核 -- 否 --x 拆分
+  classDef hot fill:#fde68a,stroke:#b45309
+  style 规划 stroke:#2563eb

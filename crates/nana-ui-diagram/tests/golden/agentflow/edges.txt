@@ -1,0 +1,44 @@
+size 1189.7 179.9
+summary nodes=9 edges=9 groups=0
+shape path M99.4,128.1 L146.6,128.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M153.4,128.1 L145,131.6 L146.5,128.1 L145,124.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M266.6,114.2 L272.6,114.2 Q278.6,114.2 278.6,108.2 L278.6,63.6 Q278.6,55.6 286.6,55.6 L307.8,55.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M314.6,55.6 L306.2,59.2 L307.7,55.6 L306.2,52.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M451.9,55.6 L493.2,55.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M499.9,55.6 L491.5,59.2 L493,55.6 L491.5,52.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M266.6,140.2 L322.6,140.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape path M608.5,55.6 L649.8,55.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M656.5,55.6 L648.1,59.2 L649.6,55.6 L648.1,52.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M779.4,44.8 L801.4,44.8 Q809.4,44.8 809.4,36.8 L809.4,36.8 Q809.4,28.8 817.4,28.8 L889.7,28.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M896.4,28.8 L888,32.3 L889.5,28.8 L888,25.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M801,55.6 L809.8,55.6 Q817.8,55.6 817.8,63.6 L817.8,77.8 Q817.8,85.8 825.8,85.8 L865.6,85.8 Q869.9,85.8 869.9,90.2 L869.9,91.9 Q869.9,94.5 872.6,94.5 L875.2,94.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M881.9,94.5 L873.5,98.1 L875,94.5 L873.5,91 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M881.9,120.5 L817.4,120.5 Q809.4,120.5 809.4,112.5 L809.4,74.5 Q809.4,66.5 801.4,66.5 L783.6,66.5 stroke=Danger/hairline/Solid
+shape path M786.8,69.7 L780.4,63.3 M786.8,63.3 L780.4,69.7 stroke=Danger/hairline/Solid
+shape path M1019.5,108.4 L1067.5,108.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape rect 826.2 18.6 31.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 831.6 20.4 20.9 16.8 size=12 w=400 ink=Muted "yes"
+shape rect 829.7 75.6 24.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 835.1 77.4 13.9 16.8 size=12 w=400 ink=Muted "no"
+shape path M20.9,108.3 L105.4,108.3 L93.5,147.9 L9,147.9 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 36.9 118.3 40.6 19.6 size=14 w=400 ink=Text "Brief"
+shape rect 153.4 108.3 113.2 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 169.4 118.3 81.2 19.6 size=14 w=400 ink=Text "Draft copy"
+shape rect 314.6 35.8 137.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M322.6,35.8 L322.6,75.4 stroke=BorderStrong/hairline/Solid
+shape path M443.9,35.8 L443.9,75.4 stroke=BorderStrong/hairline/Solid
+text 338.6 45.8 89.3 19.6 size=14 w=400 ink=Text "spell_check"
+shape path M322.6,115.4 L443.9,115.4 L443.9,159 C413.6,147.1 352.9,170.9 322.6,159 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M332.6,115.4 L332.6,159 stroke=BorderStrong/hairline/Solid
+text 338.6 127.4 89.3 19.6 size=14 w=400 ink=Text "Style guide"
+shape path M509.8,35.8 L598.6,35.8 L608.5,55.6 L598.6,75.4 L509.8,75.4 L499.9,55.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 525.8 45.8 56.8 19.6 size=14 w=400 ink=Text "Publish"
+shape path M728.8,19.5 L801,55.6 L728.8,91.8 L656.5,55.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 684.1 45.8 89.3 19.6 size=14 w=400 ink=Text "Tests pass?"
+shape rect 881.9 88.6 137.6 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 897.9 98.6 105.6 19.6 size=14 w=400 ink=Text "Fix the build"
+shape path M1067.5,83.6 L1180.7,83.6 L1180.7,127.2 C1152.4,115.3 1095.8,139.1 1067.5,127.2 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M1077.5,83.6 L1077.5,127.2 stroke=BorderStrong/hairline/Solid
+text 1083.5 95.6 81.2 19.6 size=14 w=400 ink=Text "Build logs"
+shape path M906.3,9 L995.1,9 L1005,28.8 L995.1,48.6 L906.3,48.6 L896.4,28.8 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 922.3 19 56.8 19.6 size=14 w=400 ink=Text "Ship it"
