@@ -41,11 +41,6 @@ impl Outline {
         self.stack.push((indent, index));
         parent
     }
-
-    /// The depth the next item at `indent` would get, without recording it.
-    pub fn depth_for(&self, indent: usize) -> usize {
-        self.stack.iter().filter(|&&(i, _)| i < indent).count()
-    }
 }
 
 /// `(node, depth)` in pre-order from `roots`, without recursion. Nodes a
@@ -132,32 +127,25 @@ pub fn tidy(nodes: &[TidyNode], roots: &[usize], gaps: TidyGaps) -> Vec<TidyPlac
         column[level] = column[level - 1] + widest[level - 1] + gaps.level;
     }
 
-    // Children of a placed node, in the order they were reached.
-    let reached = |v: usize, seen_order: &[Option<usize>]| -> Vec<usize> {
-        child_list(v)
-            .iter()
-            .copied()
-            .filter(|&c| c < n && seen_order[c].is_some_and(|parent| parent == v))
-            .collect()
-    };
+    // A node belongs to the first node in `order` that lists it.
     let mut parent_of: Vec<Option<usize>> = vec![None; n];
-    {
-        let mut owned = vec![false; n];
-        for &(v, _) in &order {
-            for &c in child_list(v) {
-                if c < n && !owned[c] {
-                    owned[c] = true;
-                    parent_of[c] = Some(v);
-                }
+    for &(v, _) in &order {
+        for &c in child_list(v) {
+            if c < n && parent_of[c].is_none() {
+                parent_of[c] = Some(v);
             }
         }
     }
 
     // Post-order: contours relative to each subtree's own centre.
-    let mut contours: Vec<Option<Vec<(f32, f32)>>> = vec![None; n + 1];
+    let mut contours: Vec<Vec<(f32, f32)>> = vec![Vec::new(); n + 1];
     let mut offset = vec![0.0f32; n + 1];
     for &(v, _) in order.iter().rev() {
-        let kids = reached(v, &parent_of);
+        let kids: Vec<usize> = child_list(v)
+            .iter()
+            .copied()
+            .filter(|&c| c < n && parent_of[c] == Some(v))
+            .collect();
         let half = if v < n {
             nodes[v].breadth_size / 2.0
         } else {
@@ -168,7 +156,7 @@ pub fn tidy(nodes: &[TidyNode], roots: &[usize], gaps: TidyGaps) -> Vec<TidyPlac
             let mut merged: Vec<(f32, f32)> = Vec::new();
             let mut positions = Vec::with_capacity(kids.len());
             for &c in &kids {
-                let contour = contours[c].take().unwrap_or_default();
+                let contour = std::mem::take(&mut contours[c]);
                 let mut shift = f32::NEG_INFINITY;
                 for (level, (&(_, bottom), &(top, _))) in merged.iter().zip(&contour).enumerate() {
                     let gap = if level == 0 {
@@ -196,7 +184,7 @@ pub fn tidy(nodes: &[TidyNode], roots: &[usize], gaps: TidyGaps) -> Vec<TidyPlac
             }
             own.extend(merged.into_iter().map(|(t, b)| (t - mid, b - mid)));
         }
-        contours[v] = Some(own);
+        contours[v] = own;
     }
 
     // Pre-order: absolute positions.

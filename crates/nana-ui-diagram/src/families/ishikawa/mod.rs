@@ -7,12 +7,13 @@
 //! indented items are causes on horizontal ticks that meet the bone, and
 //! causes of causes hang from a smaller bone parallel to it.
 
+use std::collections::HashMap;
+
 use nana_ui_core::RadiusTier;
 
-use super::{LayoutCx, ParseCx};
+use super::{LayoutCx, ParseCx, graphkit, kit};
 use crate::geom::PathData;
-use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
-use crate::kind;
+use crate::ir::{Align, Corner, Geom, Rect, SceneBuilder, Stroke, StrokeWidth, Tone};
 use crate::layout::tree::{Outline, indent_width, preorder};
 use crate::text::{FontSpec, Label, LaidText};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
@@ -37,24 +38,13 @@ pub(crate) struct Model {
 pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
     let mut model = Model::default();
     let mut outline = Outline::new();
-    let mut header_seen = false;
-    for (index, line) in body.lines().enumerate() {
+    let (header, rest) = kit::header(body)?;
+    if !rest.is_empty() {
+        model.effect = Some(cx.label(rest)?);
+    }
+    for line in body.lines().skip(header + 1) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
-            continue;
-        }
-        if !header_seen {
-            let Some((_, rest)) = kind::header(trimmed) else {
-                return Err(DiagramError::syntax(
-                    index as u32 + 1,
-                    1,
-                    "expected `ishikawa`",
-                ));
-            };
-            header_seen = true;
-            if !rest.is_empty() {
-                model.effect = Some(cx.label(rest)?);
-            }
             continue;
         }
         if model.effect.is_none() {
@@ -73,9 +63,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             label,
             children: Vec::new(),
         });
-    }
-    if !header_seen {
-        return Err(DiagramError::Empty);
     }
     Ok(model)
 }
@@ -166,7 +153,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut last_child: Vec<Vec<Option<usize>>> = Vec::with_capacity(bones.len());
     let mut extents: Vec<(f32, f32)> = Vec::with_capacity(bones.len());
     for bone in &bones {
-        let mut row_of: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        let mut row_of: HashMap<usize, usize> = HashMap::new();
         let mut list: Vec<Tick> = Vec::with_capacity(bone.rows.len());
         let mut last = vec![None; bone.rows.len()];
         let mut left: f32 = -SLANT * bone.length - bone.box_size[0] / 2.0;
@@ -176,8 +163,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             let end = match parent_row {
                 Some(pr) => {
                     last[pr] = Some(r);
-                    let p: &Row = &bone.rows[pr];
-                    list[pr].anchor - SLANT * (row.line - p.line).abs()
+                    list[pr].anchor - SLANT * (row.line - bone.rows[pr].line).abs()
                 }
                 None => -SLANT * row.line,
             };
@@ -230,9 +216,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     // Spine with a tail.
     let line = style::edge_stroke();
     let thick = Stroke::new(style::EDGE, StrokeWidth::Thick);
-    let mut spine = PathData::new();
-    spine.move_to([tail, 0.0]).line_to([head.x, 0.0]);
-    out.stroke(Geom::path(spine), thick);
+    graphkit::line(&mut out, [tail, 0.0], [head.x, 0.0], thick);
     let fin = m.font_size * 0.8;
     let mut tail_path = PathData::new();
     tail_path
@@ -244,28 +228,28 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (b, bone) in bones.iter().enumerate() {
         let sign = if b % 2 == 0 { -1.0 } else { 1.0 };
         let bx = bases[b];
-        let colour = Ink::Series {
-            index: b as u16,
-            tone: Tone::Solid,
-        };
+        let colour = style::series(b, Tone::Solid);
         let tip = [bx - SLANT * bone.length, sign * bone.length];
-        let mut path = PathData::new();
-        path.move_to([bx, 0.0]).line_to(tip);
-        out.stroke(Geom::path(path), Stroke::new(colour, StrokeWidth::Thick));
+        graphkit::line(
+            &mut out,
+            [bx, 0.0],
+            tip,
+            Stroke::new(colour, StrokeWidth::Thick),
+        );
 
         for (r, row) in bone.rows.iter().enumerate() {
             let t = &ticks[b][r];
             if let Some(last) = last_child[b][r] {
                 let far = bone.rows[last].line;
-                let mut sub = PathData::new();
-                sub.move_to([bx + t.anchor, sign * row.line])
-                    .line_to([bx + t.anchor - SLANT * (far - row.line).abs(), sign * far]);
-                out.stroke(Geom::path(sub), line);
+                graphkit::line(
+                    &mut out,
+                    [bx + t.anchor, sign * row.line],
+                    [bx + t.anchor - SLANT * (far - row.line).abs(), sign * far],
+                    line,
+                );
             }
             let y = sign * row.line;
-            let mut tick = PathData::new();
-            tick.move_to([bx + t.start, y]).line_to([bx + t.end, y]);
-            out.stroke(Geom::path(tick), line);
+            graphkit::line(&mut out, [bx + t.start, y], [bx + t.end, y], line);
             let top = if sign < 0.0 {
                 -(row.near + row.laid.height + 2.0)
             } else {
@@ -297,10 +281,7 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 rect,
                 corner: Corner::Tier(RadiusTier::Sm),
             },
-            Some(Ink::Series {
-                index: b as u16,
-                tone: Tone::Soft,
-            }),
+            Some(style::series(b, Tone::Soft)),
             Some(Stroke::hairline(colour)),
         );
         out.text_centered(&bone.label, rect.center(), style::TEXT);

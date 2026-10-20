@@ -43,11 +43,11 @@ pub fn squarify(values: &[f64], rect: Rect) -> Vec<Rect> {
             end += 1;
         }
         // The last row takes whatever is left, so rounding never leaves a gap.
-        let last = end == areas.len();
-        let thickness = if last {
-            if w >= h { w } else { h }
+        let column = w >= h;
+        let thickness = if end == areas.len() {
+            w.max(h)
         } else {
-            (sum / side).min(if w >= h { w } else { h })
+            (sum / side).min(w.max(h))
         };
         let mut along = 0.0;
         for k in start..end {
@@ -56,7 +56,7 @@ pub fn squarify(values: &[f64], rect: Rect) -> Vec<Rect> {
             } else {
                 0.0
             };
-            let r = if w >= h {
+            let r = if column {
                 // A column at the left edge.
                 Rect::new(
                     x as f32,
@@ -76,7 +76,7 @@ pub fn squarify(values: &[f64], rect: Rect) -> Vec<Rect> {
             out[order[k]] = r;
             along += length;
         }
-        if w >= h {
+        if column {
             x += thickness;
             w = (w - thickness).max(0.0);
         } else {
@@ -91,11 +91,8 @@ pub fn squarify(values: &[f64], rect: Rect) -> Vec<Rect> {
 /// The worst aspect ratio of a row of `areas` summing to `sum` laid along
 /// `side`.
 fn worst(areas: &[f64], sum: f64, side: f64) -> f64 {
-    let (mut max, mut min) = (f64::MIN, f64::MAX);
-    for &a in areas {
-        max = max.max(a);
-        min = min.min(a);
-    }
+    let max = areas.iter().copied().fold(f64::MIN, f64::max);
+    let min = areas.iter().copied().fold(f64::MAX, f64::min);
     if sum <= 0.0 || min <= 0.0 {
         return f64::MAX;
     }

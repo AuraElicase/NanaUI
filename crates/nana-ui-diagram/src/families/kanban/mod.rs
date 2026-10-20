@@ -7,11 +7,10 @@
 
 use nana_ui_core::{RadiusTier, SemanticColorRole as R};
 
-use super::{LayoutCx, ParseCx};
+use super::{LayoutCx, ParseCx, kit};
 use crate::ir::{Align, Corner, Geom, Ink, Rect, SceneBuilder, Stroke};
-use crate::kind;
 use crate::layout::tree::indent_width;
-use crate::text::{FontSpec, Label};
+use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene, LimitKind, Summary, style};
 
 pub(crate) const NATIVE: bool = true;
@@ -79,23 +78,12 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
             .filter(|u| !u.is_empty()),
         ..Model::default()
     };
-    let mut header_seen = false;
+    let (header, _) = kit::header(body)?;
     let mut column_indent = None;
     let mut count = 0;
-    for (index, line) in body.lines().enumerate() {
+    for (index, line) in body.lines().enumerate().skip(header + 1) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
-            continue;
-        }
-        if !header_seen {
-            if kind::header(trimmed).is_none() {
-                return Err(DiagramError::syntax(
-                    index as u32 + 1,
-                    1,
-                    "expected `kanban`",
-                ));
-            }
-            header_seen = true;
             continue;
         }
         let indent = indent_width(line);
@@ -145,9 +133,6 @@ pub(crate) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         }
         column.cards.push(card);
     }
-    if !header_seen {
-        return Err(DiagramError::Empty);
-    }
     Ok(model)
 }
 
@@ -175,7 +160,6 @@ fn node_label(text: &str) -> &str {
 
 /// `key: value, key: 'quoted, value'`.
 fn parse_meta(text: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
     let mut quote: Option<char> = None;
     let mut start = 0;
     let mut pieces = Vec::new();
@@ -191,19 +175,11 @@ fn parse_meta(text: &str) -> Vec<(String, String)> {
         }
     }
     pieces.push(&text[start..]);
-    for piece in pieces {
-        let Some((key, value)) = piece.split_once(':') else {
-            continue;
-        };
-        let value = value.trim();
-        let value = value
-            .strip_prefix('\'')
-            .and_then(|v| v.strip_suffix('\''))
-            .or_else(|| value.strip_prefix('"').and_then(|v| v.strip_suffix('"')))
-            .unwrap_or(value);
-        out.push((key.trim().to_ascii_lowercase(), value.to_string()));
-    }
-    out
+    pieces
+        .into_iter()
+        .filter_map(|piece| piece.split_once(':'))
+        .map(|(key, value)| (key.trim().to_ascii_lowercase(), kit::unquote(value).to_string()))
+        .collect()
 }
 
 pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScene, DiagramError> {
@@ -231,12 +207,16 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     // Measure every lane first: lanes share the tallest height.
     struct LaidCard {
-        label: crate::text::LaidText,
-        ticket: Option<crate::text::LaidText>,
-        assigned: Option<crate::text::LaidText>,
+        label: LaidText,
+        ticket: Option<LaidText>,
+        assigned: Option<LaidText>,
         one_row: bool,
         height: f32,
     }
+    let lay_meta = |text: &Option<String>| {
+        text.as_ref()
+            .map(|t| cx.text.lay(&Label::plain(t), small, Some(text_w)))
+    };
     let mut lanes = Vec::with_capacity(model.columns.len());
     let mut tallest: f32 = 0.0;
     for column in &model.columns {
@@ -251,14 +231,8 @@ pub(crate) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let mut height = lane_pad + head_h;
         for card in &column.cards {
             let label = cx.text.lay(&card.label, font, Some(text_w));
-            let ticket = card
-                .ticket
-                .as_ref()
-                .map(|t| cx.text.lay(&Label::plain(t), small, Some(text_w)));
-            let assigned = card
-                .assigned
-                .as_ref()
-                .map(|a| cx.text.lay(&Label::plain(a), small, Some(text_w)));
+            let ticket = lay_meta(&card.ticket);
+            let assigned = lay_meta(&card.assigned);
             let tw = ticket.as_ref().map_or(0.0, |t| t.width);
             let aw = assigned.as_ref().map_or(0.0, |a| a.width);
             let one_row = tw + aw + 2.0 * meta_gap <= text_w
