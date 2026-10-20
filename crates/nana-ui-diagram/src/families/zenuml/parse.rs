@@ -4,11 +4,11 @@
 //! `finally` and `//` comments, lowered onto the sequence event list.
 
 use crate::families::ParseCx;
+use crate::families::kit::{header, ident_len, statements, truncate, unquote};
 use crate::families::sequence::{
-    Builder, Event, FragmentKind, Group, LineKind, Message, Model, ParticipantKind,
+    Builder, Event, FragmentKind, Group, LineKind, Message, Model, NotePlace, ParticipantKind,
 };
 use crate::geom::Marker;
-use crate::kind;
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
 
@@ -33,25 +33,15 @@ enum Node {
 }
 
 pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramError> {
-    let mut lines = body.lines().enumerate().skip_while(|(_, l)| l.trim().is_empty());
-    let Some((first_index, first)) = lines.next() else {
-        return Err(DiagramError::Empty);
-    };
-    let Some((_, after)) = kind::header(first.trim()) else {
-        return Err(DiagramError::syntax(first_index as u32 + 1, 1, "expected `zenuml`"));
-    };
+    let (first_index, after) = header(body)?;
     let mut toks = Vec::new();
-    tokenize(after, first_index, &mut toks);
     let mut last = first_index;
+    let lines = std::iter::once((first_index, after)).chain(statements(body, first_index));
     for (index, line) in lines {
-        if !line.trim().is_empty() {
-            last = index;
-        }
+        last = index;
         tokenize(line, index, &mut toks);
     }
-    let mut at = 0;
-    let mut depth = 0;
-    let nodes = tree(&toks, &mut at, &mut depth, 0, cx)?;
+    let nodes = tree(&toks, &mut 0, 0, cx)?;
     let mut lower = Lower {
         cx,
         b: Builder::new(false),
@@ -143,38 +133,32 @@ fn tokenize(line: &str, index: usize, out: &mut Vec<Tok>) {
 fn tree(
     toks: &[Tok],
     at: &mut usize,
-    depth: &mut usize,
     level: usize,
     cx: &mut ParseCx<'_>,
 ) -> Result<Vec<Node>, DiagramError> {
+    if level > MAX_BRACES {
+        return Err(DiagramError::TooLarge(LimitKind::ClusterDepth));
+    }
     let mut out = Vec::new();
-    while *at < toks.len() {
-        match &toks[*at] {
-            Tok::Comment(text) => {
-                out.push(Node::Comment(text.clone()));
-                *at += 1;
-            }
+    while let Some(tok) = toks.get(*at) {
+        *at += 1;
+        match tok {
+            Tok::Comment(text) => out.push(Node::Comment(text.clone())),
             Tok::Close(line) => {
-                *at += 1;
                 if level > 0 {
                     return Ok(out);
                 }
                 cx.warn(*line, "`}` without an open block");
             }
-            Tok::Open(line) => {
-                *at += 1;
-                let block = nested(toks, at, depth, level, cx)?;
-                out.push(Node::Stmt {
-                    text: String::new(),
-                    line: *line,
-                    block: Some(block),
-                });
-            }
+            Tok::Open(line) => out.push(Node::Stmt {
+                text: String::new(),
+                line: *line,
+                block: Some(tree(toks, at, level + 1, cx)?),
+            }),
             Tok::Stmt(text, line) => {
-                *at += 1;
                 let block = if matches!(toks.get(*at), Some(Tok::Open(_))) {
                     *at += 1;
-                    Some(nested(toks, at, depth, level, cx)?)
+                    Some(tree(toks, at, level + 1, cx)?)
                 } else {
                     None
                 };
@@ -187,20 +171,6 @@ fn tree(
         }
     }
     Ok(out)
-}
-
-fn nested(
-    toks: &[Tok],
-    at: &mut usize,
-    depth: &mut usize,
-    level: usize,
-    cx: &mut ParseCx<'_>,
-) -> Result<Vec<Node>, DiagramError> {
-    if level + 1 > MAX_BRACES {
-        return Err(DiagramError::TooLarge(LimitKind::ClusterDepth));
-    }
-    *depth = (*depth).max(level + 1);
-    tree(toks, at, depth, level + 1, cx)
 }
 
 /// A call frame: who is speaking and whom it answers.
@@ -227,7 +197,7 @@ struct Lower<'a, 'c> {
 }
 
 /// Split at the first `pat` outside quotes and parentheses.
-fn split_top<'s>(s: &'s str, pat: &str) -> Option<(&'s str, &'s str)> {
+fn split_once_top<'s>(s: &'s str, pat: &str) -> Option<(&'s str, &'s str)> {
     let mut depth = 0i32;
     let mut quote = false;
     for (i, c) in s.char_indices() {
@@ -246,9 +216,7 @@ fn split_top<'s>(s: &'s str, pat: &str) -> Option<(&'s str, &'s str)> {
 
 /// The leading keyword of a statement and what follows it.
 fn keyword(text: &str) -> (&str, &str) {
-    let end = text
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        .unwrap_or(text.len());
+    let end = ident_len(text, "");
     (&text[..end], text[end..].trim())
 }
 
@@ -261,13 +229,6 @@ fn condition(rest: &str) -> Option<&str> {
         .unwrap_or(rest)
         .trim();
     (!inner.is_empty()).then_some(inner)
-}
-
-fn unquote(s: &str) -> &str {
-    let s = s.trim();
-    s.strip_prefix('"')
-        .and_then(|r| r.strip_suffix('"'))
-        .unwrap_or(s)
 }
 
 /// A participant reference at the start of `s`: a quoted name or the text
@@ -289,7 +250,7 @@ fn is_name(s: &str) -> bool {
     if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
         return true;
     }
-    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '$')
+    !s.is_empty() && ident_len(s, "$") == s.len()
 }
 
 impl Lower<'_, '_> {
@@ -345,59 +306,40 @@ impl Lower<'_, '_> {
 
     fn block(&mut self, nodes: &[Node]) -> Result<(), DiagramError> {
         let mut i = 0;
-        while i < nodes.len() {
-            match &nodes[i] {
+        while let Some(node) = nodes.get(i) {
+            i += 1;
+            match node {
                 Node::Comment(text) => {
                     if !text.is_empty() {
                         self.comment.push(text.clone());
                     }
-                    i += 1;
                 }
                 Node::Stmt { text, line, block } => {
                     self.line = *line;
-                    i += 1;
                     let (kw, rest) = keyword(text);
                     match kw {
                         "if" => {
-                            let mut branches = vec![(None, block.as_deref())];
-                            while let Some(Node::Stmt {
-                                text: next,
-                                block: next_block,
-                                ..
-                            }) = nodes.get(i)
-                                && keyword(next).0 == "else"
-                            {
-                                let tail = keyword(next).1;
-                                let label = match keyword(tail) {
-                                    ("if", cond) => Some(format!("else if {}", condition(cond).unwrap_or(""))),
-                                    _ => Some("else".to_string()),
-                                };
-                                branches.push((label, next_block.as_deref()));
-                                i += 1;
-                            }
-                            self.fragment(FragmentKind::Alt, condition(rest), branches)?;
+                            let sections = sections(nodes, &mut i, |next| match keyword(next) {
+                                ("else", tail) => Some(match keyword(tail) {
+                                    ("if", cond) => format!("else if {}", condition(cond).unwrap_or("")),
+                                    _ => "else".to_string(),
+                                }),
+                                _ => None,
+                            });
+                            self.fragment(FragmentKind::Alt, condition(rest), block.as_deref(), sections)?;
                         }
                         "try" => {
-                            let mut branches = vec![(None, block.as_deref())];
-                            while let Some(Node::Stmt {
-                                text: next,
-                                block: next_block,
-                                ..
-                            }) = nodes.get(i)
-                                && matches!(keyword(next).0, "catch" | "finally")
-                            {
-                                let (k, tail) = keyword(next);
-                                let label = match condition(tail) {
+                            let sections = sections(nodes, &mut i, |next| match keyword(next) {
+                                (k @ ("catch" | "finally"), tail) => Some(match condition(tail) {
                                     Some(c) => format!("{k}({c})"),
                                     None => k.to_string(),
-                                };
-                                branches.push((Some(label), next_block.as_deref()));
-                                i += 1;
-                            }
-                            self.fragment(FragmentKind::Try, None, branches)?;
+                                }),
+                                _ => None,
+                            });
+                            self.fragment(FragmentKind::Try, None, block.as_deref(), sections)?;
                         }
                         "while" | "for" | "forEach" | "foreach" | "loop" if rest.is_empty() || rest.starts_with('(') => {
-                            self.fragment(FragmentKind::Loop, condition(rest), vec![(None, block.as_deref())])?;
+                            self.fragment(FragmentKind::Loop, condition(rest), block.as_deref(), Vec::new())?;
                         }
                         "opt" | "par" | "critical" | "section" | "ref" if rest.is_empty() || rest.starts_with('(') => {
                             let kind = match kw {
@@ -407,7 +349,7 @@ impl Lower<'_, '_> {
                                 "section" => FragmentKind::Section,
                                 _ => FragmentKind::Ref,
                             };
-                            self.fragment(kind, condition(rest), vec![(None, block.as_deref())])?;
+                            self.fragment(kind, condition(rest), block.as_deref(), Vec::new())?;
                         }
                         "else" | "catch" | "finally" => {
                             self.warn(format!("`{kw}` without its opening block"));
@@ -428,16 +370,16 @@ impl Lower<'_, '_> {
         Ok(())
     }
 
+    /// A block and its following `else` / `catch` sections as one
+    /// fragment.
     fn fragment(
         &mut self,
         kind: FragmentKind,
         cond: Option<&str>,
-        branches: Vec<(Option<String>, Option<&[Node]>)>,
+        first: Option<&[Node]>,
+        sections: Vec<(String, Option<&[Node]>)>,
     ) -> Result<(), DiagramError> {
-        let label = match cond {
-            Some(c) => Some(self.cx.label(c)?),
-            None => None,
-        };
+        let label = cond.map(|c| self.cx.label(c)).transpose()?;
         let comment = self.take_comment()?;
         self.push(Event::Open {
             kind,
@@ -446,14 +388,12 @@ impl Lower<'_, '_> {
             comment,
         })?;
         self.fragments += 1;
-        for (n, (section, nodes)) in branches.into_iter().enumerate() {
-            if n > 0 {
-                let label = match section {
-                    Some(s) => Some(self.cx.label(&s)?),
-                    None => None,
-                };
-                self.push(Event::Section { label })?;
-            }
+        if let Some(nodes) = first {
+            self.block(nodes)?;
+        }
+        for (section, nodes) in sections {
+            let label = Some(self.cx.label(&section)?);
+            self.push(Event::Section { label })?;
             if let Some(nodes) = nodes {
                 self.block(nodes)?;
             }
@@ -493,15 +433,10 @@ impl Lower<'_, '_> {
         }
         if let Some(rest) = text.strip_prefix('@') {
             let (annotation, name) = keyword(rest);
-            let kind = match annotation.to_ascii_lowercase().as_str() {
-                "actor" => ParticipantKind::Actor,
-                "boundary" => ParticipantKind::Boundary,
-                "control" => ParticipantKind::Control,
-                "entity" => ParticipantKind::Entity,
-                "database" | "db" => ParticipantKind::Database,
-                "collection" | "collections" => ParticipantKind::Collections,
-                "queue" | "sqs" => ParticipantKind::Queue,
-                _ => ParticipantKind::Participant,
+            let kind = if annotation.eq_ignore_ascii_case("sqs") {
+                ParticipantKind::Queue
+            } else {
+                ParticipantKind::from_type(annotation).unwrap_or(ParticipantKind::Participant)
             };
             return self.declare(name, kind);
         }
@@ -510,11 +445,11 @@ impl Lower<'_, '_> {
         {
             return self.reply(rest.trim());
         }
-        if let Some((from, rest)) = split_top(text, "->") {
+        if let Some((from, rest)) = split_once_top(text, "->") {
             return self.arrow(from.trim(), rest.trim(), block);
         }
         // `[Type] var = expr`
-        let (assign, expr) = match split_top(text, "=") {
+        let (assign, expr) = match split_once_top(text, "=") {
             Some((lhs, rhs)) if !rhs.starts_with('=') && !lhs.trim().is_empty() => {
                 let var = lhs.split_whitespace().last().unwrap_or("").to_string();
                 (Some(var), rhs.trim())
@@ -531,17 +466,16 @@ impl Lower<'_, '_> {
             }
             let from = self.speaker()?;
             let to = self.b.participant(self.cx, who)?;
-            return self.sync(from, to, call.trim(), assign, block);
+            return self.call(from, to, call.trim(), assign, block);
         }
         if expr.ends_with(')') && expr.contains('(') {
             let from = self.speaker()?;
-            return self.sync(from, from, expr, assign, block);
+            return self.call(from, from, expr, assign, block);
         }
         if assign.is_none() {
             return self.declare(expr, ParticipantKind::Participant);
         }
-        let shown: String = text.chars().take(40).collect();
-        self.warn(format!("unrecognised statement `{shown}`"));
+        self.warn(format!("unrecognised statement `{}`", truncate(text)));
         Ok(())
     }
 
@@ -553,7 +487,7 @@ impl Lower<'_, '_> {
         {
             text = text[end + 2..].trim();
         }
-        let (name, alias) = match split_top(text, " as ") {
+        let (name, alias) = match split_once_top(text, " as ") {
             Some((n, a)) => (n.trim(), Some(unquote(a))),
             None => {
                 // A trailing width hint (`A 200`) is not part of the name.
@@ -565,8 +499,7 @@ impl Lower<'_, '_> {
             }
         };
         if !is_name(name) {
-            let shown: String = text.chars().take(40).collect();
-            self.warn(format!("unrecognised statement `{shown}`"));
+            self.warn(format!("unrecognised statement `{}`", truncate(text)));
             return Ok(());
         }
         let label = match alias {
@@ -585,7 +518,7 @@ impl Lower<'_, '_> {
         } else {
             self.b.participant(self.cx, unquote(from))?
         };
-        if let Some((to, label)) = split_top(rest, ":") {
+        if let Some((to, label)) = split_once_top(rest, ":") {
             let to = to.trim();
             if to.is_empty() {
                 self.warn("a message needs a receiver");
@@ -600,7 +533,7 @@ impl Lower<'_, '_> {
                 return Ok(());
             }
             let to = self.b.participant(self.cx, unquote(who))?;
-            return self.sync(from, to, call.trim(), None, block);
+            return self.call(from, to, call.trim(), None, block);
         }
         if rest.is_empty() {
             self.warn("a message needs a receiver");
@@ -612,37 +545,14 @@ impl Lower<'_, '_> {
 
     /// An async message, or a reply after `@return`.
     fn message(&mut self, from: usize, to: usize, text: &str, block: Option<&[Node]>) -> Result<(), DiagramError> {
-        let reply = std::mem::take(&mut self.reply_next);
+        let line = if std::mem::take(&mut self.reply_next) { LineKind::Dashed } else { LineKind::Solid };
         let label = self.cx.label(text)?;
         let comment = self.take_comment()?;
-        self.push(Event::Message(Message {
-            from,
-            to,
-            line: if reply { LineKind::Dashed } else { LineKind::Solid },
-            start: None,
-            end: Some(Marker::OpenArrow),
-            label,
-            wrap: false,
-            activate: false,
-            deactivate: false,
-            comment,
-        }))?;
+        self.push(Event::Message(message(from, to, line, Marker::OpenArrow, label, comment)))?;
         if let Some(b) = block {
             self.block(b)?;
         }
         Ok(())
-    }
-
-    fn sync(
-        &mut self,
-        from: usize,
-        to: usize,
-        call: &str,
-        assign: Option<String>,
-        block: Option<&[Node]>,
-    ) -> Result<(), DiagramError> {
-        let label = self.cx.label(call)?;
-        self.call(from, to, label, assign, block)
     }
 
     fn create(&mut self, rest: &str, assign: Option<String>, block: Option<&[Node]>) -> Result<(), DiagramError> {
@@ -668,8 +578,7 @@ impl Lower<'_, '_> {
             Some(a) => format!("«create»({a})"),
             None => "«create»".to_string(),
         };
-        let label = self.cx.label(&text)?;
-        self.call(from, to, label, assign, block)
+        self.call(from, to, &text, assign, block)
     }
 
     /// A sync call: the receiver stays active through its block and answers
@@ -678,24 +587,17 @@ impl Lower<'_, '_> {
         &mut self,
         from: usize,
         to: usize,
-        label: Label,
+        text: &str,
         assign: Option<String>,
         block: Option<&[Node]>,
     ) -> Result<(), DiagramError> {
+        let label = self.cx.label(text)?;
         let activate = block.is_some() || assign.is_some();
         let comment = self.take_comment()?;
         self.reply_next = false;
         self.push(Event::Message(Message {
-            from,
-            to,
-            line: LineKind::Solid,
-            start: None,
-            end: Some(Marker::Arrow),
-            label,
-            wrap: false,
             activate,
-            deactivate: false,
-            comment,
+            ..message(from, to, LineKind::Solid, Marker::Arrow, label, comment)
         }))?;
         if !activate {
             return Ok(());
@@ -719,16 +621,8 @@ impl Lower<'_, '_> {
             Some(var) => {
                 let label = self.cx.label(&var)?;
                 self.push(Event::Message(Message {
-                    from: to,
-                    to: from,
-                    line: LineKind::Dashed,
-                    start: None,
-                    end: Some(Marker::OpenArrow),
-                    label,
-                    wrap: false,
-                    activate: false,
                     deactivate: true,
-                    comment: None,
+                    ..message(to, from, LineKind::Dashed, Marker::OpenArrow, label, None)
                 }))
             }
             None => self.push(Event::Deactivate(to)),
@@ -748,17 +642,49 @@ impl Lower<'_, '_> {
         let label = self.cx.label(value)?;
         let comment = self.take_comment()?;
         self.push(Event::Message(Message {
-            from: who,
-            to: caller,
-            line: LineKind::Dashed,
-            start: None,
-            end: Some(Marker::OpenArrow),
-            label,
-            wrap: false,
-            activate: false,
             deactivate: ends,
-            comment,
+            ..message(who, caller, LineKind::Dashed, Marker::OpenArrow, label, comment)
         }))
+    }
+}
+
+/// The `else` / `catch` statements right after a block, each with its
+/// divider label from `label`, advancing `i` past them.
+fn sections<'n>(
+    nodes: &'n [Node],
+    i: &mut usize,
+    label: impl Fn(&str) -> Option<String>,
+) -> Vec<(String, Option<&'n [Node]>)> {
+    let mut out = Vec::new();
+    while let Some(Node::Stmt { text, block, .. }) = nodes.get(*i)
+        && let Some(l) = label(text)
+    {
+        out.push((l, block.as_deref()));
+        *i += 1;
+    }
+    out
+}
+
+/// A message with one head and no activation change.
+fn message(
+    from: usize,
+    to: usize,
+    line: LineKind,
+    end: Marker,
+    label: Label,
+    comment: Option<Label>,
+) -> Message {
+    Message {
+        from,
+        to,
+        line,
+        start: None,
+        end: Some(end),
+        label,
+        wrap: false,
+        activate: false,
+        deactivate: false,
+        comment,
     }
 }
 
@@ -781,7 +707,6 @@ fn move_to_front(model: &mut Model, s: usize) {
                 m.to = map(m.to);
             }
             Event::Note { place, .. } => {
-                use crate::families::sequence::NotePlace;
                 *place = match *place {
                     NotePlace::Left(p) => NotePlace::Left(map(p)),
                     NotePlace::Right(p) => NotePlace::Right(map(p)),
@@ -796,14 +721,12 @@ fn move_to_front(model: &mut Model, s: usize) {
 
 #[cfg(test)]
 mod tests {
+    use super::parse;
+    use crate::families::parse_for_test;
     use crate::families::sequence::{Event, FragmentKind, LineKind, Model, ParticipantKind};
-    use crate::{Limits, parse as parse_source};
 
     fn model(source: &str) -> Model {
-        match parse_source(source, &Limits::DEFAULT).unwrap().model {
-            crate::families::Model::ZenUml(m) => m,
-            _ => panic!("not zenuml"),
-        }
+        parse_for_test(source, parse).0.unwrap()
     }
 
     #[test]
@@ -832,7 +755,7 @@ mod tests {
     fn top_level_calls_come_from_a_starter_in_the_first_column() {
         let m = model("zenuml\nBob\nx = Bob.ask()\nnew Carl(1)");
         assert_eq!(m.participants[0].kind, ParticipantKind::Starter);
-        assert_eq!(m.participants[1].id, "Bob");
+        assert_eq!(m.participants[1].label.text(), "Bob");
         assert!(m.events.iter().any(|e| matches!(e, Event::Create(2))));
     }
 
@@ -864,6 +787,6 @@ mod tests {
     #[test]
     fn braces_too_deep_end_cleanly() {
         let source = format!("zenuml\n{}", "A.m() {\n".repeat(200));
-        assert!(parse_source(&source, &Limits::DEFAULT).is_err());
+        assert!(parse_for_test(&source, parse).0.is_err());
     }
 }
