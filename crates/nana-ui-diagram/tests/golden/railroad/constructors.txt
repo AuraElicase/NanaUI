@@ -1,0 +1,55 @@
+size 474.6 277
+summary nodes=6 edges=0 groups=2
+text 9 41.6 29.5 16.8 size=12 w=600 ink=Muted "call"
+shape path M9,79.4 L9,96.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M465.6,79.4 L465.6,96.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,87.8 L25.8,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 25.8 73.8 52.1 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 35.6 78 32.5 19.6 size=14 w=400 ink=Text "name"
+shape path M77.9,87.8 L89.1,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 89.1 73.8 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 98.9 78 8.4 19.6 size=14 w=400 ink=Text "("
+shape path M117.1,87.8 L128.3,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M128.3,87.8 L145.1,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M145.1,87.8 L161.9,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 161.9 73.8 84.6 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 171.7 78 65 19.6 size=14 w=400 ink=Text "argument"
+shape path M246.4,87.8 L263.2,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 190.2 110.2 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 200 114.4 8.4 19.6 size=14 w=400 ink=Text ","
+shape path M246.4,87.8 Q254.8,87.8 254.8,96.2 L254.8,115.8 Q254.8,124.2 246.4,124.2 L218.2,124.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M190.2,124.2 L161.9,124.2 Q153.5,124.2 153.5,115.8 L153.5,96.2 Q153.5,87.8 161.9,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M229.5,124.2 L235.1,121 L235.1,127.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}
+shape path M263.2,87.8 L280,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M128.3,87.8 Q136.7,87.8 136.7,79.4 L136.7,73.8 Q136.7,65.4 145.1,65.4 L263.2,65.4 Q271.6,65.4 271.6,73.8 L271.6,79.4 Q271.6,87.8 280,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M280,87.8 L291.2,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 291.2 73.8 28 28 r=Full fill=SemanticColorMix{first:Accent,second:None,weight:1200} stroke=Accent/hairline/Solid
+text 301 78 8.4 19.6 size=14 w=400 ink=Text ")"
+shape path M319.2,87.8 L330.4,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M330.4,87.8 L448.8,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+text 330.4 69 118.3 16.8 size=12 w=400 italic ink=Muted "no trailing comma"
+shape path M448.8,87.8 L465.6,87.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+text 9 160.6 36.9 16.8 size=12 w=600 ink=Muted "block"
+shape path M9,221.5 L9,238.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M259.9,221.5 L259.9,238.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,229.9 L25.8,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M25.8,229.9 L37.7,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M37.7,229.9 L54.5,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M54.5,229.9 L71.3,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M71.3,229.9 L88.1,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M180.8,229.9 L197.6,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 88.1 215.9 92.7 28 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 97.9 220.1 73.1 19.6 size=14 w=400 ink=Text "statement"
+shape path M71.3,229.9 Q79.7,229.9 79.7,238.3 L79.7,243.9 Q79.7,252.3 88.1,252.3 L134.4,252.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M134.4,252.3 L180.8,252.3 Q189.2,252.3 189.2,243.9 L189.2,238.3 Q189.2,229.9 197.6,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M197.6,229.9 L214.4,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M197.6,229.9 Q206,229.9 206,238.3 L206,252.3 Q206,260.7 197.6,260.7 L134.4,260.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M134.4,260.7 L71.3,260.7 Q62.9,260.7 62.9,252.3 L62.9,238.3 Q62.9,229.9 71.3,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M131.7,260.7 L137.2,257.5 L137.2,263.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}
+shape path M214.4,229.9 L231.2,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M37.7,229.9 Q46.1,229.9 46.1,221.5 L46.1,215.9 Q46.1,207.5 54.5,207.5 L214.4,207.5 Q222.8,207.5 222.8,215.9 L222.8,221.5 Q222.8,229.9 231.2,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M231.2,229.9 L243.1,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 31.4 184.4 206.1 83.6 r=Sm stroke=Muted/hairline/Dashed
+text 37.7 185.4 27.8 16.8 size=12 w=400 italic ink=Muted "body"
+shape path M243.1,229.9 L259.9,229.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+text 183.2 8 108.2 22.4 size=16 w=600 ink=Text "Call syntax"

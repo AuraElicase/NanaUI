@@ -1,0 +1,9 @@
+railroad-ebnf-beta
+title "JSON values"
+
+value = object | array | string | number | "true" | "false" | "null" ;
+object = "{" [ member { "," member } ] "}" ;
+member = string ":" value ;
+array = "[" [ value ( "," value )* ] "]" ;
+(* a comment *)
+number = [ "-" ] digit+ [ "." digit+ ] ;
