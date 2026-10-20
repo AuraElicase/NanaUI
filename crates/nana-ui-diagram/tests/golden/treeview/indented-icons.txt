@@ -1,0 +1,25 @@
+size 263.2 216.9
+summary nodes=8 edges=6 groups=0
+shape path M16.8,43.7 L26.9,43.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M16.8,121.4 L26.9,121.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M16.8,27.6 L16.8,168.2 Q16.8,173.2 21.9,173.2 L26.9,173.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M39.2,69.6 L49.3,69.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M39.2,53.5 L39.2,90.5 Q39.2,95.5 44.3,95.5 L49.3,95.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M39.2,131.2 L39.2,142.3 Q39.2,147.3 44.3,147.3 L49.3,147.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M9,23.1 L9,12.5 L13.9,12.5 L15.9,14.6 L20.8,14.6 L20.8,23.1 Z fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Accent/hairline/Solid
+text 27.5 8 34.4 19.6 size=14 w=600 ink=Text "app/"
+shape path M31.4,49 L31.4,38.4 L36.3,38.4 L38.3,40.5 L43.2,40.5 L43.2,49 Z fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Accent/hairline/Solid
+text 49.9 33.9 34.4 19.6 size=14 w=600 ink=Text "src/"
+shape path M55.5,64.3 L61.2,64.3 L63.8,66.9 L63.8,74.9 L55.5,74.9 Z fill=Surface stroke=Muted/hairline/Solid
+text 72.3 59.8 56.8 19.6 size=14 w=400 ink=Text "main.rs"
+text 178.7 61.2 76.6 16.8 size=12 w=400 italic ink=Muted "entry point"
+shape path M55.5,90.2 L61.2,90.2 L63.8,92.8 L63.8,100.8 L55.5,100.8 Z fill=Surface stroke=Muted/hairline/Solid
+text 72.3 85.7 81.2 19.6 size=14 w=400 ink=Text "widgets.rs"
+shape path M31.4,126.7 L31.4,116.1 L36.3,116.1 L38.3,118.2 L43.2,118.2 L43.2,126.7 Z fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Accent/hairline/Solid
+text 49.9 111.6 60.3 19.6 size=14 w=600 ink=Text "assets/"
+shape path M55.5,142 L61.2,142 L63.8,144.6 L63.8,152.6 L55.5,152.6 Z fill=Surface stroke=Muted/hairline/Solid
+text 72.3 137.5 65 19.6 size=14 w=400 ink=Text "logo.svg"
+shape path M33.1,167.9 L38.8,167.9 L41.4,170.5 L41.4,178.5 L33.1,178.5 Z fill=Surface stroke=Muted/hairline/Solid
+text 49.9 163.4 81.2 19.6 size=14 w=400 ink=Text "Cargo.toml"
+shape path M10.7,193.8 L16.4,193.8 L19,196.4 L19,204.4 L10.7,204.4 Z fill=Surface stroke=Muted/hairline/Solid
+text 27.5 189.3 81.2 19.6 size=14 w=400 ink=Text ".gitignore"
