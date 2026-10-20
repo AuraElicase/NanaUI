@@ -1,0 +1,52 @@
+size 1798 213.8
+summary nodes=9 edges=10 groups=3
+shape path M186.9,22.8 L1789,22.8 stroke=BorderSoft/hairline/Dashed
+shape rect 9 9 51.7 27.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 18.6 13 32.5 19.6 size=14 w=400 ink=Text "main"
+shape path M186.9,98.6 L1789,98.6 stroke=BorderSoft/hairline/Dashed
+shape rect 9 84.8 76 27.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 18.6 88.8 56.8 19.6 size=14 w=400 ink=Text "develop"
+shape path M186.9,174.4 L1789,174.4 stroke=BorderSoft/hairline/Dashed
+shape rect 9 160.6 76 27.6 r=Sm fill=series2.soft stroke=series2/hairline/Solid
+text 18.6 164.6 56.8 19.6 size=14 w=400 ink=Text "release"
+shape path M192.9,22.8 L192.9,158.4 Q192.9,174.4 208.9,174.4 L390.7,174.4 stroke=series2/thick/Solid
+shape path M192.9,22.8 L588.4,22.8 stroke=series0/thick/Solid
+shape path M192.9,22.8 L192.9,82.6 Q192.9,98.6 208.9,98.6 L786.2,98.6 stroke=series1/thick/Solid
+shape path M588.4,22.8 L984,22.8 stroke=series0/thick/Solid
+shape path M786.2,98.6 L968,98.6 Q984,98.6 984,82.6 L984,22.8 stroke=series1/thick/Solid
+shape path M984,22.8 L1181.7,22.8 stroke=series0/thick/Solid
+shape path M390.7,174.4 L1379.5,174.4 stroke=series2/thick/Solid
+shape path M984,22.8 L984,120.5 Q984,136.5 1000,136.5 L1363.5,136.5 Q1379.5,136.5 1379.5,152.5 L1379.5,174.4 stroke=series0/thick/Dashed
+shape path M1379.5,174.4 L1577.2,174.4 stroke=series2/thick/Solid
+shape path M786.2,98.6 L1775,98.6 stroke=series1/thick/Solid
+shape ellipse 185.9 15.8 14 14 fill=series0 stroke=Surface/2/Solid
+shape rect 173.6 32.8 38.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 179 34.6 27.8 16.8 size=12 w=400 ink=Muted "ZERO"
+shape ellipse 383.7 167.4 14 14 fill=series2 stroke=Surface/2/Solid
+shape rect 381.8 184.4 17.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 387.2 186.2 7 16.8 size=12 w=400 ink=Muted "A"
+shape ellipse 581.4 15.8 14 14 fill=series0 stroke=Surface/2/Solid
+shape rect 572.6 32.8 31.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 578 34.6 20.9 16.8 size=12 w=400 ink=Muted "ONE"
+shape ellipse 779.2 91.6 14 14 fill=series1 stroke=Surface/2/Solid
+shape rect 777.3 108.6 17.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 782.7 110.4 7 16.8 size=12 w=400 ink=Muted "B"
+shape ellipse 977 15.8 14 14 fill=series0 stroke=Surface/2/Solid
+shape ellipse 980.5 19.3 7 7 fill=Surface
+shape rect 961.2 32.8 45.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 966.6 34.6 34.8 16.8 size=12 w=400 ink=Muted "MERGE"
+shape ellipse 1174.7 15.8 14 14 fill=series0 stroke=Surface/2/Solid
+shape rect 1165.9 32.8 31.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 1171.3 34.6 20.9 16.8 size=12 w=400 ink=Muted "TWO"
+shape ellipse 1373.5 168.4 12 12 fill=Surface stroke=series2/thick/Solid
+shape ellipse 1376.7 171.6 5.6 5.6 fill=series2
+shape rect 1342.8 184.4 73.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 1348.2 186.2 62.6 16.8 size=12 w=400 ink=Muted "6-23ba583"
+shape rect 1283.6 141 191.8 20.4 r=Xs fill=SemanticColorMix{first:Accent,second:None,weight:1400} stroke=SemanticColorMix{first:Accent,second:None,weight:5000}/hairline/Solid
+text 1289 142.8 181 16.8 size=12 w=400 ink=Text "cherry-pick:MERGE|parent:B"
+shape ellipse 1570.2 167.4 14 14 fill=series2 stroke=Surface/2/Solid
+shape rect 1554.4 184.4 45.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 1559.8 186.2 34.8 16.8 size=12 w=400 ink=Muted "THREE"
+shape ellipse 1768 91.6 14 14 fill=series1 stroke=Surface/2/Solid
+shape rect 1766.1 108.6 17.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 1771.5 110.4 7 16.8 size=12 w=400 ink=Muted "C"
