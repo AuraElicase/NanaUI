@@ -1,0 +1,31 @@
+size 689.6 366
+summary nodes=3 edges=2 groups=3
+clip rect 9 9 671.6 348 r=Md
+shape rect 9 9 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 109 671.6 124 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 109 134.7 124 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 233 134.7 124 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,109 L680.6,109 stroke=Border/hairline/Solid
+shape path M9,233 L680.6,233 stroke=Border/hairline/Solid
+shape path M143.7,9 L143.7,357 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 671.6 348 r=Md stroke=Border/hairline/Solid
+text 21 50.6 110.7 16.8 size=12 w=600 ink=Muted "UI / Automation"
+text 24.7 154.2 103.3 16.8 size=12 w=600 ink=Muted "Command / Read"
+text 57.9 171 36.9 16.8 size=12 w=600 ink=Muted "Model"
+text 54.2 286.6 44.3 16.8 size=12 w=600 ink=Muted "Events"
+shape path M299,59 L315,59 Q323,59 323,67 L323,163 Q323,171 331,171 L340.2,171 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M347,171 L338.6,174.5 L340.1,171 L338.6,167.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M479.8,171 L495.8,171 Q503.8,171 503.8,179 L503.8,287 Q503.8,295 511.8,295 L521,295 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M527.8,295 L519.4,298.5 L520.9,295 L519.4,291.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 163.7 29 135.3 60 r=Sm fill=Surface stroke=BorderStrong/hairline/Solid
+text 224.3 39 13.9 16.8 size=12 w=400 ink=Muted "UI"
+text 179.7 59.4 103.3 19.6 size=14 w=600 ink=Text "BallotScreen"
+shape rect 347 129 132.8 84 r=Sm fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1600} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 389 139 48.7 16.8 size=12 w=400 ink=Muted "command"
+text 378.9 159.4 68.9 19.6 size=14 w=600 ink=Text "CastVote"
+text 363 186.2 100.8 16.8 size=12 w=400 ink=Muted "option: string"
+shape rect 527.8 253 132.8 84 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 576.8 263 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 559.7 283.4 68.9 19.6 size=14 w=600 ink=Text "VoteCast"
+text 543.8 310.2 100.8 16.8 size=12 w=400 ink=Muted "option: string"

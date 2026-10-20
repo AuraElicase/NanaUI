@@ -1,0 +1,22 @@
+eventmodeling
+
+tf 01 ui BookingForm
+tf 02 cmd ReserveSeat [[SeatA]]
+tf 03 evt SeatReserved [[Seat]]
+tf 04 cmd ReserveSeat [[SeatB]]
+tf 05 evt SeatReserved [[Seat]]
+
+data SeatA {
+  row: 'C'
+  number: 7
+}
+
+data SeatB {
+  row: 'D'
+  number: 12
+}
+
+data Seat {
+  row: string
+  number: number
+}

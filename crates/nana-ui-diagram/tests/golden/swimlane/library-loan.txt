@@ -1,0 +1,47 @@
+size 1414.3 297.6
+summary nodes=6 edges=6 groups=3
+clip rect 9 9 1396.3 279.6 r=Md
+shape rect 9 9 68.3 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 88.6 1396.3 120.4 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 88.6 68.3 120.4 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 209 68.3 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,88.6 L1405.3,88.6 stroke=Border/hairline/Solid
+shape path M9,209 L1405.3,209 stroke=Border/hairline/Solid
+shape path M77.3,9 L77.3,288.6 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 1396.3 279.6 r=Md stroke=Border/hairline/Solid
+text 21 40.4 44.3 16.8 size=12 w=600 ink=Muted "Reader"
+text 28.4 140.4 29.5 16.8 size=12 w=600 ink=Muted "Desk"
+text 21 240.4 44.3 16.8 size=12 w=600 ink=Muted "Stacks"
+shape path M242.9,60.7 L303.1,60.7 Q311.1,60.7 311.1,68.7 L311.1,140.8 Q311.1,148.8 319.1,148.8 L372.5,148.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M379.2,148.8 L370.8,152.3 L372.3,148.8 L370.8,145.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M581.7,148.8 L623,148.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M629.7,148.8 L621.3,152.3 L622.8,148.8 L621.3,145.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M742.2,172.9 L812.3,172.9 Q820.3,172.9 820.3,180.9 L820.3,240.8 Q820.3,248.8 828.3,248.8 L990.5,248.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M997.2,248.8 L988.8,252.3 L990.3,248.8 L988.8,245.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1175.3,248.8 L1191.3,248.8 Q1199.3,248.8 1199.3,240.8 L1199.3,56.8 Q1199.3,48.8 1207.3,48.8 L1216.6,48.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1223.3,48.8 L1214.9,52.3 L1216.5,48.8 L1214.9,45.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M742.2,124.7 L854.5,124.7 Q862.5,124.7 862.5,132.7 L862.5,152.7 Q862.5,160.7 870.5,160.7 L1014.8,160.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1021.5,160.7 L1013.1,164.2 L1014.7,160.7 L1013.1,157.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1021.5,136.9 L944,136.9 Q936,136.9 936,128.9 L936,44.9 Q936,36.9 928,36.9 L249.7,36.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M242.9,36.9 L251.3,33.4 L249.8,36.9 L251.3,40.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 256.9 94.5 108.2 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 262.3 96.3 97.4 16.8 size=12 w=400 ink=Muted "Title and card"
+shape rect 804.5 200.6 31.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 809.9 202.4 20.9 16.8 size=12 w=400 ink=Muted "Yes"
+shape rect 850.1 132.5 24.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 855.5 134.3 13.9 16.8 size=12 w=400 ink=Muted "No"
+shape rect 888.9 76.7 94.3 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 894.3 78.5 83.5 16.8 size=12 w=400 ink=Muted "Notify later"
+shape rect 97.3 29 145.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 113.3 39 113.7 19.6 size=14 w=400 ink=Text "Ask for a book"
+shape rect 1223.3 29 161.9 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 1239.3 39 129.9 19.6 size=14 w=400 ink=Text "Collect the book"
+shape rect 379.2 129 202.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 395.2 139 170.5 19.6 size=14 w=400 ink=Text "Look up the catalogue"
+shape path M710.1,108.6 L790.5,148.8 L710.1,189 L629.7,148.8 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 657.3 139 105.6 19.6 size=14 w=400 ink=Text "On the shelf?"
+shape rect 1021.5 129 129.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 1037.5 139 97.4 19.6 size=14 w=400 ink=Text "Place a hold"
+shape rect 997.2 229 178.2 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 1013.2 239 146.2 19.6 size=14 w=400 ink=Text "Fetch from storage"

@@ -1,0 +1,39 @@
+size 1240.4 256.8
+summary nodes=5 edges=5 groups=3
+clip rect 9 9 1222.4 238.8 r=Md
+shape rect 9 9 105.2 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 88.6 1222.4 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 88.6 105.2 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 168.2 105.2 79.6 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,88.6 L1231.4,88.6 stroke=Border/hairline/Solid
+shape path M9,168.2 L1231.4,168.2 stroke=Border/hairline/Solid
+shape path M114.2,9 L114.2,247.8 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 1222.4 238.8 r=Md stroke=Border/hairline/Solid
+text 28.4 40.4 66.4 16.8 size=12 w=600 ink=Muted "Requester"
+text 21 120 81.2 16.8 size=12 w=600 ink=Muted "Procurement"
+text 39.4 199.6 44.3 16.8 size=12 w=600 ink=Muted "Budget"
+shape path M263.6,48.8 L279.6,48.8 Q287.6,48.8 287.6,56.8 L287.6,120.4 Q287.6,128.4 295.6,128.4 L304.9,128.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M311.6,128.4 L303.2,131.9 L304.7,128.4 L303.2,124.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M457.3,140.3 L503.5,140.3 Q511.5,140.3 511.5,148.3 L511.5,200 Q511.5,208 519.5,208 L559,208 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M565.7,208 L557.3,211.5 L558.8,208 L557.3,204.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M703.2,208 L817.6,208 Q825.6,208 825.6,200 L825.6,143.9 Q825.6,140.3 829.2,140.3 L832.8,140.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M839.6,140.3 L831.2,143.8 L832.7,140.3 L831.2,136.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M457.3,116.5 L832.8,116.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M839.6,116.5 L831.2,120 L832.7,116.5 L831.2,113 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M993.4,128.4 L1009.4,128.4 Q1017.4,128.4 1017.4,120.4 L1017.4,56.8 Q1017.4,48.8 1025.4,48.8 L1034.6,48.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1041.4,48.8 L1033,52.3 L1034.5,48.8 L1033,45.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 471.3 163.9 80.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 476.7 165.7 69.6 16.8 size=12 w=400 ink=Muted "Over limit"
+shape rect 717.2 106.3 94.3 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 722.6 108.1 83.5 16.8 size=12 w=400 ink=Muted "Within limit"
+shape rect 134.2 29 129.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 150.2 39 97.4 19.6 size=14 w=400 ink=Text "Raise a need"
+shape rect 1041.4 29 170 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 1057.4 39 138 19.6 size=14 w=400 ink=Text "Use the equipment"
+shape rect 311.6 108.6 145.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 327.6 118.6 113.7 19.6 size=14 w=400 ink=Text "Collect quotes"
+shape rect 839.6 108.6 153.8 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 855.6 118.6 121.8 19.6 size=14 w=400 ink=Text "Place the order"
+shape rect 565.7 188.2 137.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 581.7 198.2 105.6 19.6 size=14 w=400 ink=Text "Approve spend"
