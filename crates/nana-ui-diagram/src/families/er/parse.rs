@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 use super::{Attribute, Cardinality, Entity, Model, Relationship};
 use crate::families::ParseCx;
-use crate::families::graphkit::{Styles, first_word, ident_len, plain_colon, split_classes, unquote};
-use crate::kind;
+use crate::families::graphkit::{Styles, plain_colon, split_classes};
+use crate::families::kit::{self, first_word, ident_len, truncate, unquote};
 use crate::layout::Direction;
 use crate::{DiagramError, LimitKind};
 
@@ -36,27 +36,14 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         attributes: 0,
         line: 0,
     };
-    let mut header = false;
-    for (index, raw) in body.lines().enumerate() {
-        p.line = index;
-        let line = raw.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if !header {
-            let Some((_, rest)) = kind::header(line) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected `erDiagram`"));
-            };
-            header = true;
-            if !rest.is_empty() {
-                p.statement(rest)?;
-            }
-            continue;
-        }
-        p.statement(line)?;
+    let (header, rest) = kit::header(body)?;
+    p.line = header;
+    if !rest.is_empty() {
+        p.statement(rest)?;
     }
-    if !header {
-        return Err(DiagramError::Empty);
+    for (line, stmt) in kit::statements(body, header) {
+        p.line = line;
+        p.statement(stmt)?;
     }
     if p.open.is_some() {
         p.cx.warn(p.line, "an entity block is not closed");
@@ -112,6 +99,17 @@ fn symbolic(head: &str) -> Option<(usize, usize, Cardinality, Cardinality, bool)
     None
 }
 
+/// `A only one to zero or more B`, with `optionally` before `to` for a
+/// non-identifying one: (left, right, from, to, identifying).
+fn worded(head: &str) -> Option<(&str, &str, Cardinality, Cardinality, bool)> {
+    let words: Vec<&str> = head.split_whitespace().collect();
+    let t = words.iter().position(|w| *w == "to").filter(|&t| t >= 2 && words.len() >= t + 3)?;
+    let optional = words[t - 1] == "optionally";
+    let from = word_card(&words[1..if optional { t - 1 } else { t }])?;
+    let to = word_card(&words[t + 1..words.len() - 1])?;
+    Some((words[0], words[words.len() - 1], from, to, !optional))
+}
+
 /// A cardinality in words: `only one`, `zero or more`, `1+`, ...
 fn word_card(words: &[&str]) -> Option<Cardinality> {
     let phrase = words.join(" ").to_ascii_lowercase();
@@ -150,8 +148,8 @@ impl Parser<'_, '_> {
         } else {
             (raw, None)
         };
-        let id = if id.len() >= 2 && id.starts_with('"') && id.ends_with('"') {
-            &id[1..id.len() - 1]
+        let id = if let Some(quoted) = id.strip_prefix('"').and_then(|q| q.strip_suffix('"')) {
+            quoted
         } else {
             let len = ident_len(id, "-");
             if len == 0 || len != id.len() {
@@ -189,15 +187,11 @@ impl Parser<'_, '_> {
 
     fn statement(&mut self, stmt: &str) -> Result<(), DiagramError> {
         if let Some(e) = self.open {
-            if stmt == "}" {
+            let body = stmt.strip_suffix('}');
+            if body.is_some() {
                 self.open = None;
-                return Ok(());
             }
-            if let Some(body) = stmt.strip_suffix('}') {
-                self.open = None;
-                return self.attribute(e, body);
-            }
-            return self.attribute(e, stmt);
+            return self.attribute(e, body.unwrap_or(stmt));
         }
         let (word, rest) = first_word(stmt);
         match word {
@@ -208,17 +202,8 @@ impl Parser<'_, '_> {
                 }
                 return Ok(());
             }
-            "classDef" => {
-                self.styles.class_def(rest);
-                return Ok(());
-            }
-            "class" => {
-                let (ids, classes) = first_word(rest);
-                self.styles.assign(ids, classes);
-                return Ok(());
-            }
-            "style" => {
-                self.styles.style(rest);
+            "classDef" | "class" | "style" => {
+                self.styles.statement(word, rest);
                 return Ok(());
             }
             _ => {}
@@ -291,44 +276,19 @@ impl Parser<'_, '_> {
     fn relationship(&mut self, stmt: &str) -> Result<bool, DiagramError> {
         let colon = plain_colon(stmt);
         let head = &stmt[..colon.unwrap_or(stmt.len())];
-        let parsed = if let Some((a, b, from, to, identifying)) = symbolic(head) {
-            Some((head[..a].trim().to_string(), head[b..].trim().to_string(), from, to, identifying))
-        } else {
-            // `A only one to zero or more B`.
-            let words: Vec<&str> = head.split_whitespace().collect();
-            let to_at = words.iter().position(|w| *w == "to");
-            match to_at {
-                Some(t) if t >= 2 && words.len() >= t + 3 => {
-                    let optional = words[t - 1] == "optionally";
-                    let left_end = if optional { t - 1 } else { t };
-                    let from = word_card(&words[1..left_end]);
-                    let to = word_card(&words[t + 1..words.len() - 1]);
-                    match (from, to) {
-                        (Some(from), Some(to)) => Some((
-                            words[0].to_string(),
-                            words[words.len() - 1].to_string(),
-                            from,
-                            to,
-                            !optional,
-                        )),
-                        _ => None,
-                    }
-                }
-                _ => None,
-            }
+        let parsed = match symbolic(head) {
+            Some((a, b, from, to, identifying)) => Some((head[..a].trim(), head[b..].trim(), from, to, identifying)),
+            None => worded(head),
         };
         let Some((left, right, from_card, to_card, identifying)) = parsed else {
             return Ok(false);
         };
-        let (Some(from), Some(to)) = (self.entity(&left)?, self.entity(&right)?) else {
+        let (Some(from), Some(to)) = (self.entity(left)?, self.entity(right)?) else {
             self.cx.warn(self.line, "a relationship needs an entity on each side");
             return Ok(true);
         };
         self.cx.limits.check_count(self.relationships.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
-        let label = match colon.map(|c| unquote(&stmt[c + 1..])).filter(|l| !l.is_empty()) {
-            Some(l) => Some(self.cx.label(l)?),
-            None => None,
-        };
+        let label = colon.map(|c| unquote(&stmt[c + 1..])).filter(|l| !l.is_empty()).map(|l| self.cx.label(l)).transpose()?;
         self.relationships.push(Relationship {
             from,
             to,
@@ -341,28 +301,14 @@ impl Parser<'_, '_> {
     }
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]

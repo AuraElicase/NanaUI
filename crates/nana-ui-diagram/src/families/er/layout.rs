@@ -6,11 +6,11 @@ use nana_ui_core::RadiusTier;
 
 use super::Model;
 use crate::families::LayoutCx;
-use crate::families::graphkit::{self, HEADER_FILL, ROW_RULE};
+use crate::families::graphkit::{self, HEADER_FILL, ROW_RULE, author_font, padded, verbatim};
 use crate::ir::{Align, Dash, SceneBuilder};
 use crate::layout::{EdgeSpec, End, Graph, NodeSpec, RouteKind, layered};
 use crate::style;
-use crate::text::{FontSpec, LaidText, Label, Run};
+use crate::text::{LaidText, Label};
 use crate::{DiagramError, DiagramScene};
 
 /// One attribute row, measured: type, name, keys, comment.
@@ -21,6 +21,8 @@ struct Table {
     rows: Vec<Row>,
     header: f32,
     heights: Vec<f32>,
+    /// Column widths; zero for a column no row uses.
+    cols: [f32; 4],
 }
 
 pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScene, DiagramError> {
@@ -35,13 +37,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let col_gap = m.font_size * 0.9;
     let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
 
-    let plain = |text: &str, font: FontSpec| {
-        let label = Label {
-            lines: vec![vec![Run::plain(text.to_string())]],
-            markdown: false,
-        };
-        cx.text.lay(&label, font, None)
-    };
+    let plain = |text: &str, font| cx.text.lay(&verbatim(text), font, None);
 
     let mut tables = Vec::with_capacity(model.entities.len());
     let mut graph = Graph {
@@ -49,11 +45,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         ..Graph::default()
     };
     for entity in &model.entities {
-        let face = FontSpec {
-            weight: entity.style.font_weight.unwrap_or(name_font.weight),
-            italic: entity.style.italic.unwrap_or(false),
-            ..name_font
-        };
+        let face = author_font(name_font, &entity.style);
         let name = cx.text.lay(&Label::plain(&entity.label), face, Some(wrap * 1.5));
         let rows: Vec<Row> = entity
             .attributes
@@ -84,35 +76,23 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let header = name.height + 2.0 * pad_y;
         let body: f32 = heights.iter().sum();
         let width = (name.width.max(table_w) + 2.0 * pad_x).max(m.font_size * 6.0);
-        graph.nodes.push(NodeSpec {
-            size: [width, header + body],
-            cluster: None,
-            port_span: 0.7,
-        });
-        tables.push((
-            Table {
-                name,
-                rows,
-                header,
-                heights,
-            },
+        graph.nodes.push(NodeSpec::new([width, header + body]));
+        tables.push(Table {
+            name,
+            rows,
+            header,
+            heights,
             cols,
-        ));
+        });
     }
 
     let mut edge_labels = Vec::with_capacity(model.relationships.len());
     for rel in &model.relationships {
-        let laid = rel
-            .label
-            .as_ref()
-            .map(|l| cx.text.lay(l, small, Some(wrap)))
-            .filter(|l| !l.is_empty());
+        let laid = graphkit::edge_label(cx, rel.label.as_ref(), wrap);
         graph.edges.push(EdgeSpec {
             from: End::Node(rel.from),
             to: End::Node(rel.to),
-            label: laid
-                .as_ref()
-                .map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]),
+            label: laid.as_ref().map(|l| padded(l.size(), chip_pad)),
             min_len: 1,
             weight: 1,
         });
@@ -128,20 +108,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if route.kind == RouteKind::Dropped || route.points.len() < 2 {
             continue;
         }
-        let stroke = if rel.identifying {
-            style::edge_stroke()
-        } else {
-            style::edge_stroke().dash(Dash::Dashed)
-        };
-        graphkit::edge(
-            &mut out,
-            &route.points,
-            stroke,
-            Some(rel.from_card.marker()),
-            Some(rel.to_card.marker()),
-            marker,
-            m.bend_radius,
-        );
+        let stroke = if rel.identifying { style::edge_stroke() } else { style::edge_stroke().dash(Dash::Dashed) };
+        let (start, end) = (Some(rel.from_card.marker()), Some(rel.to_card.marker()));
+        graphkit::edge(&mut out, &route.points, stroke, start, end, marker, m.bend_radius);
     }
     for (i, laid) in edge_labels.iter().enumerate() {
         if let (Some(laid), Some(center)) = (laid, placed.edges[i].label) {
@@ -151,7 +120,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
 
     for (e, entity) in model.entities.iter().enumerate() {
         let rect = placed.nodes[e];
-        let (table, cols) = &tables[e];
+        let table = &tables[e];
         let paint = graphkit::node_paint(&entity.style);
         let band = (entity.style.fill.is_none() && !table.rows.is_empty()).then_some(HEADER_FILL);
         let header = if table.rows.is_empty() { 0.0 } else { table.header };
@@ -169,7 +138,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             }
             let mut x = rect.x + pad_x;
             for (k, cell) in row.iter().enumerate() {
-                if cols[k] <= 0.0 {
+                if table.cols[k] <= 0.0 {
                     continue;
                 }
                 if let Some(cell) = cell {
@@ -180,7 +149,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                     };
                     out.text(cell, [x, y + row_pad], cell.width, Align::Start, ink);
                 }
-                x += cols[k] + col_gap;
+                x += table.cols[k] + col_gap;
             }
             y += table.heights[r];
         }

@@ -61,13 +61,9 @@ impl Reader<'_> {
                         Some(slot) => slot.1 = value,
                         None => props.push((key, value)),
                     }
-                    if self.eat(b',') {
-                        continue;
+                    if !self.eat(b',') {
+                        return self.eat(b'}').then_some(Value::Object(props));
                     }
-                    if self.eat(b'}') {
-                        return Some(Value::Object(props));
-                    }
-                    return None;
                 }
             }
             b'[' => {
@@ -78,13 +74,9 @@ impl Reader<'_> {
                 }
                 loop {
                     items.push(self.value(depth + 1)?);
-                    if self.eat(b',') {
-                        continue;
+                    if !self.eat(b',') {
+                        return self.eat(b']').then_some(Value::Array(items));
                     }
-                    if self.eat(b']') {
-                        return Some(Value::Array(items));
-                    }
-                    return None;
                 }
             }
             b'"' => self.string().map(Value::Text),
@@ -181,12 +173,10 @@ fn flatten(value: &Value, path: String, out: &mut Vec<(String, String)>, max: us
             for (i, item) in items.iter().enumerate() {
                 // Arrays of scalars list their values under one key.
                 let scalar = !matches!(item, Value::Array(_) | Value::Object(_));
-                let p = if scalar && i > 0 {
-                    String::new()
-                } else if scalar {
-                    path.clone()
-                } else {
-                    format!("{path}[{i}]")
+                let p = match (scalar, i) {
+                    (false, _) => format!("{path}[{i}]"),
+                    (true, 0) => path.clone(),
+                    (true, _) => String::new(),
                 };
                 flatten(item, p, out, max);
             }

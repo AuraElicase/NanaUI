@@ -10,11 +10,9 @@ use std::collections::HashMap;
 
 use super::{Edge, EdgeKind, EndRef, Flow, Model, Node};
 use crate::families::ParseCx;
-use crate::families::graphkit::{
-    Styles, attributes, balanced, first_word, quoted_end, statements, unquote,
-};
+use crate::families::graphkit::{Styles, attributes, class_list, statements};
+use crate::families::kit::{self, balanced, first_word, quoted_end, truncate, unquote};
 use crate::geom::Shape;
-use crate::kind;
 use crate::layout::Direction;
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
@@ -81,31 +79,20 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         direction: Direction::TB,
         line: 0,
     };
-    let mut header = false;
-    for (index, stmt) in statements(body) {
-        p.line = index;
-        if !header {
-            let Some((_, rest)) = kind::header(&stmt) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected `agentflow-beta`"));
-            };
-            header = true;
-            let (first, tail) = first_word(rest);
-            match Direction::parse(first) {
-                Some(d) => {
-                    p.direction = d;
-                    if !tail.is_empty() {
-                        p.statement(tail)?;
-                    }
-                }
-                None if !rest.is_empty() => p.statement(rest)?,
-                None => {}
-            }
-            continue;
-        }
-        p.statement(&stmt)?;
+    let (header, mut rest) = kit::header(body)?;
+    p.line = header;
+    // `agentflow-beta LR`: the header may carry the direction.
+    let (first, tail) = first_word(rest);
+    if let Some(d) = Direction::parse(first) {
+        p.direction = d;
+        rest = tail;
     }
-    if !header {
-        return Err(DiagramError::Empty);
+    if !rest.is_empty() {
+        p.statement(rest)?;
+    }
+    for (line, stmt) in statements(body, header) {
+        p.line = line;
+        p.statement(&stmt)?;
     }
     if !p.stack.is_empty() {
         p.cx.warn(p.line, "a `flow` or `global` block is not closed with `end`");
@@ -229,11 +216,7 @@ impl<'s> Cur<'s> {
                 }
                 self.i += c.len_utf8();
             }
-            node.classes = self.s[start..self.i]
-                .split(',')
-                .map(|c| c.trim().to_string())
-                .filter(|c| !c.is_empty())
-                .collect();
+            node.classes = class_list(&self.s[start..self.i]);
         }
         Some(node)
     }
@@ -303,8 +286,7 @@ impl<'s> Cur<'s> {
             let ch = r.as_bytes()[0];
             let n = r.bytes().take_while(|&b| b == ch).count();
             let after = &r[n..];
-            if let Some(t) = after.strip_prefix('>') {
-                let _ = t;
+            if after.starts_with('>') {
                 self.i += n + 1;
                 Link {
                     kind: EdgeKind::Sequence,
@@ -320,10 +302,9 @@ impl<'s> Cur<'s> {
                     label: None,
                     len: n as u32 - 1,
                 }
-            } else if n == 2 && after.starts_with(char::is_whitespace) && after.contains(if ch == b'-' { "--" } else { "==" }) {
+            } else if n == 2 && after.starts_with(char::is_whitespace) && after.contains(&r[..2]) {
                 // `-- text -->`
-                let pair = if ch == b'-' { "--" } else { "==" };
-                let close = after.find(pair)?;
+                let close = after.find(&r[..2])?;
                 let text = after[..close].trim().to_string();
                 let tail = &after[close..];
                 let m = tail.bytes().take_while(|&b| b == ch).count();
@@ -409,17 +390,8 @@ impl Parser<'_, '_> {
                 }
                 return Ok(());
             }
-            "classDef" => {
-                self.styles.class_def(rest);
-                return Ok(());
-            }
-            "class" => {
-                let (ids, classes) = first_word(rest);
-                self.styles.assign(ids, classes);
-                return Ok(());
-            }
-            "style" => {
-                self.styles.style(rest);
+            "classDef" | "class" | "style" => {
+                self.styles.statement(word, rest);
                 return Ok(());
             }
             _ => {}
@@ -494,10 +466,7 @@ impl Parser<'_, '_> {
             self.cx.limits.check_label(&node.id)?;
             self.order.push(node.id.clone());
         }
-        let label = match &node.label {
-            Some(raw) => Some(self.cx.label(raw)?),
-            None => None,
-        };
+        let label = node.label.as_deref().map(|raw| self.cx.label(raw)).transpose()?;
         let mut attr_label = None;
         let mut attr_shape = None;
         for (k, v) in &node.attrs {
@@ -569,10 +538,7 @@ impl Parser<'_, '_> {
             for n in &right {
                 self.mention(n)?;
             }
-            let label = match link.label.as_deref().filter(|l| !l.trim().is_empty()) {
-                Some(raw) => Some(self.cx.label(raw)?),
-                None => None,
-            };
+            let label = link.label.as_deref().filter(|l| !l.trim().is_empty()).map(|raw| self.cx.label(raw)).transpose()?;
             for a in &left {
                 for b in &right {
                     self.cx.limits.check_count(self.edges.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
@@ -640,28 +606,14 @@ impl Parser<'_, '_> {
     }
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     fn node<'m>(m: &'m Model, id: &str) -> &'m Node {

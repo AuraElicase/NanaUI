@@ -7,12 +7,12 @@ use nana_ui_core::RadiusTier;
 
 use super::{Model, RelKind};
 use crate::families::LayoutCx;
-use crate::families::graphkit::{self, HEADER_FILL};
+use crate::families::graphkit::{self, HEADER_FILL, author_font, padded, verbatim};
 use crate::geom::Marker;
 use crate::ir::{Align, Dash, SceneBuilder};
 use crate::layout::{EdgeSpec, End, Graph, NodeSpec, RouteKind, layered};
 use crate::style;
-use crate::text::{FontSpec, LaidText, Label, Run};
+use crate::text::LaidText;
 use crate::{DiagramError, DiagramScene};
 
 struct Laid {
@@ -31,13 +31,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let pad_y = m.node_pad_y * 0.8;
     let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
 
-    let plain = |text: String, font: FontSpec, max: Option<f32>| {
-        let label = Label {
-            lines: vec![vec![Run::plain(text)]],
-            markdown: false,
-        };
-        cx.text.lay(&label, font, max)
-    };
+    let plain = |text: String, font, max| cx.text.lay(&verbatim(text), font, max);
 
     let mut boxes = Vec::with_capacity(model.blocks.len());
     let mut graph = Graph {
@@ -46,12 +40,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     };
     for block in &model.blocks {
         let kind = plain(format!("«{}»", block.kind.title()), small, None);
-        let face = FontSpec {
-            weight: block.style.font_weight.unwrap_or(name_font.weight),
-            italic: block.style.italic.unwrap_or(false),
-            ..name_font
-        };
-        let name = plain(block.id.clone(), face, Some(wrap * 1.2));
+        let name = plain(block.id.clone(), author_font(name_font, &block.style), Some(wrap * 1.2));
         let fields: Vec<LaidText> = block
             .fields
             .iter()
@@ -67,11 +56,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         } else {
             fields.iter().map(|f| f.height).sum::<f32>() + 2.0 * pad_y
         };
-        graph.nodes.push(NodeSpec {
-            size: [(widest + 2.0 * pad_x).max(m.font_size * 8.0), header + body],
-            cluster: None,
-            port_span: 0.7,
-        });
+        graph.nodes.push(NodeSpec::new([(widest + 2.0 * pad_x).max(m.font_size * 8.0), header + body]));
         boxes.push(Laid {
             kind,
             name,
@@ -86,7 +71,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         graph.edges.push(EdgeSpec {
             from: End::Node(rel.from),
             to: End::Node(rel.to),
-            label: Some([laid.width + 2.0 * chip_pad[0], laid.height + 2.0 * chip_pad[1]]),
+            label: Some(padded(laid.size(), chip_pad)),
             min_len: 1,
             weight: 1,
         });

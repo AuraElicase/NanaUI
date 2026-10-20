@@ -7,10 +7,11 @@ use nana_ui_core::RadiusTier;
 
 use super::{EdgeKind, EndRef, Model};
 use crate::families::LayoutCx;
-use crate::families::graphkit;
+use crate::families::graphkit::{self, author_font, padded};
 use crate::geom::{Marker, Shape};
 use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
 use crate::layout::{self, ClusterSpec, EdgeSpec, End, Graph, NodeSpec, RouteKind, layered};
+use crate::source::directives::AuthorStyle;
 use crate::style;
 use crate::text::{FontSpec, LaidText};
 use crate::{DiagramError, DiagramScene};
@@ -32,23 +33,17 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
     let title_font = FontSpec::new(m.small_size).weight(m.strong_weight);
 
-    // The outermost collapsed flow hiding each flow (itself included).
+    // The outermost collapsed flow hiding each flow (itself included),
+    // bounded against parent cycles.
     let nf = model.flows.len();
-    let mut folded: Vec<Option<usize>> = vec![None; nf];
-    for (f, slot) in folded.iter_mut().enumerate() {
-        let mut cur = Some(f);
-        let mut guard = 0;
-        while let Some(c) = cur {
-            if model.flows[c].collapsed {
-                *slot = Some(c);
-            }
-            cur = model.flows[c].parent;
-            guard += 1;
-            if guard > nf {
-                break;
-            }
-        }
-    }
+    let folded: Vec<Option<usize>> = (0..nf)
+        .map(|f| {
+            std::iter::successors(Some(f), |&c| model.flows[c].parent)
+                .take(nf + 1)
+                .filter(|&c| model.flows[c].collapsed)
+                .last()
+        })
+        .collect();
     // Groups that still draw, renumbered.
     let mut cluster_of_flow = vec![None; nf];
     let mut clusters = Vec::new();
@@ -71,12 +66,7 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if node.flow.and_then(|f| folded[f]).is_some() {
             continue;
         }
-        let face = FontSpec {
-            weight: node.style.font_weight.unwrap_or(font.weight),
-            italic: node.style.italic.unwrap_or(false),
-            ..font
-        };
-        let laid = cx.text.lay(&node.label, face, Some(wrap));
+        let laid = cx.text.lay(&node.label, author_font(font, &node.style), Some(wrap));
         node_item[n] = items.len();
         graph.nodes.push(NodeSpec {
             size: node.shape.size(laid.size(), pad),
@@ -99,12 +89,8 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let more = cx.text.lay_plain("···", small);
         collapsed_item[f] = items.len();
         graph.nodes.push(NodeSpec {
-            size: [
-                laid.width.max(more.width) + 2.0 * pad[0],
-                laid.height + more.height + 2.0 * pad[1],
-            ],
             cluster: container(flow.parent),
-            port_span: 0.7,
+            ..NodeSpec::new(padded([laid.width.max(more.width), laid.height + more.height], pad))
         });
         items.push(Item::Collapsed(f));
         labels.push(laid);
@@ -141,17 +127,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         if from == to && matches!(from, End::Node(k) if matches!(items[k], Item::Collapsed(_))) {
             continue;
         }
-        let laid = e
-            .label
-            .as_ref()
-            .map(|l| cx.text.lay(l, small, Some(wrap)))
-            .filter(|l| !l.is_empty());
+        let laid = graphkit::edge_label(cx, e.label.as_ref(), wrap);
         graph.edges.push(EdgeSpec {
             from,
             to,
-            label: laid
-                .as_ref()
-                .map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]),
+            label: laid.as_ref().map(|l| padded(l.size(), chip_pad)),
             min_len: e.min_len,
             weight: 1,
         });
@@ -234,12 +214,11 @@ fn collapsed(
     out: &mut SceneBuilder,
     rect: Rect,
     title: &LaidText,
-    author: &crate::source::directives::AuthorStyle,
+    author: &AuthorStyle,
     cx: &LayoutCx<'_>,
     pad_y: f32,
 ) {
-    let fill = author.fill.map_or(style::CLUSTER_FILL, Ink::Rgba);
-    let stroke = graphkit::line_stroke(style::cluster_stroke(), author);
+    let (fill, stroke) = graphkit::cluster_inks(author);
     out.shape(
         Geom::Rect {
             rect,

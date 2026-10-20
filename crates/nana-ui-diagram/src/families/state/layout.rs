@@ -4,14 +4,14 @@
 
 use nana_ui_core::RadiusTier;
 
-use super::{Kind, Model, Scope};
+use super::{Kind, Model, Scope, State};
 use crate::families::LayoutCx;
-use crate::families::graphkit;
+use crate::families::graphkit::{self, author_font, padded};
 use crate::geom::{Marker, PathData, Shape};
-use crate::ir::{Align, Corner, Dash, Geom, Ink, Rect, SceneBuilder, Stroke};
+use crate::ir::{Align, Corner, Dash, Geom, Rect, SceneBuilder, Stroke};
 use crate::layout::{ClusterSpec, EdgeSpec, End, Graph, NodeSpec, RouteKind, layered};
 use crate::style;
-use crate::text::{FontSpec, LaidText};
+use crate::text::{FontSpec, LaidText, Label};
 use crate::{DiagramError, DiagramScene};
 
 enum Body {
@@ -29,17 +29,16 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let wrap = cx.wrap_width("state.wrappingWidth");
     let pad = [m.node_pad_x, m.node_pad_y];
     let chip_pad = [m.small_size * 0.45, m.small_size * 0.15];
-    let note_pad = [m.node_pad_x * 0.6, m.node_pad_y * 0.7];
+    let note_pad = graphkit::note_pad(&m);
     let dot = m.font_size;
     let bar = [m.font_size * 4.6, m.font_size * 0.5];
+    let name = |state: &State| state.label.clone().unwrap_or_else(|| Label::plain(&state.id));
 
     // Clusters: composites first, then each composite's regions.
     let nc = model.composites.len();
     let mut region_base = vec![usize::MAX; nc];
-    let mut clusters: Vec<(Option<usize>, Option<usize>)> = Vec::new(); // (composite, parent cluster)
-    for c in 0..nc {
-        clusters.push((Some(c), None));
-    }
+    // (composite, parent cluster)
+    let mut clusters: Vec<(Option<usize>, Option<usize>)> = (0..nc).map(|c| (Some(c), None)).collect();
     for (c, comp) in model.composites.iter().enumerate() {
         if comp.regions > 0 {
             region_base[c] = clusters.len();
@@ -59,25 +58,16 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for (c, comp) in model.composites.iter().enumerate() {
         clusters[c].1 = cluster_of(comp.scope);
     }
-    // The direction each level is likely to run in, for fork bars.
-    let mut cluster_dir = vec![model.direction; clusters.len()];
-    for (i, slot) in cluster_dir.iter_mut().enumerate() {
-        let mut dir = None;
-        let mut cur = Some(i);
-        let mut guard = 0;
-        while let Some(k) = cur {
-            if let Some(d) = clusters[k].0.and_then(|c| model.composites[c].direction) {
-                dir = Some(d);
-                break;
-            }
-            cur = clusters[k].1;
-            guard += 1;
-            if guard > clusters.len() {
-                break;
-            }
-        }
-        *slot = dir.unwrap_or(model.direction);
-    }
+    // The direction each level is likely to run in, for fork bars: the
+    // nearest composite's up the chain (bounded against parent cycles).
+    let cluster_dir: Vec<_> = (0..clusters.len())
+        .map(|i| {
+            std::iter::successors(Some(i), |&k| clusters[k].1)
+                .take(clusters.len() + 1)
+                .find_map(|k| clusters[k].0.and_then(|c| model.composites[c].direction))
+                .unwrap_or(model.direction)
+        })
+        .collect();
     let dir_of = |cluster: Option<usize>| cluster.map_or(model.direction, |c| cluster_dir[c]);
 
     let mut graph = Graph {
@@ -102,26 +92,14 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 (Body::Mark, size)
             }
             Kind::Normal => {
-                let face = FontSpec {
-                    weight: state.style.font_weight.unwrap_or(font.weight),
-                    italic: state.style.italic.unwrap_or(false),
-                    ..font
-                };
+                let face = author_font(font, &state.style);
                 if state.descriptions.len() == 1 && state.label.is_none() || state.descriptions.is_empty() {
-                    let label = state.descriptions.first().cloned().or_else(|| state.label.clone());
-                    let label = label.unwrap_or_else(|| crate::text::Label::plain(&state.id));
+                    let label = state.descriptions.first().cloned().unwrap_or_else(|| name(state));
                     let laid = cx.text.lay(&label, face, Some(wrap));
-                    let size = [
-                        (laid.width + 2.0 * pad[0]).max(m.font_size * 3.5),
-                        laid.height + 2.0 * pad[1],
-                    ];
-                    (Body::Plain(laid), size)
+                    let size = padded(laid.size(), pad);
+                    (Body::Plain(laid), [size[0].max(m.font_size * 3.5), size[1]])
                 } else {
-                    let title_label = state
-                        .label
-                        .clone()
-                        .unwrap_or_else(|| crate::text::Label::plain(&state.id));
-                    let title = cx.text.lay(&title_label, face.weight(m.strong_weight), Some(wrap));
+                    let title = cx.text.lay(&name(state), face.weight(m.strong_weight), Some(wrap));
                     let lines: Vec<LaidText> = state
                         .descriptions
                         .iter()
@@ -146,12 +124,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     let mut notes = Vec::with_capacity(model.notes.len());
     for note in &model.notes {
         let laid = cx.text.lay(&note.text, small, Some(wrap));
-        let size = [laid.width + 2.0 * note_pad[0], laid.height + 2.0 * note_pad[1]];
-        let cluster = note.target.and_then(|t| target_cluster(model, t, &cluster_of));
         graph.nodes.push(NodeSpec {
-            size,
-            cluster,
-            port_span: 0.7,
+            cluster: note.target.and_then(|t| cluster_of(model.states[t].scope)),
+            ..NodeSpec::new(padded(laid.size(), note_pad))
         });
         notes.push(laid);
     }
@@ -161,10 +136,9 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     for &(comp, parent) in &clusters {
         let (title, direction) = match comp {
             Some(c) => {
-                let state = &model.states[model.composites[c].state];
-                let label = state.label.clone().unwrap_or_else(|| crate::text::Label::plain(&state.id));
-                let direction = if model.composites[c].regions > 0 { None } else { model.composites[c].direction };
-                (Some(cx.text.lay(&label, title_font, Some(wrap * 1.5))), direction)
+                let comp = &model.composites[c];
+                let direction = if comp.regions > 0 { None } else { comp.direction };
+                (Some(cx.text.lay(&name(&model.states[comp.state]), title_font, Some(wrap * 1.5))), direction)
             }
             // Regions take their composite's direction.
             None => (None, parent.and_then(|p| model.composites.get(p)).and_then(|c| c.direction)),
@@ -185,17 +159,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
     };
     let mut edge_labels = Vec::with_capacity(model.transitions.len());
     for t in &model.transitions {
-        let laid = t
-            .label
-            .as_ref()
-            .map(|l| cx.text.lay(l, small, Some(wrap)))
-            .filter(|l| !l.is_empty());
+        let laid = graphkit::edge_label(cx, t.label.as_ref(), wrap);
         graph.edges.push(EdgeSpec {
             from: end_of(t.from),
             to: end_of(t.to),
-            label: laid
-                .as_ref()
-                .map(|l| [l.width + 2.0 * chip_pad[0], l.height + 2.0 * chip_pad[1]]),
+            label: laid.as_ref().map(|l| padded(l.size(), chip_pad)),
             min_len: 1,
             weight: 1,
         });
@@ -247,12 +215,12 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
                 graphkit::attach(&mut points, &outline, placed.nodes[n], at_end);
             }
         }
-        if i < model.transitions.len() {
-            graphkit::edge(&mut out, &points, style::edge_stroke(), None, Some(Marker::Arrow), marker, m.bend_radius);
+        let (stroke, head) = if i < model.transitions.len() {
+            (style::edge_stroke(), Some(Marker::Arrow))
         } else {
-            let stroke = Stroke::hairline(style::NOTE_STROKE).dash(Dash::Dashed);
-            graphkit::edge(&mut out, &points, stroke, None, None, marker, m.bend_radius);
-        }
+            (Stroke::hairline(style::NOTE_STROKE).dash(Dash::Dashed), None)
+        };
+        graphkit::edge(&mut out, &points, stroke, None, head, marker, m.bend_radius);
     }
     for (i, laid) in edge_labels.iter().enumerate() {
         if let (Some(laid), Some(center)) = (laid, placed.edges[i].label) {
@@ -265,14 +233,11 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
         let state = &model.states[owners[n]];
         let rect = placed.nodes[n];
         let paint = graphkit::node_paint(&state.style);
-        let solid = match paint.fill {
-            Ink::Rgba(_) => paint.fill,
-            _ => style::TEXT,
-        };
+        let solid = graphkit::solid_ink(paint.fill);
         match state.kind {
             Kind::Start => out.fill(Geom::Ellipse(rect), solid),
             Kind::End => {
-                out.shape(Geom::Ellipse(rect), Some(paint.fill), Some(Stroke { ..paint.stroke }));
+                out.shape(Geom::Ellipse(rect), Some(paint.fill), Some(paint.stroke));
                 let inset = rect.w * 0.22;
                 out.fill(Geom::Ellipse(rect.inset(inset, inset)), solid);
             }
@@ -310,20 +275,14 @@ pub(super) fn layout(model: &Model, cx: &mut LayoutCx<'_>) -> Result<DiagramScen
             },
         }
     }
+    let note_paint = graphkit::note_paint(&Default::default());
     for (i, laid) in notes.iter().enumerate() {
-        let paint = graphkit::note_paint(&Default::default());
-        graphkit::note(&mut out, placed.nodes[first_note + i], laid, note_pad, &paint);
+        graphkit::note(&mut out, placed.nodes[first_note + i], laid, note_pad, &note_paint);
     }
 
     let content = out.bounds().union(&placed.bounds);
     let content = cx.title_above(&mut out, content);
     Ok(out.finish(content, m.margin))
-}
-
-/// The cluster a note about state `t` joins: the state's own, or for a
-/// composite, the one around it.
-fn target_cluster(model: &Model, t: usize, cluster_of: &dyn Fn(Scope) -> Option<usize>) -> Option<usize> {
-    cluster_of(model.states[t].scope)
 }
 
 /// Outlines that edges should meet exactly: dots and diamonds.

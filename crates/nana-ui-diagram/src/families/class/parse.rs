@@ -7,9 +7,9 @@ use std::collections::HashMap;
 
 use super::{Class, Member, Model, Namespace, Note, Relation};
 use crate::families::ParseCx;
-use crate::families::graphkit::{Styles, first_word, ident_len, plain_colon, split_classes, unquote};
+use crate::families::graphkit::{Styles, plain_colon, split_classes};
+use crate::families::kit::{self, first_name, first_word, ident_len, truncate, unquote};
 use crate::geom::Marker;
-use crate::kind;
 use crate::layout::Direction;
 use crate::text::Label;
 use crate::{DiagramError, LimitKind};
@@ -49,27 +49,14 @@ pub(super) fn parse(body: &str, cx: &mut ParseCx<'_>) -> Result<Model, DiagramEr
         members: 0,
         line: 0,
     };
-    let mut header = false;
-    for (index, raw) in body.lines().enumerate() {
-        p.line = index;
-        let line = raw.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if !header {
-            let Some((_, rest)) = kind::header(line) else {
-                return Err(DiagramError::syntax(index as u32 + 1, 1, "expected `classDiagram`"));
-            };
-            header = true;
-            if !rest.is_empty() {
-                p.statement(rest)?;
-            }
-            continue;
-        }
-        p.statement(line)?;
+    let (header, rest) = kit::header(body)?;
+    p.line = header;
+    if !rest.is_empty() {
+        p.statement(rest)?;
     }
-    if !header {
-        return Err(DiagramError::Empty);
+    for (line, stmt) in kit::statements(body, header) {
+        p.line = line;
+        p.statement(stmt)?;
     }
     if !p.stack.is_empty() {
         p.cx.warn(p.line, "a `{` block is not closed");
@@ -335,18 +322,13 @@ impl Parser<'_, '_> {
             }
             return Ok(());
         }
-        if let Some(Block::Class(c)) = self.stack.last() {
-            let c = *c;
-            if stmt == "}" {
+        if let Some(&Block::Class(c)) = self.stack.last() {
+            let body = stmt.strip_suffix('}');
+            self.add_member(c, body.unwrap_or(stmt))?;
+            if body.is_some() {
                 self.stack.pop();
-                return Ok(());
             }
-            if let Some(body) = stmt.strip_suffix('}') {
-                self.add_member(c, body)?;
-                self.stack.pop();
-                return Ok(());
-            }
-            return self.add_member(c, stmt);
+            return Ok(());
         }
         if stmt == "}" {
             if self.stack.pop().is_none() {
@@ -363,21 +345,14 @@ impl Parser<'_, '_> {
                 }
                 return Ok(());
             }
-            "classDef" => {
-                self.styles.class_def(rest);
+            // `class` declares a class here, so only these style statements.
+            "classDef" | "style" => {
+                self.styles.statement(word, rest);
                 return Ok(());
             }
             "cssClass" => {
-                let rest = rest.trim();
-                let (ids, class) = match rest.strip_prefix('"').and_then(|r| r.split_once('"')) {
-                    Some((ids, class)) => (ids, class.trim()),
-                    None => first_word(rest),
-                };
+                let (ids, class) = first_name(rest);
                 self.styles.assign(ids, class);
-                return Ok(());
-            }
-            "style" => {
-                self.styles.style(rest);
                 return Ok(());
             }
             "click" | "link" => {
@@ -429,8 +404,7 @@ impl Parser<'_, '_> {
         }
         // `Name["Label"]`: Mermaid's display label.
         let mut label = None;
-        let (head, inline) = split_classes(rest);
-        let mut head = head;
+        let (mut head, inline) = split_classes(rest);
         if let Some(i) = head.find('[')
             && head.ends_with(']')
         {
@@ -544,10 +518,7 @@ impl Parser<'_, '_> {
             return Ok(());
         };
         self.cx.limits.check_count(self.relations.len() + 1, self.cx.limits.edges, LimitKind::Edges)?;
-        let label = match parts.label.map(unquote).filter(|l| !l.is_empty()) {
-            Some(l) => Some(self.cx.label(l)?),
-            None => None,
-        };
+        let label = parts.label.map(unquote).filter(|l| !l.is_empty()).map(|l| self.cx.label(l)).transpose()?;
         for card in [&from_card, &to_card].into_iter().flatten() {
             self.cx.limits.check_label(card)?;
         }
@@ -578,28 +549,14 @@ impl Parser<'_, '_> {
     }
 }
 
-fn truncate(s: &str) -> String {
-    s.chars().take(40).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::Config;
-    use crate::{Limits, Meta};
 
     fn parse_src(src: &str) -> Model {
-        let limits = Limits::DEFAULT;
-        let config = Config::default();
-        let mut cx = ParseCx {
-            limits: &limits,
-            config: &config,
-            meta: Meta::default(),
-            warnings: Vec::new(),
-        };
-        let model = parse(src, &mut cx).unwrap();
-        assert!(cx.warnings.is_empty(), "{:?}", cx.warnings);
-        model
+        let (model, warnings, _) = crate::families::parse_for_test(src, parse);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        model.unwrap()
     }
 
     #[test]
