@@ -177,6 +177,31 @@ impl Styles {
     }
 }
 
+/// The first `:` that is not part of `:::`, outside quotes.
+pub(crate) fn plain_colon(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut quote = false;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => quote = !quote,
+            b':' if !quote => {
+                if bytes[i..].starts_with(b":::") {
+                    i += 3;
+                    while i < bytes.len() && bytes[i] == b':' {
+                        i += 1;
+                    }
+                    continue;
+                }
+                return Some(i);
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
 /// Split `name:::a,b` into the name and its classes.
 pub(crate) fn split_classes(s: &str) -> (&str, Vec<String>) {
     match s.find(":::") {
