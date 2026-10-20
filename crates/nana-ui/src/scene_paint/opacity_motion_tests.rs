@@ -293,7 +293,12 @@ fn nested_opacity_motion_matches_static_group_composition() {
         [64; 2],
         1.0,
     );
-    for (actual, expected) in actual.chunks_exact(4).zip(expected.chunks_exact(4)) {
+    for (actual, expected) in actual
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(expected.as_chunks::<4>().0)
+    {
         assert!(
             actual
                 .iter()
