@@ -1117,8 +1117,13 @@ fn runtime_fixture(
         }
         Component::AppMenuBar => {
             let context = document.context_mut();
-            let bar = context
-                .create_component(document_id, RuntimeAppMenuBar::new(app_menu_bar_model()))?;
+            // The semantic baseline is checked on every OS; one notation keeps
+            // the shortcut column the same width on each.
+            let bar = context.create_component(
+                document_id,
+                RuntimeAppMenuBar::new(app_menu_bar_model())
+                    .shortcut_notation(nana_ui::runtime::ShortcutNotation::Symbols),
+            )?;
             context.assemble_app_menu_bar(bar)?;
             bar.stable_id()
         }

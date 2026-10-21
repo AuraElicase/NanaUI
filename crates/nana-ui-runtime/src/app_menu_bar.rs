@@ -108,6 +108,9 @@ pub struct AppMenuBar {
     /// Alt pressed and released alone gives the bar the keyboard. F10 always
     /// does.
     pub alt_key: bool,
+    /// How the shortcut text beside an item is spelled; the host's
+    /// convention unless set.
+    pub shortcut_notation: ShortcutNotation,
     pub style: NodeStyle,
     pub(crate) state: MenuBarState,
     pub(crate) parts: Option<MenuBarParts>,
@@ -118,6 +121,7 @@ impl AppMenuBar {
         Self {
             bar,
             alt_key: true,
+            shortcut_notation: ShortcutNotation::HOST,
             style: bar_style(),
             state: MenuBarState::default(),
             parts: None,
@@ -132,6 +136,11 @@ impl AppMenuBar {
 
     pub fn alt_key(mut self, alt_key: bool) -> Self {
         self.alt_key = alt_key;
+        self
+    }
+
+    pub fn shortcut_notation(mut self, notation: ShortcutNotation) -> Self {
+        self.shortcut_notation = notation;
         self
     }
 
@@ -454,38 +463,60 @@ fn heading_for(from: (f32, f32), at: (f32, f32), target: LayoutBox) -> bool {
     !(negative && positive)
 }
 
-/// Platform-conventional text for a shortcut: `Ctrl+Shift+S`, `⇧⌘S`.
-pub fn menu_shortcut_label(shortcut: &MenuShortcut) -> String {
-    let key = if shortcut.key.chars().count() == 1 {
-        shortcut.key.to_uppercase()
+/// How shortcut text is spelled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutNotation {
+    /// The macOS symbols: `⇧⌘S`.
+    Symbols,
+    /// Modifier names joined by `+`: `Ctrl+Shift+S`.
+    Names,
+}
+
+impl ShortcutNotation {
+    /// The convention of the platform this was built for.
+    pub const HOST: Self = if cfg!(target_os = "macos") {
+        Self::Symbols
     } else {
-        shortcut.key.clone()
+        Self::Names
     };
-    if cfg!(target_os = "macos") {
-        let mut text = String::new();
-        for (on, mark) in [
-            (shortcut.alt, "⌥"),
-            (shortcut.shift, "⇧"),
-            (shortcut.primary, "⌘"),
+
+    pub fn label(self, shortcut: &MenuShortcut) -> String {
+        let key = if shortcut.key.chars().count() == 1 {
+            shortcut.key.to_uppercase()
+        } else {
+            shortcut.key.clone()
+        };
+        if self == Self::Symbols {
+            let mut text = String::new();
+            for (on, mark) in [
+                (shortcut.alt, "⌥"),
+                (shortcut.shift, "⇧"),
+                (shortcut.primary, "⌘"),
+            ] {
+                if on {
+                    text.push_str(mark);
+                }
+            }
+            return text + &key;
+        }
+        let mut parts = Vec::new();
+        for (on, name) in [
+            (shortcut.primary, "Ctrl"),
+            (shortcut.alt, "Alt"),
+            (shortcut.shift, "Shift"),
         ] {
             if on {
-                text.push_str(mark);
+                parts.push(name);
             }
         }
-        return text + &key;
+        parts.push(&key);
+        parts.join("+")
     }
-    let mut parts = Vec::new();
-    for (on, name) in [
-        (shortcut.primary, "Ctrl"),
-        (shortcut.alt, "Alt"),
-        (shortcut.shift, "Shift"),
-    ] {
-        if on {
-            parts.push(name);
-        }
-    }
-    parts.push(&key);
-    parts.join("+")
+}
+
+/// Platform-conventional text for a shortcut: `Ctrl+Shift+S`, `⇧⌘S`.
+pub fn menu_shortcut_label(shortcut: &MenuShortcut) -> String {
+    ShortcutNotation::HOST.label(shortcut)
 }
 
 impl ComponentView for AppMenuBar {
@@ -782,7 +813,11 @@ fn menu_height(entries: &[MenuEntry], row: f32) -> f32 {
     2.0 * inset + rows + MENU_ITEM_GAP * entries.len().saturating_sub(1) as f32
 }
 
-fn menu_width(entries: &[MenuEntry], metrics: nana_ui_core::ThemeMetrics) -> f32 {
+fn menu_width(
+    entries: &[MenuEntry],
+    notation: ShortcutNotation,
+    metrics: nana_ui_core::ThemeMetrics,
+) -> f32 {
     let size = ControlSize::Small;
     let mut label = 0.0f32;
     let mut hint = estimated_text_width(SUBMENU, nana_ui_core::type_scale::HINT);
@@ -796,7 +831,7 @@ fn menu_width(entries: &[MenuEntry], metrics: nana_ui_core::ThemeMetrics) -> f32
                 label = label.max(estimated_text_width(text, size.text_size()));
                 if let Some(shortcut) = shortcut {
                     hint = hint.max(estimated_text_width(
-                        &menu_shortcut_label(shortcut),
+                        &notation.label(shortcut),
                         nana_ui_core::type_scale::HINT,
                     ));
                 }
@@ -1140,7 +1175,7 @@ impl AppContext {
         let bar_box = self.world().component_layout_box(bar.stable_id());
         let mut rects: Vec<LayoutBox> = Vec::with_capacity(open.len());
         for (level, menu) in open.iter().enumerate() {
-            let width = menu_width(&menu.entries, metrics);
+            let width = menu_width(&menu.entries, snapshot.shortcut_notation, metrics);
             let height = menu_height(&menu.entries, row);
             let (mut x, mut y) = match level.checked_sub(1) {
                 None => {
@@ -1210,7 +1245,7 @@ impl AppContext {
                         label.clone(),
                         shortcut
                             .as_ref()
-                            .map(menu_shortcut_label)
+                            .map(|shortcut| snapshot.shortcut_notation.label(shortcut))
                             .unwrap_or_default(),
                         *enabled,
                         *checked,
@@ -1396,12 +1431,15 @@ mod tests {
 
     #[test]
     fn shortcut_text_follows_the_platform() {
-        let label = menu_shortcut_label(&MenuShortcut::primary("s").shift());
-        if cfg!(target_os = "macos") {
-            assert_eq!(label, "⇧⌘S");
+        let shortcut = MenuShortcut::primary("s").shift();
+        assert_eq!(ShortcutNotation::Symbols.label(&shortcut), "⇧⌘S");
+        assert_eq!(ShortcutNotation::Names.label(&shortcut), "Ctrl+Shift+S");
+        let host = if cfg!(target_os = "macos") {
+            "⇧⌘S"
         } else {
-            assert_eq!(label, "Ctrl+Shift+S");
-        }
+            "Ctrl+Shift+S"
+        };
+        assert_eq!(menu_shortcut_label(&shortcut), host);
     }
 
     #[test]
