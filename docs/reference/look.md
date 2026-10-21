@@ -46,7 +46,7 @@ Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-sh
 
 - **自定义整套主题**：构造一份 `ThemeDefinition`（可从 `ThemeDefinition::NANA_DARK` 或 `NANA_LIGHT` 派生，只修改需要定制的档位，但必须填齐所有组件配方槽位），调用 `nana_ui::theme::install_theme_definition(&mut context, &definition)` 或交由宿主的 `ThemeRegistry` 注册。它会一次性替换颜色、尺寸、排版、动效时长、阴影与组件配方。
 - **系统高对比度**：当操作系统开启高对比度模式时，原生宿主调用 `AppContext::set_high_contrast(true)`。此时已安装的深色主题自动改用 `SemanticPalette::high_contrast()`（黑底、白字、黄强调、青高亮），浅色主题改用 `SemanticPalette::high_contrast_light()`（白底、黑字、深蓝强调）；`muted` 与 `faint` 保持与正文可区分的灰度，避免禁用态文字看起来像可用状态。高对比度是渲染期的策略覆盖（policy overlay），不改写已安装主题本身——关闭高对比度即可原样恢复，期间新安装的主题也会自动套用高对比度覆盖。
-- **公共导出面**：`nana_ui::theme` 导出了构成主题定义的全部 token 与配方类型，包括 `ThemeMetrics`、`SwitchMetrics`、`TreeMetrics`、`TypographyTokens`、`MotionTokens`、`EffectTokens`、`SpacingTokens`、`BorderTokens`、`OpacityTokens`、`SurfaceTokens`、`AccentRamp`、`ComponentThemeRegistry`、各类 recipe draft（如 `ButtonVariantDraft`）、组件配方（如 `DialogRecipe`、`ToastRecipe` 及其 `ToastIndicator` / `ToastGlyphs` / `ToastProgressRecipe` / `ToastMotion`），以及 `ThemeId`、`ThemeSchemaVersion`、`ThemeGeneration`。节点级命名尺寸使用的 `RadiusTier`、`ControlHeight`、`ControlPadding`、`SurfacePadding`、`SquareSize` 与 `SemanticColorMix` 同样从这里导入，应用无需直接依赖 `nana-ui-core`。
+- **公共导出面**：`nana_ui::theme` 导出了构成主题定义的全部 token 与配方类型，包括 `ThemeMetrics`、`SwitchMetrics`、`TreeMetrics`、`KeycapMetrics`、`TypographyTokens`、`MotionTokens`、`EffectTokens`、`SpacingTokens`、`BorderTokens`、`OpacityTokens`、`SurfaceTokens`、`AccentRamp`、`ComponentThemeRegistry`、各类 recipe draft（如 `ButtonVariantDraft`）、组件配方（如 `DialogRecipe`、`ToastRecipe` 及其 `ToastIndicator` / `ToastGlyphs` / `ToastProgressRecipe` / `ToastMotion`），以及 `ThemeId`、`ThemeSchemaVersion`、`ThemeGeneration`。节点级命名尺寸使用的 `RadiusTier`、`ControlHeight`、`ControlPadding`、`SurfacePadding`、`SquareSize` 与 `SemanticColorMix` 同样从这里导入，应用无需直接依赖 `nana-ui-core`。
 
 > 如果你要修改框架自身的主题架构或审计组件硬编码，请先阅读维护者文档 [主题审计记录](theme.md)。
 
@@ -77,7 +77,8 @@ Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-sh
 - **`ThemeMetrics::switch`（`SwitchMetrics`）**：默认 `30×16 px` 轨道，配 `8 px` 标签间距。无标签的 `Switch` 会直接按已安装主题的轨道宽度定宽，不额外加内边距，因此放进设置行尾时无需手动计算宽度。
 - **`ThemeMetrics::scrollbar`**：管理滚动条车道、静止与激活滑块厚度及内缩；其配色、动效和显隐策略则位于 `ScrollbarRecipe`。
 - **`ThemeMetrics::tree`（`TreeMetrics`）**：管理 `TreeView` 的行间距（`row_gap`）、每层缩进（`indent`）、行内边距（`inset`）、展开三角方块（`disclosure`）与行图标方块（`icon`），默认常量 `TREE_METRICS` 为 `2 / 12 / 4 / 16 / 12`。
-- **紧凑密度预设（`COMPACT_METRICS`）**：面向专业工具检查器与高密度面板（20 px 小号控件、24 px 中号控件，内边距收紧，树行无间距、每层缩进 10 px），可通过 `ThemeDefinition::with_metrics(nana_ui::theme::COMPACT_METRICS)` 安装。
+- **`ThemeMetrics::keycap`（`KeycapMetrics`）**：管理 `kbd` / `chord` 键帽的高度（`height`，也是单字母键帽的最小宽度）与底边厚度（`edge`），默认常量 `KEYCAP_METRICS` 为 `24 / 2`。
+- **紧凑密度预设（`COMPACT_METRICS`）**：面向专业工具检查器与高密度面板（20 px 小号控件、24 px 中号控件，内边距收紧，树行无间距、每层缩进 10 px，键帽高 20 px），可通过 `ThemeDefinition::with_metrics(nana_ui::theme::COMPACT_METRICS)` 安装。
 
 ### 用命名档位代替硬编码数字
 

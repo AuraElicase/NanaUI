@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use nana_ui_core::{
     AlignSpec, Icon, JustifySpec, LengthSpec, RadiusTier, SemanticColorMix, SemanticColorRole,
-    SpacingStep, StatusTone, TextWeight, TypeRole,
+    SpacingStep, SquareSize, StatusTone, TextWeight, TypeRole,
 };
 
 use super::node::{AnyView, IntoView, widget};
@@ -35,14 +35,9 @@ pub const fn tone_role(tone: StatusTone) -> SemanticColorRole {
     }
 }
 
-/// A keycap's height: a body line box with an extra-small inset above and
-/// below.
-const KEYCAP_HEIGHT: f32 = nana_ui_core::type_scale::LINE + 2.0 * nana_ui_core::space::XS;
-/// The keycap's bottom edge, drawn inside the cap.
-const KEYCAP_EDGE: f32 = nana_ui_core::space::XXS;
-
 /// A raised key: the surface, a border and a bottom edge in the strong
-/// border colour, so the cap reads as raised in either appearance.
+/// border colour, so the cap reads as raised in either appearance. The edge
+/// is the theme's [`nana_ui_core::KeycapMetrics::edge`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct KeycapPainter;
 
@@ -62,7 +57,7 @@ impl Painter for KeycapPainter {
             &path,
             PaintShadow::Custom {
                 color: [edge[0], edge[1], edge[2], edge[3] * 0.9].into(),
-                offset: [0.0, -KEYCAP_EDGE],
+                offset: [0.0, -cx.metrics().keycap.edge],
                 blur: 0.0,
                 spread: 0.0,
                 inset: true,
@@ -112,21 +107,18 @@ impl Painter for RaisedSurfacePainter {
     }
 }
 
-/// A keycap's face, for a cap whose label is bound in place.
+/// A keycap's face, for a cap whose label is bound in place. Its height, and
+/// the narrowest a one-letter cap gets, is the theme's
+/// [`nana_ui_core::KeycapMetrics::height`].
 pub fn keycap_face() -> Stack {
     Stack::row(0.0)
-        .height(LengthSpec::Px(KEYCAP_HEIGHT))
-        .min_width(LengthSpec::Px(KEYCAP_HEIGHT))
+        .square(SquareSize::Keycap)
         .padding_step(SpacingStep::Md, SpacingStep::Xxs)
         .align(AlignSpec::Center)
         .justify(JustifySpec::Center)
         .radius(RadiusTier::Xs)
         .painter(KeycapPainter)
-        .with_layout(|l| {
-            l.flex_shrink = Some(0.0);
-            // Room for the bottom edge, so the label sits centred on the cap.
-            l.padding_bottom = Some(LengthSpec::Px(KEYCAP_EDGE));
-        })
+        .with_layout(|l| l.flex_shrink = Some(0.0))
 }
 
 /// A keycap's label.
@@ -148,7 +140,10 @@ pub fn kbd(key: impl Into<String>) -> AnyView {
 
 /// A key drawn as a glyph (an arrow) on a keycap.
 pub fn kbd_glyph(icon: Icon) -> AnyView {
-    let mut glyph = IconGlyph::new(icon).size(KEYCAP_HEIGHT / 2.0).decorative();
+    // The label's own size, so a glyph key matches a lettered one.
+    let mut glyph = IconGlyph::new(icon)
+        .size(nana_ui_core::type_scale::META)
+        .decorative();
     glyph.style.foreground = Some(SemanticColorRole::Text);
     widget(keycap_face()).children(widget(glyph)).into_any()
 }

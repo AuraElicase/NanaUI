@@ -5637,6 +5637,12 @@ impl Stack {
         self
     }
 
+    /// 方形最小盒档位（最小宽高），跟随安装的 `ThemeMetrics`。
+    pub fn square(mut self, size: nana_ui_core::SquareSize) -> Self {
+        self.style = self.style.square(size);
+        self
+    }
+
     /// 子项间距档位，跟随安装主题的间距刻度，覆盖构造时给的 `gap`。
     pub fn gap_step(mut self, step: nana_ui_core::SpacingStep) -> Self {
         self.style = self.style.gap_step(step);
