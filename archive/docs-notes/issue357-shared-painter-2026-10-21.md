@@ -17,7 +17,7 @@ headless `PresentationDriver` 的不兼容输出组共用一个 `SceneWgpuPainte
 | 文本引擎、shape / raster 缓存、字形图集 | painter 共享 | `text_glyph_counters()` |
 | `UrlTextureCache` | painter 共享，按 egress 与源编码分桶 | `resource_counters()`：`url_textures` / `url_texture_gpu_bytes` / `url_texture_cpu_bytes` / `url_pending` |
 | motion 资源 | painter 共享 | — |
-| 图标图集 | 每个绘制过的 `RenderTargetId` 一份，另有 painter 默认目标一份 | `resource_counters()`：`icon_atlases` / `icon_atlas_bytes` |
+| 图标图集 | 每个画过图标的 `RenderTargetId` 一份（painter 默认目标同样），第一个图标出现时才创建 | `resource_counters()`：`icon_atlases` / `icon_atlas_bytes` |
 | 管线集 | 每个工作格式一份，移除 profile 时回收 | — |
 | 目标状态（uniform、实例、dest） | 每目标 | — |
 
@@ -30,7 +30,7 @@ headless `PresentationDriver` 的不兼容输出组共用一个 `SceneWgpuPainte
 - 图标图集：6 个，1,572,864 B（默认 1 个，加上两组共 5 个已绘制槽位，每个 256²×4）；
 - URL 纹理：0。
 
-图标图集在目标创建时就分配，场景里没有图标也照样占用。A 的这两类资源数字不可得：A 没有这些计数器。字形图集方面，286ff2598 的测试记录了两组从 1 MiB 变成 2 MiB；图标与 URL 的 A 侧成本按 unknown 记，不由结构推算。
+上面图标图集的数字是这次提交时的状态，当时图集在目标创建时就分配，场景里没有图标也照样占用。后续改成惰性分配后，同一 workload 报告 `icon_atlases: 0`、`icon_atlas_bytes: 0`，测试是 `shared_painter::icon_atlases_are_allocated_by_the_first_icon_a_target_draws`。A 的这两类资源数字不可得：A 没有这些计数器。字形图集方面，286ff2598 的测试记录了两组从 1 MiB 变成 2 MiB；图标与 URL 的 A 侧成本按 unknown 记，不由结构推算。
 
 ## 测试
 
@@ -100,5 +100,5 @@ CPU 调用墙钟，单位 ms，不是 GPU 时长：
 ## 未覆盖与遗留
 
 - 未覆盖 Vulkan、DX12，以及 Windows、Linux 窗口。
-- 图标图集在每个目标上提前分配，无图标的目标也占用 256 KiB。
+- ~~图标图集在每个目标上提前分配，无图标的目标也占用 256 KiB。~~ 已改为第一个图标出现时才分配。
 - motion 描述符和时间在 painter 共享，并经上传批写入。窗口与同 profile 的 Separate 输出在一帧内绘制不同场景时，最后写入者获胜。这是既有问题；headless driver 各组绘制同一场景，不受影响。
