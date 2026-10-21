@@ -55,7 +55,7 @@ Alt 按下期间按过其他键，算组合键，松开时不打开菜单。不�
 
 ## 显示
 
-- 每一项依次显示勾选标记、标签和右侧的快捷键文字。快捷键文字按平台习惯显示，例如 `Ctrl+Shift+S`、`⇧⌘S`，格式化函数是 `menu_shortcut_label`。
+- 每一项依次显示勾选标记、标签和右侧的快捷键文字。快捷键文字默认按平台习惯显示，例如 `Ctrl+Shift+S`、`⇧⌘S`，格式化函数是 `menu_shortcut_label`。要在所有平台用同一种写法时设 `.shortcut_notation(ShortcutNotation::Names)`（或 `Symbols`）。
 - 子菜单在右侧显示 `›`。
 - 快捷键文字只用于显示，按键本身仍由应用的键位表处理。
 

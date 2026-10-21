@@ -175,7 +175,7 @@ pub use animation::{
     layout_flip_play_spec, layout_flip_spec, loading_animation, retarget_track,
     toast_timeout_animation, track_completion_deadline, workspace_animation,
 };
-pub use app_menu_bar::{AppMenuBar, MenuBarActivated, menu_shortcut_label};
+pub use app_menu_bar::{AppMenuBar, MenuBarActivated, ShortcutNotation, menu_shortcut_label};
 pub use area_layout::{
     Area, AreaAxis, AreaChange, AreaEditorSelect, AreaGeometry, AreaLayout, AreaLayoutChanged,
     AreaLayoutError, AreaLayoutModel, AreaNode, AreaSplitter,
