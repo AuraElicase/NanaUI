@@ -29,8 +29,9 @@ fn display_lists_match_their_goldens() {
             std::fs::write(&path, &text).unwrap();
             continue;
         }
+        // A Windows checkout may hand the golden back with CRLF endings.
         match std::fs::read_to_string(&path) {
-            Ok(expected) if expected == text => {}
+            Ok(expected) if expected.replace("\r\n", "\n") == text => {}
             Ok(_) => failures.push(format!("{family}/{name}: differs from {}", path.display())),
             Err(_) => failures.push(format!("{family}/{name}: no golden at {}", path.display())),
         }
