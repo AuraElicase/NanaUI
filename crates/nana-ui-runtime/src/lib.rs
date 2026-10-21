@@ -67,8 +67,8 @@ mod layout_result;
 #[cfg(feature = "benchmark")]
 pub use layout_engine::plan_stats;
 mod browser_view;
-mod menus;
 pub mod fold;
+mod menus;
 mod motion_api;
 mod mutation;
 mod native_content;
