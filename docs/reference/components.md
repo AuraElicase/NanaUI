@@ -130,7 +130,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 不是控件，是由 `Stack` / `Text` / `IconGlyph` 拼成的视图，只说主题角色和档位：
 
-- `kbd(key)`、`kbd_glyph(icon)`、`chord("Ctrl+B")`、`chord_with(keys, draw_key)`：键帽和组合键，键帽由 `KeycapPainter` 画（表面、边框、强边框色的底边，随明暗模式）。
+- `kbd(key)`、`kbd_glyph(icon)`、`chord("Ctrl+B")`、`chord_with(keys, draw_key)`：键帽和组合键，键帽由 `KeycapPainter` 画（表面、边框、强边框色的底边，随明暗模式），高度和底边取自已安装主题的 `ThemeMetrics::keycap`。
 - `tag(text)` / `tag_frame()`：不可交互的标签；要能选、能关的用 `Chip`。
 - `callout(icon, tone, text)`：按 `StatusTone` 着色的提示条，图标由调用方给。`text` 可以绑定，为空时整条隐藏；`.quiet()` 不带底色、不自带水平内边距，文字小一号、偏淡，和图标居中对齐，放在已有内边距的块里当一行说明；`.trailing(view)` 在行尾放一个跳转链接或按钮，行尾不收缩，文字先换行。
 - `heading_row(title, tools)` + `heading_tools(tools)`：标题行。标题先让出宽度（可省略），工具保持宽度；工具栏没有外观和竖向内边距，行高取文字和工具中较高的。工具用 `IconButton::tool(icon, label)`（紧凑 24×24，标签同时作提示）或紧凑菜单。

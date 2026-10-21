@@ -984,7 +984,7 @@ fn palette_fields(palette: &SemanticPalette) -> [(&'static str, SemanticColor); 
     ]
 }
 
-fn metrics_fields(metrics: ThemeMetrics) -> [(&'static str, f32); 30] {
+fn metrics_fields(metrics: ThemeMetrics) -> [(&'static str, f32); 32] {
     [
         ("metrics.radius_xs", metrics.radius_xs),
         ("metrics.radius_sm", metrics.radius_sm),
@@ -1033,6 +1033,8 @@ fn metrics_fields(metrics: ThemeMetrics) -> [(&'static str, f32); 30] {
         ("metrics.tree.inset", metrics.tree.inset),
         ("metrics.tree.disclosure", metrics.tree.disclosure),
         ("metrics.tree.icon", metrics.tree.icon),
+        ("metrics.keycap.height", metrics.keycap.height),
+        ("metrics.keycap.edge", metrics.keycap.edge),
         (
             "metrics.scrollbar.track_inset",
             metrics.scrollbar.track_inset,

@@ -3674,6 +3674,35 @@ fn a_settings_group_marks_its_shown_edges() {
     );
 }
 
+/// A keycap is as tall as the installed theme's keycap, so a compact theme
+/// shrinks a shortcut with the controls around it.
+#[test]
+fn a_keycap_follows_the_installed_keycap_height() {
+    let (mut cx, document, parent) = setup();
+    let view = cx.mount_view(parent, || row().children(kbd("K"))).unwrap();
+    let cap = children(&cx, view.roots()[0])[0];
+    let viewport = LayoutViewport::new(320.0, 240.0);
+    cx.layout_document(document, viewport).unwrap();
+    let height = |cx: &AppContext| cx.world().layout_box(cap).unwrap().height;
+    assert_eq!(height(&cx), nana_ui_core::KEYCAP_METRICS.height);
+    assert!(
+        cx.world().layout_box(cap).unwrap().width >= height(&cx),
+        "a one-letter cap is at least square"
+    );
+
+    let compact = nana_ui_core::COMPACT_METRICS;
+    assert!(compact.keycap.height < nana_ui_core::KEYCAP_METRICS.height);
+    cx.set_style_tokens(
+        nana_ui_core::ThemeAppearance::Dark,
+        compact,
+        nana_ui_core::SemanticPalette::dark(),
+        nana_ui_core::SemanticPalette::dark().surface,
+    )
+    .unwrap();
+    cx.layout_document(document, viewport).unwrap();
+    assert_eq!(height(&cx), compact.keycap.height);
+}
+
 /// A `Stack` takes a theme-relative wash and outline, and a fully round
 /// corner that does not need its height, from its own builder.
 #[test]
