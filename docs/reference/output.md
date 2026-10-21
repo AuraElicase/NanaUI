@@ -96,6 +96,7 @@ fn window_output(&self, id: WindowId) -> Option<WindowOutputConfig> {
 - **静态与节流。** 输出不变时不录制输出；`max_fps` 只控制生产节拍。隐藏、最小化或遮挡窗口在 `while_hidden` 下继续排空消息/flush，并只为有变更的输出或 producer 编码；隐藏静态内容 0 UI render / submit。0 尺寸不产出帧。
 - **适配与 alpha。** 支持 `Fixed`、`MatchWindow`、`Scale`，以及等比 `Contain` / `Cover`。`Premultiplied` 使用适合外部 compositor 的 gamma 空间预乘；`Straight` 对每个 canonical slot 使用对应的转换目标，额外 pass 可观测。
 - **异步生命周期迁移。** `WindowOutputFrame::texture()` 保留回调内读取入口；异步消费必须取 `frame.lease()`。`WindowOutputLease` 可 clone，并在采样前对调用方帧使用 `keep_alive_until_complete`。不再依赖“两帧后复用”假设，慢 consumer 令池返回 `Deferred`，不会覆盖仍在使用的 slot。
+- **槽位容量。** 窗口输出池的槽数是宿主在途帧槽数加一（默认 3 + 1 = 4，上限 8）：宿主在规划输出之前已占住当帧槽位，其余在途帧各占一个输出槽直到完成，已发布帧再占一个。少于这个数时，GPU 一落后（例如 Windows WARP）输出就会按 `SourceSlots` 周期性延后，窗口照常呈现而输出缺帧。
 - **状态。** `Planned { plan }` 仅在 consumer / 尺寸 / 显示配置 / 设备等结构变化时报告实际计划；内容变化不反复通知。`Active`、`NativeUnavailable`、`NativeDeferred`、`NativeRetired`、`Failed`、`Stopped` 仅在状态改变时通知。native 不可用时仍可保留同设备输出；这不等于 CPU fallback。
 
 迁移穷尽匹配状态或错误枚举的调用方时，需要处理新增的 `Planned`、循环依赖 / 过期计划拒绝，以及 native stage 的 `ProducerBusy`。后者表示已有生产 reservation，区别于消费方尚未释放资源，不应把两种状态合并为成功或擅自释放资源。
