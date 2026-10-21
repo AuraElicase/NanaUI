@@ -24,6 +24,8 @@ let completed = driver.sample(consumer_id)?;
 
 `render_document` 返回 Runtime 的 flush 结果，不保证 GPU 已提交。若 `driver.work().output_deferred` 大于零，宿主应稍后重试呈现；可使用 `render_scene(document.scene(), ...)` 重试同一份 Scene，无需重复业务 mutation。仅 `poll` 不会补交被跳过的生产帧。`render_scene` 的返回值分别说明各组 `Submitted`、`Reused` 或 `Deferred`。
 
+所有不兼容组共用 driver 里的一个 `SceneWgpuPainter`，并录进同一个帧。每组的目标状态、uniform 与实例缓冲各自独立，共享的字形图集按录制顺序上传（见 [实时画面](gpu.md)）；移除某组时回收它的目标与不再使用的管线集。`PresentationDriver` 固定在创建时的 `GpuContext` 代际上：`configure` 拒绝其他代际的消费方并保留旧计划，设备丢失后 `render_scene` 返回错误且不提交；宿主换到新代际时要新建 driver。
+
 无窗口宿主可用 `set_resource_fetch_host` 注入与窗口相同的 policy-gated HTTP(S) 图片传输，用 `set_image_update_waker` 让异步图片完成时唤醒自己的调度器；应在首帧前安装 waker。切换或清空 fetch host 会取消旧 egress 的未完成请求，旧缓存不会跨 host 使用。
 
 `set_resource_producers(Some(Arc<SceneResourceProducerRegistry>))` 将图资源生产接入同一个输出帧：所有兼容/不兼容 UI 组共享一次 producer encode 和一次总提交，只有实际提交后通知 `submitted`，任何编码错误均丢弃整帧。`SceneResourceProducer::preparation_version` 默认 `None`，保持既有动态生产行为；提供稳定版本后，节点输入与版本均不变时不重新生产，未被引用的 producer 不会使输出 volatile。所有输出槽位饱和时在 producer 编码之前返回 `Deferred`。`PresentationError` 新增 `ResourceProduction`，穷尽匹配方需处理。
@@ -158,7 +160,7 @@ Windows CI 以 `NANA_REQUIRE_DX12_NATIVE_TESTS=1` 执行 native-export 测试：
 
 `OutputWorkObservation`、`PresentationDriver::work`、`ExternalSurface::last_work`、Runtime `WorkCounters::output_*` 及 append-only diagnostics 记录真实规划、UI renders、提交、重建、复用、copy bytes、resolve/convert pass、readback 与 defer。未执行的阶段保持未观测，缺数据不能当作零；旧退休 diagnostics ID 不重复分配。
 
-六类实际 GPU fixture 是 `output-static`、`output-multi`、`output-nested`、`output-conversion`、`output-slow`、`output-recovery`；另由真实原生 Window/Surface probe 验收 `output-direct`。后者还运行 attach/detach、兼容/不兼容输出、resize 与 hidden/static 阶段。headless target 不得冒充 direct Surface，resize recovery 不得冒充实际设备丢失。
+七类实际 GPU fixture 是 `output-static`、`output-multi`、`output-nested`、`output-conversion`、`output-slow`、`output-recovery`、`output-incompatible`（SDR 组与其 float working 组共用一个 painter、每帧一次提交，并报告共享 painter 的纹素字节 `painter_resources`）；另由真实原生 Window/Surface probe 验收 `output-direct`。后者还运行 attach/detach、兼容/不兼容输出、resize 与 hidden/static 阶段。headless target 不得冒充 direct Surface，resize recovery 不得冒充实际设备丢失。
 
 ```bash
 cargo test --locked -p nana-ui --features hosted,bundled-fonts --lib output:: -- --test-threads=1

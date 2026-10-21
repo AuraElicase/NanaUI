@@ -1282,6 +1282,22 @@ pub(super) struct IconPipelineTarget {
 }
 
 impl IconPipeline {
+    /// Atlas count and bytes: the one the painter keeps for its own target
+    /// and one per render target in `others`.
+    pub(super) fn atlas_counters_across<'a>(
+        &'a self,
+        others: impl Iterator<Item = &'a IconPipelineTarget>,
+    ) -> (u64, u64) {
+        std::iter::once(&self.atlas)
+            .chain(others.map(|target| &target.atlas))
+            .fold((0, 0), |(count, bytes), atlas| {
+                (
+                    count + 1,
+                    bytes + u64::from(atlas.edge) * u64::from(atlas.edge) * 4,
+                )
+            })
+    }
+
     pub(super) fn swap_target(
         &mut self,
         target: &mut Option<IconPipelineTarget>,

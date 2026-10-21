@@ -49,7 +49,7 @@ Release 构建前后 2,427 个源码输入一致，benchmark SHA `4230cc12…fb1
 - [#354：direct 时延及 P/E 推荐触发](https://github.com/sena-nana/NanaUI/issues/354)。这是未闭环的性能因果调查，不能直接归为平台缺口或噪声。
 - [#355：多采样 retained 目标与 resolve](https://github.com/sena-nana/NanaUI/issues/355)。这是代码能力缺口；既有内部 MSAA 几何路径不等于外部多采样输出可用。
 - [#356：Native / SteamVR / Electron 实机矩阵](https://github.com/sena-nana/NanaUI/issues/356)。这是具体外部 consumer 的平台验证缺口，通用 GPU 恢复继续由 #275 跟踪。发现代码故障时另列修复。
-- [#357：headless 跨 profile 的 painter 实例与资源共享](https://github.com/sena-nana/NanaUI/issues/357)。当前不同 profile 缓存独立 painter 实例，仍为同一设备/队列与实现；原计划的严格单实例约束未完全满足，可能重复的文本/图片资源成本需实测。
+- [#357：headless 跨 profile 的 painter 实例与资源共享](https://github.com/sena-nana/NanaUI/issues/357)。headless driver 的不兼容组已共用一个 painter，同帧图集顺序、资源计数与五轮对照见[收尾记录](issue357-shared-painter-2026-10-21.md)；Window 宿主仍按 profile 持有 painter。
 
 Metal/Vulkan native 外部共享仍因安全合同未建立明确不支持；同设备 transfer 通过不提升这些能力等级。GPU duration / driver VRAM 未观测时保持 unknown。OpenVR 提交返回、Electron IPC 返回和超时均不是外部 GPU 完成证明。
 

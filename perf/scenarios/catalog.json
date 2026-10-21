@@ -140,7 +140,8 @@
     "output-nested",
     "output-conversion",
     "output-slow",
-    "output-recovery"
+    "output-recovery",
+    "output-incompatible"
   ],
   "nana_transport_ids": [
     "transport-overlay-static",
