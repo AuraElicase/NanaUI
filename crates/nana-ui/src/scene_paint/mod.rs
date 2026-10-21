@@ -29,6 +29,24 @@ pub use self::text::TextGlyphCounters;
 pub(crate) mod url_texture_cache;
 mod validate;
 
+/// What a painter's image caches hold, beside the glyph atlas that
+/// [`TextGlyphCounters`] reports. Bytes are texels as allocated by the
+/// painter, without driver padding or alignment.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ScenePainterResourceCounters {
+    /// Icon atlases: the painter's own and one per render target it painted.
+    pub icon_atlases: u64,
+    pub icon_atlas_bytes: u64,
+    /// Uploaded `url(...)` textures, one per URL and source encoding.
+    pub url_textures: u64,
+    /// Bytes uploaded for them, every mip level.
+    pub url_texture_gpu_bytes: u64,
+    /// Decoded levels waiting for upload and source bytes kept for refits.
+    pub url_texture_cpu_bytes: u64,
+    /// Fetches and decodes still running.
+    pub url_pending: u64,
+}
+
 pub(crate) use clip::{covered_span, is_translation_projective, on_grid};
 
 use std::{sync::Arc, time::Instant};
@@ -383,10 +401,14 @@ pub struct ScenePaintViewport {
 ///
 /// One painter can serve every presentation profile on its device. What a
 /// profile does not change is its core and is shared: the text engine with
-/// its shape and raster caches and glyph atlas, the icon atlas, the URL
-/// images (bucketed by source encoding), the motion resources and every
-/// target's retained state. What a working format changes is a pipeline
-/// set, built on first use and kept while the format is painted.
+/// its shape and raster caches and glyph atlas, the URL images (bucketed by
+/// source encoding), the motion resources and every target's retained state,
+/// which includes an icon atlas of its own. What a working format changes is
+/// a pipeline set, built on first use and kept while the format is painted.
+///
+/// Targets painted into one frame read the shared glyph atlas when that
+/// frame is submitted, so every paint after the first in a frame records its
+/// atlas uploads in the frame's encoder, behind the passes before it.
 pub struct SceneWgpuPainter {
     targets: std::collections::HashMap<RenderTargetId, TargetState>,
     /// The pipeline sets of the working formats not painted right now.
@@ -400,6 +422,9 @@ pub struct SceneWgpuPainter {
     /// The same for the state [`Self::paint`] keeps in the painter itself, in
     /// a ledger of its own so no host id can alias it.
     retained_default: RetainedWrites,
+    /// Glyph-atlas regions copied in a frame's encoder (see `text/upload.rs`).
+    /// A dropped frame loses them, so the atlas forgets what it placed.
+    retained_atlas: RetainedWrites,
     device: wgpu::Device,
     queue: wgpu::Queue,
     /// Surface format. Scene pipelines use `working_format` for wide/HDR
@@ -434,6 +459,9 @@ pub struct SceneWgpuPainter {
     last_gpu_work: Option<GpuWorkObservation>,
     last_gpu_timings: Option<GpuStageTimings>,
     last_dest_pass_counts: Option<DestPassCounts>,
+    /// The frame the last paint was recorded in. A paint into the same one
+    /// copies its glyph-atlas regions in order rather than ahead of the frame.
+    last_frame: Option<nana_gpu::FrameId>,
     /// Last fully scene-described dest; host textures / GPU slots skip reuse.
     painted: Option<PaintedDest>,
     /// Which host-texture slots the last fresh prepare of the active target
@@ -697,6 +725,7 @@ impl SceneWgpuPainter {
             gpu: gpu.clone(),
             retained_targets: RetainedWrites::new(),
             retained_default: RetainedWrites::new(),
+            retained_atlas: RetainedWrites::new(),
             device: device.clone(),
             queue: queue.clone(),
             format,
@@ -736,6 +765,7 @@ impl SceneWgpuPainter {
             last_gpu_work: None,
             last_gpu_timings: None,
             last_dest_pass_counts: None,
+            last_frame: None,
             painted: None,
             painted_demand: Default::default(),
             natural_sizes: Default::default(),
@@ -1010,6 +1040,45 @@ impl SceneWgpuPainter {
         )
     }
 
+    /// What the icon atlases and the URL texture cache hold, beside the
+    /// glyph atlas of [`Self::text_glyph_counters`]. Summed the same way.
+    pub fn resource_counters(&self) -> ScenePainterResourceCounters {
+        let (icon_atlases, icon_atlas_bytes) = self.icons.atlas_counters_across(
+            self.targets
+                .values()
+                .filter_map(|state| state.icons.as_ref()),
+        );
+        let url = self.url_cache.counters();
+        ScenePainterResourceCounters {
+            icon_atlases,
+            icon_atlas_bytes,
+            url_textures: url.textures,
+            url_texture_gpu_bytes: url.gpu_bytes,
+            url_texture_cpu_bytes: url.cpu_bytes,
+            url_pending: url.pending,
+        }
+    }
+
+    /// Render targets with retained state, and pipeline sets kept for
+    /// profiles other than the selected one.
+    #[cfg(test)]
+    pub(crate) fn retained_shape(&self) -> (usize, usize) {
+        (self.targets.len(), self.pipeline_sets.len())
+    }
+
+    /// Replace the glyph atlas with one `page_edge` page within
+    /// `byte_budget`, for tests that need eviction within a few labels.
+    #[cfg(test)]
+    pub(crate) fn use_small_text_atlas(&mut self, page_edge: u32, byte_budget: usize) {
+        self.text = TextPipeline::with_atlas_budget(
+            &self.device,
+            self.working_format,
+            page_edge,
+            byte_budget,
+            self.gpu.policy(),
+        );
+    }
+
     /// Record the submit of the frame this painter last encoded into.
     pub fn record_submit(&mut self, submission: &GpuSubmission) {
         if let Some(timings) = &mut self.last_gpu_timings {
@@ -1048,7 +1117,10 @@ impl SceneWgpuPainter {
 
     /// Paint with isolated target state while sharing device pipelines/caches.
     ///
-    /// The same `frame` contract as [`Self::paint`].
+    /// The same `frame` contract as [`Self::paint`]. Targets may share one
+    /// frame; a painter records into one frame at a time and the host submits
+    /// or drops it before painting into the next, because frames submitted
+    /// out of order would land one's glyph-atlas writes under another's passes.
     #[allow(clippy::too_many_arguments)]
     pub fn paint_target(
         &mut self,
@@ -1078,6 +1150,7 @@ impl SceneWgpuPainter {
             gpu_renderers,
             Some(link),
         );
+        self.record_ordered_atlas_writes(frame);
         if result.is_ok() {
             self.host_textures.keep_alive_until_complete(frame);
         }
@@ -1135,6 +1208,15 @@ impl SceneWgpuPainter {
         if in_flight {
             return Err(ScenePaintError::TargetInFlight(target_id));
         }
+        if self.retained_atlas.has_rolled_back() {
+            self.retained_atlas.drain_rolled_back(|_| {});
+            self.text.forget_atlas_placements();
+        }
+        // The glyph atlas is shared by every target, and this frame's queue
+        // writes land ahead of every pass it records; see `text/upload.rs`.
+        let follows = self.last_frame == Some(frame.id());
+        self.last_frame = Some(frame.id());
+        self.text.set_follows_in_frame(follows);
         if self.retained_default.has_rolled_back() {
             self.retained_default.drain_rolled_back(|_| {});
             self.reset_default_target();
@@ -1196,11 +1278,20 @@ impl SceneWgpuPainter {
             gpu_renderers,
             Some(link),
         );
+        self.record_ordered_atlas_writes(frame);
         if result.is_ok() {
             self.host_textures.keep_alive_until_complete(frame);
             frame.record_retained_writes(&self.retained_default, DEFAULT_TARGET);
         }
         result
+    }
+
+    /// Recorded whether or not the paint succeeded: the copies are in the
+    /// frame's encoder either way, and a frame that is dropped loses them.
+    fn record_ordered_atlas_writes(&mut self, frame: &mut FrameContext) {
+        if self.text.take_ordered_flush() {
+            frame.record_retained_writes(&self.retained_atlas, 0);
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3653,6 +3744,7 @@ impl SceneWgpuPainter {
         host_textures: Option<&HostTextureRegistry>,
         gpu_renderers: Option<&SceneGpuRendererRegistry>,
     ) -> Result<(), ScenePaintError> {
+        self.outside_frames();
         self.paint_recorded(
             scene,
             encoder,
@@ -3662,6 +3754,13 @@ impl SceneWgpuPainter {
             gpu_renderers,
             None,
         )
+    }
+
+    /// An encoder of the caller's own is submitted on its own: its queue
+    /// writes land ahead of its passes alone, as the first paint's do.
+    fn outside_frames(&mut self) {
+        self.last_frame = None;
+        self.text.set_follows_in_frame(false);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3675,6 +3774,7 @@ impl SceneWgpuPainter {
         host_textures: Option<&HostTextureRegistry>,
         gpu_renderers: Option<&SceneGpuRendererRegistry>,
     ) -> Result<(), ScenePaintError> {
+        self.outside_frames();
         let mut state = self.targets.remove(&id).unwrap_or_default();
         if state.image_revision != self.image_revision {
             state.painted = None;

@@ -24,6 +24,8 @@ mod headless_resources;
 mod retained_dependencies;
 #[path = "driver_tests/scoped_textures.rs"]
 mod scoped_textures;
+#[path = "driver_tests/shared_painter.rs"]
+mod shared_painter;
 
 fn consumer(id: u64) -> OutputConsumer {
     OutputConsumer {
@@ -402,7 +404,7 @@ fn incompatible_profiles_share_one_glyph_atlas_and_upload_glyphs_once() {
             .iter()
             .map(|endpoint| read_pixels(completed(&mut driver, endpoint.id).texture().unwrap()))
             .collect();
-        (driver.text_glyph_counters(), uploads, pixels)
+        (driver.text_glyph_counters().unwrap(), uploads, pixels)
     };
     let (one, one_uploads, one_pixels) = run(&[bgra]);
     let (_, _, float_pixels) = run(&[float]);

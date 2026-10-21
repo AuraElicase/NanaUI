@@ -849,6 +849,12 @@ pub(super) struct TextPipeline {
     raster: GlyphRasterCache,
     atlas: GlyphAtlasManager,
     uploads: GlyphUploadQueue,
+    /// This paint follows another of the same painter in one frame, whose
+    /// passes the frame's queue writes would land ahead of.
+    follows_in_frame: bool,
+    /// Atlas regions were copied in an encoder since the last take; see
+    /// [`Self::take_ordered_flush`].
+    ordered_flushed: bool,
     gpu: TextGpu,
     /// Shaped paragraphs reused across frames. Shaping is the dominant CPU
     /// cost of a text-heavy frame and identical text+style+box repeats on
@@ -963,6 +969,8 @@ impl TextPipeline {
             raster,
             atlas,
             uploads: GlyphUploadQueue::default(),
+            follows_in_frame: false,
+            ordered_flushed: false,
             gpu,
             shape_cache: ShapeCache::default(),
             resolved: NanaGlyphBuffer::default(),
@@ -1089,6 +1097,23 @@ impl TextPipeline {
             program.0.set_subpixel(device, subpixel);
         }
         std::mem::swap(&mut self.gpu, &mut program.0);
+    }
+
+    /// Whether this paint follows another of the same painter in one frame:
+    /// its atlas regions are then copied in order, see `upload.rs`.
+    pub(super) fn set_follows_in_frame(&mut self, follows: bool) {
+        self.follows_in_frame = follows;
+    }
+
+    /// Whether this paint copied atlas regions in its encoder. The atlas
+    /// already counts them as placed, so a frame dropped with them must be
+    /// followed by [`Self::forget_atlas_placements`].
+    pub(super) fn take_ordered_flush(&mut self) -> bool {
+        std::mem::take(&mut self.ordered_flushed)
+    }
+
+    pub(super) fn forget_atlas_placements(&mut self) {
+        self.atlas.forget_every_placement();
     }
 
     /// The scene's corner curve exponent, for the clips of the text drawn
@@ -2887,7 +2912,10 @@ impl TextPipeline {
         work: Option<&crate::gpu_work::GpuWorkSink>,
     ) {
         self.gpu.prepare_materials(device, queue, &self.atlas, work);
-        self.uploads.flush(queue, &self.atlas, work);
+        let ordered = self.follows_in_frame.then_some(&mut *encoder);
+        self.ordered_flushed |= self
+            .uploads
+            .flush(device, queue, &self.atlas, work, ordered);
         // Bind groups are created here, where the atlas is still `&mut`, so
         // `draw` only has to look one up. Nearly every frame's segments name
         // the same pair, so the pair is only looked up when it changes.

@@ -36,7 +36,7 @@ use std::{
 const FRAMES: usize = 240;
 const WARMUP: usize = 30;
 const EXTENT: [u32; 2] = [128, 96];
-const WORKLOADS: [&str; 7] = [
+const WORKLOADS: [&str; 8] = [
     "direct",
     "static",
     "multi",
@@ -44,6 +44,7 @@ const WORKLOADS: [&str; 7] = [
     "conversion",
     "slow",
     "recovery",
+    "incompatible",
 ];
 type BenchResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -472,6 +473,14 @@ fn run_case(gpu: &GpuContext, workload: &str) -> BenchResult<Value> {
     if workload == "multi" {
         consumers.extend([consumer(gpu, 2), consumer(gpu, 3)]);
     }
+    // Two groups the planner cannot merge: the second needs a float working
+    // target. They render into one submission through one shared painter.
+    let incompatible = workload == "incompatible";
+    if incompatible {
+        let mut second = consumer(gpu, 2);
+        second.requirements.profile = first.requirements.profile.with_force_float_working();
+        consumers.push(second);
+    }
     if workload == "conversion" {
         let mut second = first;
         second.id = OutputConsumerId(2);
@@ -606,9 +615,20 @@ fn run_case(gpu: &GpuContext, workload: &str) -> BenchResult<Value> {
             retain_warmup_slot(&mut warmup_leases, sampled.clone(), warmup_slots)?;
         }
         for endpoint in &consumers {
-            let other = driver.sample(endpoint.id)?;
-            if !sampled.texture()?.ptr_eq(other.texture()?) {
-                return Err("compatible consumers did not share canonical texture".into());
+            let other = if incompatible {
+                completed_at(&mut driver, endpoint.id, Some(wanted))?
+            } else {
+                driver.sample(endpoint.id)?
+            };
+            if sampled.texture()?.ptr_eq(other.texture()?)
+                == (incompatible && endpoint.id != first.id)
+            {
+                return Err(if incompatible {
+                    "incompatible groups shared one canonical texture"
+                } else {
+                    "compatible consumers did not share canonical texture"
+                }
+                .into());
             }
             if measured {
                 samples += 1;
@@ -642,7 +662,27 @@ fn run_case(gpu: &GpuContext, workload: &str) -> BenchResult<Value> {
     );
     attach_measurements(&mut report, &measured_policy, Some(&measured_painter));
     report["measurement_rust_heap"] = measured_heap.report(FRAMES, "producer render/submit call only; consumer final transfer, completion polling and report aggregation excluded");
+    report["painter_resources"] = painter_resources(&driver);
     Ok(report)
+}
+
+/// What the one painter the groups share holds after the measured frames.
+/// Texel bytes as the painter allocates them; driver padding and VRAM are
+/// not observed.
+fn painter_resources(driver: &PresentationDriver) -> Value {
+    match (
+        driver.text_glyph_counters(),
+        driver.painter_resource_counters(),
+    ) {
+        (Some(text), Some(images)) => json!({"status":"measured",
+            "glyph_atlas_pages":text.glyph_atlas_pages,"glyph_atlas_bytes":text.glyph_atlas_bytes,
+            "glyph_raster_cache_bytes":text.glyph_raster_cache_bytes,"glyph_upload_bytes":text.glyph_upload_bytes,
+            "icon_atlases":images.icon_atlases,"icon_atlas_bytes":images.icon_atlas_bytes,
+            "url_textures":images.url_textures,"url_texture_gpu_bytes":images.url_texture_gpu_bytes,
+            "url_texture_cpu_bytes":images.url_texture_cpu_bytes,"url_pending":images.url_pending,
+            "scope":"cumulative over setup, warmup and measured frames; painter texel bytes, not driver VRAM"}),
+        _ => json!({"status":"unavailable","reason":"no configured painter"}),
+    }
 }
 
 fn viewport(extent: [u32; 2]) -> ScenePaintViewport {

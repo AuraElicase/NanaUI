@@ -12994,6 +12994,149 @@ fn a_target_held_by_an_unsubmitted_frame_is_not_painted_again() {
     second.submit();
 }
 
+fn label_only_scene(label: &str) -> UiScene {
+    let mut text = overflowing_text_child(2, 1, 0.0, 16.0, 96.0, 32.0, [1.0; 4]);
+    text.text = Some(TextContent {
+        value: label.into(),
+    });
+    text.style = Arc::new(ComputedStyle {
+        color: Some([1.0; 4]),
+        font_size: 24.0,
+        ..ComputedStyle::default()
+    });
+    let mut root = colored_quad_node(1, 0.0, 0.0, 96.0, 64.0, [0.0, 0.0, 1.0, 1.0]);
+    root.children = Arc::new(vec![text.id]);
+    let mut scene = UiScene::new();
+    scene.apply_delta([root, text], []);
+    scene
+}
+
+/// Every target a frame records reads the shared glyph atlas when that frame
+/// is submitted, not when its pass was recorded. A later target that evicts
+/// or repacks an earlier one's glyphs must therefore not write the freed
+/// rectangles ahead of the earlier pass.
+#[test]
+fn a_later_target_in_one_frame_cannot_overwrite_glyphs_an_earlier_one_samples() {
+    let probe = FrameProbe::new();
+    let device = __framework::device(&probe.gpu);
+    let (second_texture, second_view) = test_copy_target(
+        device,
+        wgpu::TextureFormat::Rgba8Unorm,
+        FrameProbe::SIZE[0],
+        FrameProbe::SIZE[1],
+    );
+    let second = __framework::render_target(
+        &probe.gpu,
+        second_view,
+        wgpu::TextureFormat::Rgba8Unorm,
+        FrameProbe::SIZE,
+    );
+    let small_atlas = |painter: &mut SceneWgpuPainter| {
+        // One page barely wider than a line of text: the second target's
+        // label cannot be placed without taking the first one's glyphs.
+        painter.text = TextPipeline::with_atlas_budget(
+            device,
+            wgpu::TextureFormat::Rgba8Unorm,
+            64,
+            64 * 64 + 8,
+            probe.gpu.policy(),
+        );
+    };
+    let first = label_only_scene("abcdef");
+    let other = label_only_scene("KLMNOP");
+    let mut reference = probe.painter();
+    small_atlas(&mut reference);
+    let expected = {
+        let mut frame = probe.gpu.begin_frame("reference");
+        reference
+            .paint_target(
+                RenderTargetId(1),
+                &first,
+                &mut frame,
+                &probe.target,
+                probe.viewport,
+                None,
+                None,
+            )
+            .unwrap();
+        frame.submit();
+        probe.pixels()
+    };
+
+    let mut painter = probe.painter();
+    small_atlas(&mut painter);
+    let mut frame = probe.gpu.begin_frame("shared");
+    painter
+        .paint_target(
+            RenderTargetId(1),
+            &first,
+            &mut frame,
+            &probe.target,
+            probe.viewport,
+            None,
+            None,
+        )
+        .unwrap();
+    let before = painter.text_glyph_counters();
+    painter
+        .paint_target(
+            RenderTargetId(2),
+            &other,
+            &mut frame,
+            &second,
+            probe.viewport,
+            None,
+            None,
+        )
+        .unwrap();
+    frame.submit();
+    let after = painter.text_glyph_counters();
+    assert!(
+        after.glyph_atlas_evict + after.atlas_relocations
+            > before.glyph_atlas_evict + before.atlas_relocations,
+        "the fixture makes the second target take the first one's rectangles"
+    );
+    assert!(
+        probe.pixels() == expected,
+        "the first target samples its own glyphs, not the ones placed after its pass"
+    );
+    let second_pixels = readback_rgba(
+        device,
+        __framework::queue(&probe.gpu),
+        device.create_command_encoder(&Default::default()),
+        &second_texture,
+        FrameProbe::SIZE[0],
+        FrameProbe::SIZE[1],
+    );
+    let mut alone = probe.painter();
+    small_atlas(&mut alone);
+    let mut frame = probe.gpu.begin_frame("alone");
+    alone
+        .paint_target(
+            RenderTargetId(2),
+            &other,
+            &mut frame,
+            &second,
+            probe.viewport,
+            None,
+            None,
+        )
+        .unwrap();
+    frame.submit();
+    let other_expected = readback_rgba(
+        device,
+        __framework::queue(&probe.gpu),
+        device.create_command_encoder(&Default::default()),
+        &second_texture,
+        FrameProbe::SIZE[0],
+        FrameProbe::SIZE[1],
+    );
+    assert!(
+        second_pixels == other_expected,
+        "the second target samples the glyphs it placed"
+    );
+}
+
 #[test]
 fn frames_targets_and_host_textures_from_another_device_are_refused() {
     let probe = FrameProbe::new();

@@ -441,6 +441,19 @@ struct Bucket {
     pending: HashMap<String, Pending>,
 }
 
+/// What a [`UrlTextureCache`] holds, for the painter's resource counters.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct UrlTextureCounters {
+    pub(crate) textures: u64,
+    /// Bytes uploaded for those textures, every mip level, before any padding
+    /// the driver adds.
+    pub(crate) gpu_bytes: u64,
+    /// Decoded levels not yet uploaded, and source bytes kept for refits.
+    pub(crate) cpu_bytes: u64,
+    /// Fetches and decodes still running.
+    pub(crate) pending: u64,
+}
+
 /// Retains the current working set plus a bounded LRU of inactive textures.
 /// HTTP work is limited to four concurrent requests per painter.
 ///
@@ -475,6 +488,25 @@ pub(crate) struct UrlTextureCache {
 }
 
 impl UrlTextureCache {
+    /// Every bucket counts: one URL drawn under both source encodings is two
+    /// textures, by design.
+    pub(crate) fn counters(&self) -> UrlTextureCounters {
+        let mut counters = UrlTextureCounters::default();
+        for bucket in self.buckets.values() {
+            counters.pending += bucket.pending.len() as u64;
+            for entry in bucket.entries.values() {
+                if let Some(texture) = &entry.texture {
+                    counters.textures += 1;
+                    counters.gpu_bytes += texture.bytes;
+                }
+                counters.cpu_bytes += entry.ready.as_ref().map_or(0, Prepared::bytes)
+                    + entry.source.as_ref().map_or(0, Source::retained_bytes);
+                counters.pending += u64::from(entry.job.is_some());
+            }
+        }
+        counters
+    }
+
     /// Upload the images looked up next for the given source encoding. Each
     /// encoding keeps a bucket of its own, so a painter serving both an sRGB
     /// and a raw-linear profile never samples one's texture as the other's.
@@ -1407,6 +1439,10 @@ mod tests {
             "and the sRGB one is still there for the profile that uses it"
         );
         assert_eq!(cache.entry_keys().len(), 2);
+        let counters = cache.counters();
+        assert_eq!(counters.textures, 2, "both encodings count");
+        assert_eq!(counters.gpu_bytes, 2 * 2 * 2 * 4, "two 2x2 RGBA levels");
+        assert_eq!(counters.pending, 0);
     }
 
     #[test]

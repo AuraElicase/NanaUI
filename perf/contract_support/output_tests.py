@@ -2,7 +2,7 @@
 from __future__ import annotations
 import copy
 from pathlib import Path
-from .output_extractors import OUTPUT_COUNTERS, HEAP_COUNTERS, MEASURED_POLICY_COUNTERS, PAINTER_COUNTERS, WINDOW_CHECKS, extract_output
+from .output_extractors import ENCODES_PER_FRAME, OUTPUT_COUNTERS, HEAP_COUNTERS, MEASURED_POLICY_COUNTERS, PAINTER_COUNTERS, PAINTER_RESOURCE_COUNTERS, WINDOW_CHECKS, extract_output
 from .invariants import judge_runner_invariants
 from .schema import load_catalog, load_scenario
 
@@ -18,6 +18,7 @@ _EXPECTED_WORK = {
     "slow": {"deferred": 240},
     "recovery": {"ui_renders": 240, "submissions": 240, "content_revisions": 240,
                  "target_recreates": 3},
+    "incompatible": {"ui_renders": 480, "submissions": 240, "content_revisions": 480},
 }
 
 
@@ -35,8 +36,8 @@ def _delete_path(block, path):
     del block[parts[-1]]
 
 
-def _painter(skipped=False):
-    return {"status":"skipped" if skipped else "measured", "encoded_frames":0 if skipped else 240,
+def _painter(skipped=False, encodes_per_frame=1):
+    return {"status":"skipped" if skipped else "measured", "encoded_frames":0 if skipped else 240 * encodes_per_frame,
             "skipped_frames":240 if skipped else 0, "work":None if skipped else {key:0 for key in PAINTER_COUNTERS}}
 
 
@@ -57,7 +58,9 @@ def _self_test_output(root: Path) -> list[str]:
             case["proof"]["window_cases"] = {name: True for name in WINDOW_CHECKS}
         if workload != "direct":
             case["measurement_gpu_policy"] = {key:0 for key in MEASURED_POLICY_COUNTERS}
-            case["producer_painter"] = {"status":"not instrumented", "work":None} if workload in {"slow", "recovery"} else _painter(workload in {"static", "nested"})
+            case["producer_painter"] = {"status":"not instrumented", "work":None} if workload in {"slow", "recovery"} else _painter(workload in {"static", "nested"}, ENCODES_PER_FRAME.get(workload, 1))
+        if workload == "incompatible":
+            case["painter_resources"] = {"status":"measured", **{key:0 for key in PAINTER_RESOURCE_COUNTERS}}
         if workload == "nested":
             case["parent_measurement_rust_heap"] = copy.deepcopy(case["measurement_rust_heap"])
             case["consumer_call_ms"] = {"p50":1.0,"p95":2.0,"p99":3.0}
@@ -100,8 +103,10 @@ def _self_test_output(root: Path) -> list[str]:
         required = ["adapter", "proof", "timing_ms", "measurement_rust_heap.scope", "measurement_rust_heap.samples", "producer_painter"] + ["measurement_rust_heap.counts."+key for key in HEAP_COUNTERS] + ["output_work."+key for key in OUTPUT_COUNTERS]
         if workload != "direct":
             required += ["measurement_gpu_policy."+key for key in MEASURED_POLICY_COUNTERS] + ["producer_painter", "timing_samples"]
-        if workload in {"direct", "multi", "conversion"}:
+        if workload in {"direct", "multi", "conversion", "incompatible"}:
             required += ["producer_painter.work."+key for key in PAINTER_COUNTERS]
+        if workload == "incompatible":
+            required += ["painter_resources.status"] + ["painter_resources."+key for key in PAINTER_RESOURCE_COUNTERS]
         if workload == "nested":
             required += ["consumer_call_ms", "consumer_timing_samples", "parent_measurement_rust_heap"]
             required += ["parent_painter.work."+key for key in PAINTER_COUNTERS]

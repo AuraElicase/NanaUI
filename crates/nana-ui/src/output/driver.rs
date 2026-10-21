@@ -108,13 +108,10 @@ impl PresentationDriver {
             .any(|painter| painter.has_pending_images() || painter.has_image_updates())
     }
 
-    /// Glyph counters of the one painter every group shares.
+    /// The one painter every group shares, once a consumer is configured.
     #[cfg(test)]
-    pub(super) fn text_glyph_counters(&self) -> crate::TextGlyphCounters {
-        self.painter
-            .as_ref()
-            .map(crate::SceneWgpuPainter::text_glyph_counters)
-            .unwrap_or_default()
+    pub(super) fn shared_painter(&mut self) -> &mut crate::SceneWgpuPainter {
+        self.painter.as_mut().expect("configured painter")
     }
 
     pub fn new(gpu: &GpuContext) -> Self {
@@ -323,6 +320,21 @@ impl PresentationDriver {
         });
         nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_PLAN_REBUILDS);
         Ok(true)
+    }
+
+    /// Glyph counters of the one painter every group shares; `None` while no
+    /// consumer is configured and there is no painter.
+    pub fn text_glyph_counters(&self) -> Option<crate::TextGlyphCounters> {
+        self.painter
+            .as_ref()
+            .map(crate::SceneWgpuPainter::text_glyph_counters)
+    }
+
+    /// Icon-atlas and URL-texture counters of that painter.
+    pub fn painter_resource_counters(&self) -> Option<crate::ScenePainterResourceCounters> {
+        self.painter
+            .as_ref()
+            .map(crate::SceneWgpuPainter::resource_counters)
     }
 
     pub fn plan(&self) -> &OutputPlan {
