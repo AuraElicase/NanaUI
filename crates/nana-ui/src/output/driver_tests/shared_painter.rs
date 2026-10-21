@@ -9,7 +9,7 @@ use crate::{
     output::{ExternalFramePlan, ExternalPrepare, ExternalSurface, ExternalSurfaceConfig},
 };
 use nana_gpu::{__framework as raw, GpuContext};
-use nana_ui_runtime::LayoutViewport;
+use nana_ui_runtime::{Icon, IconGlyph, LayoutViewport, List};
 
 fn text_scene(label: &str) -> UiScene {
     let id = DocumentId::new(1).unwrap();
@@ -18,6 +18,27 @@ fn text_scene(label: &str) -> UiScene {
         .context_mut()
         .create_component(id, Text::new(label))
         .unwrap();
+    document
+        .flush(
+            LayoutViewport::new(64.0, 48.0),
+            &mut NanaTextShaper::default(),
+        )
+        .unwrap();
+    document.scene().clone()
+}
+
+/// [`text_scene`] with an icon after the label.
+fn icon_scene(label: &str) -> UiScene {
+    let id = DocumentId::new(1).unwrap();
+    let mut document = RuntimeDocument::new(id);
+    let context = document.context_mut();
+    let root = context.create_component(id, List::new()).unwrap();
+    let text = context.create_component(id, Text::new(label)).unwrap();
+    context.append_child(root, text).unwrap();
+    let icon = context
+        .create_component(id, IconGlyph::new(Icon::File))
+        .unwrap();
+    context.append_child(root, icon).unwrap();
     document
         .flush(
             LayoutViewport::new(64.0, 48.0),
@@ -237,7 +258,7 @@ fn unchanged_incompatible_groups_reuse_without_rendering_submitting_or_uploading
 
 #[test]
 fn detaching_resizing_and_reattaching_a_group_keeps_the_shared_painter_bounded() {
-    let scene = text_scene("Groups");
+    let scene = icon_scene("Groups");
     let stay = with(1, bgra(), EXTENT);
     let float = with(2, bgra().with_force_float_working(), [80, 48]);
     let mut driver = PresentationDriver::new(&test_gpu::context());
@@ -300,6 +321,32 @@ fn detaching_resizing_and_reattaching_a_group_keeps_the_shared_painter_bounded()
         after_resize <= reattached,
         "{after_resize} targets after resize, {reattached} before"
     );
+}
+
+/// A target's icon atlas is created by its first glyph: groups that paint
+/// only text hold no sheet, and each one gets its own once an icon appears.
+#[test]
+fn icon_atlases_are_allocated_by_the_first_icon_a_target_draws() {
+    const SHEET_BYTES: u64 = 256 * 256 * 4;
+    let first = with(1, bgra(), EXTENT);
+    let second = with(2, bgra().with_force_float_working(), [80, 48]);
+    let mut driver = PresentationDriver::new(&test_gpu::context());
+    driver.configure(&[first, second]).unwrap();
+    render_fresh(&mut driver, &text_scene("Plain"));
+    let plain = driver.painter_resource_counters().unwrap();
+    assert_eq!(plain.icon_atlases, 0, "{plain:?}");
+    assert_eq!(plain.icon_atlas_bytes, 0, "{plain:?}");
+
+    let scene = icon_scene("Plain");
+    let outcomes = render_fresh(&mut driver, &scene);
+    let icons = driver.painter_resource_counters().unwrap();
+    assert!(icons.icon_atlases >= 2, "one sheet per group: {icons:?}");
+    assert_eq!(icons.icon_atlas_bytes, icons.icon_atlases * SHEET_BYTES);
+    for (endpoint, outcome) in [first, second].iter().zip(&outcomes) {
+        assert!(
+            submitted_pixels(&mut driver, endpoint, outcome) == alone(*endpoint, &scene, |_| {})
+        );
+    }
 }
 
 #[test]

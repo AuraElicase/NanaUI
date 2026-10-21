@@ -12,10 +12,12 @@ use crate::{PhysicalRect, gpu_work::ManagedBuffer, icons::Icon};
 /// Per-glyph raster edge cap. A glyph is rasterized at twice its dest size,
 /// so this also caps the biggest cell the shared atlas has to place.
 const MAX_ATLAS_PX: u32 = 256;
-/// Starting edge of the shared atlas, one sheet per render target. Not a cap:
-/// [`IconPipeline::repack`] doubles it when one frame's glyphs do not fit.
+/// Starting edge of the shared atlas, one sheet per render target that has
+/// drawn an icon. Not a cap: [`IconPipeline::repack`] doubles it when one
+/// frame's glyphs do not fit.
 ///
-/// 256² RGBA is 256 KiB, and it is spent up front rather than per glyph. That
+/// 256² RGBA is 256 KiB, and it is spent on a target's first glyph rather than
+/// per glyph; a target that never draws an icon spends nothing. That
 /// is *more* than the per-glyph textures cost a typical window — a 20-glyph
 /// 16px toolbar was ~82 KiB — and it is the price of the single bind group
 /// that lets those 20 glyphs be one draw. It is sized so a real shell needs no
@@ -263,7 +265,9 @@ pub(super) struct IconPipeline {
     /// The target size and corner exponent the uniforms were written with.
     uploaded_globals: Option<([u32; 2], f32)>,
     frame_slots: Vec<FrameSlot>,
-    atlas: Atlas,
+    /// Created by the first glyph this target places, so a target without
+    /// icons holds no sheet. Every entry lives in it.
+    atlas: Option<Atlas>,
     entries: HashMap<AtlasKey, AtlasEntry>,
     frame_keys: HashSet<AtlasKey>,
     /// Set when even a maximal atlas could not hold this frame's glyphs, so
@@ -477,7 +481,6 @@ impl IconPipeline {
             ..Default::default()
         });
         let pipeline = icon_pipeline(device, format, policy, &uniform_layout, &atlas_layout);
-        let atlas = new_atlas(device, &atlas_layout, &sampler, ATLAS_START_PX);
         Self {
             pipeline,
             uniform_layout,
@@ -498,7 +501,7 @@ impl IconPipeline {
             corner_exponent: 2.0,
             uploaded_globals: None,
             frame_slots: Vec::new(),
-            atlas,
+            atlas: None,
             entries: HashMap::new(),
             frame_keys: HashSet::new(),
             exhausted: false,
@@ -581,7 +584,7 @@ impl IconPipeline {
             }
         }
         self.frame_keys.insert(key);
-        let uv_rect = UvRect::of(self.entries.get(&key)?, self.atlas.edge);
+        let uv_rect = UvRect::of(self.entries.get(&key)?, self.atlas.as_ref()?.edge);
         let mut color = pack_paint_color(color);
         color[3] *= opacity;
         let clip = fragment_clip.for_physical_pixels(scale);
@@ -698,13 +701,16 @@ impl IconPipeline {
             return;
         };
         let end = last.first_vertex + last.vertex_count;
+        let Some(atlas) = &self.atlas else {
+            return;
+        };
         if end <= head.first_vertex {
             return;
         }
         pass.set_scissor_rect(scissor.x, scissor.y, scissor.width, scissor.height);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-        pass.set_bind_group(1, &self.atlas.bind_group, &[]);
+        pass.set_bind_group(1, &atlas.bind_group, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.draw(head.first_vertex..end, 0..1);
         if let Some(work) = gpu_work {
@@ -743,6 +749,14 @@ impl IconPipeline {
         if self.exhausted {
             return false;
         }
+        if self.atlas.is_none() {
+            self.atlas = Some(new_atlas(
+                device,
+                &self.atlas_layout,
+                &self.sampler,
+                ATLAS_START_PX,
+            ));
+        }
         if let Some(cell) = self.allocate(px + CELL_GUTTER * 2) {
             self.write_cell(queue, cell, px, rgba, work);
             self.entries.insert(
@@ -764,12 +778,12 @@ impl IconPipeline {
     /// Reserve a `cell`-sized square. Shelves are homogeneous, so a glyph
     /// either extends a shelf of its own cell size or opens a new one.
     fn allocate(&mut self, cell: u32) -> Option<[u32; 2]> {
-        let edge = self.atlas.edge;
+        let atlas = self.atlas.as_mut()?;
+        let edge = atlas.edge;
         if cell > edge {
             return None;
         }
-        if let Some(shelf) = self
-            .atlas
+        if let Some(shelf) = atlas
             .shelves
             .iter_mut()
             .find(|shelf| shelf.cell == cell && shelf.next_x + cell <= edge)
@@ -778,12 +792,12 @@ impl IconPipeline {
             shelf.next_x += cell;
             return Some(origin);
         }
-        if self.atlas.next_y + cell > edge {
+        if atlas.next_y + cell > edge {
             return None;
         }
-        let y = self.atlas.next_y;
-        self.atlas.next_y += cell;
-        self.atlas.shelves.push(Shelf {
+        let y = atlas.next_y;
+        atlas.next_y += cell;
+        atlas.shelves.push(Shelf {
             cell,
             y,
             next_x: cell,
@@ -833,12 +847,16 @@ impl IconPipeline {
             })
             .sum();
         let max_edge = MAX_ATLAS_EDGE.min(device.limits().max_texture_dimension_2d);
-        let mut edge = self.atlas.edge.max(ATLAS_START_PX).min(max_edge);
+        let current = self
+            .atlas
+            .as_ref()
+            .map_or(ATLAS_START_PX, |atlas| atlas.edge);
+        let mut edge = current.max(ATLAS_START_PX).min(max_edge);
         while (edge as u64) * (edge as u64) < needed * 2 && edge < max_edge {
             edge = (edge * 2).min(max_edge);
         }
         loop {
-            self.atlas = new_atlas(device, &self.atlas_layout, &self.sampler, edge);
+            self.atlas = Some(new_atlas(device, &self.atlas_layout, &self.sampler, edge));
             self.entries.clear();
             let placed = keep.iter().all(|(key, svg)| {
                 let Some(cell) = self.allocate(key.px + CELL_GUTTER * 2) else {
@@ -892,6 +910,9 @@ impl IconPipeline {
             atlas,
             ..
         } = self;
+        let Some(atlas) = atlas else {
+            return;
+        };
         for slot in frame_slots.iter() {
             let Some(entry) = entries.get(&slot.key) else {
                 continue;
@@ -918,10 +939,13 @@ impl IconPipeline {
         rgba: &[u8],
         work: Option<&crate::gpu_work::GpuWorkSink>,
     ) {
+        let Some(atlas) = &self.atlas else {
+            return;
+        };
         if let Some(work) = work {
             work.write_texture(
                 queue,
-                &self.atlas.texture,
+                &atlas.texture,
                 [cell[0] + CELL_GUTTER, cell[1] + CELL_GUTTER, 0],
                 rgba,
                 px * 4,
@@ -931,7 +955,7 @@ impl IconPipeline {
         } else {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &self.atlas.texture,
+                    texture: &atlas.texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d {
                         x: cell[0] + CELL_GUTTER,
@@ -1196,7 +1220,8 @@ mod tests {
             );
         }
         assert_eq!(
-            pipeline.atlas.edge, ATLAS_START_PX,
+            pipeline.atlas.as_ref().unwrap().edge,
+            ATLAS_START_PX,
             "a working set this small must be repacked into the same sheet, not a bigger one"
         );
         for icon in 0..3 {
@@ -1232,7 +1257,7 @@ mod tests {
             pipeline.frame_keys.insert(key(icon));
         }
         assert!(
-            pipeline.atlas.edge > ATLAS_START_PX,
+            pipeline.atlas.as_ref().unwrap().edge > ATLAS_START_PX,
             "16 cells of {PX}px cannot fit {ATLAS_START_PX}², so the sheet must grow"
         );
         for icon in 0..16 {
@@ -1275,21 +1300,22 @@ pub(super) struct IconPipelineTarget {
     /// The target size and corner exponent the uniforms were written with.
     uploaded_globals: Option<([u32; 2], f32)>,
     frame_slots: Vec<FrameSlot>,
-    atlas: Atlas,
+    atlas: Option<Atlas>,
     entries: HashMap<AtlasKey, AtlasEntry>,
     frame_keys: HashSet<AtlasKey>,
     exhausted: bool,
 }
 
 impl IconPipeline {
-    /// Atlas count and bytes: the one the painter keeps for its own target
-    /// and one per render target in `others`.
+    /// Atlas count and bytes: the painter's own target and each render
+    /// target in `others`, counting only those that have drawn an icon.
     pub(super) fn atlas_counters_across<'a>(
         &'a self,
         others: impl Iterator<Item = &'a IconPipelineTarget>,
     ) -> (u64, u64) {
         std::iter::once(&self.atlas)
             .chain(others.map(|target| &target.atlas))
+            .flatten()
             .fold((0, 0), |(count, bytes), atlas| {
                 (
                     count + 1,
@@ -1332,7 +1358,7 @@ impl IconPipeline {
                 physical_size: [0; 2],
                 uploaded_globals: None,
                 frame_slots: Vec::new(),
-                atlas: new_atlas(device, &self.atlas_layout, &self.sampler, ATLAS_START_PX),
+                atlas: None,
                 entries: HashMap::new(),
                 frame_keys: HashSet::new(),
                 exhausted: false,

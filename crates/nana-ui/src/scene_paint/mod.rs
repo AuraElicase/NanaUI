@@ -34,7 +34,8 @@ mod validate;
 /// painter, without driver padding or alignment.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ScenePainterResourceCounters {
-    /// Icon atlases: the painter's own and one per render target it painted.
+    /// Icon atlases: one per render target, the painter's own included, that
+    /// has drawn an icon. A target without icons holds none.
     pub icon_atlases: u64,
     pub icon_atlas_bytes: u64,
     /// Uploaded `url(...)` textures, one per URL and source encoding.
