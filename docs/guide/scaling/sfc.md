@@ -52,7 +52,7 @@ defineProps!(todo: Todo, on_remove: impl Fn() + Send + 'static);
 
 子组件声明 `header: impl IntoView` 这样的视图参数，模板里用 `<slot name="header"/>` 放进去。`<slot/>` 放 `children`。父组件写 `<template #header>…</template>`。`#default` 等于其余子节点。插槽内容按值传入，只能放一次，也没有后备内容。
 
-`ref="name"` 把节点 id 写进脚本里的 `let name = node_ref();`。`on_mount(move |cx| …)` 在视图进树之后执行，用来聚焦或读布局。组件上的 `key` 落在第一个根节点上。不在这一批里的标签，按 `view!` 的规则调用同名的 Rust 函数。
+`ref="name"` 把节点 id 写进脚本里的 `let name = node_ref();`。`on_mount(move |cx| …)` 在视图进树之后执行，用来聚焦或读布局。组件上的 `key` 落在第一个根节点上。不在这一批里的标签，按 `view!` 的规则调用同名的 `#[component]` Rust 函数，按属性名传参（见 [组合视图](../essentials/view-functions.md)）。
 
 `<style>` 写不写 `scoped` 都只作用于本组件，在构建时编译。模板仍遵守 Rust 的所有权，同一个值既要传给组件又要被事件闭包使用时，写 `todo.clone()`。
 

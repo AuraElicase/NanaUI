@@ -510,6 +510,20 @@ impl Text {
 
     /// Semantic foreground role. Business colors do not belong here; pick the
     /// role that matches the text's job.
+    /// Type step, following the installed theme's type scale. See
+    /// [`NodeStyle::type_role`].
+    pub fn role(mut self, role: nana_ui_core::TypeRole) -> Self {
+        self.style.type_role = Some(role);
+        self
+    }
+
+    /// Weight step, following the installed theme. See
+    /// [`NodeStyle::type_weight`].
+    pub fn weight(mut self, weight: nana_ui_core::TextWeight) -> Self {
+        self.style.type_weight = Some(weight);
+        self
+    }
+
     pub fn color(mut self, role: nana_ui_core::SemanticColorRole) -> Self {
         self.style.foreground = Some(role);
         self
@@ -688,6 +702,10 @@ impl Button {
                 control_padding_y: None,
                 surface_padding: None,
                 square: None,
+                type_role: None,
+                type_weight: None,
+                gap_step: None,
+                padding_step: None,
                 interaction: crate::InteractionStyle {
                     hovered: SemanticPaint {
                         background: Some(nana_ui_core::SemanticColorRole::Hover),
@@ -1102,6 +1120,14 @@ impl IconButton {
     /// Tooltip with [`nana_ui_core::TooltipConfig::default`].
     pub fn with_tooltip(self, label: impl Into<Arc<str>>) -> Self {
         self.tooltip(label, nana_ui_core::TooltipConfig::default())
+    }
+
+    /// A heading's tool: [`Self::compact`], its label also its tooltip.
+    pub fn tool(icon: nana_ui_core::Icon, label: impl Into<Arc<str>>) -> Self {
+        let label = label.into();
+        Self::new(icon, Arc::clone(&label))
+            .compact(true)
+            .with_tooltip(label)
     }
 
     /// Paint this button with the colours in its own [`Self::style`] instead
@@ -1610,7 +1636,62 @@ pub struct ListItem {
     /// and ArrowUp / ArrowDown on it raise [`SecondaryPress`] with
     /// `keyboard` set. See [`AccessibilityState::has_popup`].
     pub has_popup: bool,
+    /// The trailing slot holds row tools: shown while the pointer is on the
+    /// row or keyboard focus is inside it, so Tab reaches them. Set by
+    /// `El::tools`; see [`RowToolsRest`] for how they sit while put away.
+    pub trailing_tools: bool,
+    pub tools_rest: RowToolsRest,
+    /// Row tools stay shown at rest too (a pin that is on).
+    pub keep_tools: bool,
+    /// Kept by the framework from the pointer and keyboard focus.
+    pub tools_presence: RowToolsPresence,
     pub style: NodeStyle,
+}
+
+/// How a row's tools sit while they are put away (the pointer is elsewhere
+/// and keyboard focus is outside the row).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RowToolsRest {
+    /// Out of the layout: the label owns the whole row at rest, and revealing
+    /// the tools reflows it. Tab reaches them once focus is on the row;
+    /// Shift+Tab from below skips them and lands on the row.
+    #[default]
+    Yield,
+    /// Kept in place but not drawn: revealing them never reflows the row, at
+    /// the cost of the width they hold. Tab order includes them throughout.
+    Reserve,
+}
+
+/// What reveals a row's tools; the framework keeps it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RowToolsPresence {
+    /// The pointer is on the row.
+    pub hovered: bool,
+    /// Keyboard focus is on the row or inside it.
+    pub focus_within: bool,
+}
+
+impl RowToolsPresence {
+    pub fn revealed(self) -> bool {
+        self.hovered || self.focus_within
+    }
+}
+
+/// Puts a row's tools node away or back without touching the rest of its
+/// style. Returns whether anything changed.
+pub(crate) fn place_row_tools(
+    layout: &mut nana_ui_core::LayoutStyle,
+    shown: bool,
+    rest: RowToolsRest,
+) -> bool {
+    let (hidden, opacity) = match rest {
+        RowToolsRest::Yield => (!shown, layout.opacity),
+        RowToolsRest::Reserve => (false, (!shown).then_some(0.0)),
+    };
+    let changed = layout.hidden != hidden || layout.opacity != opacity;
+    layout.hidden = hidden;
+    layout.opacity = opacity;
+    changed
 }
 
 /// What a [`ListItem`] says it is, independent of how it looks. A row that
@@ -1665,6 +1746,10 @@ impl ListItem {
             pill_bleed: false,
             role: ListItemRole::ListItem,
             has_popup: false,
+            trailing_tools: false,
+            tools_rest: RowToolsRest::Yield,
+            keep_tools: false,
+            tools_presence: RowToolsPresence::default(),
             style: NodeStyle {
                 layout: Arc::new(layout),
                 background: None,
@@ -1788,6 +1873,48 @@ impl ListItem {
         self
     }
 
+    /// How the row tools sit while put away; see [`RowToolsRest`].
+    pub fn tools_rest(mut self, rest: RowToolsRest) -> Self {
+        self.tools_rest = rest;
+        self
+    }
+
+    /// Keep the row tools shown at rest too.
+    pub fn keep_tools(mut self, keep: bool) -> Self {
+        self.keep_tools = keep;
+        self
+    }
+
+    fn tools_shown(&self) -> bool {
+        self.keep_tools || self.tools_presence.revealed()
+    }
+
+    /// The trailing slot as laid out: row tools that yield their width are
+    /// out of the row while put away.
+    fn visible_trailing(&self) -> Option<StableNodeId> {
+        self.slots.trailing.filter(|_| {
+            !self.trailing_tools || self.tools_rest == RowToolsRest::Reserve || self.tools_shown()
+        })
+    }
+
+    /// Patches the tools slot, which another component owns.
+    fn project_tools(&self, world: &UiWorld, mutations: &mut MutationQueue) {
+        let Some(tools) = self.slots.trailing.filter(|_| self.trailing_tools) else {
+            return;
+        };
+        if world.node(tools).is_none() {
+            return;
+        }
+        let mut style = world.node_style(tools).cloned().unwrap_or_default();
+        if place_row_tools(
+            Arc::make_mut(&mut style.layout),
+            self.tools_shown(),
+            self.tools_rest,
+        ) {
+            mutations.set_style(tools, style);
+        }
+    }
+
     /// 行内子节点的对齐语义：有 trailing 槽时按钮簇贴行尾（与 SidebarRow
     /// 的行工具同款规则），否则按 start 排。隐藏的槽位子节点不参与 flex 流，
     /// 不影响其余子节点的分布。
@@ -1802,7 +1929,7 @@ impl ListItem {
             .control_padding_x
             .map(|padding| padding.resolve(metrics));
         let layout = Arc::make_mut(&mut style.layout);
-        layout.justify_content = if self.slots.trailing.is_some() {
+        layout.justify_content = if self.visible_trailing().is_some() {
             if self.slots.leading.is_some() {
                 nana_ui_core::JustifySpec::SpaceBetween
             } else {
@@ -1828,9 +1955,22 @@ impl ListItem {
     }
 }
 
+/// A view builds a row's slots before the row, so their nodes join the world
+/// after its first projection; the tools are put away once they have.
+fn assemble_list_item_tools(
+    cx: &mut crate::AppContext,
+    item: crate::Entity<ListItem>,
+) -> Result<bool, crate::FrameworkError> {
+    if cx.read(item, |item| item.trailing_tools)? {
+        cx.reproject_component(item)?;
+    }
+    Ok(false)
+}
+
 impl ComponentView for ListItem {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         activation: Some(crate::AppContext::activate_list_item),
+        slot_assembler: Some(assemble_list_item_tools),
         ..crate::TypeBehavior::NONE
     };
 
@@ -1869,7 +2009,7 @@ impl ComponentView for ListItem {
         let visual = StandardVisual::ListItem {
             leading: self.slots.leading,
             content: self.slots.content,
-            trailing: self.slots.trailing,
+            trailing: self.visible_trailing(),
             note: has_note.then(|| Arc::from(self.note.as_str())),
             detail: has_detail.then(|| Arc::from(self.detail.as_str())),
         };
@@ -1913,6 +2053,7 @@ impl ComponentView for ListItem {
                 ..AccessibilityState::default()
             },
         );
+        self.project_tools(world, mutations);
     }
 }
 
@@ -5471,6 +5612,10 @@ impl ComponentView for List {
 pub struct Stack {
     style: NodeStyle,
     hittable: bool,
+    /// The container a keyed list or a conditional block puts its rows in:
+    /// layout only, so a [`crate::SettingsGroup`] reads through it to the
+    /// rows themselves.
+    structural: bool,
 }
 
 impl Stack {
@@ -5489,6 +5634,7 @@ impl Stack {
         Self {
             style,
             hittable: false,
+            structural: false,
         }
     }
 
@@ -5501,6 +5647,7 @@ impl Stack {
         Self {
             style,
             hittable: true,
+            structural: false,
         }
     }
 
@@ -5508,6 +5655,12 @@ impl Stack {
     pub fn with_layout(mut self, f: impl FnOnce(&mut nana_ui_core::LayoutStyle)) -> Self {
         f(Arc::make_mut(&mut self.style.layout));
         self
+    }
+
+    /// [`Self::with_layout`] 的借用版：`bind` 闭包里拿到的是 `&mut Stack`，
+    /// 直接改字段，不必把整个容器换掉再重建。
+    pub fn layout_mut(&mut self) -> &mut nana_ui_core::LayoutStyle {
+        Arc::make_mut(&mut self.style.layout)
     }
 
     pub(crate) fn style_ref(&self) -> &NodeStyle {
@@ -5717,6 +5870,18 @@ impl Stack {
         self
     }
 
+    /// 跟随主题的混合背景（如强调色 12% 的淡底），见 [`NodeStyle::surface_mix`]。
+    pub fn surface_mix(mut self, mix: nana_ui_core::SemanticColorMix) -> Self {
+        self.style = self.style.surface_mix(mix);
+        self
+    }
+
+    /// 跟随主题的混合边框色与宽度，见 [`NodeStyle::outline_mix`]。
+    pub fn outline_mix(mut self, mix: nana_ui_core::SemanticColorMix, width: f32) -> Self {
+        self.style = self.style.outline_mix(mix, width);
+        self
+    }
+
     /// 圆角半径（物理 px）——一次性覆盖，不跟随主题。
     pub fn radius_px(mut self, radius: f32) -> Self {
         self.style = self.style.radius_px(radius);
@@ -5727,6 +5892,38 @@ impl Stack {
     pub fn radius(mut self, tier: nana_ui_core::RadiusTier) -> Self {
         self.style = self.style.radius(tier);
         self
+    }
+
+    /// 方形最小盒档位（最小宽高），跟随安装的 `ThemeMetrics`。
+    pub fn square(mut self, size: nana_ui_core::SquareSize) -> Self {
+        self.style = self.style.square(size);
+        self
+    }
+
+    /// 子项间距档位，跟随安装主题的间距刻度，覆盖构造时给的 `gap`。
+    pub fn gap_step(mut self, step: nana_ui_core::SpacingStep) -> Self {
+        self.style = self.style.gap_step(step);
+        self
+    }
+
+    /// 内边距档位（水平、垂直），跟随安装主题的间距刻度。
+    pub fn padding_step(
+        mut self,
+        x: nana_ui_core::SpacingStep,
+        y: nana_ui_core::SpacingStep,
+    ) -> Self {
+        self.style = self.style.padding_step(x, y);
+        self
+    }
+
+    /// Marks the container of a keyed list or conditional block.
+    pub(crate) fn structural(mut self) -> Self {
+        self.structural = true;
+        self
+    }
+
+    pub(crate) fn is_structural(&self) -> bool {
+        self.structural
     }
 
     /// Vue / CSS 布局盒：参与命中。Rust 预设默认可点关闭。

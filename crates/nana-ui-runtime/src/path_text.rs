@@ -150,7 +150,7 @@ pub(crate) fn shorten_path(text: &str, width: f32, measure: impl Fn(&str) -> f32
         return fitting_prefix(
             graphemes.len().saturating_sub(suffix_count),
             |count| format!("{}…{extension}", graphemes[..count].concat()),
-            &fits,
+            fits,
         );
     }
     fitting_prefix(
@@ -164,7 +164,7 @@ pub(crate) fn shorten_path(text: &str, width: f32, measure: impl Fn(&str) -> f32
                 graphemes[graphemes.len() - back..].concat()
             )
         },
-        &fits,
+        fits,
     )
 }
 

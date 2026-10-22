@@ -166,7 +166,8 @@ pub fn info_plist(input: &PlistInput<'_>) -> Result<String, String> {
         entries.push(("CFBundleDocumentTypes", Value::Raw(raw)));
     }
 
-    let overridden = match input.extra {
+    let extra = input.extra.map(plist_fragment).transpose()?;
+    let overridden = match extra {
         Some(extra) => plist_keys(extra)?,
         None => Vec::new(),
     };
@@ -199,7 +200,7 @@ pub fn info_plist(input: &PlistInput<'_>) -> Result<String, String> {
             }
         }
     }
-    if let Some(extra) = input.extra {
+    if let Some(extra) = extra {
         for line in extra.trim().lines() {
             body.push_str("  ");
             body.push_str(line.trim_end());
@@ -209,6 +210,30 @@ pub fn info_plist(input: &PlistInput<'_>) -> Result<String, String> {
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n{body}</dict>\n</plist>\n"
     ))
+}
+
+/// The keys and values `info_plist_extra` adds: the file as written, or the
+/// top-level dictionary of a whole plist document (what an editor saves).
+fn plist_fragment(extra: &str) -> Result<&str, String> {
+    let Some(at) = extra.find("<plist") else {
+        if extra.contains("<?xml") || extra.contains("<!DOCTYPE") {
+            return Err("info_plist_extra: an XML prolog without a <plist> document".into());
+        }
+        return Ok(extra);
+    };
+    let inside = &extra[at..];
+    let open = inside
+        .find("<dict>")
+        .ok_or("info_plist_extra: the <plist> document has no top-level <dict>")?;
+    let close = inside
+        .rfind("</dict>")
+        .filter(|close| *close > open)
+        .ok_or("info_plist_extra: unterminated top-level <dict>")?;
+    let after = inside[close + "</dict>".len()..].trim();
+    if after != "</plist>" {
+        return Err("info_plist_extra: content after the top-level <dict>".into());
+    }
+    Ok(&inside[open + "<dict>".len()..close])
 }
 
 /// Top-level `<key>` names in a plist fragment.
@@ -316,6 +341,53 @@ mod tests {
         assert!(out.join("Contents/Resources/AppIcon.icns").is_file());
         assert!(out.join("Contents/MacOS/dummy-bin").is_file());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_whole_plist_document_adds_its_top_level_dictionary() {
+        let app = app();
+        let macos = MacosConfig::default();
+        let extra = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <!-- no Dock icon -->\n    <key>LSUIElement</key>\n    <true/>\n    <key>NSHighResolutionCapable</key>\n    <false/>\n</dict>\n</plist>\n";
+        let plist = info_plist(&PlistInput {
+            application: &app,
+            macos: &macos,
+            executable: "X",
+            build_id: None,
+            extra: Some(extra),
+        })
+        .unwrap();
+        assert_eq!(plist.matches("<?xml").count(), 1, "{plist}");
+        assert_eq!(plist.matches("<plist").count(), 1, "{plist}");
+        assert_eq!(plist.matches("<dict>").count(), 1, "{plist}");
+        assert!(
+            plist.contains("<key>LSUIElement</key>\n      <true/>"),
+            "{plist}"
+        );
+        // The document's own value replaces the generated one.
+        assert_eq!(
+            plist.matches("NSHighResolutionCapable").count(),
+            1,
+            "{plist}"
+        );
+        assert!(plist.contains("<false/>"), "{plist}");
+
+        for bad in [
+            "<?xml version=\"1.0\"?>\n<key>A</key><true/>",
+            "<plist version=\"1.0\"><array/></plist>",
+            "<plist version=\"1.0\"><dict><key>A</key><true/></dict><dict/></plist>",
+        ] {
+            assert!(
+                info_plist(&PlistInput {
+                    application: &app,
+                    macos: &macos,
+                    executable: "X",
+                    build_id: None,
+                    extra: Some(bad),
+                })
+                .is_err(),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

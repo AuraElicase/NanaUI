@@ -1,0 +1,28 @@
+size 468.8 383.3
+summary nodes=9 edges=8 groups=0
+shape path M18.5,11.1 C137.7,11.1 137.7,8 257,8 L257,148 C137.7,148 137.7,151.1 18.5,151.1 Z fill=series6.soft
+shape path M267.5,8 C358.9,8 358.9,25.3 450.3,25.3 L450.3,142 C358.9,142 358.9,124.7 267.5,124.7 Z fill=series0.soft
+shape path M267.5,124.7 C358.9,124.7 358.9,184 450.3,184 L450.3,254 C358.9,254 358.9,194.7 267.5,194.7 Z fill=series0.soft
+shape path M18.5,319.1 C234.4,319.1 234.4,319.3 450.3,319.3 L450.3,375.3 C234.4,375.3 234.4,375.1 18.5,375.1 Z fill=series4.soft
+shape path M18.5,165.1 C137.7,165.1 137.7,148 257,148 L257,204 C137.7,204 137.7,221.1 18.5,221.1 Z fill=series8.soft
+shape path M18.5,235.1 C137.7,235.1 137.7,204 257,204 L257,246 C137.7,246 137.7,277.1 18.5,277.1 Z fill=series7.soft
+shape path M267.5,194.7 C358.9,194.7 358.9,268 450.3,268 L450.3,305.3 C358.9,305.3 358.9,232 267.5,232 Z fill=series0.soft
+shape path M18.5,291.1 C234.4,291.1 234.4,142 450.3,142 L450.3,170 C234.4,170 234.4,319.1 18.5,319.1 Z fill=series4.soft
+shape rect 257 8 10.5 238 fill=series0
+text 147 118.6 104.4 16.8 size=12 w=400 ink=Text "Electricity 510"
+shape rect 450.3 25.3 10.5 144.7 fill=series1
+text 361.2 89.3 83.5 16.8 size=12 w=400 ink=Text "Industry 310"
+shape rect 450.3 268 10.5 37.3 fill=series2
+text 361.2 278.3 83.5 16.8 size=12 w=400 ink=Text "Transport 80"
+shape rect 450.3 184 10.5 70 fill=series3
+text 340.3 210.6 104.4 16.8 size=12 w=400 ink=Text "Residential 150"
+shape rect 8 291.1 10.5 84 fill=series4
+text 24.1 324.7 48.7 16.8 size=12 w=400 ink=Text "Gas 180"
+shape rect 450.3 319.3 10.5 56 fill=series5
+text 368.1 338.9 76.6 16.8 size=12 w=400 ink=Text "Heating 120"
+shape rect 8 11.1 10.5 140 fill=series6
+text 24.1 72.7 55.7 16.8 size=12 w=400 ink=Text "Coal 300"
+shape rect 8 235.1 10.5 42 fill=series7
+text 24.1 247.7 55.7 16.8 size=12 w=400 ink=Text "Solar 90"
+shape rect 8 165.1 10.5 56 fill=series8
+text 24.1 184.7 55.7 16.8 size=12 w=400 ink=Text "Wind 120"

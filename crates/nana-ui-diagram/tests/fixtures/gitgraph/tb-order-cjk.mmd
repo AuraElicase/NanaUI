@@ -1,0 +1,13 @@
+gitGraph TB:
+    commit id: "初始化"
+    branch test1 order: 3
+    branch test2 order: 2
+    branch 功能分支 order: 1
+    checkout test1
+    commit
+    checkout test2
+    commit
+    checkout 功能分支
+    commit id: "实现登录"
+    checkout main
+    merge 功能分支 tag: "v2.0"

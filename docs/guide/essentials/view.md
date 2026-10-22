@@ -114,6 +114,6 @@ column().gap(8).with(|c| {
 | `v-show={x}` | `.visible(x)` |
 | `class="a"` / `class:empty={c}` | `.class(s::a)` / `.class_when(s::a, c)` |
 
-`v-for` 和 `v-if` 不能写在同一个元素上，这是模板错误。`v-for` 要带 `key`。不认识的标签会按 snake_case 去调用同名函数。
+`v-for` 和 `v-if` 不能写在同一个元素上，这是模板错误。`v-for` 要带 `key`。不认识的标签会按 snake_case 去调用同名的 `#[component]` 函数，见 [组合视图](view-functions.md)。
 
 信号、Store、样式表和 `.vue` 方言的全文在 [声明式视图](../../reference/reactive-view.md)。计算值、条件和列表会在后面的章节分开写。

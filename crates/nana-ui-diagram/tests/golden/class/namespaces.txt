@@ -1,0 +1,56 @@
+size 763.6 240.6
+summary nodes=4 edges=3 groups=2
+shape rect 605 9 149.6 222.6 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 642.9 18.6 73.8 16.8 size=12 w=600 ink=Muted "BaseShapes"
+shape rect 9 11.7 308 217.2 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 122.4 21.3 81.2 16.8 size=12 w=600 ink=Muted "Collections"
+shape path M566.7,113.3 L585,113.3 Q593,113.3 593,105.3 L593,75.6 Q593,67.6 601,67.6 L633.4,67.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M557,113.3 L566.7,109.1 L566.7,117.5 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M566.7,127.3 L585,127.3 Q593,127.3 593,135.3 L593,162.5 Q593,170.5 601,170.5 L621,170.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M557,127.3 L566.7,123.1 L566.7,131.5 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M315.4,132.7 L322.8,132.7 Q329,132.7 329,126.5 L329,126.5 Q329,120.3 335.2,120.3 L410.6,120.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M301,132.7 L309.4,129.2 L317.8,132.7 L309.4,136.2 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 341 110.1 45.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 346.4 111.9 34.8 16.8 size=12 w=400 ink=Muted "holds"
+shape rect 633.4 49.8 92.9 35.6 r=Sm fill=Surface
+clip rect 633.4 49.8 92.9 35.6 r=Sm
+shape rect 633.4 49.8 92.9 35.6 fill=Subtle
+unclip
+shape rect 633.4 49.8 92.9 35.6 r=Sm stroke=rgba(0,170,119,1)/2/Solid
+text 645.4 57.8 68.9 19.6 size=14 w=600 ink=Text "Triangle"
+shape rect 621 125.4 117.6 90.2 r=Sm fill=Surface
+clip rect 621 125.4 117.6 90.2 r=Sm
+shape rect 621 125.4 117.6 35.6 fill=Subtle
+unclip
+shape path M621,161 L738.6,161 stroke=BorderStrong/hairline/Solid
+shape rect 621 125.4 117.6 90.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 641.1 133.4 77.5 19.6 size=14 w=600 ink=Text "Rectangle"
+shape path M621,206.6 L738.6,206.6 stroke=BorderStrong/hairline/Solid
+text 633 167 86.4 16.8 size=12 w=400 ink=Text "double width"
+text 633 183.8 93.6 16.8 size=12 w=400 ink=Text "double height"
+shape rect 25 52.5 276 160.4 r=Sm fill=Surface
+clip rect 25 52.5 276 160.4 r=Sm
+shape rect 25 52.5 276 35.6 fill=Subtle
+unclip
+shape path M25,88.1 L301,88.1 stroke=BorderStrong/hairline/Solid
+shape rect 25 52.5 276 160.4 r=Sm stroke=BorderStrong/hairline/Solid
+text 107.1 60.5 111.9 19.6 size=14 w=600 ink=Text "Square<Shape>"
+shape path M25,150.5 L301,150.5 stroke=BorderStrong/hairline/Solid
+text 37 94.1 43.2 16.8 size=12 w=400 ink=Text "int id"
+text 37 110.9 129.6 16.8 size=12 w=400 ink=Text "List<int> position"
+text 37 127.7 158.4 16.8 size=12 w=400 ink=Text "-List<string> messages"
+text 37 156.5 194.4 16.8 size=12 w=400 ink=Text "setPoints(List<int> points)"
+text 37 173.3 165.6 16.8 size=12 w=400 ink=Text "getPoints() : List<int>"
+text 37 190.1 252 16.8 size=12 w=400 ink=Text "+setMessages(List<string> messages)"
+shape rect 410.6 56.9 146.4 126.8 r=Sm fill=rgba(255,153,102,1)
+shape path M410.6,109.3 L557,109.3 stroke=rgba(51,51,51,1)/hairline/Solid
+shape rect 410.6 56.9 146.4 126.8 r=Sm stroke=rgba(51,51,51,1)/hairline/Solid
+text 445.5 64.9 76.6 16.8 size=12 w=400 ink=Muted "«interface»"
+text 462.3 81.7 43 19.6 size=14 w=600 ink=rgba(0,0,0,1) "Shape"
+shape path M410.6,138.1 L557,138.1 stroke=rgba(51,51,51,1)/hairline/Solid
+text 422.6 115.3 72 16.8 size=12 w=400 ink=rgba(0,0,0,1) "+int count"
+shape path M422.6,130.3 L494.6,130.3 stroke=rgba(0,0,0,1)/hairline/Solid
+text 422.6 144.1 115.2 16.8 size=12 w=400 italic ink=rgba(0,0,0,1) "+area() : double"
+text 422.6 160.9 122.4 16.8 size=12 w=400 ink=rgba(0,0,0,1) "+origin() : Point"
+shape path M422.6,175.9 L545,175.9 stroke=rgba(0,0,0,1)/hairline/Solid
+link 621 125.4 117.6 90.2 "https://example.com/rect"

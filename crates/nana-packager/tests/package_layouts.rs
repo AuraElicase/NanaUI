@@ -180,6 +180,14 @@ fn every_platform_layout_packages_and_validates() {
             assert!(out.join("steam/depot_build_481.vdf").is_file());
         }
         if target.contains("darwin") {
+            assert_eq!(
+                status(&validation, "macos.info-plist"),
+                &if cfg!(target_os = "macos") {
+                    Status::Pass
+                } else {
+                    Status::NotExecuted("plutil is only available on a macOS host".into())
+                }
+            );
             let plist = std::fs::read_to_string(app_root.join("Contents/Info.plist")).unwrap();
             assert!(plist.contains("<string>2.0.0</string>"));
             assert!(app_root.join("Contents/Helpers/tool.bin").is_file());
@@ -295,4 +303,102 @@ fn a_cache_inside_out_is_refused_before_anything_is_written() {
     let error = package(&opts).unwrap_err();
     assert!(error.contains("--cache"), "{error}");
     assert!(!out.exists());
+}
+
+/// A macOS framework ships as the directory it is, symlinks kept, beside a
+/// loose resource; validation hashes what the links lead to. A bundle whose
+/// link leaves it is refused.
+#[cfg(unix)]
+#[test]
+fn bundles_keep_their_symlinks_and_loose_resources_ship() {
+    use std::os::unix::fs::symlink;
+    let dir = scratch("bundle");
+    let (config, exe) = project(&dir.0, "installer");
+    let framework = dir.0.join("vendor/Fx.framework");
+    std::fs::create_dir_all(framework.join("Versions/A/Resources")).unwrap();
+    std::fs::write(framework.join("Versions/A/Fx"), b"fake dylib").unwrap();
+    std::fs::write(
+        framework.join("Versions/A/Resources/Info.plist"),
+        b"<plist/>",
+    )
+    .unwrap();
+    symlink("A", framework.join("Versions/Current")).unwrap();
+    symlink("Versions/Current/Fx", framework.join("Fx")).unwrap();
+    symlink("Versions/Current/Resources", framework.join("Resources")).unwrap();
+    std::fs::write(dir.0.join("vendor/NOTICES.txt"), b"licences").unwrap();
+    let text = std::fs::read_to_string(&config).unwrap().replace(
+        "[runtime]\n",
+        "[runtime]\nbin = [{ source = \"vendor/Fx.framework\", platforms = [\"macos\"] }]\n\
+         resources = [{ source = \"vendor/NOTICES.txt\" }]\n",
+    );
+    std::fs::write(&config, text).unwrap();
+
+    let out = dir.0.join("out");
+    package(&options(
+        config.clone(),
+        exe.clone(),
+        "aarch64-apple-darwin",
+        out.clone(),
+    ))
+    .unwrap();
+    let app_root = out.join("app/Layout Test.app");
+    let shipped = app_root.join("Contents/Frameworks/Fx.framework");
+    assert_eq!(
+        std::fs::read_link(shipped.join("Versions/Current")).unwrap(),
+        Path::new("A")
+    );
+    assert_eq!(std::fs::read(shipped.join("Fx")).unwrap(), b"fake dylib");
+    assert_eq!(
+        std::fs::read(app_root.join("Contents/Resources/NOTICES.txt")).unwrap(),
+        b"licences"
+    );
+    let validation = validate(&ValidateOptions {
+        app_root: app_root.clone(),
+        ..ValidateOptions::default()
+    })
+    .unwrap();
+    assert!(!validation.failed(), "{validation:#?}");
+    // The framework is macOS-only; the resource ships everywhere.
+    let windows = dir.0.join("out-windows");
+    package(&options(
+        config.clone(),
+        exe.clone(),
+        "x86_64-pc-windows-msvc",
+        windows.clone(),
+    ))
+    .unwrap();
+    assert!(
+        !windows
+            .join("app/LayoutTest/runtime/bin/Fx.framework")
+            .exists()
+    );
+    assert!(
+        windows
+            .join("app/LayoutTest/runtime/resources/NOTICES.txt")
+            .is_file()
+    );
+
+    // A changed file inside the bundle is caught like any other.
+    std::fs::write(shipped.join("Versions/A/Fx"), b"other").unwrap();
+    let validation = validate(&ValidateOptions {
+        app_root,
+        ..ValidateOptions::default()
+    })
+    .unwrap();
+    assert!(
+        matches!(status(&validation, "files.manifest-match"), Status::Fail(detail) if detail.contains("Fx.framework/Versions/A/Fx"))
+    );
+
+    symlink("../../../outside", framework.join("Versions/A/Leak")).unwrap();
+    let error = package(&options(
+        config,
+        exe,
+        "aarch64-apple-darwin",
+        dir.0.join("out-leak"),
+    ))
+    .unwrap_err();
+    assert!(
+        error.contains("outside it") && error.contains("Leak"),
+        "{error}"
+    );
 }

@@ -1,0 +1,59 @@
+size 719.1 335.6
+summary nodes=5 edges=5 groups=3
+shape rect 9 42.6 148 284 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape ellipse 26.2 56.4 13.1 13.1 fill=Surface stroke=Muted/hairline/Solid
+shape path M26.2,63 L39.4,63 stroke=Muted/hairline/Solid
+shape ellipse 30.2 56.4 5.2 13.1 stroke=Muted/hairline/Solid
+text 45.4 54.6 25.4 16.8 size=12 w=600 ink=Muted "边缘"
+text 80.4 54.6 55.7 16.8 size=12 w=400 ink=Muted "internet"
+shape rect 205 42.6 505.1 284 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape rect 222.2 60.4 13.1 6.6 r=Full fill=Surface stroke=Muted/hairline/Solid
+text 241.4 54.6 50.9 16.8 size=12 w=600 ink=Muted "云端区域"
+text 301.9 54.6 34.8 16.8 size=12 w=400 ink=Muted "cloud"
+shape rect 377.1 83.4 317 227.2 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape rect 394.3 97.2 13.1 13.1 r=Xs fill=Surface stroke=Muted/hairline/Solid
+shape path M394.3,102 L407.4,102 stroke=Muted/hairline/Solid
+shape path M394.3,105.6 L407.4,105.6 stroke=Muted/hairline/Solid
+text 413.5 95.4 50.9 16.8 size=12 w=600 ink=Muted "私有子网"
+text 474 95.4 41.8 16.8 size=12 w=400 ink=Muted "server"
+shape path M157,184.6 L198.3,184.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M205,184.6 L196.6,188.1 L198.1,184.6 L196.6,181.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M329.1,197 L356.6,197 Q364.6,197 364.6,189 L364.6,162.8 Q364.6,154.8 372.6,154.8 L393.3,154.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M400,154.8 L391.6,158.3 L393.2,154.8 L391.6,151.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M447.1,185.4 L447.1,226.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M447.1,233.4 L443.6,225 L447.1,226.5 L450.6,225 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M500.9,154.8 L542.4,154.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M549.2,154.8 L540.8,158.3 L542.3,154.8 L540.8,151.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M494.2,154.8 L502.6,151.3 L501.1,154.8 L502.6,158.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M501.2,264 L605.6,264 Q613.6,264 613.6,256 L613.6,185.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 25 166.4 116 61.2 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+shape ellipse 46.2 178.2 13.1 13.1 fill=Surface stroke=Muted/hairline/Solid
+shape path M46.2,184.8 L59.3,184.8 stroke=Muted/hairline/Solid
+shape ellipse 50.1 178.2 5.2 13.1 stroke=Muted/hairline/Solid
+text 65.4 176.4 55.7 16.8 size=12 w=400 ink=Muted "internet"
+text 41 198 84 19.6 size=14 w=400 ink=Text "浏览器客户端"
+shape rect 221 166.4 108.1 61.2 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+shape ellipse 238.2 178.2 13.1 13.1 fill=Surface stroke=Muted/hairline/Solid
+shape path M238.2,184.8 L251.4,184.8 stroke=Muted/hairline/Solid
+shape ellipse 242.2 178.2 5.2 13.1 stroke=Muted/hairline/Solid
+text 257.4 176.4 55.7 16.8 size=12 w=400 ink=Muted "internet"
+text 247 198 56 19.6 size=14 w=400 ink=Text "公网网关"
+shape rect 400 124.2 94.2 61.2 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+shape rect 417.3 136 13.1 13.1 r=Xs fill=Surface stroke=Muted/hairline/Solid
+shape path M417.3,140.8 L430.4,140.8 stroke=Muted/hairline/Solid
+shape path M417.3,144.4 L430.4,144.4 stroke=Muted/hairline/Solid
+text 436.4 134.2 41.8 16.8 size=12 w=400 ink=Muted "server"
+text 419.1 155.8 56 19.6 size=14 w=400 ink=Text "接口服务"
+shape rect 549.2 124.2 129 61.2 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+shape rect 566.4 136 13.1 13.1 r=Xs fill=Surface stroke=Muted/hairline/Solid
+shape ellipse 570.6 140.2 4.7 4.7 stroke=Muted/hairline/Solid
+text 585.6 134.2 76.6 16.8 size=12 w=400 ink=Muted "logos:redis"
+text 599.6 155.8 28 19.6 size=14 w=400 ink=Text "缓存"
+shape rect 393.1 233.4 108.1 61.2 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M410.3,249.2 C410.3,247 413.3,245.2 416.9,245.2 C420.5,245.2 423.4,247 423.4,249.2 L423.4,254.4 C423.4,256.6 420.5,258.4 416.9,258.4 C413.3,258.4 410.3,256.6 410.3,254.4 Z fill=Surface stroke=Muted/hairline/Solid
+shape path M410.3,249.2 C410.3,251.5 413.3,253.2 416.9,253.2 C420.5,253.2 423.4,251.5 423.4,249.2 stroke=Muted/hairline/Solid
+text 429.5 243.4 55.7 16.8 size=12 w=400 ink=Muted "database"
+text 419.1 265 56 19.6 size=14 w=400 ink=Text "主数据库"
+shape rect 341.8 165.7 45.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 347.2 167.5 34.8 16.8 size=12 w=400 ink=Muted "HTTPS"
+text 325.6 8 67.8 22.4 size=16 w=600 ink=Text "部署拓扑"

@@ -1,0 +1,16 @@
+size 407.3 270
+summary nodes=2 edges=0 groups=1
+shape ellipse 9 9 252 252 fill=rgba(255,107,107,0.4)
+shape ellipse 184.1 27.9 214.2 214.2 fill=series1.soft
+clip ellipse 9 9 252 252
+shape ellipse 184.1 27.9 214.2 214.2 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+shape ellipse 9 9 252 252 stroke=series0/thick/Solid
+shape ellipse 184.1 27.9 214.2 214.2 stroke=series1/thick/Solid
+text 74 105.6 43 19.6 size=14 w=600 ink=Text "Alpha"
+text 78.1 128 34.8 16.8 size=12 w=400 ink=rgba(255,0,0,1) "React"
+text 46.8 147.6 97.4 16.8 size=12 w=400 ink=Muted "Design Systems"
+text 310.8 101.4 34.4 19.6 size=14 w=600 ink=Text "Beta"
+text 317.6 123.8 20.9 16.8 size=12 w=400 ink=Muted "API"
+text 211.8 115.4 16.2 19.6 size=14 w=400 ink=rgba(51,51,51,1) "AB"
+text 195.5 137.8 48.7 16.8 size=12 w=400 ink=rgba(51,51,51,1) "OpenAPI"

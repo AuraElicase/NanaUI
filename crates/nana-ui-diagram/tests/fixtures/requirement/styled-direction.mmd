@@ -1,0 +1,18 @@
+requirementDiagram
+    direction LR
+
+    requirement "Login works":::critical {
+        id: REQ-7
+        text: "Users can sign in with email and password"
+        risk: high
+        verifymethod: test
+    }
+
+    element "Auth service" {
+        type: microservice
+        docref: services/auth
+    }
+
+    "Auth service" - satisfies -> "Login works"
+    classDef critical stroke:#dc2626,stroke-width:2px
+    style "Auth service" fill:#dbeafe,color:#1e3a8a

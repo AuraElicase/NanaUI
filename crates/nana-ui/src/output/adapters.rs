@@ -516,7 +516,6 @@ mod tests {
                     profile: ScenePresentationProfile::sdr(GpuTextureFormat::BGRA8_UNORM),
                     alpha: OutputAlpha::GammaPremultiplied,
                     text_aa: OutputTextAa::Grayscale,
-                    sample_count: 1,
                     device_generation: gpu.generation(),
                     ownership: OutputOwnership::SameDevice,
                     persistent: true,

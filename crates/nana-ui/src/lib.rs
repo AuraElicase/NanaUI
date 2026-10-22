@@ -80,6 +80,7 @@ mod nana_text;
 mod native_browser;
 #[cfg(feature = "gpu")]
 mod native_content;
+pub mod notices;
 mod text_engine;
 #[cfg(feature = "hosted")]
 mod web_surface;
@@ -110,8 +111,15 @@ mod runtime_dock;
 mod runtime_host;
 #[cfg(feature = "gpu")]
 mod scene_gpu;
+#[cfg(feature = "hosted")]
+mod staged;
+#[cfg(feature = "hosted")]
+mod window_registry;
 #[cfg(feature = "gpu")]
 pub use native_content::{NativeContentRegion, NativeContentWork, native_content_regions};
+/// A host with no native window, for offscreen acceptance of a whole program.
+#[cfg(feature = "hosted")]
+pub mod headless;
 #[cfg(feature = "hosted")]
 mod scene_host;
 /// Two-phase startup (Issue #225): Early Splash, `UiReady`, takeover.
@@ -304,6 +312,7 @@ pub use nana_ui_platform::{
 pub use nana_ui_runtime::{
     AccessibilityActionRequest, AccessibilityNode, AccessibilityRole, AccessibilityUpdate,
 };
+pub use nana_ui_runtime::{DocumentId, TextureSlotName};
 pub use nana_ui_runtime::{
     HeadlessInput, InputBindError, InputCounters, InputRouteError, InputRouteOutcome, RoutedEvent,
 };
@@ -342,9 +351,9 @@ pub use scene_host::run_runtime_scene;
 #[cfg(feature = "gpu")]
 pub use scene_paint::{
     AlphaEncoding, BT709_TO_BT2020, ImageNaturalSize, RenderTargetId, ScenePaintError,
-    ScenePaintViewport, ScenePresentationColorSpace, ScenePresentationParameters,
-    ScenePresentationProfile, SceneWgpuPainter, SubpixelOrder, TextGlyphCounters,
-    commit_image_natural_sizes, hlg_decode, hlg_encode, hlg_eotf, hlg_oetf,
+    ScenePaintViewport, ScenePainterResourceCounters, ScenePresentationColorSpace,
+    ScenePresentationParameters, ScenePresentationProfile, SceneWgpuPainter, SubpixelOrder,
+    TextGlyphCounters, commit_image_natural_sizes, hlg_decode, hlg_encode, hlg_eotf, hlg_oetf,
     linear_sc_rgb_to_bt2020, pq_decode, pq_decode_nits, pq_encode, pq_encode_nits, pq_eotf,
     pq_oetf, resolve_background_image_url, set_background_image_url_base, tone_map_headroom_rgb,
 };
@@ -356,11 +365,12 @@ pub use settings::{
 #[cfg(feature = "hosted")]
 pub use settings::{hosted_window_material_modes, window_material_effect};
 pub use split_pane::{SplitAxis, SplitPaneAction, SplitPaneController};
+#[cfg(feature = "hosted")]
+pub use staged::{Launch, LaunchError, LaunchMessage, LaunchUpdate, Staged};
 pub use theme::{
-    Color, CompiledTheme, HAIRLINE, SemanticColor, SemanticPalette, ThemeAppearance,
-    ThemeAppearanceExt, ThemeChoice, ThemeId, ThemeMetrics, ThemeMode, ThemeModeExt, ThemeRegistry,
-    ThemeRegistryError, ThemeTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme_arc,
-    install_theme_tokens, space, type_scale,
+    CompiledTheme, HAIRLINE, SemanticColor, SemanticPalette, ThemeAppearance, ThemeAppearanceExt,
+    ThemeChoice, ThemeId, ThemeMetrics, ThemeRegistry, ThemeRegistryError, ThemeTokens,
+    UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme_arc, install_theme_tokens, space, type_scale,
 };
 #[cfg(feature = "bundled-fonts")]
 pub use theme::{UI_FONT_BOLD, UI_FONT_MEDIUM, UI_FONT_REGULAR, UI_FONT_SEMIBOLD, ui_font_sources};
@@ -379,6 +389,8 @@ pub use window_chrome::{
     WindowControlMode, apply_title_bar_pointer, title_bar_hits_window_control,
     window_commands_for_chrome_action,
 };
+#[cfg(feature = "hosted")]
+pub use window_registry::WindowRegistry;
 pub use workspace::{WorkspaceAction, WorkspaceController};
 
 pub use nana_ui_scene::DocumentAccessError;

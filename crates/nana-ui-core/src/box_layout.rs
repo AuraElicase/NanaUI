@@ -2746,18 +2746,29 @@ pub struct PaintMat4 {
 
 impl Default for PaintTransform {
     fn default() -> Self {
-        Self {
-            a: 1.0,
-            b: 0.0,
-            c: 0.0,
-            d: 1.0,
-            e: 0.0,
-            f: 0.0,
-        }
+        Self::IDENTITY
     }
 }
 
 impl PaintTransform {
+    pub const IDENTITY: Self = Self {
+        a: 1.0,
+        b: 0.0,
+        c: 0.0,
+        d: 1.0,
+        e: 0.0,
+        f: 0.0,
+    };
+
+    /// Scales by `x` across and `y` down, about the box's transform origin.
+    pub const fn scaling(x: f32, y: f32) -> Self {
+        Self {
+            a: x,
+            d: y,
+            ..Self::IDENTITY
+        }
+    }
+
     pub fn is_identity(self) -> bool {
         self == Self::default()
     }

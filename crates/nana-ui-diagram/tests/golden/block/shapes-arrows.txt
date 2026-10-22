@@ -1,0 +1,21 @@
+size 420.3 404.3
+summary nodes=10 edges=0 groups=0
+shape ellipse 60.1 9 55.1 55.1 fill=rgba(153,102,153,1) stroke=BorderStrong/hairline/Solid
+text 67.4 26.7 40.6 19.6 size=14 w=400 ink=rgba(247.4,247.4,249.9,1) "Start"
+shape path M103.7,84.1 L103.7,106.1 L114.3,106.1 L87.7,124.1 L61,106.1 L71.7,106.1 L71.7,84.1 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M25.5,144.1 L149.9,144.1 L166.4,177.1 L149.9,210.1 L25.5,210.1 L9,177.1 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 34.9 167.3 105.6 19.6 size=14 w=400 ink=Text "Make Decision"
+shape path M186.4,157.3 L250.8,157.3 L250.8,144.1 L283.8,177.1 L250.8,210.1 L250.8,196.9 L186.4,196.9 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 206.4 167.3 24.4 19.6 size=14 w=400 ink=Text "Yes"
+shape rect 303.8 144.1 107.5 66 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 321 167.3 73.1 19.6 size=14 w=400 ink=Text "Process A"
+shape path M111.8,230.1 L111.8,273.6 L127.9,273.6 L87.7,309.3 L47.5,273.6 L63.6,273.6 L63.6,230.1 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 79.6 242.1 16.2 19.6 size=14 w=400 ink=Text "No"
+shape path M389.8,230.1 L389.8,273.6 L411.3,273.6 L357.6,309.3 L303.8,273.6 L325.3,273.6 L325.3,230.1 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 341.3 242.1 32.5 19.6 size=14 w=400 ink=Text "Done"
+shape rect 9 329.3 157.4 66 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 51.1 352.5 73.1 19.6 size=14 w=400 ink=Text "Process B"
+shape path M186.4,342.5 L250.8,342.5 L250.8,329.3 L283.8,362.3 L250.8,395.3 L250.8,382.1 L186.4,382.1 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 202.4 352.5 32.5 19.6 size=14 w=400 ink=Text "Done"
+shape ellipse 336.9 341.7 41.3 41.3 fill=rgba(102,153,102,1) stroke=BorderStrong/hairline/Solid
+text 345.4 352.5 24.4 19.6 size=14 w=400 ink=rgba(247.4,247.4,249.9,1) "End"

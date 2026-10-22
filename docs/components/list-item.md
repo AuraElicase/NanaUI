@@ -48,19 +48,31 @@ list_item("设置").detail("外观").selected(current).on_activate(open)
 
 点了会弹出一列项的行（Dock 里能升起一列胶囊的入口）再写 `has_popup(true)`：读屏报成菜单按钮。焦点在这一行时，ArrowUp / ArrowDown、`ContextMenu` 键和 Shift+F10 都发 `keyboard: true` 的 `SecondaryPress`（ArrowDown 的 `focus` 是 `Some(RovingEdge::Start)`，ArrowUp 是 `Some(RovingEdge::End)`，菜单键是 `None`），你在处理函数里打开那一列，再用 `AppContext::focus_roving_edge` 把焦点移进去。那一列用 `.roving_focus(RovingFocusGroup::vertical())` 让方向键在项之间走，越过两端时收到 `RovingFocusEdge`。见 [控件](../reference/components.md) 的菜单按钮和方向键焦点组。
 
+## 行内工具
+
+只在需要时出现的行尾工具（固定、关闭）写 `.tools(…)`，代替 `.trailing(…)`。指针在这一行上，或键盘焦点在这一行或行内时显出，所以 Tab 先停在行上、再停到工具上。`keep_tools` 为真时平时也显示（已打开的固定）。
+
+收起时怎么占位由组件的 `tools_rest` 决定：默认 `RowToolsRest::Yield` 退出布局，标签用满整行，显出时这一行重排；Shift+Tab 从下面回来时跳过工具、落在行上，要再按 Tab 才到工具。`RowToolsRest::Reserve` 保留宽度、只是不画，显出时不重排，工具一直在 Tab 顺序里。
+
+```rust
+widget(ListItem::new("模型").tools_rest(RowToolsRest::Reserve))
+    .keep_tools(pinned)
+    .tools(icon_button(icons_tabler::PIN, "固定"))
+```
+
 ## 要改控件
 
 `@activate={open}` 已经在上面的例子里。函数不接收参数。需要 `ViewContext` 时用 `.on_cx(|_item, _event: &Activate, cx| …)`，模板里写成三个参数的 `on:Activate={…}`。
 
 ## 跟着数据
 
-要跟着数据变的一整列，用 `each`，见 [视图写法](../guide/essentials/view.md)。个数写死的几行放进 `column().children((…))`。行高、间距、`auto_height` 和 `pill_bleed` 在组件 `ListItem` 上，不在字段表里。
+要跟着数据变的一整列，用 `each`，见 [视图写法](../guide/essentials/view.md)。个数写死的几行放进 `column().children((…))`。行高、间距、`auto_height`、`pill_bleed` 和 `tools_rest` 在组件 `ListItem` 上，不在字段表里。
 
 槽是这一行自己的子节点。根上写了 `key` 的，可以用装配路径再找到。没写 key 的按位置命名。
 
 ## 属性
 
-字段是 `label: String`、`note: String`、`detail: String`、`selected: bool`、`disabled: bool`、`role: ListItemRole`、`has_popup: bool`。没有 `model`。选中不由控件自己翻。
+字段是 `label: String`、`note: String`、`detail: String`、`selected: bool`、`disabled: bool`、`role: ListItemRole`、`has_popup: bool`、`keep_tools: bool`。没有 `model`。选中不由控件自己翻。
 
 | 属性 | 类型 | 说明 |
 | --- | --- | --- |
@@ -71,6 +83,7 @@ list_item("设置").detail("外观").selected(current).on_activate(open)
 | `disabled` | `bool` | 为真时不发 `Activate`。无障碍映射禁用 |
 | `role` | `ListItemRole` | 默认 `ListItem`；`Button`、`ToggleButton`（`selected` 报成按下）。只改无障碍，不改外观 |
 | `has_popup` | `bool` | 这一行会弹出菜单。读屏报成菜单按钮，ArrowUp / ArrowDown 发 `keyboard: true` 的 `SecondaryPress` |
+| `keep_tools` | `bool` | `.tools` 的工具平时也显示 |
 
 ## 事件
 
@@ -90,6 +103,7 @@ list_item("设置").detail("外观").selected(current).on_activate(open)
 | `#leading` / `.leading` | 放在标签前 |
 | `#content` / `.content` | 代替标签。挂了之后，`detail` 不再占行尾 |
 | `#trailing` / `.trailing` | 放在标签后 |
+| `.tools` | 占 trailing 的位置，悬停或焦点在行内时显出，见上面的行内工具 |
 
 ## 参见
 

@@ -1,0 +1,40 @@
+size 737.4 245.9
+summary nodes=14 edges=0 groups=6
+shape path M20.2,136.2 L638,136.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,125 L20.2,136.2 L9,147.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M614,136.2 L557.8,42.6 stroke=series0/thick/Solid
+shape path M430,120.8 L604.8,120.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 434 79.6 154 19.6 size=14 w=400 ink=Text "新成员不熟悉代码库，需"
+text 476 99.2 112 19.6 size=14 w=400 ink=Text "要额外的上手时间"
+shape path M472.3,74.7 L577.1,74.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 476.3 53.1 84 19.6 size=14 w=400 ink=Text "关键人员请假"
+shape rect 531 9 53.7 33.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 543 16 29.7 19.6 size=14 w=600 ink=Text "人员"
+shape path M614,136.2 L585.5,183.7 stroke=series1/thick/Solid
+shape path M487,173.2 L591.8,173.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 491 151.6 84 19.6 size=14 w=400 ink=Text "评审流程过长"
+shape rect 558.7 183.7 53.7 33.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 570.7 190.7 29.7 19.6 size=14 w=600 ink=Text "方法"
+shape path M406,136.2 L377.5,88.7 stroke=series2/thick/Solid
+shape path M263.9,120.8 L396.7,120.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 267.9 99.2 112 19.6 size=14 w=400 ink=Text "构建机器磁盘不足"
+shape rect 350.6 55.1 53.7 33.6 r=Sm fill=series2.soft stroke=series2/hairline/Solid
+text 362.6 62.1 29.7 19.6 size=14 w=600 ink=Text "机器"
+shape path M406,136.2 L365.7,203.3 stroke=series3/thick/Solid
+shape path M197.2,192.8 L372,192.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 201.2 151.6 154 19.6 size=14 w=400 ink=Text "第三方依赖升级引入破坏"
+text 313.2 171.2 42 19.6 size=14 w=400 ink=Text "性变更"
+shape rect 338.9 203.3 53.7 33.6 r=Sm fill=series3.soft stroke=series3/hairline/Solid
+text 350.9 210.3 29.7 19.6 size=14 w=600 ink=Text "材料"
+shape path M173.2,136.2 L144.7,88.7 stroke=series4/thick/Solid
+shape path M59.2,120.8 L164,120.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 63.2 99.2 84 19.6 size=14 w=400 ink=Text "缺少性能基线"
+shape rect 117.9 55.1 53.7 33.6 r=Sm fill=series4.soft stroke=series4/hairline/Solid
+text 129.9 62.1 29.7 19.6 size=14 w=600 ink=Text "测量"
+shape path M173.2,136.2 L144.7,183.7 stroke=series5/thick/Solid
+shape path M32.2,173.2 L151,173.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 36.2 151.6 98 19.6 size=14 w=400 ink=Text "测试环境不稳定"
+shape rect 117.9 183.7 53.7 33.6 r=Sm fill=series5.soft stroke=series5/hairline/Solid
+text 129.9 190.7 29.7 19.6 size=14 w=600 ink=Text "环境"
+shape rect 638 116.4 91.4 39.6 r=Md fill=Accent
+text 654 126.4 59.4 19.6 size=14 w=600 ink=AccentText "交付延期"

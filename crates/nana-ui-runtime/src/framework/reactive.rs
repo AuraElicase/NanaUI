@@ -36,6 +36,9 @@ pub(crate) struct ReactiveHost {
     flips: Vec<PendingFlip>,
     /// Properties of a node that animate when its bindings change them.
     implicit: HashMap<StableNodeId, Box<[crate::view::Implicit]>, crate::BuildIdHasher>,
+    /// Settings groups to mark once the flush has installed every node it
+    /// patched ([`AppContext::defer_settings_group`]).
+    settings_groups: Vec<StableNodeId>,
 }
 
 struct Leaving {
@@ -63,6 +66,7 @@ impl Default for ReactiveHost {
             leaving: HashMap::default(),
             flips: Vec::new(),
             implicit: HashMap::default(),
+            settings_groups: Vec::new(),
         }
     }
 }
@@ -175,7 +179,26 @@ impl AppContext {
             .node(parent)
             .ok_or(FrameworkError::MissingView(parent))?
             .document;
-        self.mount_view_in(document, Some(parent), view, true)
+        self.mount_view_in(document, Some(parent), None, view, true)
+    }
+
+    /// Like [`Self::mount_view`], with the view's roots placed before
+    /// `before`, a child of `parent`, instead of after the last child.
+    pub fn mount_view_before<M: Mount>(
+        &mut self,
+        parent: StableNodeId,
+        before: StableNodeId,
+        view: impl FnOnce() -> M,
+    ) -> Result<M::Output, FrameworkError> {
+        let document = self
+            .world
+            .node(parent)
+            .ok_or(FrameworkError::MissingView(parent))?
+            .document;
+        if self.world.node(before).and_then(|node| node.parent) != Some(parent) {
+            return Err(FrameworkError::InvalidInput);
+        }
+        self.mount_view_in(document, Some(parent), Some(before), view, true)
     }
 
     /// Like [`Self::mount_view`], with the view's roots as document roots.
@@ -184,7 +207,7 @@ impl AppContext {
         document: DocumentId,
         view: impl FnOnce() -> M,
     ) -> Result<M::Output, FrameworkError> {
-        self.mount_view_in(document, None, view, false)
+        self.mount_view_in(document, None, None, view, false)
     }
 
     /// Like [`Self::mount_view_root`], with the roots parked: in no tree
@@ -195,13 +218,14 @@ impl AppContext {
         document: DocumentId,
         view: impl FnOnce() -> M,
     ) -> Result<M::Output, FrameworkError> {
-        self.mount_view_in(document, None, view, true)
+        self.mount_view_in(document, None, None, view, true)
     }
 
     fn mount_view_in<M: Mount>(
         &mut self,
         document: DocumentId,
         parent: Option<StableNodeId>,
+        before: Option<StableNodeId>,
         view: impl FnOnce() -> M,
         park: bool,
     ) -> Result<M::Output, FrameworkError> {
@@ -234,7 +258,7 @@ impl AppContext {
         if let Some(parent) = parent {
             let mut insert = MutationQueue::new();
             for root in &roots {
-                insert.insert(parent, *root, None);
+                insert.insert(parent, *root, before);
             }
             if let Err(error) = self.commit_mutations(insert) {
                 rx::dispose_scope(scope);
@@ -341,6 +365,7 @@ impl AppContext {
         let started = Instant::now();
         let outcome = self.flush_reactive_rounds();
         self.reactive.flushing = false;
+        let outcome = outcome.and(self.mark_deferred_settings_groups());
         nana_diagnostics::metric!(nana_diagnostics::framework::runtime::REACTIVE_FLUSHES);
         nana_diagnostics::metric!(
             nana_diagnostics::framework::runtime::REACTIVE_FLUSH_NS,
@@ -405,6 +430,33 @@ impl AppContext {
         rx::record_flush(patched, commits);
         self.reactive.queue = queue;
         self.reactive.patches = patches;
+        outcome
+    }
+
+    /// Whether a settings group must wait to mark its rows: during a flush a
+    /// row's view can lag the world until the patched views are installed,
+    /// and writing it then would project the lag back. Queues `group` for
+    /// the end of the flush when it must.
+    pub(crate) fn defer_settings_group(&mut self, group: StableNodeId) -> bool {
+        if !self.reactive.flushing {
+            return false;
+        }
+        if !self.reactive.settings_groups.contains(&group) {
+            self.reactive.settings_groups.push(group);
+        }
+        true
+    }
+
+    fn mark_deferred_settings_groups(&mut self) -> Result<(), FrameworkError> {
+        let mut outcome = Ok(());
+        for group in std::mem::take(&mut self.reactive.settings_groups) {
+            if self.world.contains(group) {
+                outcome = outcome.and(crate::settings::mark_settings_group(
+                    self,
+                    Entity::from_stable_id(group),
+                ));
+            }
+        }
         outcome
     }
 

@@ -1,0 +1,169 @@
+size 1477 1020.1
+summary nodes=48 edges=68 groups=0
+shape path M18.5,30.5 C358.9,30.5 358.9,60.1 699.3,60.1 L699.3,236.4 C358.9,236.4 358.9,206.8 18.5,206.8 Z fill=series35.soft
+shape path M709.8,60.1 C1084.2,60.1 1084.2,8 1458.5,8 L1458.5,173.3 C1084.2,173.3 1084.2,225.3 709.8,225.3 Z fill=series26.soft
+shape path M364.9,138.3 C425,138.3 425,166.9 485.1,166.9 L485.1,295.4 C425,295.4 425,266.7 364.9,266.7 Z fill=series37.soft
+shape path M709.8,225.3 C804.6,225.3 804.6,385 899.5,385 L899.5,495.4 C804.6,495.4 804.6,335.7 709.8,335.7 Z fill=series26.soft
+shape path M18.5,220.8 C186.5,220.8 186.5,138.3 354.4,138.3 L354.4,244.1 C186.5,244.1 186.5,326.7 18.5,326.7 Z fill=series36.soft
+shape path M495.6,316.9 C597.4,316.9 597.4,236.4 699.3,236.4 L699.3,320.4 C597.4,320.4 597.4,400.9 495.6,400.9 Z fill=series4.soft
+shape path M910,410.6 C1184.3,410.6 1184.3,466.5 1458.5,466.5 L1458.5,538.4 C1184.3,538.4 1184.3,482.4 910,482.4 Z fill=series15.soft
+shape path M18.5,728 C459,728 459,508 899.5,508 L899.5,568.7 C459,568.7 459,788.8 18.5,788.8 Z fill=series47.soft
+shape path M364.9,313.8 C425,313.8 425,316.9 485.1,316.9 L485.1,375.7 C425,375.7 425,372.6 364.9,372.6 Z fill=series1.soft
+shape path M495.6,166.9 C977.1,166.9 977.1,206.4 1458.5,206.4 L1458.5,249.7 C977.1,249.7 977.1,210.2 495.6,210.2 Z fill=series2.soft
+shape path M18.5,956.8 C738.5,956.8 738.5,785 1458.5,785 L1458.5,825.5 C738.5,825.5 738.5,997.3 18.5,997.3 Z fill=series40.soft
+shape path M18.5,408.1 C186.5,408.1 186.5,307.6 354.4,307.6 L354.4,345.8 C186.5,345.8 186.5,446.3 18.5,446.3 Z fill=series45.soft
+shape path M495.6,425.3 C597.4,425.3 597.4,320.4 699.3,320.4 L699.3,352.3 C597.4,352.3 597.4,457.2 495.6,457.2 Z fill=series5.soft
+shape path M495.6,247.2 C977.1,247.2 977.1,366.3 1458.5,366.3 L1458.5,394.8 C977.1,394.8 977.1,275.7 495.6,275.7 Z fill=series2.soft
+shape path M495.6,210.2 C977.1,210.2 977.1,263.7 1458.5,263.7 L1458.5,290.7 C977.1,290.7 977.1,237.2 495.6,237.2 Z fill=series2.soft
+shape path M18.5,460.3 C186.5,460.3 186.5,345.8 354.4,345.8 L354.4,372 C186.5,372 186.5,486.5 18.5,486.5 Z fill=series0.soft
+shape path M364.9,476 C425,476 425,441.8 485.1,441.8 L485.1,467.6 C425,467.6 425,501.8 364.9,501.8 Z fill=series24.soft
+shape path M495.6,275.7 C977.1,275.7 977.1,421.2 1458.5,421.2 L1458.5,446.6 C977.1,446.6 977.1,301.2 495.6,301.2 Z fill=series2.soft
+shape path M910,545.5 C1184.3,545.5 1184.3,747.3 1458.5,747.3 L1458.5,771.2 C1184.3,771.2 1184.3,569.3 910,569.3 Z fill=series15.soft
+shape path M18.5,340.7 C186.5,340.7 186.5,244.1 354.4,244.1 L354.4,266.7 C186.5,266.7 186.5,363.3 18.5,363.3 Z fill=series38.soft
+shape path M910,485 C1184.3,485 1184.3,616.2 1458.5,616.2 L1458.5,638.1 C1184.3,638.1 1184.3,506.9 910,506.9 Z fill=series15.soft
+shape path M910,506.9 C1184.3,506.9 1184.3,659.1 1458.5,659.1 L1458.5,678.8 C1184.3,678.8 1184.3,526.6 910,526.6 Z fill=series15.soft
+shape path M910,526.6 C1184.3,526.6 1184.3,707.1 1458.5,707.1 L1458.5,726 C1184.3,726 1184.3,545.5 910,545.5 Z fill=series15.soft
+shape path M18.5,665.9 C186.5,665.9 186.5,476 354.4,476 L354.4,493.3 C186.5,493.3 186.5,683.2 18.5,683.2 Z fill=series25.soft
+shape path M364.9,372.6 C425,372.6 425,424.8 485.1,424.8 L485.1,441.8 C425,441.8 425,389.7 364.9,389.7 Z fill=series1.soft
+shape path M709.8,335.7 C804.6,335.7 804.6,614.6 899.5,614.6 L899.5,631.3 C804.6,631.3 804.6,352.3 709.8,352.3 Z fill=series26.soft
+shape path M18.5,500.5 C186.5,500.5 186.5,372 354.4,372 L354.4,388.4 C186.5,388.4 186.5,516.9 18.5,516.9 Z fill=series39.soft
+shape path M364.9,405.6 C425,405.6 425,375.7 485.1,375.7 L485.1,391.6 C425,391.6 425,421.5 364.9,421.5 Z fill=series9.soft
+shape path M18.5,997.3 C738.5,997.3 738.5,856 1458.5,856 L1458.5,870.8 C738.5,870.8 738.5,1012.1 18.5,1012.1 Z fill=series40.soft
+shape path M18.5,606 C186.5,606 186.5,405.6 354.4,405.6 L354.4,419.1 C186.5,419.1 186.5,619.5 18.5,619.5 Z fill=series10.soft
+shape path M364.9,615 C632.2,615 632.2,495.4 899.5,495.4 L899.5,508 C632.2,508 632.2,627.6 364.9,627.6 Z fill=series41.soft
+shape path M18.5,926 C186.5,926 186.5,615 354.4,615 L354.4,627.6 C186.5,627.6 186.5,938.6 18.5,938.6 Z fill=series43.soft
+shape path M910,385 C1184.3,385 1184.3,180.7 1458.5,180.7 L1458.5,192.6 C1184.3,192.6 1184.3,396.9 910,396.9 Z fill=series15.soft
+shape path M18.5,516.9 C251.8,516.9 251.8,391.6 485.1,391.6 L485.1,403.5 C251.8,403.5 251.8,528.7 18.5,528.7 Z fill=series39.soft
+shape path M495.6,457.2 C977.1,457.2 977.1,456.3 1458.5,456.3 L1458.5,466.5 C977.1,466.5 977.1,467.4 495.6,467.4 Z fill=series5.soft
+shape path M495.6,400.9 C977.1,400.9 977.1,446.6 1458.5,446.6 L1458.5,456.3 C977.1,456.3 977.1,410.6 495.6,410.6 Z fill=series4.soft
+shape path M910,616.9 C1184.3,616.9 1184.3,771.2 1458.5,771.2 L1458.5,780.9 C1184.3,780.9 1184.3,626.6 910,626.6 Z fill=series11.soft
+shape path M910,569.3 C1184.3,569.3 1184.3,842.7 1458.5,842.7 L1458.5,851.3 C1184.3,851.3 1184.3,577.9 910,577.9 Z fill=series15.soft
+shape path M18.5,701.3 C186.5,701.3 186.5,493.3 354.4,493.3 L354.4,501.8 C186.5,501.8 186.5,709.9 18.5,709.9 Z fill=series23.soft
+shape path M910,402.6 C1184.3,402.6 1184.3,399.2 1458.5,399.2 L1458.5,407.2 C1184.3,407.2 1184.3,410.6 910,410.6 Z fill=series15.soft
+shape path M18.5,382.1 C251.8,382.1 251.8,295.9 485.1,295.9 L485.1,303.2 C251.8,303.2 251.8,389.4 18.5,389.4 Z fill=series6.soft
+shape path M18.5,578.3 C251.8,578.3 251.8,403.5 485.1,403.5 L485.1,410.8 C251.8,410.8 251.8,585.6 18.5,585.6 Z fill=series7.soft
+shape path M495.6,237.2 C977.1,237.2 977.1,309.6 1458.5,309.6 L1458.5,316.6 C977.1,316.6 977.1,244.2 495.6,244.2 Z fill=series2.soft
+shape path M910,396.9 C994.5,396.9 994.5,313.3 1078.9,313.3 L1078.9,319 C994.5,319 994.5,402.6 910,402.6 Z fill=series15.soft
+shape path M364.9,307.6 C911.7,307.6 911.7,174.6 1458.5,174.6 L1458.5,180.2 C911.7,180.2 911.7,313.3 364.9,313.3 Z fill=series1.soft
+shape path M910,626.6 C1184.3,626.6 1184.3,851.3 1458.5,851.3 L1458.5,856 C1184.3,856 1184.3,631.3 910,631.3 Z fill=series11.soft
+shape path M1089.4,314.6 C1135.6,314.6 1135.6,324.9 1181.7,324.9 L1181.7,329.3 C1135.6,329.3 1135.6,319 1089.4,319 Z fill=series17.soft
+shape path M1192.2,324.9 C1325.4,324.9 1325.4,394.8 1458.5,394.8 L1458.5,399.2 C1325.4,399.2 1325.4,329.3 1192.2,329.3 Z fill=series28.soft
+shape path M364.9,787.4 C911.7,787.4 911.7,780.9 1458.5,780.9 L1458.5,785 C911.7,785 911.7,791.4 364.9,791.4 Z fill=series42.soft
+shape path M18.5,938.6 C186.5,938.6 186.5,787.4 354.4,787.4 L354.4,791.4 C186.5,791.4 186.5,942.7 18.5,942.7 Z fill=series43.soft
+shape path M18.5,809.2 C459,809.2 459,568.7 899.5,568.7 L899.5,572.7 C459,572.7 459,813.2 18.5,813.2 Z fill=series46.soft
+shape path M495.6,244.2 C977.1,244.2 977.1,342.4 1458.5,342.4 L1458.5,345.4 C977.1,345.4 977.1,247.2 495.6,247.2 Z fill=series2.soft
+shape path M18.5,642.3 C186.5,642.3 186.5,419.1 354.4,419.1 L354.4,421.5 C186.5,421.5 186.5,644.8 18.5,644.8 Z fill=series8.soft
+shape path M910,614.6 C1184.3,614.6 1184.3,538.4 1458.5,538.4 L1458.5,540.6 C1184.3,540.6 1184.3,616.9 910,616.9 Z fill=series11.soft
+shape path M18.5,841 C459,841 459,572.7 899.5,572.7 L899.5,574.7 C459,574.7 459,843 18.5,843 Z fill=series44.soft
+shape path M910,482.4 C1184.3,482.4 1184.3,562.7 1458.5,562.7 L1458.5,564.3 C1184.3,564.3 1184.3,484.1 910,484.1 Z fill=series15.soft
+shape path M18.5,872 C459,872 459,574.7 899.5,574.7 L899.5,576.2 C459,576.2 459,873.5 18.5,873.5 Z fill=series27.soft
+shape path M18.5,902.8 C459,902.8 459,576.2 899.5,576.2 L899.5,577.6 C459,577.6 459,904.3 18.5,904.3 Z fill=series29.soft
+shape path M1089.4,313.3 C1274,313.3 1274,173.3 1458.5,173.3 L1458.5,174.6 C1274,174.6 1274,314.6 1089.4,314.6 Z fill=series17.soft
+shape path M495.6,301.2 C977.1,301.2 977.1,561.7 1458.5,561.7 L1458.5,562.7 C977.1,562.7 977.1,302.1 495.6,302.1 Z fill=series2.soft
+shape path M910,484.1 C1184.3,484.1 1184.3,594.4 1458.5,594.4 L1458.5,595.3 C1184.3,595.3 1184.3,485 910,485 Z fill=series15.soft
+shape path M18.5,550.6 C186.5,550.6 186.5,388.4 354.4,388.4 L354.4,389.3 C186.5,389.3 186.5,551.6 18.5,551.6 Z fill=series34.soft
+shape path M495.6,302.1 C977.1,302.1 977.1,592.7 1458.5,592.7 L1458.5,593.4 C977.1,593.4 977.1,302.9 495.6,302.9 Z fill=series2.soft
+shape path M364.9,313.3 C425,313.3 425,295.4 485.1,295.4 L485.1,295.9 C425,295.9 425,313.8 364.9,313.8 Z fill=series1.soft
+shape path M495.6,467.9 C977.1,467.9 977.1,842.2 1458.5,842.2 L1458.5,842.7 C977.1,842.7 977.1,468.4 495.6,468.4 Z fill=series5.soft
+shape path M495.6,424.8 C977.1,424.8 977.1,180.2 1458.5,180.2 L1458.5,180.7 C977.1,180.7 977.1,425.3 495.6,425.3 Z fill=series5.soft
+shape path M495.6,467.4 C977.1,467.4 977.1,593.9 1458.5,593.9 L1458.5,594.4 C977.1,594.4 977.1,467.9 495.6,467.9 Z fill=series5.soft
+shape path M495.6,410.6 C977.1,410.6 977.1,593.4 1458.5,593.4 L1458.5,593.9 C977.1,593.9 977.1,411.1 495.6,411.1 Z fill=series4.soft
+shape rect 8 460.3 10.5 26.2 fill=series0
+text 24.1 465 139.2 16.8 size=12 w=400 ink=Text "Agricultural 'waste'"
+shape rect 354.4 307.6 10.5 81.7 fill=series1
+text 251.4 340.1 97.4 16.8 size=12 w=400 ink=Text "Bio-conversion"
+shape rect 485.1 166.9 10.5 136 fill=series2
+text 437.7 226.5 41.8 16.8 size=12 w=400 ink=Text "Liquid"
+shape rect 1458.5 8 10.5 184.4 fill=series3
+text 1411.2 91.8 41.8 16.8 size=12 w=400 ink=Text "Losses"
+shape rect 485.1 316.9 10.5 93.9 fill=series4
+text 444.7 355.4 34.8 16.8 size=12 w=400 ink=Text "Solid"
+shape rect 485.1 424.8 10.5 42.8 fill=series5
+text 458.6 437.8 20.9 16.8 size=12 w=400 ink=Text "Gas"
+shape rect 8 382.1 10.5 7.3 fill=series6
+text 24.1 377.3 104.4 16.8 size=12 w=400 ink=Text "Biofuel imports"
+shape rect 8 578.3 10.5 7.3 fill=series7
+text 24.1 573.5 104.4 16.8 size=12 w=400 ink=Text "Biomass imports"
+shape rect 8 642.3 10.5 2.4 fill=series8
+text 24.1 635.1 83.5 16.8 size=12 w=400 ink=Text "Coal imports"
+shape rect 354.4 405.6 10.5 15.9 fill=series9
+text 321 405.2 27.8 16.8 size=12 w=400 ink=Text "Coal"
+shape rect 8 606 10.5 13.4 fill=series10
+text 24.1 604.3 90.5 16.8 size=12 w=400 ink=Text "Coal reserves"
+shape rect 899.5 614.6 10.5 16.7 fill=series11
+text 782.6 614.6 111.4 16.8 size=12 w=400 ink=Text "District heating"
+shape rect 1458.5 421.2 10.5 119.4 fill=series12
+text 1397.3 472.5 55.7 16.8 size=12 w=400 ink=Text "Industry"
+shape rect 1458.5 842.2 10.5 28.2 fill=series13
+text 1306.8 839.5 146.2 16.8 size=12 w=400 ink=Text "Heating and cooling -"
+text 1383.3 856.3 69.6 16.8 size=12 w=400 ink=Text "commercial"
+shape rect 1458.5 747.3 10.5 78.1 fill=series14
+text 1265 778 187.9 16.8 size=12 w=400 ink=Text "Heating and cooling - homes"
+shape rect 899.5 385 10.5 192.9 fill=series15
+text 782.6 473.1 111.4 16.8 size=12 w=400 ink=Text "Electricity grid"
+shape rect 1458.5 616.2 10.5 21.9 fill=series16
+text 1278.9 618.8 174 16.8 size=12 w=400 ink=Text "Over generation / exports"
+shape rect 1078.9 313.3 10.5 5.7 fill=series17
+text 982.8 307.8 90.5 16.8 size=12 w=400 ink=Text "H2 conversion"
+shape rect 1458.5 366.3 10.5 40.8 fill=series18
+text 1355.5 378.3 97.4 16.8 size=12 w=400 ink=Text "Road transport"
+shape rect 1458.5 592.7 10.5 2.3 fill=series19
+text 1376.4 585.4 76.6 16.8 size=12 w=400 ink=Text "Agriculture"
+shape rect 1458.5 561.7 10.5 2.6 fill=series20
+text 1355.5 554.6 97.4 16.8 size=12 w=400 ink=Text "Rail transport"
+shape rect 1458.5 707.1 10.5 18.9 fill=series21
+text 1292.9 699.7 160.1 16.8 size=12 w=400 ink=Text "Lighting & appliances -"
+text 1383.3 716.5 69.6 16.8 size=12 w=400 ink=Text "commercial"
+shape rect 1458.5 659.1 10.5 19.6 fill=series22
+text 1292.9 652.1 160.1 16.8 size=12 w=400 ink=Text "Lighting & appliances -"
+text 1418.1 668.9 34.8 16.8 size=12 w=400 ink=Text "homes"
+shape rect 8 701.3 10.5 8.5 fill=series23
+text 24.1 697.2 76.6 16.8 size=12 w=400 ink=Text "Gas imports"
+shape rect 354.4 476 10.5 25.8 fill=series24
+text 321 480.5 27.8 16.8 size=12 w=400 ink=Text "Ngas"
+shape rect 8 665.9 10.5 17.3 fill=series25
+text 24.1 666.2 83.5 16.8 size=12 w=400 ink=Text "Gas reserves"
+shape rect 699.3 60.1 10.5 292.2 fill=series26
+text 568.4 197.8 125.3 16.8 size=12 w=400 ink=Text "Thermal generation"
+shape rect 8 872 10.5 1.5 fill=series27
+text 24.1 864.4 69.6 16.8 size=12 w=400 ink=Text "Geothermal"
+shape rect 1181.7 324.9 10.5 4.4 fill=series28
+text 1162.2 318.7 13.9 16.8 size=12 w=400 ink=Text "H2"
+shape rect 8 902.8 10.5 1.5 fill=series29
+text 24.1 895.2 34.8 16.8 size=12 w=400 ink=Text "Hydro"
+shape rect 1458.5 263.7 10.5 27 fill=series30
+text 1299.8 268.8 153.1 16.8 size=12 w=400 ink=Text "International shipping"
+shape rect 1458.5 342.4 10.5 3 fill=series31
+text 1334.6 335.5 118.3 16.8 size=12 w=400 ink=Text "Domestic aviation"
+shape rect 1458.5 206.4 10.5 43.3 fill=series32
+text 1299.8 219.7 153.1 16.8 size=12 w=400 ink=Text "International aviation"
+shape rect 1458.5 309.6 10.5 7 fill=series33
+text 1320.7 304.7 132.2 16.8 size=12 w=400 ink=Text "National navigation"
+shape rect 8 550.6 10.5 1 fill=series34
+text 24.1 542.7 83.5 16.8 size=12 w=400 ink=Text "Marine algae"
+shape rect 8 30.5 10.5 176.4 fill=series35
+text 24.1 110.3 48.7 16.8 size=12 w=400 ink=Text "Nuclear"
+shape rect 8 220.8 10.5 105.9 fill=series36
+text 24.1 265.4 76.6 16.8 size=12 w=400 ink=Text "Oil imports"
+shape rect 354.4 138.3 10.5 128.5 fill=series37
+text 327.9 194.1 20.9 16.8 size=12 w=400 ink=Text "Oil"
+shape rect 8 340.7 10.5 22.6 fill=series38
+text 24.1 343.6 83.5 16.8 size=12 w=400 ink=Text "Oil reserves"
+shape rect 8 500.5 10.5 28.2 fill=series39
+text 24.1 506.2 76.6 16.8 size=12 w=400 ink=Text "Other waste"
+shape rect 8 956.8 10.5 55.4 fill=series40
+text 24.1 976 76.6 16.8 size=12 w=400 ink=Text "Pumped heat"
+shape rect 354.4 615 10.5 12.6 fill=series41
+text 293.1 612.9 55.7 16.8 size=12 w=400 ink=Text "Solar PV"
+shape rect 354.4 787.4 10.5 4 fill=series42
+text 258.3 781 90.5 16.8 size=12 w=400 ink=Text "Solar Thermal"
+shape rect 8 926 10.5 16.6 fill=series43
+text 24.1 926 34.8 16.8 size=12 w=400 ink=Text "Solar"
+shape rect 8 841 10.5 2 fill=series44
+text 24.1 833.6 34.8 16.8 size=12 w=400 ink=Text "Tidal"
+shape rect 8 408.1 10.5 38.2 fill=series45
+text 24.1 418.8 160.1 16.8 size=12 w=400 ink=Text "UK land based bioenergy"
+shape rect 8 809.2 10.5 4 fill=series46
+text 24.1 802.8 27.8 16.8 size=12 w=400 ink=Text "Wave"
+shape rect 8 728 10.5 60.8 fill=series47
+text 24.1 750 27.8 16.8 size=12 w=400 ink=Text "Wind"

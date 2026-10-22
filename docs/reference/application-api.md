@@ -182,6 +182,25 @@ device/surface 丢失后宿主调用 `RuntimeDocument::set_surface_generation`�
 
 `RuntimeProgramContext` 提供 `window_id`、`geometry`、`gpu()`、`material()`、`dispatch`、`run_task`、`startup()`（启动记录与接管请求）。原生窗口句柄不穿过这条边界。
 
+### 分阶段构建的程序（`Staged`）
+
+有的程序在宿主启动时还建不出来：要在工作线程读设置、开设备，再一轮一页地挂页面，让启动画面在中间照常呈现。这时实现 `Launch`（`type Program` 是最终的程序），运行 `run_runtime::<Staged<MyLaunch>>(..)`：
+
+- 构建期间，`Staged` 用 `Launch::document` 回答主窗口的文档（其他窗口这时不会打开），用 `Launch::theme_mode` / `window_material_mode` / `window_background` 回答外观，消息交给 `Launch::update`。
+- `Launch::update` 返回 `LaunchUpdate::Ready(program, update)` 后，`Staged` 把动画时钟交给程序，此后**所有**钩子原样转给它；`RuntimeProgram` 以后新增的钩子也一样，应用不必逐个转发。
+- 启动画面：`Staged` 对宿主回答 `Deferred`；程序建好、且它自己的 `startup_takeover()` 是 `Immediate` 时，由 `Staged` 代它申请接管，宿主还没发票据就每 50 ms 再问一次，超过 `Launch::TAKEOVER_TIMEOUT`（默认 30 s）调用 `Launch::takeover_failed`（默认退出）。程序回答 `Deferred` 时自己去接管。
+- 关联函数 `gpu_backend_policy` / `startup_window_material_mode` 取最终程序的。
+
+### 无窗口运行整个程序（`HeadlessRuntime`）
+
+离屏验收要跑的是真实程序，不是摘出来的一份文档。`nana_ui::headless::HeadlessRuntime<P>` 用 `GpuContext` 和主窗口几何 `P::initialize`，再按 Scene 宿主的顺序驱动钩子；程序自己持有文档，宿主经 `with_document` 读写，不把文档搬进会话再搬回来。
+
+- `turn()` 是宿主的一轮：窗口请求、排队的消息（`update`）、到期的 `wake` 与动画帧，然后每个可见窗口一帧：`prepare_window_frame`、布局、`window_frame_presented`，有消息后再 `bind_window`。主窗口在第一帧后 bind 一次，相当于原生宿主里装上程序的那条消息。
+- `input(id, payload, text)` 经该窗口自己的输入源路由进文档，再交给 `input_event`；`accessibility_action`、`window_event`、`resize` 同理走钩子。`update`、`dispatch`、`wake` 给验收脚本补一条消息或唤醒。
+- 窗口：`WindowService::create_window` 与 `WindowCommand::Open` 建虚拟窗口并调 `initialize_window`，`set_visible`、`set_size` 改它并发对应事件，`Close` 关掉它和子窗口；其余命令只进 `take_window_commands()`。文件对话框立即按 `set_file_dialog` 设的答案回 `FileDialogCompleted`，用一次后恢复为取消。
+- `take_report()` 给出合并的重绘目标、是否要求退出，以及消息、wake、输入和窗口事件里要求重绘的次数（帧回调不计；`set_quiet_messages` 可排除逐帧到达的消息）。
+- 不画像素。`nana_ui_devtools::headless::HeadlessHost`（feature `headless-host`）在它之上加 painter 与回读：`screenshot(id, clear)` 先出一帧再画，等图片解码完，把学到的图片尺寸交回文档；另有 `accessibility`、`click`、`mouse`、`key`、`type_text`、`click_node`。
+
 `run_task` 的任务在宿主的工作线程上执行。任务 panic 时不交回消息：宿主记一条 `host.task_panicked` 故障，工作线程继续处理队列。等着结果的调用方要在任务里接住失败，交回一条失败消息。
 
 `ApplicationState` 透传下列钩子。`RuntimeApplication<State>` 原样转给 `RuntimeProgram`，所以透明叠加窗口、需要合成器路径的应用不必再手写一层 `RuntimeProgram`：
@@ -202,6 +221,8 @@ device/surface 丢失后宿主调用 `RuntimeDocument::set_surface_generation`�
 
 `RuntimeProgramUpdate.redraw` 支持 `None`、`Window(id)`、`Windows(ids)`、`All`。
 合并局部更新会保留实际窗口集合。`RuntimeRedraw::for_windows` 会排序去重。
+`RuntimeRedraw::merge` 与 `RuntimeProgramUpdate::merge` 是公开的：`All` 吸收另一方，`None` 不加窗口，窗口列表取并集；更新的窗口命令按先后拼接，任一方要求退出即退出。宿主自己也用它们把一次回调里的各个更新合成一个。
+`FrameworkError` 可以转成 `String`，所以 `type Error = String` 的回调里直接对文档操作写 `?`。
 `RuntimeRedraw` 现在持有窗口列表。只实现 `Clone`。不再实现 `Copy`。穷尽匹配需处理 `Windows`。
 Vue 输入按语义变化和已挂载节点消费的 Canvas／HostTexture 版本选择窗口。
 
@@ -659,6 +680,17 @@ hosted 宿主在布局收敛后暂存无障碍变化。在成功呈现后、应�
 ## 窗口服务
 
 `RuntimeProgramContext::windows()` 提供线程安全的 `WindowService`。`window()` 提供当前窗口的 `WindowHandle`。窗口描述统一为 `WindowDescriptor`。只放一幅画面的窗口用 `content_aspect_ratio` 锁定客户区宽高比，框架负责拖边、最小尺寸与换比例，见 [内容宽高比](window.md#内容宽高比)。`ApplicationState::build` 在每扇窗口发布前执行。构建失败不显示窗口。窗口事件可在 `ApplicationState::window_event` 中观察。详见 [窗口](window.md#多窗口) 的完成语义、embedded 接口和迁移说明。
+
+### 按种类认领窗口（`WindowRegistry`）
+
+直接实现 `RuntimeProgram`、自己持有多扇窗口文档的程序，用 `WindowRegistry<K>` 记住每个 `WindowId` 是哪一种窗口。`K` 是应用自己的 `Copy` 类型，通常是枚举（主窗口、工具卡、引导卡……）：
+
+- `WindowRegistry::new(primary)`：主窗口由宿主创建，一开始就绑定。
+- 建窗前 `request(key)` 得到一个 tag，放进 `WindowDescriptor::tag`；tag 由注册表生成，应用不写也不解析 tag 字符串。同一 key 的新请求替换还没被认领的旧请求，`withdraw(key)` 撤回。
+- `initialize_window` 里 `claim(id, context)` 把宿主分配的 id 绑到 key；不是本注册表请求的窗口返回 `None`，此时返回错误让宿主回滚。
+- 其余钩子 `key(id)` 取种类再 `match`；`window(key)` 反查，几扇同种窗口并存（旧的还在关、新的已打开）时取最新的。
+- `window_event` 里 `route_event(id, &event)` 取种类，`Closed` 同时解绑；`discard_window` 里 `release(id)`。窗口在关闭前一直绑定，应用放手之后它最后的事件仍能分到认得它的代码。
+- 没有窗口服务的宿主（离屏、测试）用 `bind(id, key)` 直接绑定。
 
 窗口关闭时。`RuntimeApplication` 先移除窗口文档。再调用 `ApplicationState::window_closed` 清理应用状态。最后调用 `window_event(Closed)`。关闭通知的观察者因此看到已完成清理的状态。创建失败回滚仍调用清理钩子。但不发送成功或关闭事件。
 

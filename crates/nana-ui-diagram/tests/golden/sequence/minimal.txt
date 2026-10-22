@@ -1,0 +1,7 @@
+size 82.5 117.2
+summary nodes=1 edges=0 groups=0
+shape path M41.2,48.6 L41.2,68.6 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape rect 9 9 64.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 19 32.5 19.6 size=14 w=400 ink=Text "Solo"
+shape rect 9 68.6 64.5 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 78.6 32.5 19.6 size=14 w=400 ink=Text "Solo"

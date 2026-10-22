@@ -66,6 +66,23 @@ impl<'a> NodeMotion<'a> {
         }
     }
 
+    /// One side of a [fold](crate::fold): its opacity and transform run from
+    /// `from` to `to` on one timing, each on its own curve, replacing what
+    /// the node's own tracks were playing and holding both ends.
+    pub fn fold(self, from: crate::fold::Pose, to: crate::fold::Pose) -> FoldBuilder<'a> {
+        FoldBuilder {
+            queue: self.queue,
+            target: self.id,
+            now: self.now,
+            from,
+            to,
+            duration: nana_ui_core::motion::OVERLAY_FADE,
+            fade: STANDARD_EASING,
+            travel: STANDARD_EASING,
+            started: false,
+        }
+    }
+
     /// Explicit FLIP: layout is already Last. Presentation translate plays to identity.
     pub fn flip(
         self,
@@ -453,6 +470,82 @@ impl Drop for FlipBuilder<'_> {
     }
 }
 
+/// The default theme's settling curve, until a fold names its own.
+const STANDARD_EASING: Easing =
+    nana_ui_core::MotionTokens::DEFAULT.easing(nana_ui_core::EasingRole::Standard);
+
+/// `node.fold(from, to).duration(d).fade(e).travel(e)`.
+pub struct FoldBuilder<'a> {
+    queue: &'a mut MutationQueue,
+    target: StableNodeId,
+    now: Duration,
+    from: crate::fold::Pose,
+    to: crate::fold::Pose,
+    duration: Duration,
+    fade: Easing,
+    travel: Easing,
+    started: bool,
+}
+
+impl FoldBuilder<'_> {
+    pub fn duration(mut self, duration: Duration) -> Self {
+        self.duration = duration;
+        self
+    }
+
+    /// The opacity's curve.
+    pub fn fade(mut self, easing: Easing) -> Self {
+        self.fade = easing;
+        self
+    }
+
+    /// The transform's curve.
+    pub fn travel(mut self, easing: Easing) -> Self {
+        self.travel = easing;
+        self
+    }
+
+    /// One curve for both.
+    pub fn ease(self, easing: Easing) -> Self {
+        self.fade(easing).travel(easing)
+    }
+
+    pub fn start(mut self) {
+        self.commit();
+    }
+
+    fn commit(&mut self) {
+        if self.started {
+            return;
+        }
+        self.started = true;
+        let run = |property, from, to, easing| {
+            AnimationSpec::run(self.target, property, from, to, self.now, self.duration)
+                .with_curve(MotionCurve::Easing(easing))
+        };
+        let opacity = run(
+            AnimatableProperty::Opacity,
+            MotionValue::Scalar(self.from.opacity),
+            MotionValue::Scalar(self.to.opacity),
+            self.fade,
+        );
+        let transform = run(
+            AnimatableProperty::Transform,
+            MotionValue::Transform(self.from.transform),
+            MotionValue::Transform(self.to.transform),
+            self.travel,
+        );
+        self.queue.start_animation(opacity);
+        self.queue.start_animation(transform);
+    }
+}
+
+impl Drop for FoldBuilder<'_> {
+    fn drop(&mut self) {
+        self.commit();
+    }
+}
+
 impl MutationQueue {
     /// L3 node handle. `now` is the host monotonic clock already used by
     /// [`AnimationSpec`] timing.
@@ -477,6 +570,54 @@ impl AnimationSpec {
             from: track.from,
             to: track.to.clone(),
             velocity: track.velocity,
+            interrupt: MotionInterrupt::Replace,
+            layer: crate::MotionLayer::Runtime,
+        }
+    }
+}
+
+impl AnimationId {
+    /// `target`'s own track for `property`: the one
+    /// [`NodeMotion::transition`] and the view layer's transitions run on.
+    /// A run started with it replaces theirs, and its events carry it.
+    pub fn for_node(target: StableNodeId, property: AnimatableProperty) -> Self {
+        user_animation_id(target, property)
+            .unwrap_or_else(|| AnimationId::new(target.get()).expect("node ids are nonzero"))
+    }
+}
+
+impl AnimationSpec {
+    /// One run of `target`'s `property` from `from` to `to`, `duration` long
+    /// from `now`, on the node's own track ([`AnimationId::for_node`]). It
+    /// replaces whatever that track was playing and starts at `from`, not at
+    /// the presented value; it shows `from` through a delay and holds `to`
+    /// once it ends (`fill: both`); linear until
+    /// [`with_curve`](Self::with_curve). The other `with_*` builders adjust
+    /// the rest, as on [`AnimationSpec::new`].
+    pub fn run(
+        target: StableNodeId,
+        property: AnimatableProperty,
+        from: MotionValue,
+        to: impl Into<MotionTo>,
+        now: Duration,
+        duration: Duration,
+    ) -> Self {
+        Self {
+            id: AnimationId::for_node(target, property),
+            target,
+            timing: MotionTiming::new(now, duration, crate::framework::COMPONENT_FRAME_INTERVAL),
+            playback: AnimationPlayback {
+                iteration_count: AnimationIteration::ONCE,
+                direction: AnimationDirection::Normal,
+                fill_mode: AnimationFillMode::Both,
+                play_state: AnimationPlayState::Running,
+                paused_at: None,
+            },
+            curve: MotionCurve::Easing(Easing::Linear),
+            property,
+            velocity: from.zero_velocity(),
+            from,
+            to: to.into(),
             interrupt: MotionInterrupt::Replace,
             layer: crate::MotionLayer::Runtime,
         }
@@ -524,24 +665,9 @@ pub(crate) fn presence_spec(
     easing: Easing,
     fill_mode: AnimationFillMode,
 ) -> AnimationSpec {
-    let timing = MotionTiming::new(now, duration, crate::framework::COMPONENT_FRAME_INTERVAL);
-    let playback = AnimationPlayback {
-        iteration_count: AnimationIteration::ONCE,
-        direction: AnimationDirection::Normal,
-        fill_mode,
-        play_state: AnimationPlayState::Running,
-        paused_at: None,
-    };
-    let mut spec = user_spec(
-        target,
-        property,
-        to,
-        timing,
-        MotionCurve::Easing(easing),
-        playback,
-    );
-    spec.from = from;
-    spec.interrupt = MotionInterrupt::Replace;
+    let mut spec = AnimationSpec::run(target, property, from, to, now, duration)
+        .with_curve(MotionCurve::Easing(easing));
+    spec.playback.fill_mode = fill_mode;
     spec
 }
 
@@ -567,5 +693,55 @@ fn user_spec(
         velocity: to.zero_velocity(),
         interrupt: MotionInterrupt::Retarget,
         layer: crate::MotionLayer::Runtime,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A run is a one-shot on the node's own track: it starts where it is
+    /// told, replaces what the track played, holds both ends, and shares its
+    /// id with a transition of the same node and property.
+    #[test]
+    fn a_run_is_a_held_one_shot_on_the_nodes_own_track() {
+        let node = StableNodeId::new(7).unwrap();
+        let spec = AnimationSpec::run(
+            node,
+            AnimatableProperty::Opacity,
+            MotionValue::Scalar(0.25),
+            MotionValue::Scalar(1.0),
+            Duration::from_millis(100),
+            Duration::from_millis(200),
+        );
+        assert_eq!(
+            spec.id,
+            AnimationId::for_node(node, AnimatableProperty::Opacity)
+        );
+        assert_ne!(
+            spec.id,
+            AnimationId::for_node(node, AnimatableProperty::Transform)
+        );
+        assert_eq!(spec.from, MotionValue::Scalar(0.25));
+        assert_eq!(spec.to, MotionTo::Value(MotionValue::Scalar(1.0)));
+        assert_eq!(spec.interrupt, MotionInterrupt::Replace);
+        assert_eq!(spec.playback.fill_mode, AnimationFillMode::Both);
+        assert_eq!(spec.playback.iteration_count, AnimationIteration::ONCE);
+
+        let mut queue = MutationQueue::new();
+        queue
+            .node(node, Duration::ZERO)
+            .transition()
+            .opacity(0.0)
+            .start();
+        let ids: Vec<_> = queue
+            .as_slice()
+            .iter()
+            .filter_map(|mutation| match mutation {
+                crate::UiMutation::StartAnimation { animation } => Some(animation.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, [spec.id], "a transition runs on the same track");
     }
 }

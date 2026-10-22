@@ -1,0 +1,67 @@
+size 1003.9 644.6
+summary nodes=17 edges=0 groups=4
+shape rect 8 42.6 987.9 134.4 fill=SemanticColorMix{first:Subtle,second:None,weight:9500}
+shape rect 8 177 987.9 235.2 fill=SemanticColorMix{first:Subtle,second:None,weight:4000}
+shape rect 8 412.2 987.9 100.8 fill=SemanticColorMix{first:Subtle,second:None,weight:9500}
+shape rect 8 513 987.9 100.8 fill=SemanticColorMix{first:Subtle,second:None,weight:4000}
+shape rect 320.5 42.6 67.2 571.2 fill=SemanticColorMix{first:Border,second:None,weight:3000}
+shape rect 555.7 42.6 67.2 571.2 fill=SemanticColorMix{first:Border,second:None,weight:3000}
+shape rect 790.9 42.6 67.2 571.2 fill=SemanticColorMix{first:Border,second:None,weight:3000}
+shape path M186.1,42.6 L186.1,613.8 stroke=BorderSoft/hairline/Solid
+shape path M320.5,42.6 L320.5,613.8 stroke=BorderSoft/hairline/Solid
+shape path M454.9,42.6 L454.9,613.8 stroke=BorderSoft/hairline/Solid
+shape path M589.3,42.6 L589.3,613.8 stroke=BorderSoft/hairline/Solid
+shape path M723.7,42.6 L723.7,613.8 stroke=BorderSoft/hairline/Solid
+shape path M858.1,42.6 L858.1,613.8 stroke=BorderSoft/hairline/Solid
+shape path M152.5,613.8 L891.7,613.8 stroke=Border/hairline/Solid
+shape path M186.1,613.8 L186.1,617.8 stroke=Border/hairline/Solid
+text 151.3 619.8 69.6 16.8 size=12 w=400 ink=Muted "2014-01-07"
+shape path M320.5,613.8 L320.5,617.8 stroke=Border/hairline/Solid
+text 285.7 619.8 69.6 16.8 size=12 w=400 ink=Muted "2014-01-11"
+shape path M454.9,613.8 L454.9,617.8 stroke=Border/hairline/Solid
+text 420.1 619.8 69.6 16.8 size=12 w=400 ink=Muted "2014-01-15"
+shape path M589.3,613.8 L589.3,617.8 stroke=Border/hairline/Solid
+text 554.5 619.8 69.6 16.8 size=12 w=400 ink=Muted "2014-01-19"
+shape path M723.7,613.8 L723.7,617.8 stroke=Border/hairline/Solid
+text 688.9 619.8 69.6 16.8 size=12 w=400 ink=Muted "2014-01-23"
+shape path M858.1,613.8 L858.1,617.8 stroke=Border/hairline/Solid
+text 823.3 619.8 69.6 16.8 size=12 w=400 ink=Muted "2014-01-27"
+text 20 100 77.5 19.6 size=14 w=600 ink=Text "A section"
+text 20 284.8 120.5 19.6 size=14 w=600 ink=Text "Critical tasks"
+text 20 452.8 111.9 19.6 size=14 w=600 ink=Text "Documentation"
+text 20 553.6 103.3 19.6 size=14 w=600 ink=Text "Last section"
+shape rect 152.5 46.6 67.2 25.6 r=Xs fill=SemanticColorMix{first:Muted,second:None,weight:2000} stroke=SemanticColorMix{first:Muted,second:None,weight:6000}/hairline/Solid
+text 225.7 49.6 113.7 19.6 size=14 w=400 ink=Text "Completed task"
+shape rect 253.3 80.2 168 25.6 r=Xs fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Accent/hairline/Solid
+text 292.6 83.2 89.3 19.6 size=14 w=400 ink=Text "Active task"
+shape rect 421.3 113.8 235.2 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 494.2 116.8 89.3 19.6 size=14 w=400 ink=Text "Future task"
+shape rect 656.5 147.4 235.2 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 725.4 150.4 97.4 19.6 size=14 w=400 ink=Text "Future task2"
+shape rect 152.5 181 33.6 25.6 r=Xs fill=SemanticColorMix{first:Muted,second:None,weight:2000} stroke=Danger/thick/Solid
+text 192.1 184 284.2 19.6 size=14 w=400 ink=Text "Completed task in the critical line"
+shape rect 219.7 214.6 67.2 25.6 r=Xs fill=SemanticColorMix{first:Muted,second:None,weight:2000} stroke=Danger/thick/Solid
+text 292.9 217.6 211.1 19.6 size=14 w=400 ink=Text "Implement parser and jison"
+shape rect 286.9 248.2 168 25.6 r=Xs fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Danger/thick/Solid
+text 460.9 251.2 186.8 19.6 size=14 w=400 ink=Text "Create tests for parser"
+shape rect 454.9 281.8 235.2 25.6 r=Xs fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/thick/Solid
+text 696.1 284.8 227.4 19.6 size=14 w=400 ink=Text "Future task in critical line"
+shape rect 690.1 315.4 67.2 25.6 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 763.3 318.4 203 19.6 size=14 w=400 ink=Text "Create tests for renderer"
+shape rect 757.3 349 33.6 25.6 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 796.9 352 113.7 19.6 size=14 w=400 ink=Text "Add to mermaid"
+shape path M790.9,386.2 L800.1,395.4 L790.9,404.6 L781.7,395.4 Z fill=series1
+text 806.1 385.6 154.3 19.6 size=14 w=400 ink=Text "Functionality added"
+shape rect 219.7 416.2 100.8 25.6 r=Xs fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Accent/hairline/Solid
+text 326.5 419.2 170.5 19.6 size=14 w=400 ink=Text "Describe gantt syntax"
+shape rect 387.7 449.8 28 25.6 r=Xs fill=series2.soft stroke=series2/hairline/Solid
+text 421.7 452.8 243.6 19.6 size=14 w=400 ink=Text "Add gantt diagram to demo page"
+shape rect 387.7 483.4 67.2 25.6 r=Xs fill=series2.soft stroke=series2/hairline/Solid
+text 460.9 486.4 259.8 19.6 size=14 w=400 ink=Text "Add another diagram to demo page"
+shape rect 454.9 517 100.8 25.6 r=Xs fill=series3.soft stroke=series3/hairline/Solid
+text 561.7 520 170.5 19.6 size=14 w=400 ink=Text "Describe gantt syntax"
+shape rect 622.9 550.6 28 25.6 r=Xs fill=series3.soft stroke=series3/hairline/Solid
+text 656.9 553.6 243.6 19.6 size=14 w=400 ink=Text "Add gantt diagram to demo page"
+shape rect 650.9 584.2 67.2 25.6 r=Xs fill=series3.soft stroke=series3/hairline/Solid
+text 724.1 587.2 259.8 19.6 size=14 w=400 ink=Text "Add another diagram to demo page"
+text 280.6 8 442.7 22.4 size=16 w=600 ink=Text "Adding GANTT diagram functionality to mermaid"

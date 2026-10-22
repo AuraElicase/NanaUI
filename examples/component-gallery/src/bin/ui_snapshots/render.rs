@@ -311,7 +311,7 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     let mut popover = GalleryState::new();
     popover.update(GalleryMessage::SelectSection(GallerySection::Feedback));
     popover.update(GalleryMessage::TogglePopover);
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-popover-dark.png",
@@ -328,14 +328,14 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     context_menu.update(GalleryMessage::ContextMenu(
         GalleryContextMenuEvent::OpenSubmenu(vec![0]),
     ));
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-context-menu-dark.png",
         &mut context_menu,
     )?;
     context_menu.update(GalleryMessage::SetTheme(ThemeAppearance::Light));
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-context-menu-light.png",
@@ -352,7 +352,7 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     context_menu_search.update(GalleryMessage::ContextMenu(
         GalleryContextMenuEvent::Search("重命名".to_owned()),
     ));
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-context-menu-search-dark.png",
@@ -370,7 +370,7 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     context_menu_search_light.update(GalleryMessage::ContextMenu(
         GalleryContextMenuEvent::Search("copy".to_owned()),
     ));
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-context-menu-search-light.png",
@@ -382,7 +382,7 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     command_palette.update(GalleryMessage::CommandPalette(CommandPaletteEvent::Search(
         "工作区".to_owned(),
     )));
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-command-palette-dark.png",
@@ -392,7 +392,7 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     let mut command_palette_light = GalleryState::new();
     command_palette_light.update(GalleryMessage::SetTheme(ThemeAppearance::Light));
     command_palette_light.update(GalleryMessage::ToggleCommandPalette);
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-command-palette-light.png",
@@ -402,7 +402,7 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     let mut dialog = GalleryState::new();
     dialog.update(GalleryMessage::SelectSection(GallerySection::Feedback));
     dialog.update(GalleryMessage::ToggleDialog);
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-dialog-dark.png",
@@ -412,7 +412,7 @@ pub fn generate(mut recorder: Recorder) -> Result<Report, Box<dyn std::error::Er
     let mut image_viewer = GalleryState::new();
     image_viewer.update(GalleryMessage::SelectSection(GallerySection::Feedback));
     image_viewer.update(GalleryMessage::ToggleImageViewer);
-    gallery_snapshot(
+    gallery_overlay_snapshot(
         &mut snapshots,
         &mut recorder,
         "gallery-image-viewer-dark.png",
@@ -1257,6 +1257,23 @@ fn gallery_snapshot(
     let clear = clear_color(state.preset_theme());
     let pixels = paint_gallery(snapshots, state, GALLERY_SIZE)?;
     recorder.record(name, GALLERY_SIZE, &pixels, clear)
+}
+
+/// Past every overlay entrance in the default theme: a dialog's card, a
+/// menu's fade and pop, a palette's fade. See `settle_overlay_entrance`.
+pub(super) const OVERLAY_SETTLE: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// [`gallery_snapshot`] of an overlay the state just opened, once its entrance
+/// has run. Taken at t=0 the frame is the transparent start of the fade.
+fn gallery_overlay_snapshot(
+    snapshots: &mut OffscreenSnapshots,
+    recorder: &mut Recorder,
+    name: &str,
+    state: &mut GalleryState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    state.flush_snapshot_scene();
+    state.snapshot_settle(OVERLAY_SETTLE);
+    gallery_snapshot(snapshots, recorder, name, state)
 }
 
 fn gallery_snapshot_with_cursor(

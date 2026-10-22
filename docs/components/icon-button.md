@@ -42,7 +42,7 @@ icon_button(Icon::Search, "搜索")
 
 ## 悬停气泡
 
-悬停气泡不是 `label`。可访问名是 `label`。气泡用组件上的 `IconButton::with_tooltip`，配置是默认的 `TooltipConfig`。这不是字段表里的方法。
+悬停气泡不是 `label`。可访问名是 `label`。气泡用组件上的 `IconButton::with_tooltip`，配置是默认的 `TooltipConfig`。这不是字段表里的方法。标题行里的工具用 `IconButton::tool(icon, label)`：紧凑尺寸，标签同时作可访问名和气泡。
 
 ## 尺寸
 

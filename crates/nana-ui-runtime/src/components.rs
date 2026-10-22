@@ -2025,6 +2025,20 @@ pub struct NodeStyle {
     /// so a density setting can move them. It is the box when nothing else
     /// says: an axis whose `width` / `height` the layout writes keeps that.
     pub square: Option<nana_ui_core::SquareSize>,
+    /// Type step, resolved against the installed
+    /// [`nana_ui_core::TypographyTokens`] into `layout.font_size`. Sibling of
+    /// [`Self::radius`]: a node that wrote `font_size = type_scale::BODY`
+    /// spent the token at construction, and a theme that moves the scale
+    /// could not reach it. When set it wins over `layout.font_size`.
+    pub type_role: Option<nana_ui_core::TypeRole>,
+    /// Weight step, resolved into `layout.font_weight` the same way.
+    pub type_weight: Option<nana_ui_core::TextWeight>,
+    /// Gap step between children, resolved against the installed
+    /// [`nana_ui_core::SpacingTokens`] into `layout.gap`.
+    pub gap_step: Option<nana_ui_core::SpacingStep>,
+    /// Inset steps, horizontal then vertical, resolved against the installed
+    /// [`nana_ui_core::SpacingTokens`] into the four padding edges.
+    pub padding_step: Option<[nana_ui_core::SpacingStep; 2]>,
     pub interaction: InteractionStyle,
     pub text_horizontal_alignment: TextHorizontalAlignment,
     pub text_vertical_alignment: TextVerticalAlignment,
@@ -2057,6 +2071,10 @@ impl PartialEq for NodeStyle {
             control_padding_y,
             surface_padding,
             square,
+            type_role,
+            type_weight,
+            gap_step,
+            padding_step,
             interaction,
             text_horizontal_alignment,
             text_vertical_alignment,
@@ -2072,6 +2090,10 @@ impl PartialEq for NodeStyle {
             && control_padding_y == &other.control_padding_y
             && surface_padding == &other.surface_padding
             && square == &other.square
+            && type_role == &other.type_role
+            && type_weight == &other.type_weight
+            && gap_step == &other.gap_step
+            && padding_step == &other.padding_step
             && text_horizontal_alignment == &other.text_horizontal_alignment
             && text_vertical_alignment == &other.text_vertical_alignment
             && interaction == &other.interaction
@@ -2107,11 +2129,21 @@ impl NodeStyle {
             control_padding_y: None,
             surface_padding: None,
             square: None,
+            type_role: None,
+            type_weight: None,
+            gap_step: None,
+            padding_step: None,
             interaction: InteractionStyle::default(),
             text_horizontal_alignment: TextHorizontalAlignment::Start,
             text_vertical_alignment: TextVerticalAlignment::Top,
             painter: None,
         }
+    }
+
+    /// The layout to edit in place, copied first if another style shares it
+    /// (`Arc::make_mut`), so the shared default is never written through.
+    pub fn layout_mut(&mut self) -> &mut LayoutStyle {
+        Arc::make_mut(&mut self.layout)
     }
 
     /// 挂上节点自绘。见 [`crate::Painter`]。
@@ -2129,6 +2161,35 @@ impl NodeStyle {
         Arc::make_mut(&mut self.layout)
             .theme
             .set(property, Some(expression.into()));
+        self
+    }
+
+    /// Name the type step instead of spending it. See [`Self::type_role`].
+    pub fn type_role(mut self, role: nana_ui_core::TypeRole) -> Self {
+        self.type_role = Some(role);
+        self
+    }
+
+    /// Name the weight step. See [`Self::type_weight`].
+    pub fn type_weight(mut self, weight: nana_ui_core::TextWeight) -> Self {
+        self.type_weight = Some(weight);
+        self
+    }
+
+    /// Name the gap step between children. See [`Self::gap_step`].
+    pub fn gap_step(mut self, step: nana_ui_core::SpacingStep) -> Self {
+        self.gap_step = Some(step);
+        self
+    }
+
+    /// Name the inset steps, horizontal then vertical. See
+    /// [`Self::padding_step`].
+    pub fn padding_step(
+        mut self,
+        x: nana_ui_core::SpacingStep,
+        y: nana_ui_core::SpacingStep,
+    ) -> Self {
+        self.padding_step = Some([x, y]);
         self
     }
 
@@ -3054,13 +3115,29 @@ impl ComponentGeometry {
     /// of its layout box `bounds`, when it is not the node's own
     /// `transform-origin`: a modal frame's node is its whole scrim, and its
     /// entrance scales and moves the card about the card's own centre, the
-    /// way CSS pivots a transform on the card.
+    /// way CSS pivots a transform on the card. A triggered menu's node is its
+    /// trigger, and its entrance is the hanging surface's: it grows out of the
+    /// point of the surface nearest the trigger's centre.
     pub fn presentation_pivot(&self, bounds: LayoutBox) -> Option<[f32; 2]> {
         match self {
             Self::ModalFrame { surface, .. } => Some([
                 surface.x + surface.width / 2.0 - bounds.x,
                 surface.y + surface.height / 2.0 - bounds.y,
             ]),
+            Self::MenuSurface {
+                trigger_surface: Some(trigger),
+                surface,
+                ..
+            } => {
+                let trigger = trigger.bounds;
+                let x = (trigger.x + trigger.width / 2.0)
+                    .min(surface.x + surface.width)
+                    .max(surface.x);
+                let y = (trigger.y + trigger.height / 2.0)
+                    .min(surface.y + surface.height)
+                    .max(surface.y);
+                Some([x - bounds.x, y - bounds.y])
+            }
             _ => None,
         }
     }
@@ -3201,6 +3278,57 @@ impl ScrollMetrics {
 }
 
 impl LayoutBox {
+    /// The x of the right edge.
+    pub fn right(self) -> f32 {
+        self.x + self.width
+    }
+
+    /// The y of the bottom edge.
+    pub fn bottom(self) -> f32 {
+        self.y + self.height
+    }
+
+    /// The smallest box that covers both.
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        Self {
+            x,
+            y,
+            width: self.right().max(other.right()) - x,
+            height: self.bottom().max(other.bottom()) - y,
+        }
+    }
+
+    /// The overlap of both, `None` where they do not share an area.
+    pub fn intersection(self, other: Self) -> Option<Self> {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let width = self.right().min(other.right()) - x;
+        let height = self.bottom().min(other.bottom()) - y;
+        (width > 0.0 && height > 0.0).then_some(Self {
+            x,
+            y,
+            width,
+            height,
+        })
+    }
+
+    /// Every edge moved `amount` inward (outward when negative); a side
+    /// that would cross its opposite collapses to zero at the box's middle.
+    #[must_use]
+    pub fn inset(self, amount: f32) -> Self {
+        let width = (self.width - 2.0 * amount).max(0.0);
+        let height = (self.height - 2.0 * amount).max(0.0);
+        Self {
+            x: self.x + (self.width - width) * 0.5,
+            y: self.y + (self.height - height) * 0.5,
+            width,
+            height,
+        }
+    }
+
     pub fn contains(self, x: f32, y: f32) -> bool {
         self.width > 0.0
             && self.height > 0.0
@@ -4415,6 +4543,29 @@ pub struct ExtractedTextSpan {
 }
 
 impl StandardVisual {
+    /// The overlay of a triggered menu (Popover, ActionMenu, HoverCard): an
+    /// in-flow trigger with a surface hanging off it. Its node's presentation
+    /// layers belong to that surface: they fade and scale the surface and the
+    /// items it places, never the trigger or its trigger content.
+    pub fn triggered_menu_overlay(&self) -> Option<TriggeredMenuOverlay> {
+        match self {
+            Self::MenuSurface {
+                trigger,
+                trigger_icon,
+                trigger_image,
+                overlay: Some(overlay),
+                ..
+            } if trigger.is_some()
+                || trigger_icon.is_some()
+                || trigger_image.is_some()
+                || overlay.trigger_content.is_some() =>
+            {
+                Some(*overlay)
+            }
+            _ => None,
+        }
+    }
+
     /// Whether this node's own paint, clip and hit area are sized from
     /// `child`'s box, so a change to that box changes them although this
     /// node's box did not: a modal frame's surface fits its body slot, an
@@ -4458,6 +4609,62 @@ impl StandardVisual {
 #[cfg(test)]
 mod tests {
     use super::{TextAffinity, TextInputState, TextSelection};
+
+    #[test]
+    fn layout_box_geometry() {
+        use super::LayoutBox;
+        let a = LayoutBox {
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        let b = LayoutBox {
+            x: 5.0,
+            y: -5.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        assert_eq!(
+            a.union(b),
+            LayoutBox {
+                x: 0.0,
+                y: -5.0,
+                width: 15.0,
+                height: 15.0
+            }
+        );
+        assert_eq!(
+            a.intersection(b),
+            Some(LayoutBox {
+                x: 5.0,
+                y: 0.0,
+                width: 5.0,
+                height: 5.0
+            })
+        );
+        let far = LayoutBox { x: 10.0, ..a };
+        assert_eq!(a.intersection(far), None);
+        assert_eq!(
+            a.inset(2.0),
+            LayoutBox {
+                x: 2.0,
+                y: 2.0,
+                width: 6.0,
+                height: 6.0
+            }
+        );
+        assert_eq!(
+            a.inset(8.0),
+            LayoutBox {
+                x: 5.0,
+                y: 5.0,
+                width: 0.0,
+                height: 0.0
+            }
+        );
+        assert_eq!((a.right(), b.bottom()), (10.0, 5.0));
+    }
 
     #[test]
     fn affinity_is_part_of_where_a_caret_is() {

@@ -32,7 +32,7 @@ fn video_slot(id: u64) -> Option<String> {
 /// to off.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Video {
-    pub resource: Arc<str>,
+    pub resource: crate::TextureSlotName,
     pub opacity: f32,
     pub corner_radius: f32,
     pub fit: ContentFit,
@@ -52,7 +52,7 @@ impl Video {
         self.style = style;
         self
     }
-    pub fn new(resource: impl Into<Arc<str>>) -> Self {
+    pub fn new(resource: impl Into<crate::TextureSlotName>) -> Self {
         Self {
             resource: resource.into(),
             opacity: 1.0,
@@ -67,14 +67,14 @@ impl Video {
     }
 
     /// Host-texture Scene node. Empty identities are omitted so the world
-    /// does not reject a blank `resource`. The live revision is stamped from
-    /// the host texture registry at the frame boundary, so the node carries 0.
+    /// does not reject a blank `resource`. The painter resolves the slot in
+    /// the host texture registry every frame, so the node carries revision 0.
     pub fn custom_render(&self) -> Option<CustomRenderNode> {
-        if self.resource.trim().is_empty() {
+        if self.resource.is_empty() {
             return None;
         }
         Some(
-            CustomRenderNode::new(crate::HOST_TEXTURE_RENDERER, Arc::clone(&self.resource), 0)
+            CustomRenderNode::new(crate::HOST_TEXTURE_RENDERER, self.resource.to_resource(), 0)
                 .with_fit(self.fit),
         )
     }

@@ -1,0 +1,16 @@
+usecase-beta
+actor Normal("Normal actor")
+actor Hollow("Hollow actor")@{ type: hollow }
+actor Awesome("Awesome actor")@{ type: awesome }
+actor Icon("Registered icon")@{ icon: "fa:user" }
+actor SalesAgent("Sales agent")@{ business: true } <<Employee>>
+Quote("Prepare quote")@{ business: true } <<Core>>
+Archive[Archive quote] <<Record>>
+Normal --> Manage
+Hollow --> Manage
+Awesome --> Manage
+Icon --> Manage
+SalesAgent --> Quote
+Quote --> Archive
+note for Quote "`Needs **manager** approval`"
+note for SalesAgent "Works from the regional office"

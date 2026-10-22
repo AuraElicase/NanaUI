@@ -2816,11 +2816,8 @@ impl UiWorld {
                     }
                 };
                 let drag = drag.as_ref().map(|drag| {
-                    let boxes = row_boxes(drag.drop_targets.len());
-                    (
-                        drag.drop_mark(bounds, &boxes),
-                        boxes.get(drag.source).copied(),
-                    )
+                    let boxes = row_boxes(drag.rows());
+                    (drag.drop_mark(bounds, &boxes), drag.carried_box(&boxes))
                 });
                 Some(reorder_list_geometry(
                     bounds,
@@ -2848,6 +2845,7 @@ impl UiWorld {
                         content,
                         &geometry,
                         self.style_model.metrics,
+                        &|scene, scale| self.diagram_drawing(scene, scale),
                     ),
                     text,
                     selection: match selection_range {

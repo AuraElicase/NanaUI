@@ -1,0 +1,206 @@
+size 1507.4 157.6
+summary nodes=26 edges=13 groups=0
+shape path M52.7,54.3 L52.7,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M52.7,44.6 L56.9,54.3 L48.4,54.3 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M168.3,61.4 L168.3,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M168.3,44.6 L171.9,53 L168.3,61.4 L164.8,53 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M284,61.4 L284,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M284,44.6 L287.5,53 L284,61.4 L280.4,53 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M399.6,45.1 L399.6,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M403.1,53 L399.6,44.6 M399.6,44.6 L396.1,53 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M515.3,44.6 L515.3,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M630.9,45.1 L630.9,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M634.4,53 L630.9,44.6 M630.9,44.6 L627.4,53 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M746.5,54.3 L746.5,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M746.5,44.6 L750.8,54.3 L742.3,54.3 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M862.2,44.6 L862.2,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M986.4,44.6 L986.4,112.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M982.9,104.6 L986.4,113 M986.4,113 L990,104.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1115,44.6 L1115,112.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1111.5,104.6 L1115,113 M1115,113 L1118.5,104.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1234.9,44.6 L1234.9,112.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1231.4,104.6 L1234.9,113 M1234.9,113 L1238.5,104.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1350.6,54.3 L1350.6,103.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1350.6,113 L1346.3,103.3 L1354.8,103.3 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1350.6,44.6 L1354.8,54.3 L1346.3,54.3 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1463.4,52.2 L1463.4,113 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 1459.6 44.6 7.6 7.6 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 68.6 87.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 14.4 70.4 76.6 16.8 size=12 w=400 ink=Muted "Inheritance"
+shape rect 124.6 68.6 87.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 130 70.4 76.6 16.8 size=12 w=400 ink=Muted "Composition"
+shape rect 240.3 68.6 87.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 245.7 70.4 76.6 16.8 size=12 w=400 ink=Muted "Aggregation"
+shape rect 355.9 68.6 87.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 361.3 70.4 76.6 16.8 size=12 w=400 ink=Muted "Association"
+shape rect 471.6 68.6 87.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 477 70.4 76.6 16.8 size=12 w=400 ink=Muted "Link(Solid)"
+shape rect 590.7 68.6 80.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 596.1 70.4 69.6 16.8 size=12 w=400 ink=Muted "Dependency"
+shape rect 702.9 68.6 87.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 708.3 70.4 76.6 16.8 size=12 w=400 ink=Muted "Realization"
+shape rect 815 68.6 94.3 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 820.4 70.4 83.5 16.8 size=12 w=400 ink=Muted "Link(Dashed)"
+text 989.4 49.6 7 16.8 size=12 w=400 ink=Muted "1"
+text 989.4 83.1 7 16.8 size=12 w=400 ink=Muted "*"
+text 1118 49.6 7 16.8 size=12 w=400 ink=Muted "1"
+text 1118 83.1 27.8 16.8 size=12 w=400 ink=Muted "1..*"
+shape rect 1201.7 68.6 66.5 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 1207.1 70.4 55.7 16.8 size=12 w=400 ink=Muted "Contains"
+text 1237.9 83.1 27.8 16.8 size=12 w=400 ink=Muted "many"
+shape rect 14.9 9 75.6 35.6 r=Sm fill=Surface
+clip rect 14.9 9 75.6 35.6 r=Sm
+shape rect 14.9 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 14.9 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 26.9 17 51.6 19.6 size=14 w=600 ink=Text "classA"
+shape rect 14.9 113 75.6 35.6 r=Sm fill=Surface
+clip rect 14.9 113 75.6 35.6 r=Sm
+shape rect 14.9 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 14.9 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 26.9 121 51.6 19.6 size=14 w=600 ink=Text "classB"
+shape rect 130.5 9 75.6 35.6 r=Sm fill=Surface
+clip rect 130.5 9 75.6 35.6 r=Sm
+shape rect 130.5 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 130.5 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 142.5 17 51.6 19.6 size=14 w=600 ink=Text "classC"
+shape rect 130.5 113 75.6 35.6 r=Sm fill=Surface
+clip rect 130.5 113 75.6 35.6 r=Sm
+shape rect 130.5 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 130.5 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 142.5 121 51.6 19.6 size=14 w=600 ink=Text "classD"
+shape rect 246.1 9 75.6 35.6 r=Sm fill=Surface
+clip rect 246.1 9 75.6 35.6 r=Sm
+shape rect 246.1 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 246.1 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 258.1 17 51.6 19.6 size=14 w=600 ink=Text "classE"
+shape rect 246.1 113 75.6 35.6 r=Sm fill=Surface
+clip rect 246.1 113 75.6 35.6 r=Sm
+shape rect 246.1 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 246.1 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 258.1 121 51.6 19.6 size=14 w=600 ink=Text "classF"
+shape rect 361.8 9 75.6 35.6 r=Sm fill=Surface
+clip rect 361.8 9 75.6 35.6 r=Sm
+shape rect 361.8 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 361.8 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 373.8 17 51.6 19.6 size=14 w=600 ink=Text "classG"
+shape rect 361.8 113 75.6 35.6 r=Sm fill=Surface
+clip rect 361.8 113 75.6 35.6 r=Sm
+shape rect 361.8 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 361.8 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 373.8 121 51.6 19.6 size=14 w=600 ink=Text "classH"
+shape rect 477.4 9 75.6 35.6 r=Sm fill=Surface
+clip rect 477.4 9 75.6 35.6 r=Sm
+shape rect 477.4 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 477.4 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 489.4 17 51.6 19.6 size=14 w=600 ink=Text "classI"
+shape rect 477.4 113 75.6 35.6 r=Sm fill=Surface
+clip rect 477.4 113 75.6 35.6 r=Sm
+shape rect 477.4 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 477.4 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 489.4 121 51.6 19.6 size=14 w=600 ink=Text "classJ"
+shape rect 593.1 9 75.6 35.6 r=Sm fill=Surface
+clip rect 593.1 9 75.6 35.6 r=Sm
+shape rect 593.1 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 593.1 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 605.1 17 51.6 19.6 size=14 w=600 ink=Text "classK"
+shape rect 593.1 113 75.6 35.6 r=Sm fill=Surface
+clip rect 593.1 113 75.6 35.6 r=Sm
+shape rect 593.1 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 593.1 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 605.1 121 51.6 19.6 size=14 w=600 ink=Text "classL"
+shape rect 708.7 9 75.6 35.6 r=Sm fill=Surface
+clip rect 708.7 9 75.6 35.6 r=Sm
+shape rect 708.7 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 708.7 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 720.7 17 51.6 19.6 size=14 w=600 ink=Text "classM"
+shape rect 708.7 113 75.6 35.6 r=Sm fill=Surface
+clip rect 708.7 113 75.6 35.6 r=Sm
+shape rect 708.7 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 708.7 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 720.7 121 51.6 19.6 size=14 w=600 ink=Text "classN"
+shape rect 824.4 9 75.6 35.6 r=Sm fill=Surface
+clip rect 824.4 9 75.6 35.6 r=Sm
+shape rect 824.4 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 824.4 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 836.4 17 51.6 19.6 size=14 w=600 ink=Text "classO"
+shape rect 824.4 113 75.6 35.6 r=Sm fill=Surface
+clip rect 824.4 113 75.6 35.6 r=Sm
+shape rect 824.4 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 824.4 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 836.4 121 51.6 19.6 size=14 w=600 ink=Text "classP"
+shape rect 940 9 92.9 35.6 r=Sm fill=Surface
+clip rect 940 9 92.9 35.6 r=Sm
+shape rect 940 9 92.9 35.6 fill=Subtle
+unclip
+shape rect 940 9 92.9 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 952 17 68.9 19.6 size=14 w=600 ink=Text "Customer"
+shape rect 948.6 113 75.6 35.6 r=Sm fill=Surface
+clip rect 948.6 113 75.6 35.6 r=Sm
+shape rect 948.6 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 948.6 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 960.6 121 51.6 19.6 size=14 w=600 ink=Text "Ticket"
+shape rect 1072.9 9 84.3 35.6 r=Sm fill=Surface
+clip rect 1072.9 9 84.3 35.6 r=Sm
+shape rect 1072.9 9 84.3 35.6 fill=Subtle
+unclip
+shape rect 1072.9 9 84.3 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1084.9 17 60.3 19.6 size=14 w=600 ink=Text "Student"
+shape rect 1077.2 113 75.6 35.6 r=Sm fill=Surface
+clip rect 1077.2 113 75.6 35.6 r=Sm
+shape rect 1077.2 113 75.6 35.6 fill=Subtle
+unclip
+shape rect 1077.2 113 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1089.2 121 51.6 19.6 size=14 w=600 ink=Text "Course"
+shape rect 1197.1 9 75.6 35.6 r=Sm fill=Surface
+clip rect 1197.1 9 75.6 35.6 r=Sm
+shape rect 1197.1 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 1197.1 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1209.1 17 51.6 19.6 size=14 w=600 ink=Text "Galaxy"
+shape rect 1199.9 113 70 35.6 r=Sm fill=Surface
+clip rect 1199.9 113 70 35.6 r=Sm
+shape rect 1199.9 113 70 35.6 fill=Subtle
+unclip
+shape rect 1199.9 113 70 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1217.7 121 34.4 19.6 size=14 w=600 ink=Text "Star"
+shape rect 1312.8 9 75.6 35.6 r=Sm fill=Surface
+clip rect 1312.8 9 75.6 35.6 r=Sm
+shape rect 1312.8 9 75.6 35.6 fill=Subtle
+unclip
+shape rect 1312.8 9 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1324.8 17 51.6 19.6 size=14 w=600 ink=Text "Animal"
+shape rect 1315.6 113 70 35.6 r=Sm fill=Surface
+clip rect 1315.6 113 70 35.6 r=Sm
+shape rect 1315.6 113 70 35.6 fill=Subtle
+unclip
+shape rect 1315.6 113 70 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1329.1 121 43 19.6 size=14 w=600 ink=Text "Zebra"
+shape rect 1428.4 9 70 35.6 r=Sm fill=Surface
+clip rect 1428.4 9 70 35.6 r=Sm
+shape rect 1428.4 9 70 35.6 fill=Subtle
+unclip
+shape rect 1428.4 9 70 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1450.5 17 25.8 19.6 size=14 w=600 ink=Text "bar"
+shape rect 1428.4 113 70 35.6 r=Sm fill=Surface
+clip rect 1428.4 113 70 35.6 r=Sm
+shape rect 1428.4 113 70 35.6 fill=Subtle
+unclip
+shape rect 1428.4 113 70 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 1450.5 121 25.8 19.6 size=14 w=600 ink=Text "foo"

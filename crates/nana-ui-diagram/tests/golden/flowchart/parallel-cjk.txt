@@ -1,0 +1,30 @@
+size 399.6 290.8
+summary nodes=5 edges=9 groups=0
+shape path M117.7,141.5 L125.7,141.5 Q133.7,141.5 133.7,133.5 L133.7,59.7 Q133.7,51.7 141.7,51.7 L163.1,51.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M169.8,51.7 L161.4,55.2 L162.9,51.7 L161.4,48.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M117.7,148.5 L141.7,148.5 Q149.7,148.5 149.7,140.5 L149.7,72.3 Q149.7,65.7 156.4,65.7 L163.1,65.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M169.8,65.7 L161.4,69.2 L162.9,65.7 L161.4,62.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M117.7,155.4 L159,155.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M165.7,155.4 L157.3,158.9 L158.8,155.4 L157.3,151.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M117.7,162.3 L141.7,162.3 Q149.7,162.3 149.7,170.3 L149.7,214.5 Q149.7,221.1 156.4,221.1 L163.1,221.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M169.8,221.1 L161.4,224.7 L162.9,221.1 L161.4,217.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M278.5,65.7 L306.6,65.7 Q314.6,65.7 314.6,73.7 L314.6,176.7 Q314.6,181.3 319.2,181.3 L323.8,181.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M330.6,181.3 L322.2,184.9 L323.7,181.3 L322.2,177.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M282.6,169.3 L290.6,169.3 Q298.6,169.3 298.6,177.3 L298.6,182.6 Q298.6,190.6 306.6,190.6 L323.8,190.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M330.6,190.6 L322.2,194.1 L323.7,190.6 L322.2,187.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M278.5,221.1 L290.6,221.1 Q298.6,221.1 298.6,213.1 L298.6,207.8 Q298.6,199.8 306.6,199.8 L323.8,199.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M330.6,199.8 L322.2,203.3 L323.7,199.8 L322.2,196.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M330.6,209.1 L322.6,209.1 Q314.6,209.1 314.6,217.1 L314.6,273.8 Q314.6,281.8 306.6,281.8 L141.7,281.8 Q133.7,281.8 133.7,273.8 L133.7,173.9 Q133.7,169.3 129.1,169.3 L124.4,169.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M117.7,169.3 L126.1,165.7 L124.6,169.3 L126.1,172.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M197,71.6 L197,87.6 Q197,95.6 205,95.6 L243.3,95.6 Q251.3,95.6 251.3,87.6 L251.3,78.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M251.3,71.6 L254.8,80 L251.3,78.5 L247.8,80 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 135.6 108.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 145.6 76.7 19.6 size=14 w=400 ink=Text "输入 Input"
+shape rect 169.8 32 108.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 185.8 42 76.7 19.6 size=14 w=400 ink=Text "绘制 Scene"
+shape rect 165.7 135.6 116.8 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 181.7 145.6 84.8 19.6 size=14 w=400 ink=Text "布局 Layout"
+shape rect 169.8 215.2 108.7 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 185.8 225.2 76.7 19.6 size=14 w=400 ink=Text "解析 Parse"
+shape rect 330.6 175.4 60 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 346.6 185.4 28 19.6 size=14 w=400 ink=Text "输出"

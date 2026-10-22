@@ -1,0 +1,25 @@
+stateDiagram
+    direction LR
+    classDef notMoving fill:white
+    classDef movement font-style:italic
+    classDef badBadEvent fill:#f00,color:white,font-weight:bold,stroke-width:2px,stroke:yellow
+
+    [*] --> 静止
+    静止 --> 移动中 : 推一下
+    移动中 --> 静止 : 摩擦力让物体慢慢停下来，这个过程可能需要很长时间
+    移动中 --> Crash
+    Crash --> [*]
+    state "等待用户确认的一个很长很长的状态名称" as Wait
+    静止 --> Wait
+    Wait : 超时 30 秒
+    Wait : 可以取消
+    Wait --> [*]
+
+    class 静止 notMoving
+    class 移动中 movement
+    class Crash badBadEvent
+
+    note left of Wait
+        多行注释
+        第二行
+    end note

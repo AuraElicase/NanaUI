@@ -1,0 +1,40 @@
+sequenceDiagram
+    participant Alice
+    participant Bob
+    participant John
+    Alice->>Bob: Hello Bob, how are you?
+    alt is sick
+        Bob->>Alice: Not so good :(
+    else is well
+        Bob->>Alice: Feeling fresh like a daisy
+    end
+    opt Extra response
+        Bob->>Alice: Thanks for asking
+    end
+    loop Every minute
+        John-->Alice: Great!
+    end
+    par Alice to Bob
+        Alice->>Bob: Go help John
+    and Alice to John
+        Alice->>John: I want this done today
+        par John to Charlie
+            John->>Charlie: Can we do this today?
+        and John to Diana
+            John->>Diana: Can you help us today?
+        end
+    end
+    critical Establish a connection to the DB
+        Bob-->John: connect
+    option Network timeout
+        Bob-->Bob: Log error
+    end
+    break when the booking process fails
+        John-->Alice: show failure
+    end
+    rect rgba(0, 0, 255, .1)
+        Alice->>John: highlighted
+        rect rgb(200, 150, 255)
+            John-->>Alice: nested highlight
+        end
+    end

@@ -12,10 +12,12 @@ use crate::{PhysicalRect, gpu_work::ManagedBuffer, icons::Icon};
 /// Per-glyph raster edge cap. A glyph is rasterized at twice its dest size,
 /// so this also caps the biggest cell the shared atlas has to place.
 const MAX_ATLAS_PX: u32 = 256;
-/// Starting edge of the shared atlas, one sheet per render target. Not a cap:
-/// [`IconPipeline::repack`] doubles it when one frame's glyphs do not fit.
+/// Starting edge of the shared atlas, one sheet per render target that has
+/// drawn an icon. Not a cap: [`IconPipeline::repack`] doubles it when one
+/// frame's glyphs do not fit.
 ///
-/// 256² RGBA is 256 KiB, and it is spent up front rather than per glyph. That
+/// 256² RGBA is 256 KiB, and it is spent on a target's first glyph rather than
+/// per glyph; a target that never draws an icon spends nothing. That
 /// is *more* than the per-glyph textures cost a typical window — a 20-glyph
 /// 16px toolbar was ~82 KiB — and it is the price of the single bind group
 /// that lets those 20 glyphs be one draw. It is sized so a real shell needs no
@@ -246,7 +248,9 @@ pub(super) struct PreparedIcon {
 }
 
 pub(super) struct IconPipeline {
+    /// The one part compiled for a working format; see [`Self::swap_pipeline`].
     pipeline: wgpu::RenderPipeline,
+    uniform_layout: wgpu::BindGroupLayout,
     atlas_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     uniform_bind_group: wgpu::BindGroup,
@@ -261,7 +265,9 @@ pub(super) struct IconPipeline {
     /// The target size and corner exponent the uniforms were written with.
     uploaded_globals: Option<([u32; 2], f32)>,
     frame_slots: Vec<FrameSlot>,
-    atlas: Atlas,
+    /// Created by the first glyph this target places, so a target without
+    /// icons holds no sheet. Every entry lives in it.
+    atlas: Option<Atlas>,
     entries: HashMap<AtlasKey, AtlasEntry>,
     frame_keys: HashSet<AtlasKey>,
     /// Set when even a maximal atlas could not hold this frame's glyphs, so
@@ -269,7 +275,112 @@ pub(super) struct IconPipeline {
     exhausted: bool,
 }
 
+/// The icon program for targets of `format`: the only part of
+/// [`IconPipeline`] that depends on the working format.
+fn icon_pipeline(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    policy: Option<&nana_gpu::GpuDeviceState>,
+    uniform_layout: &wgpu::BindGroupLayout,
+    atlas_layout: &wgpu::BindGroupLayout,
+) -> wgpu::RenderPipeline {
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("nana-ui.scene.icon.pipeline"),
+        bind_group_layouts: &[Some(uniform_layout), Some(atlas_layout)],
+        immediate_size: 0,
+    });
+    let create_pipeline = || {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("nana-ui.scene.icon.shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ICON_SHADER)),
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("nana-ui.scene.icon.pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<IconVertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array!(
+                        0 => Float32x2,
+                        1 => Float32x2,
+                        2 => Float32x4,
+                        3 => Float32x4,
+                        4 => Float32x4,
+                        5 => Float32x3,
+                        6 => Float32x4,
+                    ),
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        })
+    };
+    if let Some(policy) = policy {
+        nana_gpu::__framework::render_pipeline_state(
+            policy,
+            nana_gpu::PipelineKey {
+                generation: policy.generation(),
+                target_format: nana_gpu::__framework::format_from_wgpu(format),
+                sample_count: 1,
+                shader: 0x6963_6f6e_7069_7065,
+                layout: icon_layout_key(),
+                material: 0,
+                primitive: 0,
+                blend: 1,
+                depth: 0,
+                vertex_layout: std::mem::size_of::<IconVertex>() as u64,
+            },
+            create_pipeline,
+        )
+        .expect("icon pipeline uses this context generation")
+    } else {
+        create_pipeline()
+    }
+}
+
 impl IconPipeline {
+    /// The icon program for another working format, for the same atlas.
+    pub(super) fn pipeline_for(
+        &self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        policy: Option<&nana_gpu::GpuDeviceState>,
+    ) -> wgpu::RenderPipeline {
+        icon_pipeline(
+            device,
+            format,
+            policy,
+            &self.uniform_layout,
+            &self.atlas_layout,
+        )
+    }
+
+    /// Draw through `pipeline` from now on, handing back the one in use. The
+    /// atlas and its entries stay: one icon atlas serves every format.
+    pub(super) fn swap_pipeline(&mut self, pipeline: &mut wgpu::RenderPipeline) {
+        std::mem::swap(&mut self.pipeline, pipeline);
+    }
+
     #[cfg(test)]
     pub(super) fn cached_pipeline(&self) -> &wgpu::RenderPipeline {
         &self.pipeline
@@ -284,10 +395,6 @@ impl IconPipeline {
         format: wgpu::TextureFormat,
         policy: Option<&nana_gpu::GpuDeviceState>,
     ) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("nana-ui.scene.icon.shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ICON_SHADER)),
-        });
         let uniform_layout = if let Some(policy) = policy {
             let table = ResourceTable::new(vec![
                 LogicalBinding::new(0, LogicalBindingType::UniformBuffer, &[ShaderStage::Vertex])
@@ -373,77 +480,10 @@ impl IconPipeline {
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("nana-ui.scene.icon.pipeline"),
-            bind_group_layouts: &[Some(&uniform_layout), Some(&atlas_layout)],
-            immediate_size: 0,
-        });
-        let create_pipeline = || {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("nana-ui.scene.icon.pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[Some(wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<IconVertex>() as u64,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array!(
-                            0 => Float32x2,
-                            1 => Float32x2,
-                            2 => Float32x4,
-                            3 => Float32x4,
-                            4 => Float32x4,
-                            5 => Float32x3,
-                            6 => Float32x4,
-                        ),
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let pipeline = if let Some(policy) = policy {
-            nana_gpu::__framework::render_pipeline_state(
-                policy,
-                nana_gpu::PipelineKey {
-                    generation: policy.generation(),
-                    target_format: nana_gpu::__framework::format_from_wgpu(format),
-                    sample_count: 1,
-                    shader: 0x6963_6f6e_7069_7065,
-                    layout: icon_layout_key(),
-                    material: 0,
-                    primitive: 0,
-                    blend: 1,
-                    depth: 0,
-                    vertex_layout: std::mem::size_of::<IconVertex>() as u64,
-                },
-                create_pipeline,
-            )
-            .expect("icon pipeline uses this context generation")
-        } else {
-            create_pipeline()
-        };
-        let atlas = new_atlas(device, &atlas_layout, &sampler, ATLAS_START_PX);
+        let pipeline = icon_pipeline(device, format, policy, &uniform_layout, &atlas_layout);
         Self {
             pipeline,
+            uniform_layout,
             atlas_layout,
             sampler,
             uniform_bind_group,
@@ -461,7 +501,7 @@ impl IconPipeline {
             corner_exponent: 2.0,
             uploaded_globals: None,
             frame_slots: Vec::new(),
-            atlas,
+            atlas: None,
             entries: HashMap::new(),
             frame_keys: HashSet::new(),
             exhausted: false,
@@ -544,7 +584,7 @@ impl IconPipeline {
             }
         }
         self.frame_keys.insert(key);
-        let uv_rect = UvRect::of(self.entries.get(&key)?, self.atlas.edge);
+        let uv_rect = UvRect::of(self.entries.get(&key)?, self.atlas.as_ref()?.edge);
         let mut color = pack_paint_color(color);
         color[3] *= opacity;
         let clip = fragment_clip.for_physical_pixels(scale);
@@ -661,13 +701,16 @@ impl IconPipeline {
             return;
         };
         let end = last.first_vertex + last.vertex_count;
+        let Some(atlas) = &self.atlas else {
+            return;
+        };
         if end <= head.first_vertex {
             return;
         }
         pass.set_scissor_rect(scissor.x, scissor.y, scissor.width, scissor.height);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-        pass.set_bind_group(1, &self.atlas.bind_group, &[]);
+        pass.set_bind_group(1, &atlas.bind_group, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.draw(head.first_vertex..end, 0..1);
         if let Some(work) = gpu_work {
@@ -706,6 +749,14 @@ impl IconPipeline {
         if self.exhausted {
             return false;
         }
+        if self.atlas.is_none() {
+            self.atlas = Some(new_atlas(
+                device,
+                &self.atlas_layout,
+                &self.sampler,
+                ATLAS_START_PX,
+            ));
+        }
         if let Some(cell) = self.allocate(px + CELL_GUTTER * 2) {
             self.write_cell(queue, cell, px, rgba, work);
             self.entries.insert(
@@ -727,12 +778,12 @@ impl IconPipeline {
     /// Reserve a `cell`-sized square. Shelves are homogeneous, so a glyph
     /// either extends a shelf of its own cell size or opens a new one.
     fn allocate(&mut self, cell: u32) -> Option<[u32; 2]> {
-        let edge = self.atlas.edge;
+        let atlas = self.atlas.as_mut()?;
+        let edge = atlas.edge;
         if cell > edge {
             return None;
         }
-        if let Some(shelf) = self
-            .atlas
+        if let Some(shelf) = atlas
             .shelves
             .iter_mut()
             .find(|shelf| shelf.cell == cell && shelf.next_x + cell <= edge)
@@ -741,12 +792,12 @@ impl IconPipeline {
             shelf.next_x += cell;
             return Some(origin);
         }
-        if self.atlas.next_y + cell > edge {
+        if atlas.next_y + cell > edge {
             return None;
         }
-        let y = self.atlas.next_y;
-        self.atlas.next_y += cell;
-        self.atlas.shelves.push(Shelf {
+        let y = atlas.next_y;
+        atlas.next_y += cell;
+        atlas.shelves.push(Shelf {
             cell,
             y,
             next_x: cell,
@@ -796,12 +847,16 @@ impl IconPipeline {
             })
             .sum();
         let max_edge = MAX_ATLAS_EDGE.min(device.limits().max_texture_dimension_2d);
-        let mut edge = self.atlas.edge.max(ATLAS_START_PX).min(max_edge);
+        let current = self
+            .atlas
+            .as_ref()
+            .map_or(ATLAS_START_PX, |atlas| atlas.edge);
+        let mut edge = current.max(ATLAS_START_PX).min(max_edge);
         while (edge as u64) * (edge as u64) < needed * 2 && edge < max_edge {
             edge = (edge * 2).min(max_edge);
         }
         loop {
-            self.atlas = new_atlas(device, &self.atlas_layout, &self.sampler, edge);
+            self.atlas = Some(new_atlas(device, &self.atlas_layout, &self.sampler, edge));
             self.entries.clear();
             let placed = keep.iter().all(|(key, svg)| {
                 let Some(cell) = self.allocate(key.px + CELL_GUTTER * 2) else {
@@ -855,6 +910,9 @@ impl IconPipeline {
             atlas,
             ..
         } = self;
+        let Some(atlas) = atlas else {
+            return;
+        };
         for slot in frame_slots.iter() {
             let Some(entry) = entries.get(&slot.key) else {
                 continue;
@@ -881,10 +939,13 @@ impl IconPipeline {
         rgba: &[u8],
         work: Option<&crate::gpu_work::GpuWorkSink>,
     ) {
+        let Some(atlas) = &self.atlas else {
+            return;
+        };
         if let Some(work) = work {
             work.write_texture(
                 queue,
-                &self.atlas.texture,
+                &atlas.texture,
                 [cell[0] + CELL_GUTTER, cell[1] + CELL_GUTTER, 0],
                 rgba,
                 px * 4,
@@ -894,7 +955,7 @@ impl IconPipeline {
         } else {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &self.atlas.texture,
+                    texture: &atlas.texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d {
                         x: cell[0] + CELL_GUTTER,
@@ -1159,7 +1220,8 @@ mod tests {
             );
         }
         assert_eq!(
-            pipeline.atlas.edge, ATLAS_START_PX,
+            pipeline.atlas.as_ref().unwrap().edge,
+            ATLAS_START_PX,
             "a working set this small must be repacked into the same sheet, not a bigger one"
         );
         for icon in 0..3 {
@@ -1195,7 +1257,7 @@ mod tests {
             pipeline.frame_keys.insert(key(icon));
         }
         assert!(
-            pipeline.atlas.edge > ATLAS_START_PX,
+            pipeline.atlas.as_ref().unwrap().edge > ATLAS_START_PX,
             "16 cells of {PX}px cannot fit {ATLAS_START_PX}², so the sheet must grow"
         );
         for icon in 0..16 {
@@ -1238,13 +1300,30 @@ pub(super) struct IconPipelineTarget {
     /// The target size and corner exponent the uniforms were written with.
     uploaded_globals: Option<([u32; 2], f32)>,
     frame_slots: Vec<FrameSlot>,
-    atlas: Atlas,
+    atlas: Option<Atlas>,
     entries: HashMap<AtlasKey, AtlasEntry>,
     frame_keys: HashSet<AtlasKey>,
     exhausted: bool,
 }
 
 impl IconPipeline {
+    /// Atlas count and bytes: the painter's own target and each render
+    /// target in `others`, counting only those that have drawn an icon.
+    pub(super) fn atlas_counters_across<'a>(
+        &'a self,
+        others: impl Iterator<Item = &'a IconPipelineTarget>,
+    ) -> (u64, u64) {
+        std::iter::once(&self.atlas)
+            .chain(others.map(|target| &target.atlas))
+            .flatten()
+            .fold((0, 0), |(count, bytes), atlas| {
+                (
+                    count + 1,
+                    bytes + u64::from(atlas.edge) * u64::from(atlas.edge) * 4,
+                )
+            })
+    }
+
     pub(super) fn swap_target(
         &mut self,
         target: &mut Option<IconPipelineTarget>,
@@ -1279,7 +1358,7 @@ impl IconPipeline {
                 physical_size: [0; 2],
                 uploaded_globals: None,
                 frame_slots: Vec::new(),
-                atlas: new_atlas(device, &self.atlas_layout, &self.sampler, ATLAS_START_PX),
+                atlas: None,
                 entries: HashMap::new(),
                 frame_keys: HashSet::new(),
                 exhausted: false,

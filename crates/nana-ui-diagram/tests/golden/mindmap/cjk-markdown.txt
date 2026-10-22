@@ -1,0 +1,43 @@
+size 936.5 217.6
+summary nodes=12 edges=11 groups=0
+shape path M440.6,113.6 C513.2,113.6 513.2,80 585.8,80 stroke=series0/thick/Solid
+shape path M440.6,113.6 C513.2,113.6 513.2,147.2 585.8,147.2 stroke=series1/thick/Solid
+shape path M440.6,113.6 C368,113.6 368,155.2 295.4,155.2 stroke=series2/thick/Solid
+shape path M440.6,113.6 C368,113.6 368,125.4 295.4,125.4 stroke=series3/thick/Solid
+shape path M440.6,113.6 C368,113.6 368,85.8 295.4,85.8 stroke=series4/thick/Solid
+shape path M665.8,147.2 C758.6,147.2 758.6,141.2 851.5,141.2 stroke=series1/hairline/Solid
+shape path M665.8,147.2 C758.6,147.2 758.6,180.8 851.5,180.8 stroke=series1/hairline/Solid
+shape path M215.4,155.2 C188.8,155.2 188.8,149.2 162.2,149.2 stroke=series2/hairline/Solid
+shape path M215.4,155.2 C188.8,155.2 188.8,188.8 162.2,188.8 stroke=series2/hairline/Solid
+shape path M100.2,188.8 C78.6,188.8 78.6,169 57,169 stroke=series2/hairline/Solid
+shape path M100.2,188.8 C78.6,188.8 78.6,208.6 57,208.6 stroke=series2/hairline/Solid
+shape rect 348.2 83.2 184.8 60.8 r=Xs fill=Accent
+text 406.7 91.2 67.8 22.4 size=16 w=700 ink=AccentText "核心目标"
+text 360.2 113.6 160.8 22.4 size=16 w=600 ink=AccentText "掌握 Rust 与图形学"
+shape rect 585.8 42.6 222.5 74.8 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 597.8 50.6 36.1 19.6 size=14 w=400 ink=Text "阅读 "
+text 633.9 50.6 162.4 19.6 size=14 w=400 italic ink=Text "The Rust Programming"
+text 608.6 70.2 65 19.6 size=14 w=400 italic ink=Text "Language"
+text 673.5 70.2 112 19.6 size=14 w=400 ink=Text "，并完成所有练习"
+text 655 89.8 84 19.6 size=14 w=400 ink=Text "题，记录笔记"
+shape rect 585.8 129.4 80 35.6 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 597.8 137.4 56 19.6 size=14 w=400 ink=Text "图形管线"
+shape path M851.5,141.2 L927.5,141.2 stroke=series1/hairline/Solid
+text 854.5 117.6 70 19.6 size=14 w=400 ink=Text "顶点着色器"
+shape path M851.5,180.8 L927.5,180.8 stroke=series1/hairline/Solid
+text 854.5 157.2 70 19.6 size=14 w=400 ink=Text "片元着色器"
+shape rect 215.4 137.4 80 35.6 r=Md fill=series2.soft stroke=series2/hairline/Solid
+text 227.4 145.4 56 19.6 size=14 w=400 ink=Text "项目实践"
+shape path M114.2,149.2 L162.2,149.2 stroke=series2/hairline/Solid
+text 117.2 125.6 42 19.6 size=14 w=400 ink=Text "渲染器"
+shape path M100.2,188.8 L162.2,188.8 stroke=series2/hairline/Solid
+text 103.2 165.2 56 19.6 size=14 w=400 ink=Text "布局引擎"
+shape path M9,169 L57,169 stroke=series2/hairline/Solid
+text 12 145.4 42 19.6 size=14 w=400 ink=Text "分层图"
+shape path M9,208.6 L57,208.6 stroke=series2/hairline/Solid
+text 12 185 42 19.6 size=14 w=400 ink=Text "树布局"
+shape path M205.4,125.4 L295.4,125.4 stroke=series3/thick/Solid
+text 208.4 101.8 84 19.6 size=14 w=400 ink=Text "日本語のメモ"
+shape path M211.3,85.8 L295.4,85.8 stroke=series4/thick/Solid
+text 214.3 62.2 78.1 19.6 size=14 w=400 ink=Text "한국어 노트"
+text 434.3 8 67.8 22.4 size=16 w=600 ink=Text "学习计划"

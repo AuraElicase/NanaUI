@@ -1,0 +1,10 @@
+size 130.6 138.4
+summary nodes=1 edges=0 groups=1
+clip rect 9 9 112.6 120.4 r=Md
+shape rect 9 9 112.6 40.8 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M121.6,9 L121.6,129.4 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 112.6 120.4 r=Md stroke=Border/hairline/Solid
+text 50.5 21 29.5 16.8 size=12 w=600 ink=Muted "Only"
+shape rect 29 69.8 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 45 79.8 40.6 19.6 size=14 w=400 ink=Text "Alone"

@@ -228,6 +228,14 @@ pub struct ThemeMetrics {
     /// written before this field still loads.
     #[serde(default)]
     pub tree: TreeMetrics,
+    /// Keycap geometry: the cap's height and its drawn bottom edge.
+    ///
+    /// Composed like [`Self::tree`]: before this they were constants beside
+    /// the keycap view, so a compact theme shrank the controls around a
+    /// shortcut but not its keys. `serde(default)` so a metrics blob written
+    /// before this field still loads.
+    #[serde(default)]
+    pub keycap: KeycapMetrics,
     /// How every rounded corner is shaped, whatever its radius. Painted only:
     /// see [`CornerShape`]. `serde(default)` so a metrics blob written before
     /// this field still loads with round corners.
@@ -331,6 +339,27 @@ impl Default for TreeMetrics {
     }
 }
 
+/// Keycap geometry; see [`ThemeMetrics::keycap`].
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct KeycapMetrics {
+    /// The cap's height, and its narrowest width: a one-letter key is square.
+    pub height: f32,
+    /// The bottom edge drawn inside the cap, so it reads as raised.
+    pub edge: f32,
+}
+
+/// The keycap geometry every built-in theme uses.
+pub const KEYCAP_METRICS: KeycapMetrics = KeycapMetrics {
+    height: 24.0,
+    edge: space::XXS,
+};
+
+impl Default for KeycapMetrics {
+    fn default() -> Self {
+        KEYCAP_METRICS
+    }
+}
+
 /// Which radius step a control wants, rather than how many pixels that is.
 ///
 /// This is the same shape as [`crate::SemanticColorRole`]: the component names
@@ -355,7 +384,15 @@ pub enum RadiusTier {
     /// The 2xl step: large standalone surfaces — a player bar, a detail
     /// card — one step rounder than the rails.
     Xxl,
+    /// Fully round: a pill, a dot, an avatar. Resolves to [`FULL_RADIUS`],
+    /// which every painter clamps to half the box's shorter side, so it
+    /// stays round at any size without the caller knowing the height.
+    Full,
 }
+
+/// What [`RadiusTier::Full`] resolves to: larger than any box, so the
+/// half-side clamp decides the corner.
+pub const FULL_RADIUS: f32 = 9999.0;
 
 impl RadiusTier {
     pub const fn resolve(self, metrics: ThemeMetrics) -> f32 {
@@ -366,6 +403,7 @@ impl RadiusTier {
             Self::Lg => metrics.radius_lg,
             Self::Xl => metrics.radius_xl,
             Self::Xxl => metrics.radius_xxl,
+            Self::Full => FULL_RADIUS,
         }
     }
 }
@@ -483,6 +521,8 @@ impl SurfacePadding {
 pub enum SquareSize {
     IconButton,
     Control(crate::ControlSize),
+    /// [`KeycapMetrics::height`]: a key's cap.
+    Keycap,
 }
 
 impl SquareSize {
@@ -490,6 +530,7 @@ impl SquareSize {
         match self {
             Self::IconButton => metrics.icon_button_size,
             Self::Control(size) => size.height_in(metrics),
+            Self::Keycap => metrics.keycap.height,
         }
     }
 }
@@ -565,12 +606,13 @@ pub const UI_METRICS: ThemeMetrics = ThemeMetrics {
     scrollbar: crate::scrollbar::SCROLLBAR_METRICS,
     switch: SWITCH_METRICS,
     tree: TREE_METRICS,
+    keycap: KEYCAP_METRICS,
     corner_shape: CornerShape::Round,
 };
 
 /// A dense example: the 20 px rows of professional tools' panels (3D, audio,
-/// node editors). Controls, lists, trees and menus get shorter and tighter;
-/// colours, type sizes and radii stay. Install it with
+/// node editors). Controls, lists, trees, menus and keycaps get shorter and
+/// tighter; colours, type sizes and radii stay. Install it with
 /// `ThemeDefinition::with_metrics(COMPACT_METRICS)`.
 pub const COMPACT_METRICS: ThemeMetrics = ThemeMetrics {
     compact_control_height: 20.0,
@@ -590,6 +632,10 @@ pub const COMPACT_METRICS: ThemeMetrics = ThemeMetrics {
         inset: space::XXS,
         disclosure: type_scale::META,
         icon: type_scale::META,
+    },
+    keycap: KeycapMetrics {
+        height: 20.0,
+        ..KEYCAP_METRICS
     },
     ..UI_METRICS
 };

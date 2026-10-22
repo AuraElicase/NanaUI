@@ -85,7 +85,7 @@ pub enum ImageViewerContent {
     #[default]
     None,
     Child(StableNodeId),
-    HostTexture(Arc<str>),
+    HostTexture(crate::TextureSlotName),
     CustomRender(CustomRenderNode),
 }
 
@@ -94,7 +94,7 @@ impl ImageViewerContent {
         Self::Child(id)
     }
 
-    pub fn host_texture(slot: impl Into<Arc<str>>) -> Self {
+    pub fn host_texture(slot: impl Into<crate::TextureSlotName>) -> Self {
         Self::HostTexture(slot.into())
     }
 
@@ -112,9 +112,9 @@ impl ImageViewerContent {
     /// HostTexture slots use [`HOST_TEXTURE_RENDERER`]. Empty identities are omitted.
     pub fn as_custom_render(&self) -> Option<CustomRenderNode> {
         match self {
-            Self::HostTexture(slot) if !slot.trim().is_empty() => Some(CustomRenderNode::new(
+            Self::HostTexture(slot) if !slot.is_empty() => Some(CustomRenderNode::new(
                 HOST_TEXTURE_RENDERER,
-                Arc::clone(slot),
+                slot.to_resource(),
                 0,
             )),
             Self::CustomRender(node)

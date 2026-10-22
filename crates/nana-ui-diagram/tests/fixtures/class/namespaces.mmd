@@ -1,0 +1,32 @@
+classDiagram
+    direction LR
+    namespace BaseShapes {
+        class Triangle
+        class Rectangle {
+            double width
+            double height
+        }
+    }
+    namespace Collections {
+        class Square~Shape~ {
+            int id
+            List~int~ position
+            setPoints(List~int~ points)
+            getPoints() List~int~
+        }
+    }
+    class Shape {
+        <<interface>>
+        +area()* double
+        +int count$
+        +origin()$ Point
+    }
+    Shape <|.. Triangle
+    Shape <|.. Rectangle
+    Square~Shape~ o-- Shape : holds
+    Square : -List~string~ messages
+    Square : +setMessages(List~string~ messages)
+    classDef hot fill:#f96,stroke:#333,color:#000
+    class Shape:::hot
+    style Triangle stroke:#0a7,stroke-width:2px
+    click Rectangle href "https://example.com/rect" "Rectangle docs"

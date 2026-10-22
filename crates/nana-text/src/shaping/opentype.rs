@@ -11,8 +11,8 @@ use crate::font::{AxisCoord, FeatureValue, FontData};
 use crate::id::FontId;
 use crate::shape::ScriptTag;
 use harfrust::{
-    BufferFlags, Direction, Feature, FontRef, Language, Script, ShapeOptions, ShaperData,
-    ShaperInstance, Tag, UnicodeBuffer,
+    BufferFlags, Direction, Feature, FontRef, Language, Script, ShapeOptions, ShapePlan,
+    ShapePlanKey, ShaperData, ShaperInstance, Tag, UnicodeBuffer,
 };
 use std::collections::HashMap;
 use std::ops::Range;
@@ -51,9 +51,16 @@ pub struct ShapeInput<'a> {
     pub size_px: f32,
 }
 
+/// Shape plans a face keeps. Compiling one costs about as much as shaping a
+/// short line, and a face meets few distinct script, direction, language,
+/// feature and instance combinations.
+const PLANS_PER_FACE: usize = 8;
+
 struct FaceShaper {
     data: FontData,
     shaper_data: ShaperData,
+    /// Most recently used last.
+    plans: Vec<ShapePlan>,
 }
 
 /// Per-face HarfRust acceleration data. Built once per face and dropped
@@ -82,7 +89,11 @@ impl FaceShapers {
                 let data = load()?;
                 let font_ref = FontRef::from_index(data.bytes(), data.index()).ok()?;
                 let shaper_data = ShaperData::new(&font_ref);
-                entry.insert(FaceShaper { data, shaper_data })
+                entry.insert(FaceShaper {
+                    data,
+                    shaper_data,
+                    plans: Vec::new(),
+                })
             }
         };
         let font_ref = FontRef::from_index(face.data.bytes(), face.data.index()).ok()?;
@@ -144,7 +155,36 @@ impl FaceShapers {
             features.push(Feature::new(Tag::new(b"kern"), 0, ..));
         }
 
-        let output = shaper.shape(buffer, ShapeOptions::new().features(&features));
+        let (direction, script, language) =
+            (buffer.direction(), Some(buffer.script()), buffer.language());
+        let key = ShapePlanKey::new(script, direction)
+            .language(language.as_ref())
+            .instance(Some(&instance))
+            .features(&features);
+        match face.plans.iter().position(|plan| key.matches(plan)) {
+            Some(at) => {
+                let plan = face.plans.remove(at);
+                face.plans.push(plan);
+            }
+            None => {
+                if face.plans.len() == PLANS_PER_FACE {
+                    face.plans.remove(0);
+                }
+                face.plans.push(ShapePlan::new(
+                    &shaper,
+                    direction,
+                    script,
+                    language.as_ref(),
+                    &features,
+                ));
+            }
+        }
+        let output = shaper.shape(
+            buffer,
+            ShapeOptions::new()
+                .plan(face.plans.last())
+                .features(&features),
+        );
         let upem = shaper.units_per_em();
         let scale = if upem > 0 {
             input.size_px / upem as f32
@@ -173,5 +213,76 @@ impl FaceShapers {
                 })
                 .collect(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::{FontSystem, font_blob};
+
+    fn face() -> (FontId, FontData) {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/noto-sans-arabic.ttf");
+        let mut fonts = FontSystem::hermetic();
+        let font = fonts
+            .register_bytes(font_blob(std::fs::read(path).unwrap()), &Default::default())
+            .unwrap()
+            .faces[0];
+        (font, fonts.face_data(font).unwrap())
+    }
+
+    fn input<'a>(
+        text: &'a str,
+        language: Option<&'a str>,
+        features: &'a [FeatureValue],
+    ) -> ShapeInput<'a> {
+        ShapeInput {
+            text,
+            range: 0..text.len(),
+            rtl: true,
+            vertical: false,
+            script: Some(ScriptTag(*b"Arab")),
+            language,
+            features,
+            disable_kerning: false,
+            coords: &[],
+            size_px: 16.0,
+        }
+    }
+
+    #[test]
+    fn a_face_reuses_one_plan_per_shaping_setup_and_keeps_a_few() {
+        let (font, data) = face();
+        let shape = |shapers: &mut FaceShapers, text, language, features| {
+            shapers
+                .shape(
+                    font,
+                    || Some(data.clone()),
+                    &input(text, language, features),
+                )
+                .unwrap()
+        };
+        let plans = |shapers: &FaceShapers| shapers.faces[&font].plans.len();
+        let mut shapers = FaceShapers::default();
+        shape(&mut shapers, "سلام عليكم", None, &[]);
+        // Same setup, other text: shaped with the cached plan, the glyphs a
+        // plan of its own gives.
+        let cached = shape(&mut shapers, "مرحبا", None, &[]);
+        let fresh = shape(&mut FaceShapers::default(), "مرحبا", None, &[]);
+        assert!(!cached.is_empty());
+        assert_eq!(cached, fresh);
+        assert_eq!(plans(&shapers), 1);
+        // A language or a feature change is another plan.
+        shape(&mut shapers, "مرحبا", Some("fa"), &[]);
+        let no_liga = [FeatureValue {
+            tag: *b"liga",
+            value: 0,
+        }];
+        shape(&mut shapers, "مرحبا", None, &no_liga);
+        assert_eq!(plans(&shapers), 3);
+        for language in ["ar", "ur", "ps", "ku", "sd", "ug", "ks", "bal"] {
+            shape(&mut shapers, "مرحبا", Some(language), &[]);
+        }
+        assert_eq!(plans(&shapers), PLANS_PER_FACE);
     }
 }

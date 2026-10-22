@@ -5,8 +5,6 @@ use nana_ui_web_api::{MediaId, MediaRuntime, SharedMediaRuntime};
 
 use crate::canvas_gpu::{HostTextureSlotStore, HostTextureUpload};
 
-const VIDEO_TEXTURE_ID_BIT: u64 = 1 << 61;
-
 /// Shared by every Vue window in one runtime, just like Canvas/SVG GPU bridges.
 #[derive(Clone)]
 pub(crate) struct MediaGpuBridge {
@@ -68,7 +66,6 @@ impl MediaGpuBridge {
                 id,
                 HostTextureUpload {
                     slot: &slot,
-                    texture_id: VIDEO_TEXTURE_ID_BIT | id.0,
                     width: upload.width,
                     height: upload.height,
                     version: upload.version,

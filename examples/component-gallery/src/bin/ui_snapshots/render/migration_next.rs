@@ -1117,8 +1117,13 @@ fn runtime_fixture(
         }
         Component::AppMenuBar => {
             let context = document.context_mut();
-            let bar = context
-                .create_component(document_id, RuntimeAppMenuBar::new(app_menu_bar_model()))?;
+            // The semantic baseline is checked on every OS; one notation keeps
+            // the shortcut column the same width on each.
+            let bar = context.create_component(
+                document_id,
+                RuntimeAppMenuBar::new(app_menu_bar_model())
+                    .shortcut_notation(nana_ui::runtime::ShortcutNotation::Symbols),
+            )?;
             context.assemble_app_menu_bar(bar)?;
             bar.stable_id()
         }
@@ -2164,6 +2169,17 @@ fn settle_hover(context: &mut nana_ui::runtime::AppContext) {
     context.advance_animations(nana_ui_core::motion::HOVER_COLOR);
 }
 
+/// Settles the entrance an opened overlay starts.
+///
+/// An open popover, menu or activated overlay fades and pops in from its
+/// first frame: since the scene applies presentation before the compositor
+/// layer is promoted, the frame at t=0 is the transparent start of that fade,
+/// not the open surface the fixture is named for. One second is past every
+/// overlay entrance the default theme has.
+fn settle_overlay_entrance(context: &mut nana_ui::runtime::AppContext) {
+    context.advance_animations(super::OVERLAY_SETTLE);
+}
+
 fn overlay_active(context: &nana_ui::runtime::AppContext, target: StableNodeId) -> bool {
     context
         .world()
@@ -2229,7 +2245,10 @@ fn apply_runtime_state(
             settle_hover(context);
             Ok(handled)
         }
-        "open" if !matches!(fixture.component, Component::Tooltip) => Ok(true),
+        "open" if !matches!(fixture.component, Component::Tooltip) => {
+            settle_overlay_entrance(context);
+            Ok(true)
+        }
         // The pending half. Step the clock to the *first* deadline only: that
         // one belongs to the hover fade, one frame away, while the tooltip is
         // still counting down its `delay_ms`. Which is the state this fixture
@@ -2445,6 +2464,11 @@ fn apply_runtime_state(
                 ),
             },
         )?),
+        // Activation is the fixture's own; only its entrance is settled here.
+        "stacked" if fixture.component == Component::OverlayHost => {
+            settle_overlay_entrance(context);
+            Ok(false)
+        }
         // A stack's toasts fade in once they are measured; the state is
         // what they settle to.
         _ if fixture.component == Component::ToastStack => {

@@ -1,0 +1,17 @@
+agentflow-beta LR
+  brief["Brief"]@{ shape: input }
+  draft["Draft copy"]@{ shape: task }
+  spellcheck["spell_check"]@{ shape: tool }
+  guide["Style guide"]@{ shape: refdoc }
+  publish["Publish"]@{ shape: action }
+  check["Tests pass?"]@{ shape: decision }
+  fix["Fix the build"]@{ shape: task }
+  logs["Build logs"]@{ shape: refdoc }
+
+  brief --> draft --> spellcheck --> publish
+  draft -.- guide
+  publish --> check
+  check -- yes --> done["Ship it"]@{ shape: action }
+  check -- no --> fix
+  fix --x check
+  fix -.- logs

@@ -51,6 +51,9 @@ pub enum OutputOwnership {
 /// Resolved render requirements. These describe one rasterization, including
 /// its viewport identity; differing text AA or pixel density cannot share a
 /// render merely because their texture formats match.
+///
+/// Every consumer target is single-sample. Raster MSAA is internal to the
+/// Scene painter, which resolves it before any consumer reads the target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderTargetRequirements {
     pub presentation: PresentationId,
@@ -61,7 +64,6 @@ pub struct RenderTargetRequirements {
     pub profile: ScenePresentationProfile,
     pub alpha: OutputAlpha,
     pub text_aa: OutputTextAa,
-    pub sample_count: u32,
     pub device_generation: DeviceGeneration,
     pub ownership: OutputOwnership,
     pub persistent: bool,
@@ -91,9 +93,6 @@ pub struct OutputConsumer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputUnsupportedReason {
     InvalidExtent,
-    InvalidSampleCount,
-    /// The Scene painter currently has a single-sample destination contract.
-    MultisamplingUnavailable,
     DuplicateConsumer,
     NoConsumerPath,
     NativeSharingUnavailable,
@@ -143,7 +142,6 @@ pub enum OutputIncompatibilityReason {
     Profile,
     Alpha,
     TextAa,
-    SampleCount,
     DeviceGeneration,
     Ownership,
 }
@@ -355,12 +353,6 @@ fn consumer_path(consumer: &OutputConsumer, only_consumer: bool) -> OutputPath {
     if requirements.extent.contains(&0) {
         return OutputPath::Unsupported(Unsupported::InvalidExtent);
     }
-    if requirements.sample_count == 0 || !requirements.sample_count.is_power_of_two() {
-        return OutputPath::Unsupported(Unsupported::InvalidSampleCount);
-    }
-    if requirements.sample_count != 1 {
-        return OutputPath::Unsupported(Unsupported::MultisamplingUnavailable);
-    }
     let capabilities = consumer.capabilities;
     if only_consumer
         && consumer.kind == OutputConsumerKind::Window
@@ -420,10 +412,6 @@ fn incompatibility(
         (first.alpha != second.alpha, Reason::Alpha),
         (first.text_aa != second.text_aa, Reason::TextAa),
         (
-            first.sample_count != second.sample_count,
-            Reason::SampleCount,
-        ),
-        (
             first.device_generation != second.device_generation,
             Reason::DeviceGeneration,
         ),
@@ -475,7 +463,6 @@ mod tests {
                 profile: ScenePresentationProfile::sdr(GpuTextureFormat::RGBA8_UNORM_SRGB),
                 alpha: OutputAlpha::LinearPremultiplied,
                 text_aa: OutputTextAa::Grayscale,
-                sample_count: 1,
                 device_generation: crate::test_gpu::context().generation(),
                 ownership: OutputOwnership::SameDevice,
                 persistent: false,
@@ -718,19 +705,13 @@ mod tests {
                 .all(|binding| binding.path
                     == OutputPath::Unsupported(OutputUnsupportedReason::DuplicateConsumer))
         );
-        for (sample_count, reason) in [
-            (0, OutputUnsupportedReason::InvalidSampleCount),
-            (3, OutputUnsupportedReason::InvalidSampleCount),
-            (4, OutputUnsupportedReason::MultisamplingUnavailable),
-        ] {
-            external.requirements.sample_count = sample_count;
-            planner.update(&[external]);
-            assert_eq!(
-                planner.plan().binding(external.id).unwrap().path,
-                OutputPath::Unsupported(reason)
-            );
-            assert_eq!(planner.plan().render_count(), 0);
-        }
+        external.requirements.extent = [0, 48];
+        planner.update(&[external]);
+        assert_eq!(
+            planner.plan().binding(external.id).unwrap().path,
+            OutputPath::Unsupported(OutputUnsupportedReason::InvalidExtent)
+        );
+        assert_eq!(planner.plan().render_count(), 0);
     }
 
     #[test]

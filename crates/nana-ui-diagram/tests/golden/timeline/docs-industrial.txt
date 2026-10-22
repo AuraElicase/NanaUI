@@ -1,0 +1,50 @@
+size 956.8 256.2
+summary nodes=10 edges=0 groups=2
+shape rect 17 41.6 542.5 35.6 r=Sm fill=series0
+text 215.1 49.6 146.3 19.6 size=14 w=600 ink=series0.on "17th-20th century"
+shape rect 575.5 41.6 356.3 35.6 r=Sm fill=series1
+text 702 49.6 103.3 19.6 size=14 w=600 ink=series1.on "21st century"
+shape path M102.1,122.8 L102.1,152.8 stroke=series0/hairline/Dashed
+shape path M288.2,122.8 L288.2,152.8 stroke=series0/hairline/Dashed
+shape path M474.4,122.8 L474.4,152.8 stroke=series0/hairline/Dashed
+shape path M660.6,122.8 L660.6,152.8 stroke=series1/hairline/Dashed
+shape path M846.7,122.8 L846.7,152.8 stroke=series1/hairline/Dashed
+shape path M9,137.8 L941.1,137.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M947.8,137.8 L939.4,141.3 L940.9,137.8 L939.4,134.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 17 87.2 170.2 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 50.4 95.2 103.3 19.6 size=14 w=600 ink=Text "Industry 1.0"
+shape ellipse 97.6 133.3 9 9 fill=series0
+shape rect 17 152.8 170.2 74.8 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 37.1 160.8 129.9 19.6 size=14 w=400 ink=Text "Machinery, Water"
+text 53.4 180.4 97.4 19.6 size=14 w=400 ink=Text "power, Steam"
+text 81.8 200 40.6 19.6 size=14 w=400 ink=Text "power"
+shape rect 203.2 87.2 170.2 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 236.6 95.2 103.3 19.6 size=14 w=600 ink=Text "Industry 2.0"
+shape ellipse 283.7 133.3 9 9 fill=series0
+shape rect 203.2 152.8 170.2 94.4 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 239.5 160.8 97.4 19.6 size=14 w=400 ink=Text "Electricity,"
+text 255.8 180.4 65 19.6 size=14 w=400 ink=Text "Internal"
+text 215.2 200 146.2 19.6 size=14 w=400 ink=Text "combustion engine,"
+text 227.3 219.6 121.8 19.6 size=14 w=400 ink=Text "Mass production"
+shape rect 389.3 87.2 170.2 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 422.8 95.2 103.3 19.6 size=14 w=600 ink=Text "Industry 3.0"
+shape ellipse 469.9 133.3 9 9 fill=series0
+shape rect 389.3 152.8 170.2 74.8 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 425.7 160.8 97.4 19.6 size=14 w=400 ink=Text "Electronics,"
+text 433.8 180.4 81.2 19.6 size=14 w=400 ink=Text "Computers,"
+text 433.8 200 81.2 19.6 size=14 w=400 ink=Text "Automation"
+shape rect 575.5 87.2 170.2 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 608.9 95.2 103.3 19.6 size=14 w=600 ink=Text "Industry 4.0"
+shape ellipse 656.1 133.3 9 9 fill=series1
+shape rect 575.5 152.8 170.2 74.8 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 624 160.8 73.1 19.6 size=14 w=400 ink=Text "Internet,"
+text 587.5 180.4 146.2 19.6 size=14 w=400 ink=Text "Robotics, Internet"
+text 624 200 73.1 19.6 size=14 w=400 ink=Text "of Things"
+shape rect 761.6 87.2 170.2 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 795.1 95.2 103.3 19.6 size=14 w=600 ink=Text "Industry 5.0"
+shape ellipse 842.2 133.3 9 9 fill=series1
+shape rect 761.6 152.8 170.2 74.8 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 806.1 160.8 81.2 19.6 size=14 w=400 ink=Text "Artificial"
+text 777.7 180.4 138 19.6 size=14 w=400 ink=Text "intelligence, Big"
+text 777.7 200 138 19.6 size=14 w=400 ink=Text "data, 3D printing"
+text 316.1 8 324.6 22.4 size=16 w=600 ink=Text "Timeline of Industrial Revolution"

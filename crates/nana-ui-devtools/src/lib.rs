@@ -15,6 +15,8 @@
 
 #[cfg(feature = "runtime-agent")]
 pub mod agent;
+#[cfg(feature = "headless-host")]
+pub mod headless;
 #[cfg(feature = "offscreen")]
 pub mod offscreen;
 

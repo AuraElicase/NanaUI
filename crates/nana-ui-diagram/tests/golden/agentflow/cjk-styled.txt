@@ -1,0 +1,25 @@
+size 830.8 141.4
+summary nodes=4 edges=4 groups=1
+shape rect 320.5 9 305.3 123.4 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=rgba(37,99,235,1)/hairline/Solid
+text 441.4 18.6 63.6 16.8 size=12 w=600 ink=Muted "规划智能体"
+shape path M424.5,79.1 L446.4,79.1 Q448.5,79.1 448.5,81.3 L448.5,81.3 Q448.5,83.5 450.7,83.5 L465.8,83.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M472.5,83.5 L464.1,87 L465.6,83.5 L464.1,79.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M263.6,70.7 L300.5,70.7 Q308.5,70.7 308.5,78.7 L308.5,85 Q308.5,93 316.5,93 L329.8,93 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M336.5,93 L328.1,96.5 L329.6,93 L328.1,89.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M609.8,69.6 L632.3,69.6 Q637.8,69.6 637.8,64.1 L637.8,64.1 Q637.8,58.6 643.3,58.6 L683.3,58.6 Q684.6,58.6 684.6,60 L684.6,60 Q684.6,61.3 686,61.3 L708.7,61.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M715.4,61.3 L707,64.8 L708.5,61.3 L707,57.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M715.4,80.1 L686,80.1 Q684.6,80.1 684.6,81.4 L684.6,81.4 Q684.6,82.8 683.3,82.8 L645.8,82.8 Q637.8,82.8 637.8,90.8 L637.8,108.4 Q637.8,116.4 629.8,116.4 L453.3,116.4 Q448.5,116.4 448.5,111.6 L448.5,111.6 Q448.5,106.9 443.8,106.9 L428.7,106.9 stroke=Danger/hairline/Solid
+shape path M431.9,110.1 L425.5,103.7 M431.9,103.7 L425.5,110.1 stroke=Danger/hairline/Solid
+shape rect 649.8 72.6 22.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 655.2 74.4 12 16.8 size=12 w=400 ink=Muted "否"
+shape path M26.8,41.1 L272.5,41.1 L254.8,100.3 L9,100.3 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 42.8 51.1 196 19.6 size=14 w=400 ink=Text "用户提交的需求文档，可能非常"
+text 49.8 70.7 182 19.6 size=14 w=400 ink=Text "长并且需要拆分成多个子任务"
+shape rect 336.5 73.2 88 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 352.5 83.2 56 19.6 size=14 w=400 ink=Text "拆分任务"
+shape rect 472.5 49.8 137.3 39.6 r=Xs fill=rgba(253,230,138,1) stroke=rgba(180,83,9,1)/hairline/Solid
+shape path M480.5,49.8 L480.5,89.4 stroke=rgba(180,83,9,1)/hairline/Solid
+shape path M601.8,49.8 L601.8,89.4 stroke=rgba(180,83,9,1)/hairline/Solid
+text 496.5 59.8 89.3 19.6 size=14 w=400 ink=rgba(28.1,28.1,30.6,1) "search_docs"
+shape path M759.2,39.4 L821.8,70.7 L759.2,102 L696.6,70.7 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 724.2 60.9 70 19.6 size=14 w=400 ink=Text "是否通过？"

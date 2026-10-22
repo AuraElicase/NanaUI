@@ -1,0 +1,30 @@
+size 479.8 331.6
+summary nodes=10 edges=2 groups=0
+shape path M167,291.3 L174,291.3 Q181,291.3 181,284.3 L181,245 Q181,237 189,237 L327.6,237 Q335.6,237 335.6,229 L335.6,216 Q335.6,214.3 337.2,214.3 L338.9,214.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M345.6,214.3 L337.2,217.8 L338.7,214.3 L337.2,210.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M345.6,291.3 L332.3,291.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape path M325.6,291.3 L334,287.8 L332.5,291.3 L334,294.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 42.6 158 66 r=Xs fill=rgba(102,153,102,1) stroke=rgba(51,51,51,1)/hairline/Solid
+text 25 65.8 126 19.6 size=14 w=400 ink=rgba(247.4,247.4,249.9,1) "前端应用（浏览器）"
+shape path M220,55.8 L292.6,55.8 L292.6,42.6 L325.6,75.6 L292.6,108.6 L292.6,95.4 L220,95.4 L220,108.6 L187,75.6 L220,42.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 236 65.8 40.6 19.6 size=14 w=400 ink=Text "HTTPS"
+shape rect 345.6 42.6 125.2 66 r=Xs fill=rgba(153,102,153,1) stroke=rgba(51,51,51,1)/hairline/Solid
+text 380.2 65.8 56 19.6 size=14 w=400 ink=rgba(247.4,247.4,249.9,1) "后端服务"
+shape path M424.2,128.6 L424.2,150.6 L434.9,150.6 L408.2,168.6 L381.5,150.6 L392.2,150.6 L392.2,128.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M24.4,188.6 L151.6,188.6 L167,240 L9,240 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 67 204.5 42 19.6 size=14 w=400 ink=Text "冷存储"
+shape path M203.7,204.3 L325.6,204.3 L325.6,224.3 L203.7,224.3 L203.7,231 L187,214.3 L203.7,197.7 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M345.6,198.6 C345.6,193.1 373.6,188.6 408.2,188.6 C442.8,188.6 470.8,193.1 470.8,198.6 L470.8,230 C470.8,235.6 442.8,240 408.2,240 C373.6,240 345.6,235.6 345.6,230 Z fill=rgba(153,102,153,1) stroke=rgba(51,51,51,1)/hairline/Solid
+shape path M345.6,198.6 C345.6,204.1 373.6,208.6 408.2,208.6 C442.8,208.6 470.8,204.1 470.8,198.6 stroke=rgba(51,51,51,1)/hairline/Solid
+text 387.2 209.5 42 19.6 size=14 w=400 ink=rgba(247.4,247.4,249.9,1) "数据库"
+shape rect 9 260 158 62.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M17,260 L17,322.6 stroke=BorderStrong/hairline/Solid
+shape path M159,260 L159,322.6 stroke=BorderStrong/hairline/Solid
+text 67 281.5 42 19.6 size=14 w=400 ink=Text "缓存层"
+shape path M187,260 L325.6,260 L325.6,322.6 L187,322.6 L202.7,291.3 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 228.3 281.5 56 19.6 size=14 w=400 ink=Text "消息队列"
+shape path M408.2,260 L470.8,291.3 L408.2,322.6 L345.6,291.3 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 373.2 281.5 70 19.6 size=14 w=400 ink=Text "是否命中？"
+shape rect 184 237.7 46.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 189.4 239.5 36 16.8 size=12 w=400 ink=Muted "未命中"
+text 206 8 67.8 22.4 size=16 w=600 ink=Text "系统架构"

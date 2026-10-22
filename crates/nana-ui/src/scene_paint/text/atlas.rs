@@ -221,6 +221,8 @@ pub(super) struct GlyphAtlasManager {
     misses: u64,
     evictions: u64,
     relocations: u64,
+    /// Times every placement was forgotten after a dropped frame.
+    forgotten: u64,
     stale_handle_rejects: Cell<u64>,
     /// The raster epoch the placed pixels came from. A new epoch means the
     /// face set changed under the whole atlas, so every page is dropped rather
@@ -304,6 +306,7 @@ impl GlyphAtlasManager {
             misses: 0,
             evictions: 0,
             relocations: 0,
+            forgotten: 0,
             stale_handle_rejects: Cell::new(0),
             raster_generation,
         };
@@ -361,7 +364,17 @@ impl GlyphAtlasManager {
     /// Bumped whenever a placement moved or died: what a retained instance's
     /// rectangle is stamped with, and what says it must be re-read.
     pub(super) fn placement_epoch(&self) -> u64 {
-        self.evictions.wrapping_add(self.relocations)
+        self.evictions
+            .wrapping_add(self.relocations)
+            .wrapping_add(self.forgotten)
+    }
+
+    /// Forget every placement, because pixels it promised never reached the
+    /// pages: a dropped frame took the in-order copies with it. Every entry
+    /// faults its glyphs in again, and every retained batch is rebuilt.
+    pub(super) fn forget_every_placement(&mut self) {
+        self.drop_every_placement();
+        self.forgotten += 1;
     }
 
     /// Claim `id` on behalf of a retained block.

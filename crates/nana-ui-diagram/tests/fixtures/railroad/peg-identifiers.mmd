@@ -1,0 +1,7 @@
+railroad-peg-beta
+title "标识符（排除关键字）"
+
+Identifier <- !Keyword Start Rest* ;
+Keyword <- "if" / "else" / "while" / "返回" ;
+Start <- [a-zA-Z_]
+Rest <- [a-zA-Z0-9_] / &"-" . ;

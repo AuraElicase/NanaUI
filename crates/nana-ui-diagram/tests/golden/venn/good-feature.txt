@@ -1,0 +1,25 @@
+size 416.2 427.1
+summary nodes=3 edges=0 groups=4
+shape ellipse 9 42.6 252 252 fill=series0.soft
+shape ellipse 155.2 42.6 252 252 fill=series1.soft
+shape ellipse 82.1 166.1 252 252 fill=series2.soft
+clip ellipse 9 42.6 252 252
+shape ellipse 155.2 42.6 252 252 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+clip ellipse 9 42.6 252 252
+shape ellipse 82.1 166.1 252 252 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+clip ellipse 155.2 42.6 252 252
+shape ellipse 82.1 166.1 252 252 fill=SemanticColorMix{first:Text,second:None,weight:700}
+unclip
+shape ellipse 9 42.6 252 252 stroke=series0/thick/Solid
+shape ellipse 155.2 42.6 252 252 stroke=series1/thick/Solid
+shape ellipse 82.1 166.1 252 252 stroke=series2/thick/Solid
+text 47.7 126.7 77.5 19.6 size=14 w=600 ink=Text "Desirable"
+text 295.3 126.7 68.9 19.6 size=14 w=600 ink=Text "Feasible"
+text 182.3 340.5 51.6 19.6 size=14 w=600 ink=Text "Viable"
+text 171.5 116.2 73.1 19.6 size=14 w=400 ink=Text "Buildable"
+text 235.3 241.4 89.3 19.6 size=14 w=400 ink=Text "Sustainable"
+text 95.6 241.4 81.2 19.6 size=14 w=400 ink=Text "Marketable"
+text 179.7 199.7 56.8 19.6 size=14 w=400 ink=Text "Ship it"
+text 85.1 8 245.9 22.4 size=16 w=600 ink=Text "What makes a good feature"

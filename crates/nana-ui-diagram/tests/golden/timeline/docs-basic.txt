@@ -1,0 +1,31 @@
+size 490 198.4
+summary nodes=9 edges=0 groups=0
+shape path M67,78.2 L67,108.2 stroke=series0/hairline/Dashed
+shape path M183,78.2 L183,153.8 stroke=series1/hairline/Dashed
+shape path M299,78.2 L299,108.2 stroke=series2/hairline/Dashed
+shape path M415,78.2 L415,108.2 stroke=series3/hairline/Dashed
+shape path M9,93.2 L474.3,93.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M481,93.2 L472.6,96.7 L474.1,93.2 L472.6,89.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape rect 17 42.6 100 35.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 49.8 50.6 34.4 19.6 size=14 w=600 ink=Text "2002"
+shape ellipse 62.5 88.7 9 9 fill=series0
+shape rect 17 108.2 100 35.6 r=Sm fill=Surface stroke=series0/hairline/Solid
+text 34.5 116.2 65 19.6 size=14 w=400 ink=Text "LinkedIn"
+shape rect 133 42.6 100 35.6 r=Sm fill=series1.soft stroke=series1/hairline/Solid
+text 165.8 50.6 34.4 19.6 size=14 w=600 ink=Text "2004"
+shape ellipse 178.5 88.7 9 9 fill=series1
+shape rect 133 108.2 100 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 150.5 116.2 65 19.6 size=14 w=400 ink=Text "Facebook"
+shape rect 133 153.8 100 35.6 r=Sm fill=Surface stroke=series1/hairline/Solid
+text 158.6 161.8 48.7 19.6 size=14 w=400 ink=Text "Google"
+shape rect 249 42.6 100 35.6 r=Sm fill=series2.soft stroke=series2/hairline/Solid
+text 281.8 50.6 34.4 19.6 size=14 w=600 ink=Text "2005"
+shape ellipse 294.5 88.7 9 9 fill=series2
+shape rect 249 108.2 100 35.6 r=Sm fill=Surface stroke=series2/hairline/Solid
+text 270.6 116.2 56.8 19.6 size=14 w=400 ink=Text "YouTube"
+shape rect 365 42.6 100 35.6 r=Sm fill=series3.soft stroke=series3/hairline/Solid
+text 397.8 50.6 34.4 19.6 size=14 w=600 ink=Text "2006"
+shape ellipse 410.5 88.7 9 9 fill=series3
+shape rect 365 108.2 100 35.6 r=Sm fill=Surface stroke=series3/hairline/Solid
+text 386.6 116.2 56.8 19.6 size=14 w=400 ink=Text "Twitter"
+text 87.6 8 314.8 22.4 size=16 w=600 ink=Text "History of Social Media Platform"

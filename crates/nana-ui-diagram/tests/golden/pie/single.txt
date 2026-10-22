@@ -1,0 +1,6 @@
+size 396.4 268
+summary nodes=1 edges=0 groups=0
+shape ellipse 8 8 252 252 fill=series0
+text 120.1 125.6 27.8 16.8 size=12 w=400 ink=series0.on "100%"
+shape rect 288 128 12 12 r=Xs fill=series0
+text 307.2 124.2 81.2 19.6 size=14 w=400 ink=Text "Everything"

@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     textures.register(
         "fixture",
-        HostTexture::new(501, 1, &texture),
+        HostTexture::new(&texture),
         120,
         72,
         HostTextureAlphaMode::Opaque,

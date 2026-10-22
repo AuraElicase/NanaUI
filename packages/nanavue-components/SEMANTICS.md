@@ -75,7 +75,7 @@ Issue #5 — Vue **基础组件与布局原语**经 `MessageBridge` 落到 Nana 
 | `nana-tree-view` | TreeView | Runtime `TreeView` |
 | `nana-calendar-heatmap` | CalendarHeatmap | Runtime `CalendarHeatmap`（`data` 单元格；`options` 对象为热图度量，数组仍作单元格回退；无法解释时投影空热图） |
 | `nana-image-viewer` | ImageViewer | Runtime `ImageViewer`（仅 host texture id，不解码） |
-| `nana-native-markdown` | NativeMarkdown | Runtime `NativeMarkdown::from_source`（`mermaid`/`mmd`、`math`/`latex`/`tex` 栅栏落到块种类；可选 `mermaidRenderer`/`mathRenderer` 仅为 `mermaid:{source}` / `math:{source}` 身份，不实现排版） |
+| `nana-native-markdown` | NativeMarkdown | Runtime `NativeMarkdown::from_source`（`mermaid`/`mmd`、`math`/`latex`/`tex` 栅栏落到块种类；可选 `mermaidRenderer`/`mathRenderer` 仅为 `mermaid:{source}` / `math:{source}` 身份；图与公式由 Runtime 原生绘制） |
 | `nana-graph-canvas` | GraphCanvas | Runtime `GraphCanvas`（`nodes`/`edges`/`model`/`viewport`/`selection`；无法解释时投影空模型） |
 | `nana-workspace` | Workspace | Runtime `Workspace`（`region` / `data-region` 子节点为 slots） |
 | `nana-dock` | Dock | Runtime `Dock`（子节点或 `layout`/`root`；有子节点时不是 dummy `item("dock", None)`） |
@@ -185,7 +185,7 @@ Issue #5 — Vue **基础组件与布局原语**经 `MessageBridge` 落到 Nana 
 | `NanaCalendar` `data` / `options` | Runtime `CalendarHeatmap`；`options` 对象映射 `cellSize`/`cellGap`/`cellRadius`/`labelWidth`/`monthLabelHeight`/`weekStartsOn`；数组仍作单元格回退；无法解释时空热图 |
 | `NanaImageViewer` `src`/`value` | Runtime `ImageViewer` HostTexture id；不解码 |
 | `NanaMarkdown` `value`/`modelValue` | Runtime `NativeMarkdown::from_source`；mermaid/math 栅栏为块种类 |
-| `NanaMarkdown` `mermaidRenderer` / `mathRenderer` | 应用身份，落到 Runtime `mermaid:{source}` / `math:{source}` 标签；不实现 mermaid/TeX |
+| `NanaMarkdown` `mermaidRenderer` / `mathRenderer` | 应用身份，落到 Runtime `mermaid:{source}` / `math:{source}` 标签；属性本身不实现 mermaid/TeX，图与公式由 Runtime 原生绘制 |
 | `NanaGraphCanvas` `nodes`/`edges`/`model` | Runtime `GraphCanvas`；无法解释时空模型 |
 | `NanaGraphCanvas` `viewport` / `selection` | `GraphViewport`（`offset`/`zoom`）与 `GraphSelection`（node/edge/port） |
 | `NanaWorkspace` children `region` / `data-region` | Runtime `Workspace` region slots；无子节点才投影空 slots |

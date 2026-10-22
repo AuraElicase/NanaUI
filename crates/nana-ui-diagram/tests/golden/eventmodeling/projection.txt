@@ -1,0 +1,31 @@
+size 810.2 218
+summary nodes=4 edges=3 groups=2
+clip rect 9 9 792.2 200 r=Md
+shape rect 9 9 127.3 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 109 792.2 100 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 109 127.3 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,109 L801.2,109 stroke=Border/hairline/Solid
+shape path M136.3,9 L136.3,209 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 792.2 200 r=Md stroke=Border/hairline/Solid
+text 21 42.2 103.3 16.8 size=12 w=600 ink=Muted "Command / Read"
+text 54.2 59 36.9 16.8 size=12 w=600 ink=Muted "Model"
+text 50.5 150.6 44.3 16.8 size=12 w=600 ink=Muted "Events"
+shape path M313.8,159 L297.8,159 Q289.8,159 289.8,151 L289.8,85 Q289.8,77 281.8,77 L272.5,77 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M265.8,77 L274.2,73.5 L272.6,77 L274.2,80.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M479.8,159 L463.8,159 Q455.8,159 455.8,151 L455.8,67 Q455.8,59 447.8,59 L272.5,59 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M265.8,59 L274.2,55.5 L272.6,59 L274.2,62.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M663.1,159 L647.1,159 Q639.1,159 639.1,151 L639.1,49 Q639.1,41 631.1,41 L272.5,41 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M265.8,41 L274.2,37.5 L272.6,41 L274.2,44.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 156.3 29 109.5 60 r=Sm fill=SemanticColorMix{first:Success,second:Some(Surface),weight:1600} stroke=SemanticColorMix{first:Success,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 176.2 39 69.6 16.8 size=12 w=400 ink=Muted "read model"
+text 172.3 59.4 77.5 19.6 size=14 w=600 ink=Text "BoardView"
+shape rect 313.8 129 118.1 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 355.4 139 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 329.8 159.4 86.1 19.6 size=14 w=600 ink=Text "TaskOpened"
+shape rect 479.8 129 135.3 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 530.1 139 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 495.8 159.4 103.3 19.6 size=14 w=600 ink=Text "TaskAssigned"
+shape rect 663.1 129 118.1 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 704.7 139 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 679.1 159.4 86.1 19.6 size=14 w=600 ink=Text "TaskClosed"

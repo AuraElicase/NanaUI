@@ -1,0 +1,53 @@
+size 861.4 337.6
+summary nodes=6 edges=5 groups=0
+shape path M209,123.8 L212,123.8 Q215,123.8 215,120.8 L215,69.8 Q215,61.8 223,61.8 L626.4,61.8 Q634.4,61.8 634.4,69.8 L634.4,90.2 L635,90.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M640.4,90.2 L632,93.7 L633.5,90.2 L632,86.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M633.6,135 L551.9,135 Q543.9,135 543.9,143 L543.9,274.4 Q543.9,282.4 535.9,282.4 L519.4,282.4 stroke=rgba(204,51,51,1)/hairline/Solid
+shape path M512.7,282.4 L521.1,278.9 L519.6,282.4 L521.1,285.9 Z fill=rgba(204,51,51,1) stroke=rgba(204,51,51,1)/hairline/Solid
+shape path M640.4,135 L632,138.5 L633.5,135 L632,131.5 Z fill=rgba(204,51,51,1) stroke=rgba(204,51,51,1)/hairline/Solid
+shape path M640.4,157.4 L584.5,157.4 Q576.5,157.4 576.5,165.4 L576.5,203 Q576.5,211 568.5,211 L280.8,211 Q272.8,211 272.8,219 L272.8,250.3 Q272.8,258.3 264.8,258.3 L214.3,258.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M207.6,258.3 L216,254.8 L214.5,258.3 L216,261.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M207.6,306.5 L322.7,306.5 Q330.7,306.5 330.7,314.5 L330.7,320.6 Q330.7,328.6 338.7,328.6 L568.5,328.6 Q576.5,328.6 576.5,320.6 L576.5,290.4 Q576.5,282.4 584.5,282.4 L633.6,282.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M640.4,282.4 L632,285.9 L633.5,282.4 L632,278.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M512.7,118.2 L633.6,118.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M640.4,118.2 L632,121.7 L633.5,118.2 L632,114.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 67.8 200 112 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape ellipse 103.1 77.8 11.8 11.8 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+shape rect 97.2 91.2 23.5 14.6 r=8.7 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+text 74.2 109.4 69.6 16.8 size=12 w=400 ink=Muted "<<person>>"
+text 94.2 129.8 29.7 19.6 size=14 w=600 ink=Text "顾客"
+text 25 153 168 16.8 size=12 w=400 ink=Text "在网上下单购买商品的普通用户"
+shape rect 336.7 67.8 176 112 r=Md fill=rgba(34,187,102,1) stroke=rgba(17,136,85,1)/hairline/Solid
+shape ellipse 418.8 88 11.8 11.8 fill=rgba(17,136,85,1)
+shape rect 412.9 101.4 23.5 14.6 r=8.7 fill=rgba(17,136,85,1)
+text 358.6 119.6 132.2 16.8 size=12 w=400 ink=rgba(255,255,255,1) "<<external_person>>"
+text 395 140 59.4 19.6 size=14 w=600 ink=rgba(255,255,255,1) "合作商家"
+shape rect 640.4 67.8 212 112 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 711.6 85.2 69.6 16.8 size=12 w=400 ink=Muted "<<system>>"
+text 716.7 105.6 59.4 19.6 size=14 w=600 ink=Text "电商平台"
+text 656.4 128.8 180 16.8 size=12 w=400 ink=Text "负责商品展示、下单与支付流程的"
+text 722.4 145.6 48 16.8 size=12 w=400 ink=Text "核心系统"
+shape path M15.4,242.2 L202.6,242.2 C206.1,242.2 209,260.2 209,282.4 C209,304.6 206.1,322.6 202.6,322.6 L15.4,322.6 C11.9,322.6 9,304.6 9,282.4 C9,260.2 11.9,242.2 15.4,242.2 Z fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape path M202.6,242.2 C199,242.2 196.1,260.2 196.1,282.4 C196.1,304.6 199,322.6 202.6,322.6 stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 50.1 262.4 111.4 16.8 size=12 w=400 ink=Muted "<<system_queue>>"
+text 76.1 282.8 59.4 19.6 size=14 w=600 ink=Text "消息总线"
+shape rect 336.7 242.2 176 80.4 r=Md fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 358.6 252.2 132.2 16.8 size=12 w=400 ink=Muted "<<external_system>>"
+text 387.6 272.6 74.2 19.6 size=14 w=600 ink=Text "第三方支付"
+text 352.7 295.8 144 16.8 size=12 w=400 ink=Text "处理所有银行卡与钱包支付"
+shape path M640.4,252.2 C640.4,246.7 687.8,242.2 746.4,242.2 C804.9,242.2 852.4,246.7 852.4,252.2 L852.4,312.6 C852.4,318.1 804.9,322.6 746.4,322.6 C687.8,322.6 640.4,318.1 640.4,312.6 Z fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape path M640.4,252.2 C640.4,257.7 687.8,262.2 746.4,262.2 C804.9,262.2 852.4,257.7 852.4,252.2 stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 669.8 267.4 153.1 16.8 size=12 w=400 ink=Muted "<<external_system_db>>"
+text 714.3 287.8 64.1 19.6 size=14 w=600 ink=Text "仓储 ERP"
+shape rect 263.5 42.6 70.8 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 268.9 45 60 16.8 size=12 w=400 ink=Muted "浏览并下单"
+text 274.5 61.8 48.7 16.8 size=12 w=400 ink=Muted "[HTTPS]"
+shape rect 492 197.9 103.7 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 497.4 200.3 92.9 16.8 size=12 w=400 ink=rgba(204,51,51,1) "发起支付 / 回调"
+shape rect 383.3 200.2 82.8 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 388.7 202.6 72 16.8 size=12 w=400 ink=Muted "发布订单事件"
+shape rect 239.7 295.7 58.8 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 245.1 298.1 48 16.8 size=12 w=400 ink=Muted "同步库存"
+shape rect 547.1 107.4 58.8 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 552.5 109.8 48 16.8 size=12 w=400 ink=Muted "上架商品"
+text 349.4 8 162.5 22.4 size=16 w=600 ink=Text "电商平台 系统上下文"

@@ -1,0 +1,82 @@
+size 696.4 452
+summary nodes=4 edges=3 groups=0
+shape path M130.7,268.6 L130.7,337.8 Q130.7,345.8 138.7,345.8 L206.3,345.8 Q212.3,345.8 212.3,351.8 L212.3,357.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M212.3,349.4 L207.8,357.8 M212.3,349.4 L216.9,357.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 209.7 341.5 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M134.2,274.5 L127.1,274.5 M134.2,278.7 L127.1,278.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M489.9,289.4 L489.9,337.8 Q489.9,345.8 481.9,345.8 L414.2,345.8 Q408.2,345.8 408.2,351.8 L408.2,357.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M408.2,349.4 L403.6,357.8 M408.2,349.4 L412.8,357.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 405.5 341.5 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M493.4,295.3 L486.3,295.3 M493.4,299.5 L486.3,299.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M130.7,44.6 L130.7,133.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M130.7,125.4 L126.1,133.8 M130.7,125.4 L135.2,133.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 128 117.5 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M134.2,50.5 L127.1,50.5 M134.2,54.7 L127.1,54.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 104.4 313.4 52.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 109.8 315.2 41.8 16.8 size=12 w=400 ink=Muted "allows"
+shape rect 477.5 313.4 24.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 482.9 315.2 13.9 16.8 size=12 w=400 ink=Muted "is"
+shape rect 107.9 68.6 45.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 113.3 70.4 34.8 16.8 size=12 w=400 ink=Muted "makes"
+shape rect 9 133.8 243.3 134.8 r=Sm fill=Surface
+clip rect 9 133.8 243.3 134.8 r=Sm
+shape rect 9 133.8 243.3 35.6 fill=Subtle
+unclip
+shape path M9,169.4 L252.3,169.4 stroke=BorderStrong/hairline/Solid
+shape rect 9 133.8 243.3 134.8 r=Sm stroke=BorderStrong/hairline/Solid
+text 117.7 141.8 25.8 19.6 size=14 w=600 ink=Text "CAR"
+text 20.2 173.4 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 88.5 173.4 125.3 16.8 size=12 w=400 ink=Text "registrationNumber"
+text 226.4 173.4 14.8 16.8 size=12 w=600 ink=Accent "PK"
+shape path M9,194.2 L252.3,194.2 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 198.2 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 88.5 198.2 27.8 16.8 size=12 w=400 ink=Text "make"
+shape path M9,219 L252.3,219 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 223 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 88.5 223 34.8 16.8 size=12 w=400 ink=Text "model"
+shape path M9,243.8 L252.3,243.8 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 247.8 55.7 16.8 size=12 w=400 ink=Muted "string[]"
+text 88.5 247.8 34.8 16.8 size=12 w=400 ink=Text "parts"
+shape rect 170.4 357.8 279.8 85.2 r=Sm fill=Surface
+clip rect 170.4 357.8 279.8 85.2 r=Sm
+shape rect 170.4 357.8 279.8 35.6 fill=Subtle
+unclip
+shape path M170.4,393.4 L450.2,393.4 stroke=BorderStrong/hairline/Solid
+shape rect 170.4 357.8 279.8 85.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 258.6 365.8 103.3 19.6 size=14 w=600 ink=Text "NAMED-DRIVER"
+text 181.6 397.4 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 235.9 397.4 146.2 16.8 size=12 w=400 ink=Text "carRegistrationNumber"
+text 394.7 397.4 44.3 16.8 size=12 w=600 ink=Accent "PK, FK"
+shape path M170.4,418.2 L450.2,418.2 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 181.6 422.2 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 235.9 422.2 90.5 16.8 size=12 w=400 ink=Text "driverLicence"
+text 394.7 422.2 44.3 16.8 size=12 w=600 ink=Accent "PK, FK"
+shape rect 292.3 113 395.1 176.4 r=Sm fill=Surface
+clip rect 292.3 113 395.1 176.4 r=Sm
+shape rect 292.3 113 395.1 35.6 fill=Subtle
+unclip
+shape path M292.3,148.6 L687.4,148.6 stroke=BorderStrong/hairline/Solid
+shape rect 292.3 113 395.1 176.4 r=Sm stroke=BorderStrong/hairline/Solid
+text 464.1 121 51.6 19.6 size=14 w=600 ink=Text "PERSON"
+text 303.5 152.6 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 385.7 152.6 97.4 16.8 size=12 w=400 ink=Text "driversLicense"
+text 495.8 152.6 14.8 16.8 size=12 w=600 ink=Accent "PK"
+text 523.1 152.6 90.5 16.8 size=12 w=400 ink=Muted "The license #"
+shape path M292.3,173.4 L687.4,173.4 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 303.5 177.4 69.6 16.8 size=12 w=400 ink=Muted "string(99)"
+text 385.7 177.4 62.6 16.8 size=12 w=400 ink=Text "firstName"
+text 523.1 177.4 153.1 16.8 size=12 w=400 ink=Muted "Only 99 characters are"
+text 523.1 194.2 48.7 16.8 size=12 w=400 ink=Muted "allowed"
+shape path M292.3,215 L687.4,215 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 303.5 219 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 385.7 219 55.7 16.8 size=12 w=400 ink=Text "lastName"
+shape path M292.3,239.8 L687.4,239.8 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 303.5 243.8 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 385.7 243.8 34.8 16.8 size=12 w=400 ink=Text "phone"
+text 495.8 243.8 14.8 16.8 size=12 w=600 ink=Accent "UK"
+shape path M292.3,264.6 L687.4,264.6 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 303.5 268.6 20.9 16.8 size=12 w=400 ink=Muted "int"
+text 385.7 268.6 20.9 16.8 size=12 w=400 ink=Text "age"
+shape rect 67.8 9 125.7 35.6 r=Sm fill=Surface
+shape rect 67.8 9 125.7 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 79 17 103.3 19.6 size=14 w=600 ink=Text "MANUFACTURER"

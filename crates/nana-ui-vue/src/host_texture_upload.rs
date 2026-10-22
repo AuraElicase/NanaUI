@@ -12,7 +12,6 @@ use nana_ui::{
 
 pub(crate) struct HostTextureUpload<'a> {
     pub slot: &'a str,
-    pub texture_id: u64,
     pub width: u32,
     pub height: u32,
     pub version: u64,
@@ -34,10 +33,6 @@ struct SlotEntry {
 
 struct SlotStoreState<K> {
     gpu: GpuContext,
-    /// Floor for the HostTexture generation of slots created from now on;
-    /// bumped per device so a slot recreated on a new device never reuses a
-    /// generation the painter already bound.
-    texture_epoch: u64,
     entries: HashMap<K, SlotEntry>,
 }
 
@@ -53,7 +48,6 @@ impl<K: Eq + Hash + Clone> HostTextureSlotStore<K> {
             textures,
             state: Arc::new(Mutex::new(SlotStoreState {
                 gpu,
-                texture_epoch: 1,
                 entries: HashMap::new(),
             })),
         }
@@ -68,7 +62,6 @@ impl<K: Eq + Hash + Clone> HostTextureSlotStore<K> {
         }
         state.entries.clear();
         state.gpu = gpu;
-        state.texture_epoch = state.texture_epoch.saturating_add(1).max(1);
     }
 
     pub(crate) fn binding(&self, key: &K) -> Option<HostTextureBinding> {
@@ -116,11 +109,6 @@ impl<K: Eq + Hash + Clone> HostTextureSlotStore<K> {
             .get(&key)
             .is_none_or(|entry| entry.width != upload.width || entry.height != upload.height);
         if recreate {
-            let prior_generation = state
-                .entries
-                .get(&key)
-                .map(|entry| entry.binding.texture.generation())
-                .unwrap_or_else(|| state.texture_epoch.saturating_sub(1));
             // Created before the old entry goes: a size the device refuses
             // keeps the slot the store already tracks (and so still removes
             // on prune or device replacement) instead of orphaning it.
@@ -134,11 +122,7 @@ impl<K: Eq + Hash + Clone> HostTextureSlotStore<K> {
                     usage: GpuTextureUsages::COPY_DST | GpuTextureUsages::SAMPLED,
                 })
                 .map_err(|error| format!("{}: {error}", upload.label))?;
-            let host = HostTexture::new(
-                upload.texture_id,
-                prior_generation.saturating_add(1).max(state.texture_epoch),
-                &texture,
-            );
+            let host = HostTexture::new(&texture);
             state.entries.remove(&key);
             let binding = self.textures.register(
                 upload.slot,

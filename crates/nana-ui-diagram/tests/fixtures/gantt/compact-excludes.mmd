@@ -1,0 +1,22 @@
+---
+config:
+  gantt:
+    displayMode: compact
+---
+gantt
+    title Compact rows, excluded days and inclusive ends
+    dateFormat YYYY-MM-DD
+    axisFormat %b %e
+    tickInterval 1week
+    weekday monday
+    excludes weekends, 2024-05-01
+    includes 2024-05-04
+    inclusiveEndDates
+    section Team A
+        Research   : r1, 2024-04-22, 2024-04-26
+        Prototype  : p1, after r1, 4d
+        Polish     : 2024-04-25, 2024-04-30
+    section Team B
+        Docs       : d1, 2024-04-24, 3d
+        Review     : crit, after d1 p1, 2d
+        Launch     : milestone, after p1, 0d

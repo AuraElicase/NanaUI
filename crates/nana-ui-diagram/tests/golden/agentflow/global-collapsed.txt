@@ -1,0 +1,23 @@
+size 239.1 463.8
+summary nodes=5 edges=5 groups=3
+shape rect 9 9 209.6 96.4 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 91.6 18.6 44.3 16.8 size=12 w=600 ink=Muted "Intake"
+shape rect 93 255 137.1 96.4 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 124.7 264.6 73.8 16.8 size=12 w=600 ink=Muted "Summariser"
+shape path M76.8,207 L76.8,225.6 Q76.8,231 71.4,231 L71.4,231 Q66,231 66,236.4 L66,399.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape path M161.6,335.4 L161.6,399.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape path M113.8,89.4 L113.8,146.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M113.8,153.4 L110.3,145 L113.8,146.5 L117.3,145 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M150.8,207 L150.8,225.6 Q150.8,231 156.2,231 L156.2,231 Q161.6,231 161.6,236.4 L161.6,289.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M161.6,295.8 L158,287.4 L161.6,288.9 L165.1,287.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M45,399.4 L182.6,399.4 L182.6,443 C148.2,431.1 79.4,454.8 45,443 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M55,399.4 L55,443 stroke=BorderStrong/hairline/Solid
+text 61 411.4 105.6 19.6 size=14 w=400 ink=Text "Shared corpus"
+shape path M36.9,49.8 L202.6,49.8 L190.7,89.4 L25,89.4 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 52.9 59.8 121.8 19.6 size=14 w=400 ink=Text "Receive request"
+shape rect 109 295.8 105.1 39.6 r=Md fill=Surface stroke=BorderStrong/hairline/Solid
+text 125 305.8 73.1 19.6 size=14 w=400 ink=Text "Summarise"
+shape rect 60.9 153.4 105.8 53.6 r=Sm fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 76.9 163.4 73.8 16.8 size=12 w=600 ink=Text "Processing"
+shape path M66.9,182.2 L160.7,182.2 stroke=Border/hairline/Dashed
+text 103.3 182.2 20.9 16.8 size=12 w=400 ink=Muted "···"

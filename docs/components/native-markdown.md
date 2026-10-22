@@ -48,13 +48,11 @@ widget(NativeMarkdown::from_source("# 说明\n\n一段正文。"))
 
 ## 图和公式
 
-mermaid 围栏和公式围栏会被解析，并给出 presenter 槽。
+mermaid 围栏和公式围栏由控件自己画：公式用 RaTeX，图用原生图表引擎（见 [原生图表引擎](../reference/diagram-engine.md)），颜色跟随主题。
 
-`MERMAID_PRESENTER` 是 `"mermaid"`，`MATH_PRESENTER` 是 `"math"`。
+两种围栏还各给出一个 presenter 槽，带着源码。`MERMAID_PRESENTER` 是 `"mermaid"`，`MATH_PRESENTER` 是 `"math"`。宿主要换成自己的呈现，可以按这个身份接管；图表的槽还带无障碍名称与描述。
 
-控件不渲染这两样，由宿主自己画进槽里。
-
-表格、删除线和任务列表走原生块；图和公式只留下槽位。
+读不懂的 mermaid 源码显示为代码块。表格、删除线和任务列表走原生块。
 
 ## 装配
 
@@ -87,8 +85,8 @@ mermaid 围栏和公式围栏会被解析，并给出 presenter 槽。
 
 | 插槽 | 说明 |
 | --- | --- |
-| `mermaid` | `MERMAID_PRESENTER` 是 `"mermaid"`。控件不渲染，由宿主自己画进槽里 |
-| `math` | `MATH_PRESENTER` 是 `"math"`。控件不渲染，由宿主自己画进槽里 |
+| `mermaid` | `MERMAID_PRESENTER` 是 `"mermaid"`。控件已原生绘制，槽给出源码与身份 |
+| `math` | `MATH_PRESENTER` 是 `"math"`。控件已原生绘制，槽给出源码与身份 |
 
 ## 参见
 

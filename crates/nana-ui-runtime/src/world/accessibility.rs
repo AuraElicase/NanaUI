@@ -180,7 +180,7 @@ impl UiWorld {
             let layout = self.hit_motion_layout(node);
             if layout.position == PositionSpec::Fixed {
                 // Viewport-relative; ancestors cannot scroll or clip this branch.
-                cumulative = (IDENTITY_AFFINE, [0.0, 0.0]);
+                cumulative = self.hanging_branch_transform(node);
                 blocks_3d = false;
             }
             let local = self.input_local_scene_transform(node, &layout, bounds, blocks_3d);

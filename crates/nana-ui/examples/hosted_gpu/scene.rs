@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use nana_ui::Color;
+use nana_ui::SemanticColor;
 
 const SOURCE: &str = r#"
 struct SceneUniform {
@@ -64,7 +64,7 @@ impl SharedScene {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
-        palette: [Color; 2],
+        palette: [SemanticColor; 2],
         revision: u32,
         size: (u32, u32),
     ) -> Self {
@@ -140,7 +140,13 @@ impl SharedScene {
         scene
     }
 
-    pub fn update(&self, queue: &wgpu::Queue, background: Color, accent: Color, revision: u32) {
+    pub fn update(
+        &self,
+        queue: &wgpu::Queue,
+        background: SemanticColor,
+        accent: SemanticColor,
+        revision: u32,
+    ) {
         let uniform = SceneUniform {
             background: color_array(background),
             accent: color_array(accent),
@@ -234,6 +240,6 @@ impl SceneTarget {
     }
 }
 
-fn color_array(color: Color) -> [f32; 4] {
+fn color_array(color: SemanticColor) -> [f32; 4] {
     [color.r, color.g, color.b, color.a]
 }

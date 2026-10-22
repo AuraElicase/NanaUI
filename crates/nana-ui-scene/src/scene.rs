@@ -248,6 +248,25 @@ fn is_triggered_overlay_surface(id: PrimitiveId) -> bool {
     id.slot == TRIGGERED_OVERLAY_SURFACE_SLOT
 }
 
+/// Whether `node` is a triggered menu. Its node is the trigger, and its
+/// presentation layers are the hanging surface's: they fade the surface and
+/// the items it places, and move them about the surface's pivot
+/// ([`UiScene::hanging_transform`]); the trigger and its trigger content keep
+/// their logical opacity and transform.
+fn is_triggered_menu(node: &ExtractedNode) -> bool {
+    node.standard_visual
+        .as_ref()
+        .is_some_and(|visual| visual.triggered_menu_overlay().is_some())
+}
+
+/// Whether `child` draws the trigger of the triggered menu `menu`.
+fn is_trigger_content(menu: &ExtractedNode, child: StableNodeId) -> bool {
+    menu.standard_visual
+        .as_ref()
+        .and_then(StandardVisual::triggered_menu_overlay)
+        .is_some_and(|overlay| overlay.trigger_content == Some(child))
+}
+
 /// A triggered surface's paint-order key: its own `(z_index, document_order)`
 /// at the root, where `z_index` is the menu content's level, so it sits under
 /// the content (later in document order) and over its trigger and the rest
@@ -1474,6 +1493,10 @@ pub struct UiScene {
     /// ([`nana_ui_runtime::Dialog::surface_painter`]), kept apart from the
     /// node's own painter's. Empty unless a dialog paints its own card.
     modal_surface_paint: NodeMap<custom_paint::BuiltPaint>,
+    /// Geometry built from each Markdown document's native diagrams, one
+    /// recording per diagram, reused while the runtime hands back the same
+    /// recordings. Empty unless a document holds a diagram.
+    markdown_diagram_paint: NodeMap<Arc<[custom_paint::BuiltPaint]>>,
     /// Nodes that [`may_be_dest_group`] admits. Paint asks
     /// [`UiScene::opacity_groups`] once per primitive, and even the memoized
     /// walk behind it has to read a cold `ExtractedNode` and its style for the
@@ -1525,6 +1548,7 @@ impl Default for UiScene {
             compositor: CompositorRegistry::default(),
             custom_paint: NodeMap::default(),
             modal_surface_paint: NodeMap::default(),
+            markdown_diagram_paint: NodeMap::default(),
             dest_group_candidates: 0,
             glyph_live: NodeMap::default(),
             chart_live: NodeMap::default(),
@@ -1564,6 +1588,7 @@ impl Clone for UiScene {
             compositor: self.compositor.clone(),
             custom_paint: self.custom_paint.clone(),
             modal_surface_paint: self.modal_surface_paint.clone(),
+            markdown_diagram_paint: self.markdown_diagram_paint.clone(),
             dest_group_candidates: self.dest_group_candidates,
             glyph_live: self.glyph_live.clone(),
             chart_live: self.chart_live.clone(),
@@ -1688,7 +1713,8 @@ impl UiScene {
                     .opacity_group_cache
                     .lock()
                     .expect("scene opacity groups");
-                self.ancestor_opacity_groups(&mut cache, parent, 0)
+                let groups = self.ancestor_opacity_groups(&mut cache, parent, 0);
+                self.trigger_content_groups(parent, node, groups)
             }
             None => empty_opacity_groups(),
         };
@@ -1718,7 +1744,10 @@ impl UiScene {
             return empty_opacity_groups();
         };
         let base = match candidate.parent {
-            Some(parent) => self.ancestor_opacity_groups(cache, parent, depth + 1),
+            Some(parent) => {
+                let groups = self.ancestor_opacity_groups(cache, parent, depth + 1);
+                self.trigger_content_groups(parent, id, groups)
+            }
             None => empty_opacity_groups(),
         };
         let groups = if is_dest_group(&self.nodes, candidate) {
@@ -1734,6 +1763,8 @@ impl UiScene {
 
     /// Destination groups for this draw. A modal scrim inherits outer groups,
     /// but never the card's own opacity: it has an independent presence track.
+    /// A triggered menu's trigger is outside its menu's fade the same way:
+    /// only the hanging surface and its items fade in.
     pub fn primitive_opacity_groups(&self, primitive: &ScenePrimitive) -> Arc<[OpacityGroup]> {
         if self.is_modal_scrim(primitive) {
             return self
@@ -1742,7 +1773,56 @@ impl UiScene {
                 .and_then(|node| node.parent)
                 .map_or_else(empty_opacity_groups, |parent| self.opacity_groups(parent));
         }
-        self.opacity_groups(primitive.node)
+        let groups = self.opacity_groups(primitive.node);
+        if is_triggered_overlay_surface(primitive.id) {
+            return groups;
+        }
+        match self.nodes.get(&primitive.node) {
+            Some(menu) if is_triggered_menu(menu) => self.without_menu_fade(menu, groups),
+            _ => groups,
+        }
+    }
+
+    /// `groups`, inherited by `child` from `parent`, outside `parent`'s fade
+    /// when `child` draws the trigger of a triggered menu `parent`.
+    fn trigger_content_groups(
+        &self,
+        parent: StableNodeId,
+        child: StableNodeId,
+        groups: Arc<[OpacityGroup]>,
+    ) -> Arc<[OpacityGroup]> {
+        match self.nodes.get(&parent) {
+            Some(menu) if is_trigger_content(menu, child) => self.without_menu_fade(menu, groups),
+            _ => groups,
+        }
+    }
+
+    /// `groups`, ending with `menu`'s own, with that group reduced to what
+    /// the menu's logical style composites: its presentation fades only its
+    /// hanging surface and items. Dropped when that leaves nothing to
+    /// composite.
+    fn without_menu_fade(
+        &self,
+        menu: &ExtractedNode,
+        groups: Arc<[OpacityGroup]>,
+    ) -> Arc<[OpacityGroup]> {
+        let Some((own, outer)) = groups.split_last().filter(|(own, _)| own.node == menu.id) else {
+            return groups;
+        };
+        let logical = dest_group(&self.nodes, menu.id, menu);
+        if logical.opacity == 1.0
+            && logical.filter.is_identity()
+            && logical.mix_blend.is_normal()
+            && logical.inset_shadow.is_none()
+        {
+            return Arc::from(outer);
+        }
+        if *own == logical {
+            return groups;
+        }
+        let mut groups = outer.to_vec();
+        groups.push(logical);
+        Arc::from(groups)
     }
 
     fn presented_dest_group(&self, id: StableNodeId, node: &ExtractedNode) -> OpacityGroup {
@@ -1798,6 +1878,9 @@ impl UiScene {
                 }
                 if !self.modal_surface_paint.is_empty() {
                     self.modal_surface_paint.remove(&id);
+                }
+                if !self.markdown_diagram_paint.is_empty() {
+                    self.markdown_diagram_paint.remove(&id);
                 }
             }
         }
@@ -2092,6 +2175,13 @@ impl UiScene {
             "a painted card held for a dialog that no longer paints it"
         );
         assert!(
+            self.markdown_diagram_paint.keys().all(|id| self
+                .nodes
+                .get(id)
+                .is_some_and(|node| node_has_markdown_diagram(node))),
+            "diagram geometry held for a document without diagrams"
+        );
+        assert!(
             self.primitives.values().all(|held| !matches!(
                 held.primitive.kind,
                 ScenePrimitiveKind::Path { .. }
@@ -2100,7 +2190,10 @@ impl UiScene {
             ) || self
                 .custom_paint
                 .contains_key(&held.primitive.node)
-                || self.modal_surface_paint.contains_key(&held.primitive.node)),
+                || self.modal_surface_paint.contains_key(&held.primitive.node)
+                || self
+                    .markdown_diagram_paint
+                    .contains_key(&held.primitive.node)),
             "a painted primitive without its geometry"
         );
         assert!(
@@ -2361,7 +2454,29 @@ impl UiScene {
                 })
                 .unwrap_or(0)
         };
-        let mut transform = AffineTransform::IDENTITY;
+        // The items a triggered menu places hang with its surface: their
+        // branch starts from the menu's presentation, not the bare viewport.
+        let fixed_root = if fixed {
+            Some(node)
+        } else {
+            ancestors.get(geometry_start).copied().filter(|ancestor| {
+                ancestor.source_style.layout.position == nana_ui_core::PositionSpec::Fixed
+            })
+        };
+        let mut transform = match fixed_root {
+            Some(root) if visual => {
+                // Whether a fixed node starts its menu's branch depends on
+                // whether it is the menu's trigger content, which its
+                // siblings do not share.
+                node_dependent |= fixed
+                    && node
+                        .parent
+                        .and_then(|parent| self.nodes.get(&parent))
+                        .is_some_and(|parent| is_triggered_menu(parent));
+                self.hanging_branch_transform(root)
+            }
+            _ => AffineTransform::IDENTITY,
+        };
         let mut opacity = 1.0;
         let mut clips = Vec::new();
         let mut blocks_3d = false;
@@ -2491,12 +2606,12 @@ impl UiScene {
         for (node, (presentation, objects)) in &self.glyph_objects {
             for object in objects.iter() {
                 let mut reveal = presentation.reveal.clone();
-                if presentation.transitions.entrance.is_some() {
-                    if let Some(r) = &mut reveal {
-                        r.intro.fade = false;
-                        r.intro.pop = false;
-                        r.intro.rise_px = 0.;
-                    }
+                if presentation.transitions.entrance.is_some()
+                    && let Some(r) = &mut reveal
+                {
+                    r.intro.fade = false;
+                    r.intro.pop = false;
+                    r.intro.rise_px = 0.;
                 }
                 let reveal_now = presentation.transitions.freeze_reveal.unwrap_or(now);
                 let sample = nana_ui_core::evaluate_glyph_chain(
@@ -3443,6 +3558,22 @@ fn group_prefix(
     }
     stack.reverse();
     stack
+}
+
+/// Whether a node's Markdown drawing holds a native diagram.
+#[cfg(debug_assertions)]
+fn node_has_markdown_diagram(node: &ExtractedNode) -> bool {
+    #[cfg(feature = "rich-text")]
+    if let Some(ComponentGeometry::NativeMarkdown { drawing, .. }) =
+        node.component_geometry.as_deref()
+    {
+        return drawing
+            .commands
+            .iter()
+            .any(|c| matches!(c, nana_ui_runtime::MarkdownDrawingCommand::Diagram { .. }));
+    }
+    let _ = node;
+    false
 }
 
 fn has_custom_paint(nodes: &SceneNodes, node: StableNodeId) -> bool {

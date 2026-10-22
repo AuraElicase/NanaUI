@@ -1,0 +1,22 @@
+size 462.1 316.8
+summary nodes=4 edges=0 groups=0
+shape path M146.7,42.6 C200.9,42.6 249.1,77.3 266.2,128.8 C283.4,180.3 265.6,236.9 222.2,269.5 L161.8,188.8 C170.5,182.3 174,170.9 170.6,160.6 C167.1,150.3 157.5,143.4 146.7,143.4 Z fill=series0 stroke=Surface/thick/Solid
+shape path M222.2,269.5 C171,307.8 99.1,301.7 55.2,255.2 C11.2,208.7 9,136.7 50.1,87.6 L127.4,152.4 C119.1,162.2 119.6,176.6 128.4,185.9 C137.2,195.2 151.5,196.4 161.8,188.8 Z fill=series1 stroke=Surface/thick/Solid
+shape path M50.1,87.6 C65.9,68.8 86.9,55 110.5,47.9 L139.4,144.5 C134.7,145.9 130.5,148.6 127.4,152.4 Z fill=series2 stroke=Surface/thick/Solid
+shape path M110.5,47.9 C122.3,44.4 134.4,42.6 146.7,42.6 L146.7,143.4 C144.2,143.4 141.8,143.8 139.4,144.5 Z fill=series3 stroke=Surface/thick/Solid
+text 208 136.3 20.9 16.8 size=12 w=400 ink=series0.on "40%"
+text 81.3 212.2 20.9 16.8 size=12 w=400 ink=series1.on "46%"
+text 98.2 97 13.9 16.8 size=12 w=400 ink=series2.on "9%"
+shape rect 300.7 125.1 12 12 r=Xs fill=series0
+text 319.9 121.3 56.8 19.6 size=14 w=400 ink=Text "Calcium"
+text 381 121.3 56.8 19.6 size=14 w=400 ink=Muted "[42.96]"
+shape rect 300.7 150.1 12 12 r=Xs fill=series1
+text 319.9 146.3 73.1 19.6 size=14 w=400 ink=Text "Potassium"
+text 397.3 146.3 56.8 19.6 size=14 w=400 ink=Muted "[50.05]"
+shape rect 300.7 175.1 12 12 r=Xs fill=series2
+text 319.9 171.3 73.1 19.6 size=14 w=400 ink=Text "Magnesium"
+text 397.3 171.3 56.8 19.6 size=14 w=400 ink=Muted "[10.01]"
+shape rect 300.7 200.1 12 12 r=Xs fill=series3
+text 319.9 196.3 32.5 19.6 size=14 w=400 ink=Text "Iron"
+text 356.7 196.3 24.4 19.6 size=14 w=400 ink=Muted "[5]"
+text 108.1 8 245.9 22.4 size=16 w=600 ink=Text "Key elements in Product X"

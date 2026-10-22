@@ -1,0 +1,30 @@
+size 364.8 283.6
+summary nodes=7 edges=4 groups=2
+shape rect 9 9 346.8 206 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape rect 21 139.4 322.8 63.6 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape path M61.5,119.4 L61.5,137.4 Q61.5,145.4 53.5,145.4 L35,145.4 Q27,145.4 27,153.4 L27,221 Q27,229 35,229 L90.7,229 L90.7,229.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M90.7,235 L87.2,226.6 L90.7,228.1 L94.2,226.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M102.7,191 L102.7,217 Q102.7,225 110.7,225 L223.4,225 Q225.1,225 225.1,226.6 L225.1,228.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M225.1,235 L221.5,226.6 L225.1,228.1 L228.6,226.6 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M283.6,70.2 L303.6,70.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M323.1,235 L323.1,205 Q323.1,197 315.1,197 L191,197 Q183,197 183,189 L183,126.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M183,119.4 L186.5,127.8 L183,126.3 L179.5,127.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 21 21 202.5 98.4 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 41.1 31 162.4 19.6 size=14 w=400 ink=Text "A label that is long"
+text 37 50.6 170.5 19.6 size=14 w=400 ink=Text "enough to wrap across"
+text 37 70.2 170.5 19.6 size=14 w=400 ink=Text "more than one line in"
+text 85.7 89.8 73.1 19.6 size=14 w=400 ink=Text "the block"
+shape rect 243.5 21 40.1 98.4 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 259.5 60.4 8.1 19.6 size=14 w=400 ink=Text "b"
+shape rect 303.6 21 40.1 98.4 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 319.6 60.4 8.1 19.6 size=14 w=400 ink=Text "c"
+shape rect 33 151.4 139.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 98.6 161.4 8.1 19.6 size=14 w=400 ink=Text "x"
+shape rect 192.4 151.4 139.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 258 161.4 8.1 19.6 size=14 w=400 ink=Text "y"
+shape rect 9 235 163.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 86.6 245 8.1 19.6 size=14 w=400 ink=Text "p"
+shape rect 192.4 235 163.4 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 270 245 8.1 19.6 size=14 w=400 ink=Text "q"
+shape rect 303.8 205.8 38.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 309.2 207.6 27.8 16.8 size=12 w=400 ink=Muted "back"

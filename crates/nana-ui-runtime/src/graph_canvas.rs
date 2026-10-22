@@ -192,7 +192,7 @@ pub enum GraphNodeContent {
     Region(StableNodeId),
     /// HostTexture registry slot. Assemble allocates a child that samples
     /// [`HOST_TEXTURE_RENDERER`].
-    HostTexture(Arc<str>),
+    HostTexture(crate::TextureSlotName),
     /// Already-built custom node, still projected onto a child (never the canvas).
     CustomRender(CustomRenderNode),
 }
@@ -202,7 +202,7 @@ impl GraphNodeContent {
         Self::Region(id)
     }
 
-    pub fn host_texture(slot: impl Into<Arc<str>>) -> Self {
+    pub fn host_texture(slot: impl Into<crate::TextureSlotName>) -> Self {
         Self::HostTexture(slot.into())
     }
 
@@ -220,9 +220,9 @@ impl GraphNodeContent {
     /// HostTexture slots use [`HOST_TEXTURE_RENDERER`]. Empty identities are omitted.
     pub fn as_custom_render(&self) -> Option<CustomRenderNode> {
         match self {
-            Self::HostTexture(slot) if !slot.trim().is_empty() => Some(CustomRenderNode::new(
+            Self::HostTexture(slot) if !slot.is_empty() => Some(CustomRenderNode::new(
                 HOST_TEXTURE_RENDERER,
-                Arc::clone(slot),
+                slot.to_resource(),
                 0,
             )),
             Self::CustomRender(node)

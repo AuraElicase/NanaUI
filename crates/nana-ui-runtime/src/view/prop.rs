@@ -274,6 +274,9 @@ const_props! {
     Option<&'static str> => Option<Arc<str>>, |v| v.map(Arc::from);
     &'static str => Option<Arc<str>>, |v| Some(Arc::from(v));
     String => Option<Arc<str>>, |v| Some(Arc::from(v));
+    crate::TextureSlotName => crate::TextureSlotName, |v| v;
+    &'static str => crate::TextureSlotName, |v| crate::TextureSlotName::from(v);
+    String => crate::TextureSlotName, |v| crate::TextureSlotName::from(v);
     Vec<crate::SelectOption> => Vec<crate::SelectOption>, |v| v;
     crate::StableNodeId => Option<crate::StableNodeId>, |v| Some(v);
     Option<crate::StableNodeId> => Option<crate::StableNodeId>, |v| v;

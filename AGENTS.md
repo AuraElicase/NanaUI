@@ -19,6 +19,7 @@ Supporting boundaries:
 
 - \`nana-text\` is the product text measurement, shaping, and retained text-layout authority.
 - \`nana-ui-charts\` is the chart model: the typed ECharts-shaped option, scales, layout, hit data and the GPU mark arrays the chart shaders read. It depends only on \`nana-ui-core\`; the \`Chart\` component lives in \`nana-ui-runtime\` and the chart pipelines in \`nana-ui\`.
+- \`nana-ui-diagram\` is the Mermaid engine: parsing, layout and a theme-neutral vector display list, with no GPU and no text engine (callers pass measurement). \`nana-ui-runtime\` (\`rich-text\`) lays fences out through it and records the list against the theme; \`nana-ui-scene\` tessellates the recording like any custom paint. Diagram types land one family at a time behind \`families::<name>::NATIVE\`; see \`docs/reference/diagram-engine.md\`.
 - \`nana-ui-css\` is the one CSS engine: stylesheet parse, cascade and the mapping onto the Style Model. The Vue path runs it at run time; the \`.vue\` compiler, \`view!\` and \`css!\` run it at build time and hand the runtime Style Model data. CSS parsing stays out of \`nana-ui-core\`, \`nana-ui-runtime\`, \`nana-ui-scene\` and \`nana-ui\`.
 - \`nana-ui-input\` owns the canonical input event, endpoint, sequencer, and \`HostServices\` contract; hosts lower native input into it and the per-\`AppContext\` router in \`nana-ui-runtime\` is its only consumer.
 - \`nana-ui-platform\` owns platform-neutral window contracts and re-exports the input contract; \`nana-window\` owns native handles, materials, title-bar chrome, scaling, and fullscreen behavior.
@@ -47,7 +48,7 @@ Read the focused contract document named by the selected skill before editing. R
 - Preserve one authoritative \`UiWorld\` → \`UiScene\` path. \`PendingHostOps\` commit at the frame boundary; \`LayoutBoxStore\` is a projection and scrolling does not write Runtime layout boxes.
 - Use the shared \`ComponentRegistry\` for built-in and extension components. Keep \`event_flags\` in Runtime event listeners and GPU slots in Runtime \`CustomRenderNode\`.
 - Keep logical state separate from presentation overlays. Compositor animation must not write transient samples back into base style state.
-- Fade a subtree or compound painter as one isolated composition, including the frames before compositor-layer promotion; keep a modal scrim outside its own card's opacity group.
+- Fade a subtree or compound painter as one isolated composition, including the frames before compositor-layer promotion; keep a modal scrim outside its own card's opacity group, and a triggered menu's trigger outside its hanging surface's fade and scale.
 - Keep raw window handles out of ordinary controls. Native material failure returns the actual applied outcome or an explicit fallback.
 - Auxiliary top-level windows use `WindowDescriptor::parent` for native ordering above their owner and host-managed level inheritance. Keep this separate from Underlay's below-owner contract; hidden startup owners and Wayland remapping follow `docs/reference/window.md`.
 - Keep one WGPU major version across manifests, lockfile, and the resolved dependency graph. Never add a second Device/Queue or a product CPU readback path.

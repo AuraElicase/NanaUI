@@ -19,12 +19,13 @@ use crate::{
     RangeChanged, RangeField, RangeInput, RangeSpanChanged, RangeSpanField, RangeSpanInput,
     RangeSpanOrientation, RangeSpanThumb, ScrollView, Select, SelectChanged, SelectOption, Spinner,
     StableNodeId, Stack, StatusBadge, Switch, Text, TextArea, TextChanged, TextInput,
-    TextSubmitted, Thumbnail, ToggleChanged,
+    TextSubmitted, TextureSlotName, Thumbnail, ToggleChanged,
 };
 use crate::{
     AppTitleBar, Breadcrumb, Dialog, Drawer, FormField, GpuView, IconGlyph, InteractiveCard,
     LabeledValue, LevelMeter, List, MediaTransportBar, OverlayHost, Panel, PathText, SettingsCard,
-    SidebarRow, Skeleton, StatusBar, Tabs, Toolbar, Tooltip, ValidationMessage, Video,
+    SettingsGroup, SidebarRow, Skeleton, StatusBar, Tabs, Toolbar, Tooltip, ValidationMessage,
+    Video,
 };
 use nana_ui_core::{ButtonKind, Icon, RadiusTier, SemanticColorRole, StatusTone};
 
@@ -148,6 +149,7 @@ styled!(
     Toolbar,
     InteractiveCard,
     SettingsCard,
+    SettingsGroup,
     FormField,
     Breadcrumb,
     StatusBar,
@@ -311,7 +313,7 @@ macro_rules! controls {
         $target.selected.as_ref() != Some($value) || $target.focus.as_ref() != Some($value)
     };
     (@write resource $target:ident, $value:ident, $field:ident) => {{
-        $target.state = if $value.trim().is_empty() {
+        $target.state = if $value.is_empty() {
             ThumbnailState::Empty
         } else {
             ThumbnailState::Ready
@@ -640,10 +642,12 @@ impl<K> El<EmptyState, K> {
 ///   testing (what `.visible(..)` binds);
 /// - [`fields::Localized`]: the message a text says (what [`t`] binds);
 /// - [`fields::HiddenWhenEmpty`]: any of those fields, with the node hidden
-///   while the value is empty (`.prop::<_, HiddenWhenEmpty<fields::text::value>>(title)`).
+///   while the value is empty (`.prop::<_, HiddenWhenEmpty<fields::text::value>>(title)`);
+/// - [`fields::FromString`] / [`fields::FromOptionalString`]: an `Arc<str>`
+///   field bound from the `String` a store holds.
 pub mod fields {
     pub use super::generated::*;
-    pub use super::{Blank, HiddenWhenEmpty};
+    pub use super::{Blank, FromOptionalString, FromString, HiddenWhenEmpty};
     pub use super::{Localized, Visible};
 
     /// [`crate::ActionMenu`] fields (not a template tag: its items are its
@@ -707,6 +711,39 @@ impl FieldWrite<EmptyState, String> for generated::empty_state::message {
 
     fn differs(target: &EmptyState, message: &String) -> bool {
         target.message.as_deref().unwrap_or("") != message.as_str()
+    }
+}
+
+/// The `Arc<str>` field `W` writes, bound from a `String`. It compares before
+/// converting, so an unchanged value costs no allocation.
+pub struct FromString<W>(std::marker::PhantomData<W>);
+
+impl<C, W: FieldWrite<C, Arc<str>>> FieldWrite<C, String> for FromString<W> {
+    const FIELD: &'static str = W::FIELD;
+
+    fn write(target: &mut C, value: String) {
+        W::write(target, value.into());
+    }
+
+    fn differs(target: &C, value: &String) -> bool {
+        W::differs(target, &Arc::from(value.as_str()))
+    }
+}
+
+/// [`FromString`] for an optional text field.
+pub struct FromOptionalString<W>(std::marker::PhantomData<W>);
+
+impl<C, W: FieldWrite<C, Option<Arc<str>>>> FieldWrite<C, Option<String>>
+    for FromOptionalString<W>
+{
+    const FIELD: &'static str = W::FIELD;
+
+    fn write(target: &mut C, value: Option<String>) {
+        W::write(target, value.map(Arc::from));
+    }
+
+    fn differs(target: &C, value: &Option<String>) -> bool {
+        W::differs(target, &value.as_deref().map(Arc::from))
     }
 }
 
@@ -784,6 +821,12 @@ impl FieldText for String {
 impl FieldText for Arc<str> {
     fn parse(text: &str) -> Result<Self, String> {
         Ok(Arc::from(text))
+    }
+}
+
+impl FieldText for TextureSlotName {
+    fn parse(text: &str) -> Result<Self, String> {
+        Ok(Self::from(text))
     }
 }
 
@@ -1022,6 +1065,28 @@ macro_rules! item_slots {
 }
 
 item_slots!(ListItem, crate::SidebarRow);
+
+impl<K> El<ListItem, K> {
+    /// Row tools in the trailing slot: shown while the pointer is on the row
+    /// or keyboard focus is inside it, so Tab reaches them. Give it in place
+    /// of `.trailing`; [`ListItem::tools_rest`] says how they sit while put
+    /// away, and `keep_tools` keeps them shown at rest (a pin that is on).
+    pub fn tools(self, view: impl super::IntoView) -> Self {
+        self.child_slot(view, |mut item: ListItem, id| {
+            item.slots.trailing = Some(id);
+            item.trailing_tools = true;
+            item
+        })
+    }
+}
+
+impl<K> El<crate::SidebarRow, K> {
+    /// Row tools after the label, shown in place of the trailing slot while
+    /// the pointer is on the row or keyboard focus is inside it.
+    pub fn tools(self, view: impl super::IntoView) -> Self {
+        self.child_slot(view, crate::SidebarRow::tools)
+    }
+}
 
 impl<K> El<TextArea, K> {
     /// A real action inside the field's bottom trailing corner.

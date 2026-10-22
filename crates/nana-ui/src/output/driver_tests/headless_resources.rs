@@ -84,7 +84,7 @@ fn fixture(versioned: bool) -> (Arc<Producer>, HostTextureRegistry, Arc<UiScene>
     let textures = HostTextureRegistry::new();
     textures.register(
         "source",
-        HostTexture::new(1, 1, &texture),
+        HostTexture::new(&texture),
         64,
         48,
         HostTextureAlphaMode::Premultiplied,

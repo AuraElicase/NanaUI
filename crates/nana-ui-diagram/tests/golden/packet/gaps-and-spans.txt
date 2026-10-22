@@ -1,0 +1,24 @@
+size 225.2 219.4
+summary nodes=4 edges=0 groups=0
+shape rect 9 55.9 103.6 58.8 fill=Surface stroke=BorderStrong/hairline/Solid
+text 36.4 76.9 48.7 16.8 size=12 w=400 ink=Text "Version"
+text 11 41.6 5.9 14.3 size=10.2 w=400 ink=Muted "0"
+text 104.7 41.6 5.9 14.3 size=10.2 w=400 ink=Muted "3"
+shape rect 164.4 55.9 51.8 58.8 fill=Surface stroke=BorderStrong/hairline/Solid
+text 172.9 60.1 34.8 16.8 size=12 w=400 ink=Text "Spans"
+text 179.9 76.9 20.9 16.8 size=12 w=400 ink=Text "two"
+text 176.4 93.7 27.8 16.8 size=12 w=400 ink=Text "rows"
+text 166.4 41.6 5.9 14.3 size=10.2 w=400 ink=Muted "6"
+text 208.3 41.6 5.9 14.3 size=10.2 w=400 ink=Muted "7"
+shape rect 9 129 155.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 38 137.4 97.4 16.8 size=12 w=400 ink=Text "Spans two rows"
+text 11 114.7 5.9 14.3 size=10.2 w=400 ink=Muted "8"
+text 150.6 114.7 11.8 14.3 size=10.2 w=400 ink=Muted "13"
+shape rect 164.4 129 51.8 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 166.6 138.6 47.3 14.3 size=10.2 w=400 ink=Text "Flags w…"
+text 166.4 114.7 11.8 14.3 size=10.2 w=400 ink=Muted "14"
+text 202.4 114.7 11.8 14.3 size=10.2 w=400 ink=Muted "15"
+shape rect 9 176.8 25.9 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 18.5 185.2 7 16.8 size=12 w=400 ink=Text "X"
+text 16 162.6 11.8 14.3 size=10.2 w=400 ink=Muted "16"
+text 63.4 8 98.4 22.4 size=16 w=600 ink=Text "Odd layout"

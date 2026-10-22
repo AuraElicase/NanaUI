@@ -432,7 +432,7 @@ fn detach_withdraws_only_owned_attachments_and_notifies_each_registry_outside_it
     node.register_host_texture(&second, "owned", HostTextureAlphaMode::Premultiplied);
     node.register_host_texture(&second, "removed", HostTextureAlphaMode::Premultiplied);
     second.remove("removed");
-    let replacement = HostTexture::new(999, 1, &target(&test_gpu::context()));
+    let replacement = HostTexture::new(&target(&test_gpu::context()));
     first.register(
         "replaced",
         replacement.clone(),
@@ -571,7 +571,7 @@ fn concurrent_retained_refresh_never_overwrites_a_replacement_owner() {
     let (_child, node, _newest) = two_pinned_revisions();
     let registry = HostTextureRegistry::new();
     let old = node.host_texture().clone();
-    let replacement = HostTexture::new(999, 1, &target(&test_gpu::context()));
+    let replacement = HostTexture::new(&target(&test_gpu::context()));
     let barriers = Arc::new(std::sync::Barrier::new(3));
     let mut ownership_preserved = true;
     std::thread::scope(|scope| {

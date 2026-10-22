@@ -1,0 +1,13 @@
+size 280.9 430.2
+summary nodes=4 edges=3 groups=0
+shape path M18.5,8 C85.5,8 85.5,28.1 152.6,28.1 L152.6,378.1 C85.5,378.1 85.5,358 18.5,358 Z fill=series0.soft
+shape path M163.1,28.1 C212.7,28.1 212.7,58.2 262.4,58.2 L262.4,268.2 C212.7,268.2 212.7,238.1 163.1,238.1 Z fill=series1.soft
+shape path M163.1,238.1 C212.7,238.1 212.7,282.2 262.4,282.2 L262.4,422.2 C212.7,422.2 212.7,378.1 163.1,378.1 Z fill=series1.soft
+shape rect 8 8 10.5 350 fill=series0
+text 24.1 174.6 27.8 16.8 size=12 w=400 ink=Text "A 10"
+shape rect 152.6 28.1 10.5 350 fill=series1
+text 119.1 194.7 27.8 16.8 size=12 w=400 ink=Text "B 10"
+shape rect 262.4 58.2 10.5 210 fill=series2
+text 235.9 154.8 20.9 16.8 size=12 w=400 ink=Text "C 6"
+shape rect 262.4 282.2 10.5 140 fill=series3
+text 235.9 343.8 20.9 16.8 size=12 w=400 ink=Text "D 4"

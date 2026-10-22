@@ -1,0 +1,4 @@
+size 58.1 57.6
+summary nodes=1 edges=0 groups=0
+shape rect 9 9 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 19 8.1 19.6 size=14 w=400 ink=Text "A"

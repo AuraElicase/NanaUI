@@ -1,0 +1,47 @@
+size 805.7 569.7
+summary nodes=3 edges=5 groups=1
+shape rect 44.8 419 444.9 68.6 r=Xs fill=SemanticColorMix{first:Subtle,second:None,weight:4500} stroke=Border/hairline/Solid
+shape path M60,101.8 L60,501.5 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M474.4,101.8 L474.4,501.5 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M659.2,101.8 L659.2,501.5 stroke=SemanticColorMix{first:Faint,second:Some(Border),weight:5000}/hairline/Dashed
+shape path M44.8,419 L86.3,419 L86.3,433.8 L78.3,441.8 L44.8,441.8 Z fill=Subtle stroke=Border/hairline/Solid
+text 50.8 422 29.5 16.8 size=12 w=600 ink=Text "loop"
+text 92.3 422 293.8 16.8 size=12 w=400 ink=Muted "[每 30 秒轮询一次状态，直到支付完成或者超时为止]"
+shape path M60,160.6 L467.7,160.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M474.4,160.6 L466,164.1 L467.5,160.6 L466,157.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 71.2 117.2 392 19.6 size=14 w=400 ink=Text "提交订单，并附带一段很长很长的备注说明，用来检验消息文字"
+text 190.2 136.8 154 19.6 size=14 w=400 ink=Text "在列间距里的换行与测宽"
+shape path M474.4,258.6 L652.5,258.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M659.2,258.6 L650.8,262.1 L652.3,258.6 L650.8,255.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 489.7 176 154.3 19.6 size=14 w=400 ink=Text "A deliberately long"
+text 485.6 195.6 162.4 19.6 size=14 w=400 ink=Text "English message that"
+text 489.7 215.2 154.3 19.6 size=14 w=400 ink=Text "asks to wrap at the"
+text 501.8 234.8 129.9 19.6 size=14 w=400 ink=Text "configured width"
+shape path M659.2,297.8 L481.1,297.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M474.4,297.8 L482.8,294.3 L481.3,297.8 L482.8,301.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 517.8 274 98 19.6 size=14 w=400 ink=Text "承認されました"
+shape path M474.4,403.6 L66.7,403.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M60,403.6 L68.4,400.1 L66.9,403.6 L68.4,407.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 245.1 379.8 44.2 19.6 size=14 w=400 ink=Text "完成 ✅"
+shape path M60,473.6 L467.7,473.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M474.4,473.6 L466,477.1 L467.5,473.6 L466,470.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 253.2 449.8 28 19.6 size=14 w=400 ink=Text "查询"
+shape rect 665.5 313.2 131.2 51.2 r=Xs fill=Surface
+shape rect 665.5 313.2 131.2 51.2 r=Xs fill=SemanticColorMix{first:Warning,second:None,weight:1400} stroke=SemanticColorMix{first:Warning,second:None,weight:5500}/hairline/Solid
+text 675.1 319.2 112 19.6 size=14 w=400 ink=Text "便签里的文字也会"
+text 682.1 338.8 98 19.6 size=14 w=400 ink=Text "按宽度换行显示"
+shape rect 9 42.6 102 59.2 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 46 52.6 28 19.6 size=14 w=400 ink=Text "用户"
+text 25 72.2 70 19.6 size=14 w=400 ink=Text "（移动端）"
+shape rect 9 501.5 102 59.2 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 46 511.5 28 19.6 size=14 w=400 ink=Text "用户"
+text 25 531.1 70 19.6 size=14 w=400 ink=Text "（移动端）"
+shape rect 430.4 62.2 88 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 446.4 72.2 56 19.6 size=14 w=400 ink=Text "サーバー"
+shape rect 430.4 501.5 88 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 446.4 511.5 56 19.6 size=14 w=400 ink=Text "サーバー"
+shape rect 604.1 62.2 110.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 620.1 72.2 78.1 19.6 size=14 w=400 ink=Text "결제 서비스"
+shape rect 604.1 501.5 110.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 620.1 511.5 78.1 19.6 size=14 w=400 ink=Text "결제 서비스"
+text 301.1 8 203.5 22.4 size=16 w=600 ink=Text "下单流程（中日韩与换行）"

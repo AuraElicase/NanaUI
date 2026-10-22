@@ -233,12 +233,28 @@ impl RetiredIds {
 }
 
 /// Stable document/window ownership boundary.
+///
+/// An application takes one per document from [`Self::allocate`]; a fixed
+/// number through [`Self::new`] is for tests and fixtures that name their
+/// documents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DocumentId(u64);
+
+/// First id [`DocumentId::allocate`] hands out: above any number a test or
+/// fixture writes by hand, and low enough that a Vue document's node handles
+/// (`(id - 1) * 2^32 + local`) stay exact in a JavaScript number.
+const FIRST_ALLOCATED_DOCUMENT: u64 = 1 << 16;
+static NEXT_DOCUMENT: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(FIRST_ALLOCATED_DOCUMENT);
 
 impl DocumentId {
     pub const fn new(value: u64) -> Option<Self> {
         if value == 0 { None } else { Some(Self(value)) }
+    }
+
+    /// An id no other call in this process returns.
+    pub fn allocate() -> Self {
+        Self(NEXT_DOCUMENT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     }
 
     pub const fn get(self) -> u64 {
@@ -695,6 +711,10 @@ pub struct UiWorld {
     /// so an unchanged node is never re-recorded. Only painted nodes have an
     /// entry; despawn drops it.
     paint_recordings: RefCell<crate::NodeMap<PaintCacheEntry>>,
+    /// Markdown diagrams recorded against the theme, by laid-out scene and
+    /// palette epoch. Cleared when the epoch moves; bounded.
+    #[cfg(feature = "rich-text")]
+    diagram_recordings: RefCell<Vec<(u64, crate::markdown_diagram::DiagramDrawing)>>,
     /// Last recording of each modal frame's card surface painter
     /// ([`crate::Dialog::surface_painter`]), apart from the node's own
     /// painter: a frame can have both. Geometry reads through it; despawn
@@ -987,6 +1007,8 @@ impl UiWorld {
             scroll_reclamped: HashSet::default(),
             scroll_resized: HashSet::default(),
             paint_recordings: RefCell::new(crate::NodeMap::default()),
+            #[cfg(feature = "rich-text")]
+            diagram_recordings: RefCell::new(Vec::new()),
             modal_surface_recordings: RefCell::new(crate::NodeMap::default()),
             paint_text_engine: None,
             painter_overrides: crate::NodeMap::default(),

@@ -1,0 +1,30 @@
+size 442.8 284.4
+summary nodes=13 edges=0 groups=2
+shape rect 9 68.6 284.6 123.2 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape rect 9 211.8 424.8 63.6 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape rect 9 9 424.8 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 217.4 19 8.1 19.6 size=14 w=400 ink=Text "a"
+shape rect 21 80.6 120.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 77.1 90.6 8.1 19.6 size=14 w=400 ink=Text "h"
+shape rect 161.3 80.6 120.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 217.4 90.6 8.1 19.6 size=14 w=400 ink=Text "i"
+shape rect 21 140.2 120.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 77.1 150.2 8.1 19.6 size=14 w=400 ink=Text "j"
+shape rect 161.3 140.2 120.3 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 217.4 150.2 8.1 19.6 size=14 w=400 ink=Text "k"
+shape rect 313.6 68.6 120.3 123.2 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 369.6 120.4 8.1 19.6 size=14 w=400 ink=Text "g"
+shape rect 21 223.8 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 37 233.8 8.1 19.6 size=14 w=400 ink=Text "l"
+shape rect 81.1 223.8 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 97.1 233.8 8.1 19.6 size=14 w=400 ink=Text "m"
+shape rect 141.2 223.8 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 157.2 233.8 8.1 19.6 size=14 w=400 ink=Text "n"
+shape rect 201.4 223.8 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 217.4 233.8 8.1 19.6 size=14 w=400 ink=Text "o"
+shape rect 261.5 223.8 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 277.5 233.8 8.1 19.6 size=14 w=400 ink=Text "p"
+shape rect 321.6 223.8 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 337.6 233.8 8.1 19.6 size=14 w=400 ink=Text "q"
+shape rect 381.7 223.8 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 397.7 233.8 8.1 19.6 size=14 w=400 ink=Text "r"

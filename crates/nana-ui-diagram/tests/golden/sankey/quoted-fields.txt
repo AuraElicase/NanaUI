@@ -1,0 +1,21 @@
+size 801.3 394.7
+summary nodes=6 edges=5 groups=0
+shape path M509.5,8 C646.1,8 646.1,22.7 782.8,22.7 L782.8,278.9 C646.1,278.9 646.1,264.2 509.5,264.2 Z fill=series0.soft
+shape path M302.3,81.7 C400.6,81.7 400.6,8 499,8 L499,167.9 C400.6,167.9 400.6,241.6 302.3,241.6 Z fill=series3.soft
+shape path M18.5,105.4 C155.1,105.4 155.1,81.7 291.8,81.7 L291.8,187.9 C155.1,187.9 155.1,211.6 18.5,211.6 Z fill=series4.soft
+shape path M509.5,264.2 C646.1,264.2 646.1,292.9 782.8,292.9 L782.8,386.7 C646.1,386.7 646.1,358 509.5,358 Z fill=series0.soft
+shape path M18.5,225.6 C155.1,225.6 155.1,187.9 291.8,187.9 L291.8,280.8 C155.1,280.8 155.1,318.5 18.5,318.5 Z fill=series5.soft
+shape rect 499 8 10.5 350 fill=series0
+text 375.1 174.6 118.3 16.8 size=12 w=400 ink=Text "Pumped heat 263.7"
+shape rect 782.8 22.7 10.5 256.2 fill=series1
+text 582.3 134 194.9 16.8 size=12 w=400 ink=Text "Heating and cooling, \"homes\""
+text 735.4 150.8 41.8 16.8 size=12 w=400 ink=Text "193.03"
+shape rect 782.8 292.9 10.5 93.8 fill=series2
+text 638 323 139.2 16.8 size=12 w=400 ink=Text "Heating and cooling,"
+text 651.9 339.8 125.3 16.8 size=12 w=400 ink=Text "\"commercial\" 70.67"
+shape rect 291.8 81.7 10.5 199.1 fill=series3
+text 147 172.8 139.2 16.8 size=12 w=400 ink=Text "Electricity grid 150"
+shape rect 8 105.4 10.5 106.2 fill=series4
+text 24.1 150.1 55.7 16.8 size=12 w=400 ink=Text "Solar 80"
+shape rect 8 225.6 10.5 92.9 fill=series5
+text 24.1 263.7 48.7 16.8 size=12 w=400 ink=Text "Wind 70"

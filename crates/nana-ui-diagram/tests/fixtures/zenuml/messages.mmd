@@ -1,0 +1,21 @@
+zenuml
+    title Reply message
+    @Actor Client
+    Client->A.method() {
+      B.method() {
+        if(condition) {
+          return x1
+          // return early
+          @return
+          A->Client: x11
+        }
+      }
+      return x2
+    }
+    a = A.SyncMessage()
+    SomeType b = B.SyncMessage(with, parameters) {
+      B.selfCheck()
+      C->D: nested async message
+    }
+    new A1
+    new A2(with, parameters)

@@ -1,0 +1,5 @@
+size 134 78
+summary nodes=1 edges=0 groups=0
+shape rect 9 9 116 60 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 32.2 19 69.6 16.8 size=12 w=400 ink=Muted "<<system>>"
+text 49.8 39.4 34.4 19.6 size=14 w=600 ink=Text "Only"

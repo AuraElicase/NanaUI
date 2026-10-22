@@ -1,0 +1,18 @@
+swimlane-beta LR
+  subgraph Reader
+    ask[Ask for a book]
+    collect[Collect the book]
+  end
+  subgraph Desk
+    lookup[Look up the catalogue]
+    onShelf{On the shelf?}
+    hold[Place a hold]
+  end
+  subgraph Stacks
+    fetch[Fetch from storage]
+  end
+  ask -->|Title and card| lookup
+  lookup --> onShelf
+  onShelf -->|Yes| fetch --> collect
+  onShelf -->|No| hold
+  hold -->|Notify later| ask

@@ -1,0 +1,27 @@
+---
+title: 报销流程
+---
+swimlane-beta LR
+  subgraph emp [员工]
+    提交([提交报销单])
+    补充[补充发票与说明，金额较大时需要附上审批邮件]
+  end
+  subgraph mgr [部门经理]
+    审核{金额是否超标？}
+    subgraph 内部
+      复核[复核]
+    end
+  end
+  subgraph fin [财务]
+    打款[(付款记录)]
+  end
+  未分配((外部审计))
+  提交 --> 审核
+  审核 -->|是| 复核 -.-> 补充
+  补充 --> 审核
+  审核 ==>|否| 打款
+  复核 --> 打款
+  打款 --- 未分配
+  classDef warn fill:#f5d76e,stroke:#b58b00
+  class 审核 warn
+  style 打款 stroke:#2b6,stroke-width:2px

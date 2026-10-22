@@ -1,0 +1,70 @@
+size 545.8 420.6
+summary nodes=24 edges=0 groups=2
+shape path M36.9,42.6 L36.9,364.2 stroke=BorderSoft/hairline/Solid
+text 19.5 368.2 34.8 16.8 size=12 w=400 ink=Muted "4,000"
+shape path M105.5,42.6 L105.5,364.2 stroke=BorderSoft/hairline/Solid
+text 88.1 368.2 34.8 16.8 size=12 w=400 ink=Muted "5,000"
+shape path M174,42.6 L174,364.2 stroke=BorderSoft/hairline/Solid
+text 156.6 368.2 34.8 16.8 size=12 w=400 ink=Muted "6,000"
+shape path M242.6,42.6 L242.6,364.2 stroke=BorderSoft/hairline/Solid
+text 225.2 368.2 34.8 16.8 size=12 w=400 ink=Muted "7,000"
+shape path M311.2,42.6 L311.2,364.2 stroke=BorderSoft/hairline/Solid
+text 293.8 368.2 34.8 16.8 size=12 w=400 ink=Muted "8,000"
+shape path M379.7,42.6 L379.7,364.2 stroke=BorderSoft/hairline/Solid
+text 362.3 368.2 34.8 16.8 size=12 w=400 ink=Muted "9,000"
+shape path M448.3,42.6 L448.3,364.2 stroke=BorderSoft/hairline/Solid
+text 427.4 368.2 41.8 16.8 size=12 w=400 ink=Muted "10,000"
+shape path M516.9,42.6 L516.9,364.2 stroke=BorderSoft/hairline/Solid
+text 496 368.2 41.8 16.8 size=12 w=400 ink=Muted "11,000"
+shape path M36.9,42.6 L36.9,364.2 L516.9,364.2 stroke=Border/hairline/Solid
+shape path M32.9,56 L36.9,56 stroke=Border/hairline/Solid
+text 8 47.6 20.9 16.8 size=12 w=400 ink=Muted "jan"
+shape path M32.9,82.8 L36.9,82.8 stroke=Border/hairline/Solid
+text 8 74.4 20.9 16.8 size=12 w=400 ink=Muted "feb"
+shape path M32.9,109.6 L36.9,109.6 stroke=Border/hairline/Solid
+text 8 101.2 20.9 16.8 size=12 w=400 ink=Muted "mar"
+shape path M32.9,136.4 L36.9,136.4 stroke=Border/hairline/Solid
+text 8 128 20.9 16.8 size=12 w=400 ink=Muted "apr"
+shape path M32.9,163.2 L36.9,163.2 stroke=Border/hairline/Solid
+text 8 154.8 20.9 16.8 size=12 w=400 ink=Muted "may"
+shape path M32.9,190 L36.9,190 stroke=Border/hairline/Solid
+text 8 181.6 20.9 16.8 size=12 w=400 ink=Muted "jun"
+shape path M32.9,216.8 L36.9,216.8 stroke=Border/hairline/Solid
+text 8 208.4 20.9 16.8 size=12 w=400 ink=Muted "jul"
+shape path M32.9,243.6 L36.9,243.6 stroke=Border/hairline/Solid
+text 8 235.2 20.9 16.8 size=12 w=400 ink=Muted "aug"
+shape path M32.9,270.4 L36.9,270.4 stroke=Border/hairline/Solid
+text 8 262 20.9 16.8 size=12 w=400 ink=Muted "sep"
+shape path M32.9,297.2 L36.9,297.2 stroke=Border/hairline/Solid
+text 8 288.8 20.9 16.8 size=12 w=400 ink=Muted "oct"
+shape path M32.9,324 L36.9,324 stroke=Border/hairline/Solid
+text 8 315.6 20.9 16.8 size=12 w=400 ink=Muted "nov"
+shape path M32.9,350.8 L36.9,350.8 stroke=Border/hairline/Solid
+text 8 342.4 20.9 16.8 size=12 w=400 ink=Muted "dec"
+shape rect 36.9 46.6 68.6 18.8 r=Xs fill=series0
+shape rect 36.9 73.4 137.1 18.8 r=Xs fill=series0
+shape rect 36.9 100.2 240 18.8 r=Xs fill=series0
+shape rect 36.9 127 288 18.8 r=Xs fill=series0
+shape rect 36.9 153.8 377.1 18.8 r=Xs fill=series0
+shape rect 36.9 180.6 445.7 18.8 r=Xs fill=series0
+shape rect 36.9 207.4 480 18.8 r=Xs fill=series0
+shape rect 36.9 234.2 425.1 18.8 r=Xs fill=series0
+shape rect 36.9 261 356.6 18.8 r=Xs fill=series0
+shape rect 36.9 287.8 308.6 18.8 r=Xs fill=series0
+shape rect 36.9 314.6 205.7 18.8 r=Xs fill=series0
+shape rect 36.9 341.4 137.1 18.8 r=Xs fill=series0
+shape path M105.5,56 L174,82.8 L276.9,109.6 L324.9,136.4 L414,163.2 L482.6,190 L516.9,216.8 L462,243.6 L393.5,270.4 L345.5,297.2 L242.6,324 L174,350.8 stroke=series1/thick/Solid
+shape ellipse 102.5 53 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 171 79.8 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 273.9 106.6 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 321.9 133.4 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 411 160.2 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 479.6 187 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 513.9 213.8 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 459 240.6 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 390.5 267.4 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 342.5 294.2 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 239.6 321 6 6 fill=series1 stroke=Surface/1/Solid
+shape ellipse 171 347.8 6 6 fill=series1 stroke=Surface/1/Solid
+text 220 393 113.7 19.6 size=14 w=400 ink=Muted "Revenue (in $)"
+text 208.9 8 127.9 22.4 size=16 w=600 ink=Text "Sales Revenue"

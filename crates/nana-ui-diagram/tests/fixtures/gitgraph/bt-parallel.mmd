@@ -1,0 +1,15 @@
+---
+config:
+  gitGraph:
+    parallelCommits: true
+    mainBranchName: trunk
+---
+gitGraph BT:
+  commit
+  branch feature
+  switch feature
+  commit
+  commit
+  switch trunk
+  commit
+  merge feature id: "M1" type: HIGHLIGHT tag: "release"

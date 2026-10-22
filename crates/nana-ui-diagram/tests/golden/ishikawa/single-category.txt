@@ -1,0 +1,20 @@
+size 448.5 211.4
+summary nodes=6 edges=0 groups=1
+shape path M20.2,183.6 L296.6,183.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M9,172.4 L20.2,183.6 L9,194.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/thick/Solid
+shape path M272.6,183.6 L188,42.6 stroke=series0/thick/Solid
+shape path M252.2,168.2 L224.5,122.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M76.7,168.2 L263.4,168.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 186.3 127 24.4 19.6 size=14 w=400 ink=Text "DNS"
+text 80.7 146.6 129.9 19.6 size=14 w=400 ink=Text "misconfiguration"
+shape path M213.3,122.1 L199.1,98.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M97.7,122.1 L224.5,122.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 101.7 103.3 83.5 16.8 size=12 w=400 ink=Muted "TTL too long"
+shape path M66.9,98.4 L199.1,98.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 70.9 79.6 111.4 16.8 size=12 w=400 ink=Muted "Cached for a day"
+shape path M32.2,74.7 L207.3,74.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 36.2 53.1 154.3 19.6 size=14 w=400 ink=Text "Expired certificate"
+shape rect 145.9 9 84.3 33.6 r=Sm fill=series0.soft stroke=series0/hairline/Solid
+text 157.9 16 60.3 19.6 size=14 w=600 ink=Text "Network"
+shape rect 296.6 163.8 143.9 39.6 r=Md fill=Accent
+text 312.6 173.8 111.9 19.6 size=14 w=600 ink=AccentText "Server outage"
