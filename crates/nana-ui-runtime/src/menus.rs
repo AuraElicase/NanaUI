@@ -8,10 +8,11 @@ use nana_ui_core::{
 use crate::popover::{menu_surface_style, project_anchored_menu};
 use crate::view_components::project_common;
 use crate::{
-    AccessibilityRole, AccessibilityState, ComponentElevation, ComponentGeometry,
-    ComponentTextRegion, ComputedStyle, InteractionState, InteractionStyle, LayoutBox,
-    MenuSurfaceKind, MutationQueue, NodeKind, NodeStyle, SelectOptionData, SemanticPaint,
-    StableNodeId, StandardVisual, TextContent, TextInputState, TextVerticalAlignment, UiWorld,
+    AccessibilityRole, AccessibilityState, AppContext, ComponentElevation, ComponentGeometry,
+    ComponentTextRegion, ComputedStyle, Entity, FrameworkError, InteractionState, InteractionStyle,
+    LayoutBox, MenuSurfaceKind, MutationQueue, NodeKind, NodePointer, NodePointerHooks, NodeStyle,
+    SelectOptionData, SemanticPaint, StableNodeId, StandardVisual, TextContent, TextInputState,
+    TextVerticalAlignment, UiWorld,
 };
 
 const MENU_WIDTH: f32 = crate::popover::ACTION_MENU_WIDTH;
@@ -627,11 +628,45 @@ impl ContextMenu {
     }
 }
 
+/// The pointer over an open context menu: the row under it takes the
+/// highlight the arrow keys move, which is also the row a screen reader is
+/// on, and leaving the menu clears it, as a menu bar's open menu does.
+/// Presses stay the menu's activation; the wheel goes on to what is under it.
+const CONTEXT_MENU_POINTER: NodePointerHooks<ContextMenu> = NodePointerHooks {
+    moved: context_menu_moved,
+    left: |cx, menu| cx.update_component(menu, |menu, _| menu.highlighted = None),
+    pressed: |_, _, _| Ok(false),
+    released: |_, _, _| Ok(false),
+    wheel: |_, _, _| Ok(false),
+};
+
+fn context_menu_moved(
+    cx: &mut AppContext,
+    menu: Entity<ContextMenu>,
+    pointer: NodePointer,
+) -> Result<bool, FrameworkError> {
+    let world = cx.world();
+    let (Some(geometry), Some(origin)) = (
+        world.component_geometry(menu.stable_id()),
+        world.component_layout_box(menu.stable_id()),
+    ) else {
+        return Ok(false);
+    };
+    // The hook's pointer is in the node's own px, the rows in the document's.
+    match context_menu_option_at(&geometry, origin.x + pointer.x, origin.y + pointer.y) {
+        Some(row) if cx.read(menu, |menu| menu.highlighted)? != Some(row) => {
+            cx.focus_context_menu_index(menu, row)
+        }
+        _ => Ok(false),
+    }
+}
+
 impl crate::ComponentView for ContextMenu {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         activation: Some(crate::AppContext::dismiss_context_menu),
         activate_at: Some(crate::AppContext::activate_context_menu_at),
         editable: Some(&crate::framework::Editable::<Self>::HOOKS),
+        pointer: Some(&CONTEXT_MENU_POINTER),
         ..crate::TypeBehavior::NONE
     };
 
