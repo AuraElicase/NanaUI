@@ -1,0 +1,82 @@
+Cargo.lock
+  h_8e6780fc7b4bb1 2905
+crates/nana-ui-core/src/file_dialog.rs
+  h_8e6780fc7b4bb1 138-139,148,157,166,170-175
+crates/nana-ui-runtime/src/components.rs
+  h_8e6780fc7b4bb1 1014-1015
+crates/nana-ui-runtime/src/framework/choice.rs
+  h_8e6780fc7b4bb1 1,3-10
+crates/nana-ui-runtime/src/framework/choice_fields.rs
+  h_8e6780fc7b4bb1 1-456
+crates/nana-ui-runtime/src/framework/choice_navigation.rs
+  h_8e6780fc7b4bb1 1-277
+crates/nana-ui-runtime/src/framework/choice_nodes.rs
+  h_8e6780fc7b4bb1 1-156
+crates/nana-ui-runtime/src/framework/choice_popovers.rs
+  h_8e6780fc7b4bb1 1-263
+crates/nana-ui-runtime/src/framework/choice_select_tests.rs
+  h_8e6780fc7b4bb1 1-79
+crates/nana-ui-runtime/src/framework/input/dispatch.rs
+  h_8e6780fc7b4bb1 804-810
+crates/nana-ui-runtime/src/lib.rs
+  h_8e6780fc7b4bb1 379
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_8e6780fc7b4bb1 179-182,208-210,282-285,292-296,300-303
+crates/nana-ui-runtime/src/reorder_list_escape_tests.rs
+  h_8e6780fc7b4bb1 1-80
+crates/nana-ui-runtime/src/reorder_list_gap.rs
+  h_8e6780fc7b4bb1 1-71
+crates/nana-ui-runtime/src/reorder_list_gap_tests.rs
+  h_8e6780fc7b4bb1 1-168
+crates/nana-ui-runtime/src/reorder_list_geometry.rs
+  h_8e6780fc7b4bb1 1-100
+crates/nana-ui-runtime/src/reorder_list_gesture.rs
+  h_8e6780fc7b4bb1 1-285
+crates/nana-ui-runtime/src/reorder_list_input.rs
+  h_8e6780fc7b4bb1 1-322
+crates/nana-ui-runtime/src/reorder_list_projection.rs
+  h_8e6780fc7b4bb1 1-92
+crates/nana-ui-runtime/src/reorder_list_tests_1.rs
+  h_8e6780fc7b4bb1 1-444
+crates/nana-ui-runtime/src/reorder_list_tests_2.rs
+  h_8e6780fc7b4bb1 1-364
+crates/nana-ui-runtime/src/select.rs
+  h_8e6780fc7b4bb1 50-55,333,476-478,480-481
+crates/nana-ui-runtime/src/select_geometry.rs
+  h_8e6780fc7b4bb1 1-221
+crates/nana-ui-runtime/src/select_geometry_tests.rs
+  h_8e6780fc7b4bb1 1-161
+crates/nana-ui-runtime/src/select_tests.rs
+  h_8e6780fc7b4bb1 1-382
+crates/nana-ui-runtime/src/world/extraction.rs
+  h_8e6780fc7b4bb1 4-6,173-174,246-255,314,316,322-323
+crates/nana-ui-runtime/src/world/extraction_paint.rs
+  h_8e6780fc7b4bb1 1-156
+crates/nana-ui-runtime/src/world/extraction_text.rs
+  h_8e6780fc7b4bb1 1-119
+crates/nana-ui-runtime/src/world/geometry.rs
+  h_8e6780fc7b4bb1 2533,2573-2576
+crates/nana-ui-runtime/src/world/reorder_preview.rs
+  h_8e6780fc7b4bb1 1-83
+crates/nana-window/Cargo.toml
+  h_8e6780fc7b4bb1 34
+crates/nana-window/src/file_dialog_windows.rs
+  h_8e6780fc7b4bb1 22-24,166-169,173-175,416-417
+crates/nana-window/src/file_dialog_windows_tests.rs
+  h_8e6780fc7b4bb1 1-151
+crates/nana-window/src/file_dialog_windows_types.rs
+  h_8e6780fc7b4bb1 1-193
+docs/components/reorder-list.md
+  h_8e6780fc7b4bb1 81-86,126,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4b1c36bbf68c3d6330f4008de0dd6a06d97264a0",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
