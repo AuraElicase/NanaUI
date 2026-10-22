@@ -5,11 +5,16 @@
 //! shared textures on Windows and read by a D3D11 device of the same adapter,
 //! the way an in-process Spout sender does.
 //!
-//! Phases (about 2.5 s each): visible and animated, hidden and animated,
-//! hidden and static, visible and static. Prints one JSON line per phase and a
-//! summary, then exits non-zero when a phase did not behave:
-//! animated phases must keep producing frames (hidden included), static
-//! phases must produce none, and every native token must reach the consumer.
+//! Phases: visible and animated, hidden and animated, hidden and static,
+//! visible and static. Prints one JSON line per phase and a summary, then
+//! exits non-zero when a phase did not behave: animated phases must keep
+//! producing frames (hidden included), static phases must produce none, and
+//! every native token must reach the consumer.
+//!
+//! Phases advance on progress, not on a clock: an animated phase ends after
+//! its frames, a static one 2.5 s after the output went idle. A software
+//! adapter (WARP on CI) spends seconds on its first frames and then manages
+//! a few frames per second, so a fixed window would judge its throughput.
 //!
 //! ```powershell
 //! cargo run -p nana-ui --example window-output-probe --features hosted,bundled-fonts,native-export
@@ -31,7 +36,16 @@ use nana_ui::{
 use nana_ui_core::LengthSpec;
 use nana_ui_platform::{WindowEvent, WindowId};
 
-const PHASE: Duration = Duration::from_millis(2500);
+/// Output frames an animated phase must produce.
+const ANIMATED_FRAMES: u64 = 30;
+/// How long a static phase watches an idle output.
+const STATIC_PHASE: Duration = Duration::from_millis(2500);
+/// A phase that has not finished by then failed.
+const PHASE_DEADLINE: Duration = Duration::from_secs(60);
+/// How often `wake` checks progress while the window is hidden.
+const PHASE_POLL: Duration = Duration::from_millis(100);
+/// The perf workload failed when no native token arrived for this long.
+const NATIVE_STALL_LIMIT: Duration = Duration::from_secs(30);
 const PHASES: [(&str, bool, bool); 4] = [
     ("visible-animated", true, true),
     ("hidden-animated", false, true),
@@ -42,6 +56,9 @@ const PHASES: [(&str, bool, bool); 4] = [
 #[derive(Default, Debug, Clone, serde::Serialize)]
 struct Counts {
     frames: u64,
+    /// Frames of the previous phase's last content, before a static phase's
+    /// output went idle.
+    settle_frames: u64,
     native_tokens: u64,
     consumed: u64,
     statuses: Vec<String>,
@@ -51,7 +68,12 @@ struct Probe {
     document: RuntimeDocument,
     label: Entity<Text>,
     window: Option<WindowHandle>,
-    started: Instant,
+    /// When the current phase began.
+    phase_entered: Instant,
+    /// When a static phase's output went idle and its window opened.
+    settled_at: Option<Instant>,
+    poll_at: Instant,
+    failure: Option<String>,
     phase: usize,
     counts: Vec<Counts>,
     tick: u64,
@@ -77,6 +99,7 @@ struct NativePerf {
     native_copy_bytes: usize,
     source_native_copies: usize,
     consumer_times: Vec<f64>,
+    last_progress: Instant,
     source_times: Vec<f64>,
     source_started: Instant,
     measured_source_frame: bool,
@@ -103,6 +126,7 @@ impl NativePerf {
             native_copy_bytes: 0,
             source_native_copies: 0,
             consumer_times: Vec::with_capacity(240),
+            last_progress: Instant::now(),
             source_times: Vec::new(),
             source_started: Instant::now(),
             measured_source_frame: false,
@@ -133,31 +157,47 @@ fn quantiles(mut values: Vec<f64>) -> serde_json::Value {
 }
 
 impl Probe {
-    fn phase_at(&self, now: Instant) -> usize {
-        ((now - self.started).as_millis() / PHASE.as_millis()) as usize
-    }
-
     fn animated(&self) -> bool {
         self.perf.is_some() || PHASES.get(self.phase).is_some_and(|phase| phase.2)
     }
 
+    /// A static phase whose output still finishes the previous content.
+    fn settling(&self) -> bool {
+        self.perf.is_none() && !self.animated() && self.settled_at.is_none()
+    }
+
     fn advance(&mut self) -> RuntimeProgramUpdate {
-        if self.perf.is_some() {
-            if self.started.elapsed() > Duration::from_secs(90) {
-                self.finish_native(Some("native workload timed out"));
+        if let Some(perf) = &self.perf {
+            if perf.last_progress.elapsed() > NATIVE_STALL_LIMIT {
+                self.finish_native(Some("native workload stalled"));
             }
             return RuntimeProgramUpdate::default();
         }
-        let phase = self.phase_at(Instant::now());
-        if phase == self.phase {
+        let Some(&(name, _, animated)) = PHASES.get(self.phase) else {
+            return RuntimeProgramUpdate::default();
+        };
+        let now = Instant::now();
+        let done = if animated {
+            self.counts[self.phase].frames >= ANIMATED_FRAMES
+        } else {
+            self.settled_at
+                .is_some_and(|settled| now - settled >= STATIC_PHASE)
+        };
+        if !done {
+            if now - self.phase_entered > PHASE_DEADLINE {
+                self.failure = Some(format!("{name} did not finish within {PHASE_DEADLINE:?}"));
+                return self.finish();
+            }
             return RuntimeProgramUpdate::default();
         }
-        let (name, _, _) = PHASES[self.phase];
         println!(
             "{}",
             serde_json::json!({"phase": name, "counts": self.counts[self.phase]})
         );
-        self.phase = phase;
+        self.phase += 1;
+        self.phase_entered = now;
+        self.settled_at = None;
+        let phase = self.phase;
         let Some(&(_, visible, _)) = PHASES.get(phase) else {
             return self.finish();
         };
@@ -172,8 +212,9 @@ impl Probe {
             [0, 1, 2, 3].map(|i| &self.counts[i]);
         let native = cfg!(all(windows, feature = "native-export"));
         let checks = serde_json::json!({
-            "visible_animated_frames": visible.frames >= 30,
-            "hidden_animated_frames": hidden.frames >= 30,
+            "phases_finished": self.failure.is_none(),
+            "visible_animated_frames": visible.frames >= ANIMATED_FRAMES,
+            "hidden_animated_frames": hidden.frames >= ANIMATED_FRAMES,
             "hidden_static_no_frames": hidden_static.frames == 0,
             "visible_static_at_most_one_frame": visible_static.frames <= 1,
             "native_tokens_consumed": !native || (visible.native_tokens > 0
@@ -185,7 +226,7 @@ impl Probe {
             .is_some_and(|checks| checks.values().all(|value| value == true));
         println!(
             "{}",
-            serde_json::json!({"summary": checks, "passed": passed, "counts": self.counts})
+            serde_json::json!({"summary": checks, "passed": passed, "failure": self.failure, "counts": self.counts})
         );
         std::process::exit(if passed { 0 } else { 1 });
     }
@@ -275,7 +316,10 @@ impl RuntimeProgram for Probe {
                 document,
                 label,
                 window: None,
-                started: Instant::now(),
+                phase_entered: Instant::now(),
+                settled_at: None,
+                poll_at: Instant::now(),
+                failure: None,
                 phase: 0,
                 counts: vec![Counts::default(); PHASES.len()],
                 tick: 0,
@@ -330,7 +374,8 @@ impl RuntimeProgram for Probe {
         match event {
             WindowEvent::Ready { .. } => {
                 self.window = Some(context.window());
-                self.started = Instant::now();
+                self.phase_entered = Instant::now();
+                self.poll_at = self.phase_entered + PHASE_POLL;
                 println!(
                     "{}",
                     serde_json::json!({
@@ -371,6 +416,28 @@ impl RuntimeProgram for Probe {
             }
             perf.source_started = Instant::now();
             perf.measured_source_frame = perf.measurement_started;
+        }
+        #[cfg(all(windows, feature = "native-export"))]
+        if let Some(consumer) = &mut self.consumer {
+            match consumer.poll_readback() {
+                Ok(Some(pixel)) => {
+                    self.readback_ok = Some(pixel[3] == 255 && pixel[2] > 128);
+                    println!("{}", serde_json::json!({"readback_bgra": pixel}));
+                }
+                Ok(None) => {}
+                Err(error) => println!("{}", serde_json::json!({"consumer_error": error})),
+            }
+        }
+        // The last frame reused a completed output of unchanged content.
+        if self.settling()
+            && self
+                .document
+                .context()
+                .last_work_counters()
+                .output_idle_reuse_frames
+                .is_some_and(|frames| frames > 0)
+        {
+            self.settled_at = Some(Instant::now());
         }
         if self.animated() {
             self.tick += 1;
@@ -434,13 +501,15 @@ impl RuntimeProgram for Probe {
     }
 
     fn next_wakeup(&self) -> Option<Instant> {
-        if self.perf.is_some() {
-            return Some(self.started + Duration::from_secs(90));
+        if let Some(perf) = &self.perf {
+            return Some(perf.last_progress + NATIVE_STALL_LIMIT);
         }
-        Some(self.started + PHASE * (self.phase as u32 + 1))
+        // A hidden window presents nothing, so progress is checked here.
+        Some(self.poll_at)
     }
 
-    fn wake(&mut self, _: Instant, _: &RuntimeProgramContext<()>) -> RuntimeProgramUpdate {
+    fn wake(&mut self, now: Instant, _: &RuntimeProgramContext<()>) -> RuntimeProgramUpdate {
+        self.poll_at = now + PHASE_POLL;
         self.advance()
     }
 
@@ -478,6 +547,7 @@ impl RuntimeProgram for Probe {
             if consumer.consume(&mut token, false).is_err() {
                 self.finish_native(Some("native GPU import/copy failed"));
             }
+            perf.last_progress = at;
             if perf.warmup_tokens < 30 {
                 perf.warmup_tokens += 1;
             } else {
@@ -488,10 +558,15 @@ impl RuntimeProgram for Probe {
             perf.last_release = token.release_value();
             return;
         }
+        let settling = self.settling();
         let Some(counts) = self.counts.get_mut(self.phase) else {
             return;
         };
-        counts.frames += 1;
+        if settling {
+            counts.settle_frames += 1;
+        } else {
+            counts.frames += 1;
+        }
         let _ = (frame, context);
         #[cfg(all(windows, feature = "native-export"))]
         if let Some(mut token) = frame.take_native() {
@@ -500,15 +575,10 @@ impl RuntimeProgram for Probe {
                 .consumer
                 .get_or_insert_with(|| consumer::Consumer::on_luid(token.adapter_luid()));
             // Read one frame back (probe-only) to prove the bytes arrived.
-            let read_back = self.readback_ok.is_none() && self.tick > 5;
+            let read_back =
+                self.readback_ok.is_none() && self.tick > 5 && !consumer.readback_pending();
             match consumer.consume(&mut token, read_back) {
-                Ok(pixel) => {
-                    counts.consumed += 1;
-                    if let Some(pixel) = pixel {
-                        self.readback_ok = Some(pixel[3] == 255 && pixel[2] > 128);
-                        println!("{}", serde_json::json!({"readback_bgra": pixel}));
-                    }
-                }
+                Ok(()) => counts.consumed += 1,
                 Err(error) => println!("{}", serde_json::json!({"consumer_error": error})),
             }
         }
@@ -536,13 +606,14 @@ mod consumer {
     use windows::Win32::Foundation::{HANDLE, HMODULE, LUID};
     use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_UNKNOWN;
     use windows::Win32::Graphics::Direct3D11::{
-        D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_MAP_READ,
-        D3D11_MAPPED_SUBRESOURCE, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-        D3D11_USAGE_STAGING, D3D11CreateDevice, ID3D11Device, ID3D11Device1, ID3D11Device5,
-        ID3D11DeviceContext, ID3D11DeviceContext4, ID3D11Fence, ID3D11Texture2D,
+        D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_MAP_FLAG_DO_NOT_WAIT,
+        D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
+        D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING, D3D11CreateDevice, ID3D11Device, ID3D11Device1,
+        ID3D11Device5, ID3D11DeviceContext, ID3D11DeviceContext4, ID3D11Fence, ID3D11Texture2D,
     };
     use windows::Win32::Graphics::Dxgi::{
-        CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, IDXGIAdapter, IDXGIFactory4,
+        CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_ERROR_WAS_STILL_DRAWING, IDXGIAdapter,
+        IDXGIFactory4,
     };
     use windows::core::Interface;
 
@@ -552,6 +623,8 @@ mod consumer {
         opened: Option<(u64, Vec<ID3D11Texture2D>, ID3D11Fence)>,
         /// Where each frame is copied, as a sender's own texture would be.
         copy: Option<ID3D11Texture2D>,
+        /// A validation copy not mapped yet.
+        readback: Option<(ID3D11Texture2D, D3D11_TEXTURE2D_DESC)>,
         pub stats: Stats,
     }
 
@@ -601,17 +674,23 @@ mod consumer {
                     context: context.unwrap(),
                     opened: None,
                     copy: None,
+                    readback: None,
                     stats: Stats::default(),
                 }
             }
         }
 
-        /// Returns the centre texel when `read_back` asks for it.
+        pub fn readback_pending(&self) -> bool {
+            self.readback.is_some()
+        }
+
+        /// Copies the frame for validation too when `read_back` asks for it;
+        /// [`Self::poll_readback`] reads that copy.
         pub fn consume(
             &mut self,
             token: &mut NativeFrameToken,
             read_back: bool,
-        ) -> Result<Option<[u8; 4]>, String> {
+        ) -> Result<(), String> {
             unsafe {
                 if self
                     .opened
@@ -673,7 +752,7 @@ mod consumer {
                 self.stats.gpu_release_signals += 1;
                 self.context.Flush();
                 if !read_back {
-                    return Ok(None);
+                    return Ok(());
                 }
                 // Probe-only verification: map a staging copy of the frame.
                 let staging_desc = D3D11_TEXTURE2D_DESC {
@@ -689,10 +768,35 @@ mod consumer {
                     .map_err(|e| e.to_string())?;
                 let staging = staging.unwrap();
                 self.context.CopyResource(&staging, copy);
+                self.context.Flush();
+                self.readback = Some((staging, desc));
+                Ok(())
+            }
+        }
+
+        /// The centre texel of the validation copy once this context finished
+        /// it. Never waits: that copy waits for the producer's ready signal,
+        /// which can sit behind a present the blocked event loop would never
+        /// let complete.
+        pub fn poll_readback(&mut self) -> Result<Option<[u8; 4]>, String> {
+            let Some((staging, desc)) = self.readback.take() else {
+                return Ok(None);
+            };
+            unsafe {
                 let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
-                self.context
-                    .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
-                    .map_err(|e| e.to_string())?;
+                match self.context.Map(
+                    &staging,
+                    0,
+                    D3D11_MAP_READ,
+                    D3D11_MAP_FLAG_DO_NOT_WAIT.0 as u32,
+                    Some(&mut mapped),
+                ) {
+                    Err(error) if error.code() == DXGI_ERROR_WAS_STILL_DRAWING => {
+                        self.readback = Some((staging, desc));
+                        return Ok(None);
+                    }
+                    result => result.map_err(|e| e.to_string())?,
+                }
                 self.stats.validation_readbacks += 1;
                 // The opaque part of the frame is the red box; find it and
                 // return its centre texel.
