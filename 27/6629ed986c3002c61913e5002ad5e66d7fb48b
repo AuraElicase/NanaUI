@@ -1,0 +1,18 @@
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_8e6780fc7b4bb1 177,305
+crates/nana-ui-runtime/src/reorder_list_input.rs
+  h_8e6780fc7b4bb1 41,87,112,192,243-250,306-307,310-313,330
+crates/nana-ui-runtime/src/reorder_list_scroll_tests.rs
+  h_8e6780fc7b4bb1 1-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "276629ed986c3002c61913e5002ad5e66d7fb48b",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
