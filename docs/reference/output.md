@@ -151,7 +151,7 @@ cargo test -p nana-gpu --features native-export --test native_export
 cargo run -p nana-ui --example window-output-probe --features hosted,bundled-fonts,native-export
 ```
 
-测试覆盖：导出帧并在同一适配器的 D3D11 设备上打开、逐字节复制比对、未释放帧使下一帧 defer、drop token 自释放、丢弃帧不污染池，以及最后一枚 token 释放后退役池关闭句柄。`window-output-probe` 让一扇透明合成窗口跑过四个阶段（可见/隐藏 × 动画/静态），并在 D3D11 设备上消费每一枚原生 token。
+测试覆盖：导出帧并在同一适配器的 D3D11 设备上打开、逐字节复制比对、未释放帧使下一帧 defer、drop token 自释放、丢弃帧不污染池，以及最后一枚 token 释放后退役池关闭句柄。`window-output-probe` 让一扇透明合成窗口跑过四个阶段（可见/隐藏 × 动画/静态），并在 D3D11 设备上消费每一枚原生 token。阶段按进度推进而不是按固定时长：动画阶段拿到 30 帧输出即结束，静态阶段从输出空闲（复用已完成的帧）起观察 2.5 秒，空闲之前完成上一阶段最后内容的帧单独计为 `settle_frames`；任一阶段 60 秒内没走完即判失败。原因是软件适配器（CI 上的 WARP）前几帧要在 GPU 上执行数秒、稳态也只有每秒几帧，固定 2.5 秒的窗口实际是在判吞吐而不是功能。像素回读用 `D3D11_MAP_FLAG_DO_NOT_WAIT` 在后续帧上取：回读拷贝要等生产端的 ready 信号，而该信号可能排在一次需要事件循环继续运行才能完成的 present 之后，在事件循环线程上阻塞 `Map` 会互相等死。perf 模式（`--perf-output`）同理以 30 秒没有新 token 判为停滞，不再限制总时长。
 
 Windows CI 以 `NANA_REQUIRE_DX12_NATIVE_TESTS=1` 执行 native-export 测试：缺少 DX12 adapter 直接失败，避免本地可选 skip 被误计为平台验收通过。CI 还运行上面的真实 Window/D3D11 import probe，保存其原始证据；配置了 CI 不等于本机已经执行 Windows 测试。
 
