@@ -138,6 +138,21 @@ impl SemanticPaint {
         background: None,
         border: Some(SemanticColorRole::FocusBorder),
     };
+
+    /// What a focused text field paints: [`Self::FOCUS_BORDER`]'s border over
+    /// its resting `Background` deepened a step toward the text.
+    ///
+    /// The border alone is one pixel of colour. A field the caret is in is
+    /// where the next key goes, clicked into or tabbed into alike
+    /// ([`crate::UiWorld::focus_visible`]), so its whole surface says so.
+    pub const FOCUS_FIELD: Self = Self {
+        background_mix: Some(nana_ui_core::SemanticColorMix::new(
+            SemanticColorRole::Background,
+            SemanticColorRole::Text,
+            0.95,
+        )),
+        ..Self::FOCUS_BORDER
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

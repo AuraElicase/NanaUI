@@ -766,7 +766,7 @@ impl UiWorld {
             );
         }
         // `focus_visible`, not `focused`: a control that was clicked is focused
-        // and does not say so.
+        // and does not say so, unless it is a text field taking typing.
         if self.focus_visible(self.record(id).document) == Some(id) {
             paint = paint.overlay(local.interaction.focused);
         }

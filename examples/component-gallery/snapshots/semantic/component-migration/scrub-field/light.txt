@@ -22,7 +22,7 @@ state: editing
   target: 20.00,20.00 380.00x32.00
   a11y: role=Slider disabled=false checked=None selected=None mixed=false
   quad #2/0 20.00,20.00 380.00x32.00 opacity=1.00 bg=#f7f8faff border=#e3e5e8ff border_width=0.00 radius=6.00/6.00/6.00/6.00 shadow=none
-  quad #5/0 20.00,20.00 380.00x32.00 opacity=1.00 bg=#ffffffff border=#2c7ed6ff border_width=1.00 radius=6.00/6.00/6.00/6.00 shadow=none
+  quad #5/0 20.00,20.00 380.00x32.00 opacity=1.00 bg=#f4f4f4ff border=#2c7ed6ff border_width=1.00 radius=6.00/6.00/6.00/6.00 shadow=none
   quad-batch #5/1 31.00,28.00 25.26x16.00 opacity=1.00 count=1 bg=#4991d71a border=none border_width=0.00 radius=0.00/0.00/0.00/0.00 shadow=none
   text #5/2 31.00,28.00 25.26x16.00 opacity=1.00 color=#1a1a1fff size=13.00 weight=inherit line_height=Absolute(16.0) tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
   quad #5/4 56.26,28.00 1.00x16.00 opacity=1.00 bg=#1a1a1fff border=none border_width=0.00 radius=0.00/0.00/0.00/0.00 shadow=none

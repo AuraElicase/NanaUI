@@ -545,7 +545,7 @@ state: primary
 
 **每一段都验过确实进入了状态**。方式是拿语义基线做逐字节比对：与该组件任何其他状态都不相同。或相同时能说清为什么。
 
-这条比对当时只按家族抽查。漏掉了它本可以一次说清的事。后来把 615 张基线**全部按 md5 分组**再看。结论要大得多：**14 个有 `focused` fixture 的组件里。11 个把焦点渲染得和另一个状态逐字节相同**。`button` / `icon-button` / `sidebar-section` 与静息态一样（什么都没画）。`dropdown` / `search-dropdown` / `xy-pad` 与 hover 一样。`tabs` 与选中一样。`sidebar-row` 写了 `border: Accent` 却配 `border_width: 0`。这不是 Phase 4 的待办。已经在本分支修掉：焦点数值收进 `AccentRamp.focus` 与三个语义角色。只在键盘焦点时出现。并由
+这条比对当时只按家族抽查。漏掉了它本可以一次说清的事。后来把 615 张基线**全部按 md5 分组**再看。结论要大得多：**14 个有 `focused` fixture 的组件里。11 个把焦点渲染得和另一个状态逐字节相同**。`button` / `icon-button` / `sidebar-section` 与静息态一样（什么都没画）。`dropdown` / `search-dropdown` / `xy-pad` 与 hover 一样。`tabs` 与选中一样。`sidebar-row` 写了 `border: Accent` 却配 `border_width: 0`。这不是 Phase 4 的待办。已经在本分支修掉：焦点数值收进 `AccentRamp.focus` 与三个语义角色。只在键盘焦点时出现（可输入的文本框例外：点进去也显示，见 `UiWorld::focus_visible` 与 `SemanticPaint::FOCUS_FIELD`）。并由
 `a_focused_fixture_never_looks_like_a_state_the_keyboard_did_not_cause` 守着（拿修之前的基线跑。它报 18 处碰撞）。
 
 **方法本身比这条结论更值得留下**：把基线按内容分组。看哪些"不同状态"其实是同一张图。它不需要 adapter、不需要构建。一次读一遍文件。而本树里每一个真缺陷最后都是这么浮出来的。
