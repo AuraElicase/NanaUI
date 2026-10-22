@@ -1,14 +1,16 @@
-//! A focused text field with nothing in it — no value, no placeholder — still
-//! has a line for its caret, through the product frame loop.
+//! A focused text field through the product frame loop: with nothing in it —
+//! no value, no placeholder — it still has a line for its caret, and it says
+//! it is focused with its fill as well as its border.
 
 use std::sync::{Arc, Mutex};
 
 use nana_text::font::{FaceDescriptor, FallbackPolicy, FontSystem, GenericFamily, font_blob};
 use nana_text::{NativeTextEngine, SharedTextEngine};
+use nana_ui_core::SemanticColorRole;
 use nana_ui_runtime::view::widget;
 use nana_ui_runtime::{
-    ComponentGeometry, DocumentId, LayoutBox, LayoutViewport, NanaTextEngineShaper, StableNodeId,
-    TextInput,
+    ComponentGeometry, DocumentId, LayoutBox, LayoutViewport, NanaTextEngineShaper, SemanticPaint,
+    StableNodeId, TextInput,
 };
 use nana_ui_scene::RuntimeDocument;
 
@@ -49,6 +51,34 @@ fn caret(runtime: &RuntimeDocument, id: StableNodeId) -> Option<LayoutBox> {
         ComponentGeometry::TextInput { caret, .. } => caret,
         _ => None,
     }
+}
+
+/// The focused field paints [`SemanticPaint::FOCUS_FIELD`]: the focus
+/// border over its fill deepened toward the text.
+#[test]
+fn a_focused_field_deepens_its_fill_and_takes_the_focus_border() {
+    let (runtime, id) = focused(TextInput::new(""));
+    let world = runtime.context().world();
+    let rgba = |c: nana_ui_core::SemanticColor| [c.r, c.g, c.b, c.a];
+    let Some(ComponentGeometry::TextInput {
+        background, border, ..
+    }) = world.component_geometry(id)
+    else {
+        panic!("the focused field has no geometry");
+    };
+    let fill = SemanticPaint::FOCUS_FIELD
+        .background_mix
+        .expect("a deepened fill")
+        .resolve(world.style_model());
+    let resting = world.style_model().color(SemanticColorRole::Background);
+    assert_ne!(rgba(fill), rgba(resting));
+    assert_eq!(background, Some(rgba(fill)));
+    assert_eq!(
+        border,
+        Some(rgba(
+            world.style_model().color(SemanticColorRole::FocusBorder)
+        ))
+    );
 }
 
 #[test]

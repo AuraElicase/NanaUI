@@ -549,6 +549,62 @@ fn pointer_down_moves_focus_to_the_hit_text_input() {
     assert_eq!(context.world().focused(document), Some(input.stable_id()));
 }
 
+/// A click into a field that takes typing shows its focus, as the web's
+/// `:focus-visible` holds for an element that takes keyboard input. A click
+/// on a button, or into a read-only field, focuses it without saying so.
+#[test]
+fn a_clicked_text_field_shows_its_focus_and_a_clicked_button_does_not() {
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let button = context
+        .create_component(document, Button::new("Other"))
+        .unwrap();
+    let input = context
+        .create_component(document, TextInput::new("NanaUI"))
+        .unwrap();
+    let read_only = context
+        .create_component(document, TextInput::new("fixed").read_only(true))
+        .unwrap();
+    let mut layout = MutationQueue::new();
+    for (node, y) in [
+        (button.stable_id(), 0.0),
+        (input.stable_id(), 40.0),
+        (read_only.stable_id(), 80.0),
+    ] {
+        layout.write_layout(
+            node,
+            LayoutBox {
+                x: 0.0,
+                y,
+                width: 160.0,
+                height: 32.0,
+            },
+        );
+    }
+    context.commit_mutations(layout).unwrap();
+    context.take_system_work();
+    context.rebuild_hit_test(document);
+
+    let mut adapter = TestInput::default();
+    for (y, target, shown) in [
+        (52.0, input.stable_id(), true),
+        (12.0, button.stable_id(), false),
+        (92.0, read_only.stable_id(), false),
+        (52.0, input.stable_id(), true),
+    ] {
+        for phase in [PointerPhase::Down, PointerPhase::Up] {
+            adapter
+                .dispatch(&mut context, document, &pointer(phase, 24.0, y))
+                .unwrap();
+        }
+        assert_eq!(context.world().focused(document), Some(target));
+        assert_eq!(
+            context.world().focus_visible(document),
+            shown.then_some(target)
+        );
+    }
+}
+
 #[test]
 fn focused_textarea_caret_uses_text_color_and_clears_on_outside_press() {
     let mut context = AppContext::new();
