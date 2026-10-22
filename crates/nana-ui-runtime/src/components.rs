@@ -1900,15 +1900,17 @@ pub struct SelectMenuGeometry {
 /// How an open Select, Dropdown or SearchDropdown menu is scrolled and how
 /// its scrollbar is held.
 ///
-/// Interaction state, like the keyboard highlight: it starts over each time
-/// the menu opens, and an application refresh that leaves the value and the
-/// options alone keeps it.
+/// Interaction state, like the highlight: it starts over each time the menu
+/// opens, and an application refresh that leaves the value and the options
+/// alone keeps it.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct SelectMenuScroll {
     /// How far the rows are scrolled up, px. `None` until the wheel, the
-    /// scrollbar or the keyboard moves them: the menu then shows its
-    /// highlighted option, the chosen one as it opens, in the middle where
-    /// the list allows. The menu clamps it to what its rows can scroll.
+    /// scrollbar or the keyboard moves them, or the pointer moves the
+    /// highlight and keeps them where they are drawn. Until then the menu
+    /// shows its highlighted option, the chosen one as it opens, in the
+    /// middle where the list allows. The menu clamps it to what its rows can
+    /// scroll.
     pub offset: Option<f32>,
     /// The pointer is on the scrollbar's lane.
     pub hot: bool,

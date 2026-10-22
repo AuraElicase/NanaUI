@@ -6631,6 +6631,82 @@ fn arrow_keys_move_an_open_context_menu_and_enter_activates_it() {
     assert!(context.active_runtime_overlay(document).is_none());
 }
 
+/// The row under the pointer takes an open context menu's highlight, the one
+/// the arrow keys move and a screen reader is on. A disabled row does not,
+/// leaving the menu clears it, and a press still chooses the row.
+#[test]
+fn the_pointer_moves_an_open_context_menu_highlight() {
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let host = context
+        .create_component(document, OverlayHost::new())
+        .unwrap();
+    let menu = context
+        .create_component(
+            document,
+            crate::ContextMenu::new(8.0, 12.0)
+                .items([
+                    crate::ContextMenuItem::new("pin", "取消窗口置顶").disabled(true),
+                    crate::ContextMenuItem::new("full", "全屏"),
+                    crate::ContextMenuItem::new("close", "关闭"),
+                ])
+                .open(true),
+        )
+        .unwrap();
+    context.append_child(host, menu).unwrap();
+    context.activate_overlay(host, menu).unwrap();
+    context
+        .layout_document(document, crate::LayoutViewport::new(400.0, 300.0))
+        .unwrap();
+    context.rebuild_hit_test(document);
+    let chosen = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&chosen);
+    context
+        .on(menu, move |_, event: &crate::ContextMenuEvent, _| {
+            sink.lock().unwrap().push(event.clone())
+        })
+        .unwrap();
+    let Some(ComponentGeometry::MenuSurface { options, .. }) =
+        context.world().component_geometry(menu.stable_id())
+    else {
+        panic!("an open context menu draws its rows");
+    };
+    let row = |index: usize| {
+        let bounds = options[index].bounds;
+        (
+            bounds.x + bounds.width / 2.0,
+            bounds.y + bounds.height / 2.0,
+        )
+    };
+    let highlighted = |context: &AppContext| context.read(menu, |menu| menu.highlighted).unwrap();
+    let mut input = TestInput::default();
+    let mut send = |context: &mut AppContext, phase, (x, y): (f32, f32)| {
+        input
+            .dispatch(context, document, &pointer(phase, x, y))
+            .unwrap();
+    };
+    send(&mut context, PointerPhase::Move, row(2));
+    assert_eq!(highlighted(&context), Some(2));
+    let focused = context
+        .world()
+        .project_accessibility(document)
+        .into_iter()
+        .find(|node| node.role == crate::AccessibilityRole::MenuItem && node.focused)
+        .and_then(|node| node.label);
+    assert_eq!(focused.as_deref(), Some("关闭"));
+    send(&mut context, PointerPhase::Move, row(0));
+    assert_eq!(highlighted(&context), Some(2));
+    send(&mut context, PointerPhase::Move, (390.0, 290.0));
+    assert_eq!(highlighted(&context), None);
+    for phase in [PointerPhase::Move, PointerPhase::Down, PointerPhase::Up] {
+        send(&mut context, phase, row(1));
+    }
+    assert_eq!(
+        chosen.lock().unwrap().as_slice(),
+        [crate::ContextMenuEvent::Select(Arc::from("full"))]
+    );
+}
+
 /// A mouse is one pointer for all its buttons: the middle button going down
 /// and up during a left drag neither ends the drag nor commits it.
 #[test]
