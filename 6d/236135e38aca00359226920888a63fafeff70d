@@ -1,0 +1,16 @@
+crates/nana-ui-scene/src/scene/primitives/overlays.rs
+  h_8e6780fc7b4bb1 299-304,306,321
+crates/nana-ui-scene/src/scene/tests.rs
+  h_8e6780fc7b4bb1 6363-6436
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6d236135e38aca00359226920888a63fafeff70d",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
