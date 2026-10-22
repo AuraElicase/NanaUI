@@ -2436,11 +2436,14 @@ impl UiWorld {
                 work.layout_frontier_seeds
                     .push(crate::LayoutFrontierSeed::new(id, invalidation));
             }
+            // An editor bears text with no value yet: its caret line and an
+            // IME preedit are shaped from its presentation.
             let has_text = matches!(self.record(id).kind.as_ref(), NodeKind::Text)
                 || !self.record(id).text.value.is_empty()
                 || matches!(
                     self.nodes.visual(id),
-                    Some(StandardVisual::EmptyState { .. })
+                    Some(StandardVisual::TextInput { .. })
+                        | Some(StandardVisual::EmptyState { .. })
                         | Some(StandardVisual::ModalFrame { .. })
                 );
             let bits = if has_text {

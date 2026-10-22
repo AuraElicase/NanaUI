@@ -3998,10 +3998,8 @@ impl UiWorld {
                     // drawing a layout of what it used to say.
                     self.nodes.release_text_layout(id);
                 }
-                // An editor is shaped even with nothing in it: the empty line
-                // is where its caret stands, and only its presentation places
-                // that line. An empty field without a placeholder may never
-                // have been scheduled, so this pass is the one that shapes it.
+                // An editor is reshaped with nothing in it too: its empty
+                // line, where the caret stands, follows the box like any line.
                 if empty && presentation.is_none() {
                     // A box with no text of its own resolves to nothing, and
                     // stays resolved until text or a text-bearing visual
