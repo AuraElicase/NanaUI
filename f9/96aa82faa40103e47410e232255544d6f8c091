@@ -1,0 +1,18 @@
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 2006-2007,2523,2531,2533,2541,3059-3060
+crates/nana-ui-scene/src/scene/order.rs
+  h_8e6780fc7b4bb1 7-8,29-35
+crates/nana-ui-scene/tests/select_popup_hit.rs
+  h_8e6780fc7b4bb1 1,4-5,7,134-300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f996aa82faa40103e47410e232255544d6f8c091",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
