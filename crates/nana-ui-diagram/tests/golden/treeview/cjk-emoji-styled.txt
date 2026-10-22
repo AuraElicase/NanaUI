@@ -1,0 +1,16 @@
+size 399.3 165.1
+summary nodes=6 edges=5 groups=0
+shape path M20.8,43.7 L35.2,43.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/2/Solid
+shape path M20.8,121.4 L35.2,121.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/2/Solid
+shape path M20.8,27.6 L20.8,140.1 Q20.8,147.3 28,147.3 L35.2,147.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/2/Solid
+shape path M52.8,69.6 L67.2,69.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/2/Solid
+shape path M52.8,53.5 L52.8,88.3 Q52.8,95.5 60,95.5 L67.2,95.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/2/Solid
+text 8 8 74.2 19.6 size=14 w=600 ink=Text "项目根目录"
+text 40 33.9 46.9 19.6 size=14 w=600 ink=Text "📦 包/"
+shape rect 67.8 58.8 86.5 21.6 r=Xs fill=rgba(255,224,224,1) stroke=rgba(192,0,0,1)/hairline/Solid
+text 72 59.8 78.1 19.6 size=14 w=400 ink=rgba(160,0,0,1) "🎨 界面组件"
+text 175.3 61.2 48 16.8 size=12 w=400 italic ink=Muted "需要重构"
+text 72 85.7 78.1 19.6 size=14 w=400 ink=Text "🛠\u{fe0f} 工具函数"
+text 40 111.6 76.6 19.6 size=14 w=600 ink=Text "🧪 テスト/"
+text 40 137.5 102.5 19.6 size=14 w=400 ink=Text "📝 说明文档.md"
+text 175.3 138.9 216 16.8 size=12 w=400 italic ink=Muted "一行很长很长的说明文字用来测试注释列"

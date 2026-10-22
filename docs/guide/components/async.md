@@ -5,8 +5,9 @@
 `load_user` 是你的函数，不在框架里。它要在 `suspense` 的内容构建时才调用，所以放在内容会执行的函数里。写在 `suspense` 外面的 `resource` 不会让这份回退出现。
 
 ```rust
-use nana_ui::runtime::view::{resource, spawn_blocking, text, IntoView, Signal};
+use nana_ui::runtime::view::{component, resource, spawn_blocking, text, IntoView, Signal};
 
+#[component]
 fn profile(id: Signal<u64>) -> impl IntoView {
     let user = resource(move || id.get(), |id| spawn_blocking(move || load_user(id)));
     text(move || user.with(|user| user.map_or(String::new(), |user| user.name.clone())))
@@ -34,7 +35,7 @@ suspense(|| text("加载中…"), move || profile(id))
 
 :::
 
-`<Profile id={id} />` 展开成 `profile(id)`。内容立刻建好，先藏起来，直到里面创建的 `resource` 第一次完成。之后的重新加载不再切回「加载中…」。模板的 `fallback` 和 `.vue` 里的 `<template #fallback>` 见 [Suspense](../built-ins/suspense.md)。
+`<Profile id={id} />` 调用 `profile(id)`（`#[component]` 让模板按名字传参，见 [组合视图](../essentials/view-functions.md)）。内容立刻建好，先藏起来，直到里面创建的 `resource` 第一次完成。之后的重新加载不再切回「加载中…」。模板的 `fallback` 和 `.vue` 里的 `<template #fallback>` 见 [Suspense](../built-ins/suspense.md)。
 
 ## `resource` 记住最近一次结果
 

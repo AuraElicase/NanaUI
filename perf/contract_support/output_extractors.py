@@ -6,11 +6,14 @@ from pathlib import Path
 from typing import Any, Mapping
 from .reports import envelope
 
-OUTPUT_WORKLOADS = frozenset({"direct", "static", "multi", "nested", "conversion", "slow", "recovery"})
+OUTPUT_WORKLOADS = frozenset({"direct", "static", "multi", "nested", "conversion", "slow", "recovery", "incompatible"})
 OUTPUT_COUNTERS = frozenset({"extra_passes", "gpu_copies", "gpu_copy_bytes", "target_recreates", "content_revisions", "idle_reuse_frames", "resolve_count", "gpu_convert_passes", "plan_rebuilds", "ui_renders", "submissions", "cpu_readbacks", "deferred"})
 MEASURED_POLICY_COUNTERS = frozenset({"samples", "upload_bytes", "upload_writes", "upload_copies", "buffer_reallocations", "frame_slot_waits", "frame_slot_stalls", "upload_ring_waits"})
 HEAP_COUNTERS = frozenset({"alloc_calls", "alloc_requested_bytes", "dealloc_calls", "dealloc_bytes", "realloc_calls", "realloc_old_bytes", "realloc_requested_bytes"})
 PAINTER_COUNTERS = frozenset({"draw_calls", "draw_batches", "batch_rebuilds", "gpu_upload_bytes", "gpu_buffer_reallocations"})
+PAINTER_RESOURCE_COUNTERS = frozenset({"glyph_atlas_pages", "glyph_atlas_bytes", "glyph_raster_cache_bytes", "glyph_upload_bytes", "icon_atlases", "icon_atlas_bytes", "url_textures", "url_texture_gpu_bytes", "url_texture_cpu_bytes"})
+# Encodes per measured frame: incompatible groups each render once per frame.
+ENCODES_PER_FRAME = {"incompatible": 2}
 WINDOW_CHECKS = frozenset({"direct_surface", "compatible_shared_render", "incompatible_separate_renders", "detach_restores_direct", "resize_matches_output", "hidden_static_zero_output"})
 
 
@@ -44,11 +47,11 @@ def _require_heap(block: Any, label: str) -> None:
     _require_counts(block.get("counts"), HEAP_COUNTERS, label + ".counts")
 
 
-def _require_painter(block: Any, label: str, skipped: bool) -> None:
+def _require_painter(block: Any, label: str, skipped: bool, encodes_per_frame: int = 1) -> None:
     if not isinstance(block, dict):
         raise KeyError(f"output GPU report omitted {label}")
     _require_counts(block, frozenset({"encoded_frames", "skipped_frames"}), label)
-    if (block["encoded_frames"], block["skipped_frames"]) != ((0, 240) if skipped else (240, 0)):
+    if (block["encoded_frames"], block["skipped_frames"]) != ((0, 240) if skipped else (240 * encodes_per_frame, 0)):
         raise KeyError(f"{label} must account for exactly 240 expected measured encode/skip observations")
     if skipped:
         if block.get("status") != "skipped" or block.get("work") is not None:
@@ -122,8 +125,14 @@ def extract_output(scenario: Mapping[str, Any], reports: Mapping[str, Mapping[st
             if not isinstance(painter, dict) or painter.get("status") != "not instrumented" or painter.get("work") is not None:
                 raise KeyError("surface-internal painter metrics must explicitly remain not instrumented/null")
         else:
-            _require_painter(painter, "producer_painter", skipped=workload in {"static", "nested"})
+            _require_painter(painter, "producer_painter", skipped=workload in {"static", "nested"}, encodes_per_frame=ENCODES_PER_FRAME.get(workload, 1))
         sections["producer_painter"] = painter
+        if workload == "incompatible":
+            resources = case.get("painter_resources")
+            if not isinstance(resources, dict) or resources.get("status") != "measured":
+                raise KeyError("incompatible groups must report the shared painter's measured resources")
+            _require_counts(resources, PAINTER_RESOURCE_COUNTERS, "painter_resources")
+            sections["painter_resources"] = resources
         if workload == "nested":
             _require_painter(case.get("parent_painter"), "parent_painter", skipped=False)
             _require_counts(case.get("parent_measurement_gpu_policy"), MEASURED_POLICY_COUNTERS, "parent_measurement_gpu_policy")

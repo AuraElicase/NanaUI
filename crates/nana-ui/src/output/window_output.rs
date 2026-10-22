@@ -387,6 +387,14 @@ fn target_namespace(window: WindowId) -> u64 {
     OUTPUT_TARGET_NAMESPACE ^ window.0.wrapping_mul(0x9E37_79B9_7F4A_7C15).rotate_left(17)
 }
 
+/// The host holds a frame slot before planning the output, so the other
+/// frames in flight each hold an output slot until they complete, and the
+/// published frame holds one more. Fewer slots defer the output whenever the
+/// GPU runs that far behind, as WARP does.
+fn output_slots(gpu: &GpuContext) -> usize {
+    (gpu.policy().frame_slot_count() + 1).min(super::external::MAX_SLOTS)
+}
+
 /// The output's presentation profile: sRGB into a UNORM target, so the
 /// painter's final pass writes encoded bytes.
 pub(crate) fn output_profile() -> ScenePresentationProfile {
@@ -941,7 +949,8 @@ impl WindowOutputState {
             Some(_) => super::OutputRecreateReason::Requirements,
         };
         let config = ExternalSurfaceConfig::with_presentation(extent, output_profile())
-            .with_copy_source(true);
+            .with_copy_source(true)
+            .with_slots(output_slots(gpu));
         let current = self
             .surface
             .as_ref()
@@ -1165,7 +1174,6 @@ impl WindowOutputState {
             profile: output_profile(),
             alpha: OutputAlpha::GammaPremultiplied,
             text_aa: OutputTextAa::Grayscale,
-            sample_count: 1,
             device_generation: gpu.generation(),
             ownership: OutputOwnership::SameDevice,
             persistent: true,
@@ -1839,8 +1847,9 @@ mod tests {
         ));
         let window = geometry((64.0, 48.0), 1.0);
         let scene = UiScene::new();
+        let slots = output_slots(&gpu);
         let mut held = Vec::new();
-        for _ in 0..3 {
+        for _ in 0..slots {
             state.volatile += 1;
             let frame = record_one(&mut state, &mut painter, &window, &scene).unwrap();
             let lease = frame.lease();
@@ -1852,7 +1861,7 @@ mod tests {
         }
         state.volatile += 1;
         assert!(record_one(&mut state, &mut painter, &window, &scene).is_none());
-        assert_eq!(state.straight.len(), 3);
+        assert_eq!(state.straight.len(), slots);
         assert_eq!(state.last_work().ui_renders, 0);
         assert_eq!(state.last_work().submissions, 0);
         assert_eq!(state.last_work().gpu_convert_passes, 0);

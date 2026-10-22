@@ -239,8 +239,8 @@ below in §8.1.
 
 ## Issue #242 presentation output
 
-`catalog.json` 的 `nana_output_ids` 是七个独立工作量门禁；不进入跨框架
-`harness_ids`。`output-direct` 来自真实 Window/Surface probe；其余六项来自同一设备上
+`catalog.json` 的 `nana_output_ids` 是八个独立工作量门禁；不进入跨框架
+`harness_ids`。`output-direct` 来自真实 Window/Surface probe；其余七项来自同一设备上
 真实的保留目标、Scene painter、consumer lease 与 final transfer。初始化与 30 次预热不计入
 240 次测量窗口，报告同时给出调用区间的 elapsed wall time p50/p95/p99；这些时间没有公共 CI 阈值。
 `output-recovery` 的时间包含非阻塞 GPU 完成轮询；其余 headless 时间计生产调用，
@@ -249,7 +249,7 @@ direct 计真实窗口 prepare 至 presented 的区间。
 
 ```bash
 cargo run --release --locked -p nana-ui --features gpu --bin nana-output-benchmark -- --output target/performance/output/live.json
-for workload in static multi nested conversion slow recovery; do
+for workload in static multi nested conversion slow recovery incompatible; do
   python3 perf/runners/nana/run.py --scenario "output-${workload}" --from-report target/performance/output/live.json --output "target/performance/output/gates/output-${workload}.json"
 done
 python3 perf/contract.py --evaluate-invariants target/performance/output/gates
@@ -259,7 +259,8 @@ python3 perf/contract.py --evaluate-invariants target/performance/output/direct.
 ```
 
 静态输出与 active parent 内的静态 child 要求 producer render/submit/copy/recreate 为 0；
-三消费方要求每次内容修订只 render 一次；BGRA typed/untyped 转换只增加显式 final transfer；
+三消费方要求每次内容修订只 render 一次；两个不兼容组（`output-incompatible`）每帧各 render 一次、
+共一次 submit，并报告共享 painter 的字形/图标/URL 纹素字节；BGRA typed/untyped 转换只增加显式 final transfer；
 慢消费者填满池后必须零录制地 defer，释放后恢复；resize 验证旧代际被拒绝与有界目标重建。
 真实窗口 probe 还验证 attach/detach、不兼容目标、resize 与隐藏静态输出。
 

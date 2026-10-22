@@ -1,0 +1,18 @@
+size 389.1 280.8
+summary nodes=6 edges=2 groups=1
+shape rect 9 128.6 371.1 63.6 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+shape path M138.9,192.2 L138.9,225.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M138.9,232.2 L135.4,223.8 L138.9,225.3 L142.4,223.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M348.1,180.2 L348.1,225.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M348.1,232.2 L344.5,223.8 L348.1,225.3 L351.6,223.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 174.8 9 39.6 39.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 186.4 19 16.2 19.6 size=14 w=400 ink=Text "DB"
+shape path M210.6,68.6 L210.6,90.6 L221.2,90.6 L194.6,108.6 L167.9,90.6 L178.6,90.6 L178.6,68.6 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape rect 21 140.6 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 37 150.6 8.1 19.6 size=14 w=400 ink=Text "A"
+shape rect 81.1 140.6 226.9 39.6 r=Xs fill=rgba(153,102,153,1) stroke=rgba(51,51,51,1)/4/Solid
+text 97.1 150.6 194.9 19.6 size=14 w=400 ink=rgba(247.4,247.4,249.9,1) "A wide one in the middle"
+shape rect 328 140.6 40.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 344 150.6 8.1 19.6 size=14 w=400 ink=Text "C"
+shape rect 9 232.2 371.1 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 190.5 242.2 8.1 19.6 size=14 w=400 ink=Text "D"

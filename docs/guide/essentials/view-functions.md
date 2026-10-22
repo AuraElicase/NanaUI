@@ -2,15 +2,16 @@
 
 一块界面是一个函数，返回 `impl IntoView`。`IntoView` 是能落成保留节点的东西：一个元素、若干视图组成的 tuple、`each`、`when`，以及 `()`。调用发生在挂载的时候，函数本身不缓存树。
 
-`<Status label="空闲" />` 展开成 `status("空闲")`。
+模板里的组件是带 `#[component]` 的函数。`<Status label="空闲" />` 调用 `status("空闲")`。
 
 :::api
 
 ```rust view
 use nana_ui::runtime::view;
-use nana_ui::runtime::view::{IntoProp, IntoView};
+use nana_ui::runtime::view::{IntoProp, IntoView, component};
 use nana_ui::runtime::SemanticColorRole;
 
+#[component]
 fn status(label: impl IntoProp<String>) -> impl IntoView {
     view! {
         <Text foreground={SemanticColorRole::Muted}>{label}</Text>
@@ -41,18 +42,19 @@ fn page() -> impl IntoView {
 
 :::
 
-不认识的标签按 snake_case 调用同名函数。`Status` 是 `status`，`TodoRow` 是 `todo_row`。属性按书写顺序做参数，子节点是最后一个参数。没有子节点就不传。一个子节点就是那一个视图。多个子节点打成 tuple，超过 12 个再嵌套一层 tuple。
+不认识的标签按 snake_case 找同名函数。`Status` 是 `status`，`TodoRow` 是 `todo_row`。属性按名字交给同名参数，顺序随意。子节点交给名为 `children` 的参数。没有子节点就不传。一个子节点就是那一个视图。多个子节点打成 tuple，超过 12 个再嵌套一层 tuple。
 
 :::api
 
 ```rust view
 use nana_ui::runtime::view;
-use nana_ui::runtime::view::IntoView;
+use nana_ui::runtime::view::{IntoView, component};
 
-fn frame(body: impl IntoView) -> impl IntoView {
+#[component]
+fn frame(children: impl IntoView) -> impl IntoView {
     view! {
         <Column gap=8>
-            {body}
+            {children}
         </Column>
     }
 }
@@ -61,14 +63,75 @@ fn frame(body: impl IntoView) -> impl IntoView {
 ```rust rust
 use nana_ui::runtime::view::{column, text, IntoView};
 
-fn frame(body: impl IntoView) -> impl IntoView {
-    column().gap(8).children(body)
+fn frame(children: impl IntoView) -> impl IntoView {
+    column().gap(8).children(children)
 }
 ```
 
 :::
 
 `<Frame><Text>"内容"</Text></Frame>` 就是 `frame(text("内容"))`。
+
+## 可以不写的属性
+
+参数上写 `#[prop(default)]`（取 `Default::default()`）或 `#[prop(default = 表达式)]`，模板就可以不写这个属性。只写属性名不写值（`<Setting disabled />`）就是 `true`。
+
+:::api
+
+```rust view
+use nana_ui::runtime::view;
+use nana_ui::runtime::view::{IntoProp, IntoView, component};
+
+#[component]
+fn setting(
+    label: &'static str,
+    #[prop(default = "")] hint: &'static str,
+    #[prop(default = false)] disabled: impl IntoProp<bool>,
+) -> impl IntoView {
+    view! {
+        <Column gap=2>
+            <Checkbox label={label} disabled={disabled} />
+            <Text>{hint}</Text>
+        </Column>
+    }
+}
+
+fn page() -> impl IntoView {
+    view! {
+        <Column gap=8>
+            <Setting label="自动保存" />
+            <Setting hint="需要先登录" label="同步" disabled />
+        </Column>
+    }
+}
+```
+
+```rust rust
+use nana_ui::runtime::view::*;
+
+fn setting(label: &'static str, hint: &'static str, disabled: impl IntoProp<bool>) -> impl IntoView {
+    column().gap(2).children((checkbox(label).disabled(disabled), text(hint)))
+}
+
+fn page() -> impl IntoView {
+    column().gap(8).children((
+        setting("自动保存", "", false),
+        setting("同步", "需要先登录", true),
+    ))
+}
+```
+
+:::
+
+默认值写在函数旁边，名字在函数所在的模块里解析，不在用它的模板里。`impl Trait` 参数也能有默认值，`#[prop(default = || true)] shown: impl Fn() -> bool` 这样写。类型用到函数自己泛型参数的属性不能有默认值。
+
+这几种写法编译不过，错误指在模板上：
+
+- 漏了没有默认值的属性：`` `<Setting>` needs `label` ``。
+- 写了函数没有的参数：`no method named 'colour'`。同一个属性写两次也是错误。
+- 函数没标 `#[component]`：编译器说找不到模块 `setting`。
+
+`#[component]` 不改函数本身。Rust 里照常按顺序传齐参数，`setting("同步", "需要先登录", true)`。它在函数旁边加一个同名的隐藏模块，里面是模板展开后用的构建器（`setting::Props`）。`use` 进这个函数时，模块也一起进来了。参数要拿所有权或是 `'static` 的值。组件标签上的 `key` 另有用处（见下文），参数不能叫 `key`。
 
 自定义标签只收这些值。事件和字段写在函数里面。`<Status @activate={save} />` 是模板错误：组件标签不能挂 `@` 或 `on:`。
 

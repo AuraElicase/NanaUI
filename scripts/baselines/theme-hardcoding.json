@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue": 101,
   "root": "crates/nana-ui-runtime/src",
-  "components_scanned": 146,
+  "components_scanned": 148,
   "totals": {
     "color_role": 188,
     "color_literal": 0,
@@ -11,15 +11,15 @@
     "elevation": 0
   },
   "shared_totals": {
-    "color_role": 387,
+    "color_role": 407,
     "color_literal": 0,
-    "design_number": 78,
-    "motion": 27,
+    "design_number": 65,
+    "motion": 28,
     "elevation": 0
   },
-  "token_reads": 832,
+  "token_reads": 867,
   "local_values": 28,
-  "shared_local_values": 105,
+  "shared_local_values": 93,
   "module_constants": 111,
   "components": [
     {
@@ -954,7 +954,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 6,
+      "token_reads": 7,
       "roles": [
         "AccentOnSoft",
         "AccentSoft",
@@ -1423,6 +1423,21 @@
       "local_values": 0
     },
     {
+      "component": "PathText",
+      "file": "crates/nana-ui-runtime/src/path_text.rs",
+      "counts": {
+        "color_role": 0,
+        "color_literal": 0,
+        "design_number": 0,
+        "motion": 0,
+        "elevation": 0
+      },
+      "token_reads": 0,
+      "roles": [],
+      "states": [],
+      "local_values": 0
+    },
+    {
       "component": "Progress",
       "file": "crates/nana-ui-runtime/src/feedback.rs",
       "counts": {
@@ -1756,6 +1771,21 @@
       "roles": [
         "Muted"
       ],
+      "states": [],
+      "local_values": 0
+    },
+    {
+      "component": "SettingsGroup",
+      "file": "crates/nana-ui-runtime/src/settings.rs",
+      "counts": {
+        "color_role": 0,
+        "color_literal": 0,
+        "design_number": 0,
+        "motion": 0,
+        "elevation": 0
+      },
+      "token_reads": 0,
+      "roles": [],
       "states": [],
       "local_values": 0
     },
@@ -2499,19 +2529,6 @@
   ],
   "shared_authority": [
     {
-      "file": "crates/nana-ui-runtime/src/markdown_drawing.rs",
-      "counts": {
-        "color_role": 0,
-        "color_literal": 0,
-        "design_number": 14,
-        "motion": 0,
-        "elevation": 0
-      },
-      "local_values": 14,
-      "token_reads": 4,
-      "roles": []
-    },
-    {
       "file": "crates/nana-ui-runtime/src/animation.rs",
       "counts": {
         "color_role": 0,
@@ -2625,19 +2642,6 @@
       ]
     },
     {
-      "file": "crates/nana-ui-runtime/src/rich_text.rs",
-      "counts": {
-        "color_role": 0,
-        "color_literal": 0,
-        "design_number": 5,
-        "motion": 0,
-        "elevation": 0
-      },
-      "local_values": 5,
-      "token_reads": 6,
-      "roles": []
-    },
-    {
       "file": "crates/nana-ui-runtime/src/layout_engine/placement.rs",
       "counts": {
         "color_role": 0,
@@ -2648,6 +2652,32 @@
       },
       "local_values": 4,
       "token_reads": 2,
+      "roles": []
+    },
+    {
+      "file": "crates/nana-ui-runtime/src/motion_api.rs",
+      "counts": {
+        "color_role": 0,
+        "color_literal": 0,
+        "design_number": 0,
+        "motion": 4,
+        "elevation": 0
+      },
+      "local_values": 4,
+      "token_reads": 0,
+      "roles": []
+    },
+    {
+      "file": "crates/nana-ui-runtime/src/rich_text.rs",
+      "counts": {
+        "color_role": 0,
+        "color_literal": 0,
+        "design_number": 4,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 4,
+      "token_reads": 6,
       "roles": []
     },
     {
@@ -2718,19 +2748,6 @@
         "color_literal": 0,
         "design_number": 1,
         "motion": 2,
-        "elevation": 0
-      },
-      "local_values": 3,
-      "token_reads": 0,
-      "roles": []
-    },
-    {
-      "file": "crates/nana-ui-runtime/src/motion_api.rs",
-      "counts": {
-        "color_role": 0,
-        "color_literal": 0,
-        "design_number": 0,
-        "motion": 3,
         "elevation": 0
       },
       "local_values": 3,
@@ -2834,6 +2851,19 @@
         "FocusText",
         "Text"
       ]
+    },
+    {
+      "file": "crates/nana-ui-runtime/src/markdown_drawing.rs",
+      "counts": {
+        "color_role": 0,
+        "color_literal": 0,
+        "design_number": 2,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 2,
+      "token_reads": 2,
+      "roles": []
     },
     {
       "file": "crates/nana-ui-runtime/src/rich_text_editor.rs",
@@ -3072,6 +3102,31 @@
       ]
     },
     {
+      "file": "crates/nana-ui-runtime/src/view/marks.rs",
+      "counts": {
+        "color_role": 19,
+        "color_literal": 0,
+        "design_number": 0,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 0,
+      "token_reads": 33,
+      "roles": [
+        "Accent",
+        "Border",
+        "BorderSoft",
+        "BorderStrong",
+        "Danger",
+        "Muted",
+        "Subtle",
+        "Success",
+        "Surface",
+        "Text",
+        "Warning"
+      ]
+    },
+    {
       "file": "crates/nana-ui-runtime/src/sidebar.rs",
       "counts": {
         "color_role": 16,
@@ -3277,7 +3332,7 @@
         "elevation": 0
       },
       "local_values": 0,
-      "token_reads": 8,
+      "token_reads": 9,
       "roles": [
         "Text",
         "from_css_token_name"
@@ -3489,6 +3544,21 @@
       },
       "local_values": 0,
       "token_reads": 3,
+      "roles": [
+        "Surface"
+      ]
+    },
+    {
+      "file": "crates/nana-ui-runtime/src/markdown_diagram.rs",
+      "counts": {
+        "color_role": 1,
+        "color_literal": 0,
+        "design_number": 0,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 0,
+      "token_reads": 2,
       "roles": [
         "Surface"
       ]

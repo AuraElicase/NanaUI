@@ -1,0 +1,15 @@
+erDiagram
+    direction LR
+    p[Person] {
+        string firstName
+        string lastName
+    }
+    a["Customer Account"] {
+        string email
+    }
+    p ||--o| a : has
+    a |o..o{ s["Session"] : opens
+    a }o--|| plan : "subscribes to"
+    plan:::premium
+    classDef premium fill:#fde68a,stroke:#b45309,color:#000
+    style p stroke:#2563eb,stroke-width:2px

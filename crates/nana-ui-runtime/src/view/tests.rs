@@ -2987,6 +2987,37 @@ fn a_child_slot_keeps_the_keys_its_view_declared() {
     assert_eq!(cx.world().text(count), Some("尾"));
 }
 
+/// A view mounted before a sibling lands in front of it, its roots in order;
+/// a node that is not a child of the parent is refused.
+#[test]
+fn a_view_mounts_before_a_sibling() {
+    let (mut cx, _, parent) = setup();
+    let (_, (first, last)) = cx
+        .mount_view(parent, || {
+            let first = entity_ref::<Text>();
+            let last = entity_ref::<Text>();
+            with_refs(
+                (text("头").entity_ref(first), text("尾").entity_ref(last)),
+                (first, last),
+            )
+        })
+        .unwrap();
+    let view = cx
+        .mount_view_before(parent, last.stable_id(), || (text("一"), text("二")))
+        .unwrap();
+    let order: Vec<_> = children(&cx, parent)
+        .into_iter()
+        .map(|id| cx.world().text(id).unwrap_or_default().to_owned())
+        .collect();
+    assert_eq!(order, ["头", "一", "二", "尾"]);
+    assert_eq!(view.roots().len(), 2);
+    assert_eq!(
+        cx.mount_view_before(first.stable_id(), last.stable_id(), || text("外"))
+            .err(),
+        Some(crate::FrameworkError::InvalidInput)
+    );
+}
+
 #[test]
 fn list_item_slots_in_a_view_are_the_slots_set_by_hand() {
     use crate::{ListItem, ListItemSlots};
@@ -3406,6 +3437,332 @@ fn keys_in_a_switched_branch_resolve_by_path_inside_a_virtual_row() {
     mode.set(2);
     cx.flush_reactive().unwrap();
     assert_eq!(shown(&cx), "行 0 2");
+}
+
+/// A settings group puts an inset divider between rows, and a hidden row
+/// takes its divider with it, the first row too; keycaps and a chord name
+/// their roles.
+#[test]
+fn a_settings_group_divides_its_rows_and_hides_a_hidden_rows_divider() {
+    let (mut cx, _, parent) = setup();
+    let shown = std::cell::Cell::new(None);
+    let view = cx
+        .mount_view(parent, || {
+            let first = signal(true);
+            let second = signal(true);
+            shown.set(Some((first, second)));
+            settings_group(
+                Some("Group".into()),
+                vec![
+                    group_row(text("first")).visible(first),
+                    group_row(text("second")).visible(second),
+                    group_row(chord("Ctrl+B")),
+                ],
+            )
+        })
+        .unwrap();
+    let (first, second) = shown.get().unwrap();
+    let root = view.roots()[0];
+    let [title, card] = children(&cx, root)[..] else {
+        panic!("title and card");
+    };
+    assert_eq!(children(&cx, title).len(), 1);
+    let painter = cx.world().node_style(card).unwrap().painter.clone();
+    assert!(painter.is_some(), "the card is a raised surface");
+    let [group] = children(&cx, card)[..] else {
+        panic!("one group in the card");
+    };
+    let members = children(&cx, group);
+    assert_eq!(members.len(), 5, "three rows with a divider between each");
+    let hidden = |cx: &AppContext, id| cx.world().node_style(id).unwrap().layout.hidden;
+    let dividers = |cx: &AppContext| [hidden(cx, members[1]), hidden(cx, members[3])];
+    assert_eq!(dividers(&cx), [false, false]);
+
+    second.set(false);
+    cx.flush_reactive().unwrap();
+    assert!(hidden(&cx, members[2]));
+    assert_eq!(dividers(&cx), [true, false], "one divider between two rows");
+
+    first.set(false);
+    cx.flush_reactive().unwrap();
+    assert_eq!(dividers(&cx), [true, true], "no divider above the only row");
+
+    second.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        dividers(&cx),
+        [true, false],
+        "none above the first shown row"
+    );
+
+    let chord = children(&cx, members[4])[0];
+    assert_eq!(children(&cx, chord).len(), 3, "two keys and the joiner");
+}
+
+/// A callout says what its text says and hides while that is empty; a quiet
+/// one has no tint; what trails it keeps its width at the end.
+#[test]
+fn a_callout_follows_its_text_and_keeps_its_trailing_view() {
+    let (mut cx, _, parent) = setup();
+    let state = std::cell::Cell::new(None);
+    let view = cx
+        .mount_view(parent, || {
+            let note = signal(String::new());
+            state.set(Some(note));
+            column().children((
+                callout(
+                    nana_ui_core::Icon::Add,
+                    nana_ui_core::StatusTone::Warning,
+                    note,
+                )
+                .quiet()
+                .trailing(button("打开")),
+                callout(
+                    nana_ui_core::Icon::Add,
+                    nana_ui_core::StatusTone::Warning,
+                    "固定",
+                ),
+            ))
+        })
+        .unwrap();
+    let note = state.get().unwrap();
+    let [quiet, tinted] = children(&cx, view.roots()[0])[..] else {
+        panic!("two callouts");
+    };
+    let style = |cx: &AppContext, id| cx.world().node_style(id).unwrap().clone();
+    assert!(style(&cx, quiet).layout.hidden, "empty text hides it");
+    assert!(!style(&cx, tinted).layout.hidden);
+    assert!(
+        style(&cx, quiet).interaction.base.background_mix.is_none(),
+        "a quiet one has no tint"
+    );
+    assert!(style(&cx, tinted).interaction.base.background_mix.is_some());
+    note.set("面捕已暂停".into());
+    cx.flush_reactive().unwrap();
+    assert!(!style(&cx, quiet).layout.hidden);
+    let parts = children(&cx, quiet);
+    assert_eq!(parts.len(), 3, "glyph, text and the trailing view");
+    let copy = children(&cx, parts[1])[0];
+    assert_eq!(text_of(&cx, Entity::from_stable_id(copy)), "面捕已暂停");
+    assert_eq!(style(&cx, parts[2]).layout.flex_shrink, Some(0.0));
+}
+
+/// A heading line gives up its title's width before its tools'; the foot
+/// fade of a scroll area takes no input.
+#[test]
+fn a_heading_row_keeps_its_tools_and_a_foot_fade_takes_no_input() {
+    let (mut cx, _, parent) = setup();
+    let view = cx
+        .mount_view(parent, || {
+            column().children((
+                heading_row(
+                    text("很长的分组标题"),
+                    heading_tools(widget(crate::IconButton::tool(
+                        nana_ui_core::Icon::Add,
+                        "添加",
+                    ))),
+                ),
+                scroll_foot_fade(12.0, nana_ui_core::SemanticColorRole::Surface),
+            ))
+        })
+        .unwrap();
+    let [row, fade] = children(&cx, view.roots()[0])[..] else {
+        panic!("a heading and a fade");
+    };
+    let [title, tools] = children(&cx, row)[..] else {
+        panic!("title and tools");
+    };
+    let layout = |cx: &AppContext, id| cx.world().node_style(id).unwrap().layout.clone();
+    assert_eq!(layout(&cx, title).flex_shrink, Some(1.0));
+    assert_eq!(layout(&cx, title).min_width, Some(LengthSpec::Px(0.0)));
+    assert_eq!(layout(&cx, tools).flex_shrink, Some(0.0));
+    let tool = children(&cx, tools)[0];
+    cx.read(
+        Entity::<crate::IconButton>::from_stable_id(tool),
+        |button| {
+            assert!(button.compact);
+        },
+    )
+    .unwrap();
+    let fade = layout(&cx, fade);
+    assert_eq!(
+        fade.pointer_events,
+        Some(nana_ui_core::PointerEventsSpec::None)
+    );
+    assert!(fade.paint.mask.is_some());
+}
+
+/// A settings group marks its first and last shown row, whichever rows are
+/// shown, reading through a keyed list and a conditional block to their
+/// rows; other content takes a place without being marked.
+#[test]
+fn a_settings_group_marks_its_shown_edges() {
+    let (mut cx, document, parent) = setup();
+    let state = std::cell::Cell::new(None);
+    cx.mount_view(parent, || {
+        let lead = signal(true);
+        let items = signal(vec![1u32, 2]);
+        let tail = signal(true);
+        state.set(Some((lead, items, tail)));
+        widget(crate::SettingsGroup::new()).children((
+            // Its label moves with its visibility, so the row is written
+            // (and out of reach) when the group looks.
+            settings_row(move || std::sync::Arc::<str>::from(if lead.get() { "lead" } else { "" }))
+                .visible(lead),
+            each(
+                items,
+                |item| *item,
+                |item| settings_row(format!("item {item}")),
+            ),
+            text("note"),
+            when(tail, || settings_row("tail")),
+        ))
+    })
+    .unwrap();
+    let (lead, items, tail) = state.get().unwrap();
+    // Shown rows in document order: label, first, last.
+    let edges = |cx: &AppContext| -> Vec<(String, bool, bool)> {
+        cx.world()
+            .document_order(document)
+            .into_iter()
+            .filter(|id| cx.world().node_style(*id).is_some_and(|s| !s.layout.hidden))
+            .filter_map(|id| {
+                cx.read(Entity::<crate::SettingsRow>::from_stable_id(id), |row| {
+                    (row.label.to_string(), row.first_in_group, row.last_in_group)
+                })
+                .ok()
+            })
+            .collect()
+    };
+    let row = |label: &str, first, last| (label.to_owned(), first, last);
+    assert_eq!(
+        edges(&cx),
+        [
+            row("lead", true, false),
+            row("item 1", false, false),
+            row("item 2", false, false),
+            row("tail", false, true),
+        ]
+    );
+
+    lead.set(false);
+    tail.set(false);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        edges(&cx),
+        [row("item 1", true, false), row("item 2", false, false)],
+        "the note after the list is the last shown member"
+    );
+
+    items.set(vec![2]);
+    tail.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        edges(&cx),
+        [row("item 2", true, false), row("tail", false, true)]
+    );
+
+    lead.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(
+        edges(&cx),
+        [
+            row("lead", true, false),
+            row("item 2", false, false),
+            row("tail", false, true),
+        ]
+    );
+}
+
+/// A keycap is as tall as the installed theme's keycap, so a compact theme
+/// shrinks a shortcut with the controls around it.
+#[test]
+fn a_keycap_follows_the_installed_keycap_height() {
+    let (mut cx, document, parent) = setup();
+    let view = cx.mount_view(parent, || row().children(kbd("K"))).unwrap();
+    let cap = children(&cx, view.roots()[0])[0];
+    let viewport = LayoutViewport::new(320.0, 240.0);
+    cx.layout_document(document, viewport).unwrap();
+    let height = |cx: &AppContext| cx.world().layout_box(cap).unwrap().height;
+    assert_eq!(height(&cx), nana_ui_core::KEYCAP_METRICS.height);
+    assert!(
+        cx.world().layout_box(cap).unwrap().width >= height(&cx),
+        "a one-letter cap is at least square"
+    );
+
+    let compact = nana_ui_core::COMPACT_METRICS;
+    assert!(compact.keycap.height < nana_ui_core::KEYCAP_METRICS.height);
+    cx.set_style_tokens(
+        nana_ui_core::ThemeAppearance::Dark,
+        compact,
+        nana_ui_core::SemanticPalette::dark(),
+        nana_ui_core::SemanticPalette::dark().surface,
+    )
+    .unwrap();
+    cx.layout_document(document, viewport).unwrap();
+    assert_eq!(height(&cx), compact.keycap.height);
+}
+
+/// A `Stack` takes a theme-relative wash and outline, and a fully round
+/// corner that does not need its height, from its own builder.
+#[test]
+fn a_stack_takes_mixes_and_a_full_radius_from_its_builder() {
+    use nana_ui_core::{RadiusTier, SemanticColorMix, SemanticColorRole};
+    let (mut cx, _, parent) = setup();
+    let wash = SemanticColorMix::alpha(SemanticColorRole::Accent, 0.12);
+    let rim = SemanticColorMix::alpha(SemanticColorRole::Accent, 0.4);
+    let view = cx
+        .mount_view(parent, move || {
+            widget(
+                Stack::row(0.0)
+                    .surface_mix(wash)
+                    .outline_mix(rim, 1.0)
+                    .radius(RadiusTier::Full),
+            )
+            .key("pill")
+        })
+        .unwrap();
+    let id = view.roots()[0];
+    let style = cx.world().node_style(id).unwrap();
+    assert_eq!(style.interaction.base.background_mix, Some(wash));
+    assert_eq!(style.interaction.base.border_mix, Some(rim));
+    assert_eq!(style.layout.border_width, Some(1.0));
+    assert_eq!(style.radius, Some(RadiusTier::Full));
+    assert_eq!(
+        RadiusTier::Full.resolve(nana_ui_core::UI_METRICS),
+        nana_ui_core::FULL_RADIUS
+    );
+}
+
+/// `.grow()` gives a switching block's container the rest of its parent's
+/// main axis, so a branch that fills has room to fill; without it the
+/// container takes its content's size.
+#[test]
+fn a_growing_switch_container_takes_the_space_left() {
+    let (mut cx, _, parent) = setup();
+    let view = cx
+        .mount_view(parent, || {
+            column().key("page").children((
+                dynamic(signal(0u32), |_: &u32| text("a")).key("plain"),
+                dynamic(signal(0u32), |_: &u32| text("b"))
+                    .grow()
+                    .key("grown"),
+                when(signal(true), || text("c")).grow().key("when"),
+            ))
+        })
+        .unwrap();
+    let root = view.roots()[0];
+    let layout = |cx: &AppContext, path: &str| {
+        let id = cx.resolve_assembly_path(root, path).unwrap();
+        cx.world().node_style(id).unwrap().layout.clone()
+    };
+    for path in ["grown", "when"] {
+        let grown = layout(&cx, path);
+        assert_eq!(grown.flex_grow, Some(1.0), "{path}");
+        assert_eq!(grown.flex_basis, Some(LengthSpec::Px(0.0)), "{path}");
+        assert_eq!(grown.min_height, Some(LengthSpec::Px(0.0)), "{path}");
+    }
+    assert_ne!(layout(&cx, "plain").flex_grow, Some(1.0));
 }
 
 /// The same outside a virtual list: a `dynamic` at the top of a view, a
@@ -4362,7 +4719,7 @@ fn a_title_bar_shows_and_hides_from_a_view() {
 /// hidden-while-empty, and the rules some fields carry.
 mod control_fields {
     use super::*;
-    use crate::view::fields::{self, HiddenWhenEmpty};
+    use crate::view::fields::{self, FromString, HiddenWhenEmpty};
     use std::sync::Arc;
 
     fn hidden(cx: &AppContext, id: StableNodeId) -> bool {
@@ -4384,9 +4741,10 @@ mod control_fields {
                     empty_state("").prop::<_, HiddenWhenEmpty<fields::empty_state::title>>(
                         move || Arc::<str>::from(title.get()),
                     ),
-                    labeled_value("型号").prop::<_, HiddenWhenEmpty<fields::labeled_value::value>>(
-                        move || Arc::<str>::from(title.get()),
-                    ),
+                    labeled_value("型号")
+                        .prop::<_, HiddenWhenEmpty<FromString<fields::labeled_value::value>>>(
+                            title,
+                        ),
                 ))
             })
             .unwrap();
@@ -4415,7 +4773,7 @@ mod control_fields {
                 let message = signal(String::new());
                 let level = signal(f64::NAN);
                 let label = signal(Arc::<str>::from("更多"));
-                let slot = signal(Arc::<str>::from(""));
+                let slot = signal(crate::TextureSlotName::from(""));
                 state.set(Some((number, tab, message, level, label, slot)));
                 column().children((
                     number_input().value(number),
@@ -5101,4 +5459,46 @@ fn composer_action_slot_is_retained_replaces_content_and_stays_hidden_after_remo
             .iter()
             .any(|node| node.id == replacement.stable_id())
     );
+}
+
+/// A row the flush shows is out of date in the views until the flush has
+/// installed it; the group marks it after that, not before, so the flush
+/// does not project the row back hidden.
+#[test]
+fn a_settings_group_marks_a_row_its_flush_shows() {
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let group = cx
+        .create_component(document, crate::SettingsGroup::new())
+        .unwrap()
+        .stable_id();
+    let state = std::cell::Cell::new(None);
+    cx.mount_view(group, || {
+        let remote = signal(false);
+        state.set(Some(remote));
+        (settings_row("a"), settings_row("b").visible(remote))
+    })
+    .unwrap();
+    let remote = state.get().unwrap();
+    // Hidden, first, last, for each row.
+    let rows = |cx: &AppContext| -> Vec<(bool, bool, bool)> {
+        children(cx, group)
+            .into_iter()
+            .map(|id| {
+                let row = Entity::<crate::SettingsRow>::from_stable_id(id);
+                let view = cx
+                    .read(row, |row| (row.first_in_group, row.last_in_group))
+                    .unwrap();
+                let hidden = cx.world().node_style(id).unwrap().layout.hidden;
+                (hidden, view.0, view.1)
+            })
+            .collect()
+    };
+    assert_eq!(rows(&cx), [(false, true, true), (true, false, false)]);
+    remote.set(true);
+    cx.flush_reactive().unwrap();
+    assert_eq!(rows(&cx), [(false, true, false), (false, false, true)]);
+    remote.set(false);
+    cx.flush_reactive().unwrap();
+    assert_eq!(rows(&cx), [(false, true, true), (true, false, true)]);
 }

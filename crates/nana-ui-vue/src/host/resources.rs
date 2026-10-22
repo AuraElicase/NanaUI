@@ -114,7 +114,7 @@ impl VueHost {
     #[cfg(feature = "scene-view")]
     pub fn register_host_texture(
         &self,
-        slot: impl Into<String>,
+        slot: impl Into<nana_ui::TextureSlotName>,
         texture: HostTexture,
         width: u32,
         height: u32,
@@ -130,7 +130,7 @@ impl VueHost {
             None,
         );
         NanaTextureHandle {
-            slot: binding.slot,
+            slot: binding.slot.to_string(),
             id: binding.texture.id(),
             generation: binding.texture.generation(),
             version: binding.texture.version(),

@@ -698,6 +698,15 @@ impl UiScene {
             {
                 self.modal_surface_paint.remove(&id);
             }
+            // Only a document that draws a diagram holds diagram geometry.
+            if !self.markdown_diagram_paint.is_empty()
+                && !matches!(
+                    node.component_geometry.as_deref(),
+                    Some(ComponentGeometry::NativeMarkdown { .. })
+                )
+            {
+                self.markdown_diagram_paint.remove(&id);
+            }
             let context = GeometryPaintContext {
                 node: &node,
                 bounds,
@@ -781,8 +790,14 @@ impl UiScene {
                 #[cfg(feature = "controls")]
                 Some(ComponentGeometry::ReorderList { .. }) => controls::build(&context, &mut emit),
                 #[cfg(feature = "rich-text")]
-                Some(ComponentGeometry::NativeMarkdown { .. })
-                | Some(ComponentGeometry::SelectableRichText { .. }) => {
+                Some(ComponentGeometry::NativeMarkdown { drawing, .. }) => {
+                    rich_text::build(&context, &mut emit);
+                    self.emit_markdown_diagrams(
+                        &node, drawing, transform, &clips, opacity, node_order,
+                    );
+                }
+                #[cfg(feature = "rich-text")]
+                Some(ComponentGeometry::SelectableRichText { .. }) => {
                     rich_text::build(&context, &mut emit)
                 }
                 #[cfg(feature = "graph-canvas")]

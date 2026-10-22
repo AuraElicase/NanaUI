@@ -1,0 +1,11 @@
+size 228.3 118
+summary nodes=1 edges=0 groups=1
+clip rect 9 9 210.3 100 r=Md
+shape rect 9 9 68.3 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M77.3,9 L77.3,109 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 210.3 100 r=Md stroke=Border/hairline/Solid
+text 21 50.6 44.3 16.8 size=12 w=600 ink=Muted "Events"
+shape rect 97.3 29 102 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 130.9 39 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 113.8 59.4 68.9 19.6 size=14 w=600 ink=Text "Happened"

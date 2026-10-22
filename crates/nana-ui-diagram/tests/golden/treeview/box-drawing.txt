@@ -1,0 +1,24 @@
+size 289.7 294.6
+summary nodes=11 edges=8 groups=0
+shape path M17,43.7 L27,43.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M17,27.6 L17,220 Q17,225 22,225 L27,225 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M39.4,69.6 L49.4,69.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M39.4,53.5 L39.4,194.1 Q39.4,199.1 44.4,199.1 L49.4,199.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M61.8,95.5 L71.8,95.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M61.8,79.4 L61.8,168.2 Q61.8,173.2 66.8,173.2 L71.8,173.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M84.2,121.4 L94.2,121.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M84.2,105.3 L84.2,142.3 Q84.2,147.3 89.2,147.3 L94.2,147.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 8 8 60.3 19.6 size=14 w=600 ink=Text "crates/"
+text 30.4 33.9 137.7 19.6 size=14 w=600 ink=Text "nana-ui-diagram/"
+text 52.8 59.8 34.4 19.6 size=14 w=600 ink=Text "src/"
+text 75.2 85.7 60.3 19.6 size=14 w=600 ink=Text "layout/"
+text 97.6 111.6 56.8 19.6 size=14 w=400 ink=Text "tree.rs"
+text 212.1 113 69.6 16.8 size=12 w=400 italic ink=Muted "tidy trees"
+text 97.6 137.5 89.3 19.6 size=14 w=400 ink=Text "squarify.rs"
+shape rect 71 162.4 57.1 21.6 r=Xs fill=SemanticColorMix{first:Highlight,second:None,weight:2800}
+text 75.2 163.4 48.7 19.6 size=14 w=400 ink=Text "lib.rs"
+text 212.1 164.8 69.6 16.8 size=12 w=400 italic ink=Muted "crate root"
+text 52.8 189.3 81.2 19.6 size=14 w=400 ink=Text "Cargo.toml"
+text 30.4 215.2 111.9 19.6 size=14 w=600 ink=Text "nana-ui-core/"
+text 8 241.1 43 19.6 size=14 w=600 ink=Text "docs/"
+text 8 267 73.1 19.6 size=14 w=400 ink=Text "README.md"

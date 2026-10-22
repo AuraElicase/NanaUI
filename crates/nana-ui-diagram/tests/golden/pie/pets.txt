@@ -1,0 +1,14 @@
+size 358.7 312.1
+summary nodes=3 edges=0 groups=0
+shape path M145,168.6 L145,42.6 C199.2,42.6 247.3,77.2 264.5,128.6 C281.7,179.9 264.2,236.6 220.9,269.2 C177.7,301.8 118.4,303.1 73.8,272.5 C29.1,241.9 9,186.1 23.9,134 Z fill=series0 stroke=Surface/thick/Solid
+shape path M145,168.6 L23.9,134 C36.9,88.5 74.3,54.1 120.7,45 Z fill=series1 stroke=Surface/thick/Solid
+shape path M145,168.6 L120.7,45 C128.7,43.4 136.9,42.6 145,42.6 Z fill=series2 stroke=Surface/thick/Solid
+text 186.2 228.6 20.9 16.8 size=12 w=400 ink=series0.on "79%"
+text 76.6 97.1 20.9 16.8 size=12 w=400 ink=series1.on "17%"
+shape rect 299 137.6 12 12 r=Xs fill=series0
+text 318.2 133.8 32.5 19.6 size=14 w=400 ink=Text "Dogs"
+shape rect 299 162.6 12 12 r=Xs fill=series1
+text 318.2 158.8 32.5 19.6 size=14 w=400 ink=Text "Cats"
+shape rect 299 187.6 12 12 r=Xs fill=series2
+text 318.2 183.8 32.5 19.6 size=14 w=400 ink=Text "Rats"
+text 51.5 8 255.8 22.4 size=16 w=600 ink=Text "Pets adopted by volunteers"

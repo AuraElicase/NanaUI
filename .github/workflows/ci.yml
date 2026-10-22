@@ -5,6 +5,30 @@ on:
   pull_request:
 
 jobs:
+  # Issue #345: the repository gate scripts run apart from `check`, so a red
+  # gate no longer hides whether the Rust tests pass. The scripts read
+  # `cargo metadata`, and they decode it differently on Windows, so they keep
+  # all three platforms.
+  gate-scripts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check engine and text-stack dependency boundary
+        run: python3 scripts/check-engine-boundary.py
+      - name: Check API convergence boundaries
+        run: python3 scripts/check-api-convergence.py
+      - name: Check framework interface strings stay in the table
+        run: python3 scripts/audit-framework-strings.py
+      - name: Check packaging dependency boundary
+        run: python3 scripts/check-package-boundary.py
+      - name: Self-test repository gate scripts
+        run: python3 -m unittest discover -s scripts/tests -v
+
   check:
     strategy:
       fail-fast: false
@@ -36,16 +60,6 @@ jobs:
             libvulkan1 mesa-vulkan-drivers libasound2-dev
       - name: Check formatting
         run: cargo fmt --all -- --check
-      - name: Check engine and text-stack dependency boundary
-        run: python3 scripts/check-engine-boundary.py
-      - name: Check API convergence boundaries
-        run: python3 scripts/check-api-convergence.py
-      - name: Check framework interface strings stay in the table
-        run: python3 scripts/audit-framework-strings.py
-      - name: Check packaging dependency boundary
-        run: python3 scripts/check-package-boundary.py
-      - name: Self-test repository gate scripts
-        run: python3 -m unittest discover -s scripts/tests -v
       - name: Rebuild Vue SFC compatibility fixture
         working-directory: crates/nana-js-engine/fixtures/vue-sfc-compat
         run: |
@@ -172,6 +186,7 @@ jobs:
           lifecycle embedded-window-lifecycle
           lifecycle embedded-window-lifecycle --probe-device-loss
           lifecycle embedded-window-lifecycle --probe-host-stop
+          lifecycle theme-switch-probe
       # The Gallery *pixel* gate cannot run here: it compares exactly against a
       # baseline recorded by one GPU adapter, and no hosted runner matches a
       # committed adapter key. These tests cover the parts that are

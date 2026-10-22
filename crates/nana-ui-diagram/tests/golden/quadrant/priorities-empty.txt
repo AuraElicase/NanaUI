@@ -1,0 +1,20 @@
+size 534.2 458.8
+summary nodes=0 edges=0 groups=4
+shape rect 315.2 9 210 210 fill=series0.soft
+shape rect 105.2 9 210 210 fill=series1.soft
+shape rect 105.2 219 210 210 fill=series2.soft
+shape rect 315.2 219 210 210 fill=series3.soft
+shape path M315.2,9 L315.2,429 M105.2,219 L525.2,219 stroke=Surface/thick/Solid
+shape rect 105.2 9 420 420 stroke=Border/hairline/Solid
+text 403 104.2 34.4 19.6 size=14 w=600 ink=Text "Plan"
+text 201.6 104.2 17.2 19.6 size=14 w=600 ink=Text "Do"
+text 175.8 314.2 68.9 19.6 size=14 w=600 ink=Text "Delegate"
+text 394.4 314.2 51.6 19.6 size=14 w=600 ink=Text "Delete"
+text 189.3 434 41.8 16.8 size=12 w=400 ink=Muted "Urgent"
+text 385.4 434 69.6 16.8 size=12 w=400 ink=Muted "Not Urgent"
+text 8 315.6 90.5 16.8 size=12 w=400 ink=Muted "Not Important"
+text 21.9 105.6 76.6 16.8 size=12 w=400 ink=Muted "Important ❤"
+shape path M302.6,442.4 L322.4,442.4 stroke=Muted/hairline/Solid
+shape path M327.8,442.4 L321.1,445.3 L322.3,442.4 L321.1,439.6 Z fill=Muted stroke=Muted/hairline/Solid
+shape path M101.8,231.6 L101.8,211.8 stroke=Muted/hairline/Solid
+shape path M101.8,206.4 L104.7,213.1 L101.8,211.9 L99,213.1 Z fill=Muted stroke=Muted/hairline/Solid

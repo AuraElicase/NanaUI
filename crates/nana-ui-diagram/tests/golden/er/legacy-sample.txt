@@ -1,0 +1,65 @@
+size 294.8 484.8
+summary nodes=3 edges=2 groups=0
+shape path M147.4,119 L147.4,187.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M147.4,179 L142.8,187.4 M147.4,179 L152,187.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 144.7 171.1 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M150.9,124.9 L143.9,124.9 M150.9,129.1 L143.9,129.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M147.4,297.4 L147.4,365.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M147.4,357.4 L142.8,365.8 M147.4,357.4 L152,365.8 M143.9,354.9 L150.9,354.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M150.9,303.3 L143.9,303.3 M150.9,307.5 L143.9,307.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 121.1 143 52.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 126.5 144.8 41.8 16.8 size=12 w=400 ink=Muted "places"
+shape rect 114.2 321.4 66.5 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 119.6 323.2 55.7 16.8 size=12 w=400 ink=Muted "contains"
+shape rect 9 9 276.8 110 r=Sm fill=Surface
+clip rect 9 9 276.8 110 r=Sm
+shape rect 9 9 276.8 35.6 fill=Subtle
+unclip
+shape path M9,44.6 L285.8,44.6 stroke=BorderStrong/hairline/Solid
+shape rect 9 9 276.8 110 r=Sm stroke=BorderStrong/hairline/Solid
+text 113 17 68.9 19.6 size=14 w=600 ink=Text "CUSTOMER"
+text 20.2 48.6 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 74.6 48.6 27.8 16.8 size=12 w=400 ink=Text "name"
+text 149.3 48.6 125.3 16.8 size=12 w=400 ink=Muted "customer full name"
+shape path M9,69.4 L285.8,69.4 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 73.4 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 74.6 73.4 34.8 16.8 size=12 w=400 ink=Text "email"
+text 122 73.4 14.8 16.8 size=12 w=600 ink=Accent "PK"
+text 149.3 73.4 111.4 16.8 size=12 w=400 ink=Muted "primary identity"
+shape path M9,94.2 L285.8,94.2 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 98.2 41.8 16.8 size=12 w=400 ink=Muted "string"
+text 74.6 98.2 34.8 16.8 size=12 w=400 ink=Text "phone"
+shape rect 64 187.4 166.8 110 r=Sm fill=Surface
+clip rect 64 187.4 166.8 110 r=Sm
+shape rect 64 187.4 166.8 35.6 fill=Subtle
+unclip
+shape path M64,223 L230.8,223 stroke=BorderStrong/hairline/Solid
+shape rect 64 187.4 166.8 110 r=Sm stroke=BorderStrong/hairline/Solid
+text 125.9 195.4 43 19.6 size=14 w=600 ink=Text "ORDER"
+text 75.2 227 20.9 16.8 size=12 w=400 ink=Muted "int"
+text 115.7 227 13.9 16.8 size=12 w=400 ink=Text "id"
+text 204.8 227 14.8 16.8 size=12 w=600 ink=Accent "PK"
+shape path M64,247.8 L230.8,247.8 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 75.2 251.8 27.8 16.8 size=12 w=400 ink=Muted "date"
+text 115.7 251.8 48.7 16.8 size=12 w=400 ink=Text "created"
+shape path M64,272.6 L230.8,272.6 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 75.2 276.6 20.9 16.8 size=12 w=400 ink=Muted "int"
+text 115.7 276.6 76.6 16.8 size=12 w=400 ink=Text "customer_id"
+text 204.8 276.6 14.8 16.8 size=12 w=600 ink=Accent "FK"
+shape rect 77.9 365.8 138.9 110 r=Sm fill=Surface
+clip rect 77.9 365.8 138.9 110 r=Sm
+shape rect 77.9 365.8 138.9 35.6 fill=Subtle
+unclip
+shape path M77.9,401.4 L216.9,401.4 stroke=BorderStrong/hairline/Solid
+shape rect 77.9 365.8 138.9 110 r=Sm stroke=BorderStrong/hairline/Solid
+text 108.7 373.8 77.5 19.6 size=14 w=600 ink=Text "LINE_ITEM"
+text 89.1 405.4 20.9 16.8 size=12 w=400 ink=Muted "int"
+text 122.6 405.4 13.9 16.8 size=12 w=400 ink=Text "id"
+text 190.9 405.4 14.8 16.8 size=12 w=600 ink=Accent "PK"
+shape path M77.9,426.2 L216.9,426.2 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 89.1 430.2 20.9 16.8 size=12 w=400 ink=Muted "int"
+text 122.6 430.2 55.7 16.8 size=12 w=400 ink=Text "order_id"
+text 190.9 430.2 14.8 16.8 size=12 w=600 ink=Accent "FK"
+shape path M77.9,451 L216.9,451 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 89.1 455 20.9 16.8 size=12 w=400 ink=Muted "int"
+text 122.6 455 20.9 16.8 size=12 w=400 ink=Text "qty"

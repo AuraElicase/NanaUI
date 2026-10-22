@@ -40,6 +40,8 @@ CI 中的 `scripts/check-package-boundary.py` 强制守护以下边界：`nana-p
 | `RuntimeTools` | `runtime/tools` | `Contents/Helpers` |
 | `RuntimeManifest` | `runtime/manifest` | `Contents/Resources/manifest` |
 
+`[runtime]` 的 `bin`、`tools`、`resources` 分别复制到 `RuntimeBin`、`RuntimeTools`、`RuntimeResources`。条目可以是目录：整体复制，符号链接原样保留（macOS 的 `.framework` 依赖 `Versions/Current` 链接），目录内指向自身之外的链接（绝对路径或越过目录的 `..`）会被拒绝；清单逐个记录其中的文件，链接到文件的按目标内容计。
+
 Windows 应用根目录默认只允许放主程序 `.exe`；确因第三方 SDK 限制必须与 `.exe` 同目录的文件（如 Steamworks 的 `steam_api64.dll`），必须在 `platform.windows.root_exceptions` 中显式登记文件路径与原因。当 `distribution.backend = "portable"` 时，打包器会写入 `runtime/manifest/portable` 标记，运行时可写数据统一落入 `<root>/data`；安装版应用绝不往安装目录内写任何数据、缓存或日志。
 
 ## 3. 配置文件 `nana-package.toml` 与密钥传入
@@ -71,9 +73,11 @@ info_plist_extra = "packaging/Info.extra.plist"
 [platform.windows]
 root_exceptions = [{ source = "vendor/steam_api64.dll", reason = "Steamworks 从 exe 同目录加载" }]
 
-[runtime]
-bin     = [{ source = "vendor/foo.dll", platforms = ["windows"] }]
+[runtime]                            # source 可以是目录：整体复制并保留符号链接（.framework）
+bin     = [{ source = "vendor/foo.dll", platforms = ["windows"] },
+           { source = "vendor/Foo.framework", platforms = ["macos"] }]
 tools   = [{ source = "vendor/ffmpeg" }]
+resources = [{ source = "LICENSES.txt" }]   # 不进资源包的零散文件 → RuntimeResources
 plugins = [{ name = "fx", source = "vendor/fx.plugin", abi = "nana-plugin-1", version = "1.0.0" }]
 
 [resources]

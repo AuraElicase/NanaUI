@@ -1,0 +1,57 @@
+size 465.9 448.4
+summary nodes=12 edges=0 groups=3
+shape rect 8 44 12 12 r=Xs fill=series0
+text 24 41.6 24 16.8 size=12 w=400 ink=Text "华东"
+shape rect 64 44 12 12 r=Xs fill=series1
+text 80 41.6 55 16.8 size=12 w=400 ink=Text "华南 区域"
+shape path M151,50 L163,50 stroke=series2/thick/Solid
+text 167 41.6 24 16.8 size=12 w=400 ink=Text "目标"
+text 8 66.4 84 19.6 size=14 w=400 ink=Muted "营收（万元）"
+shape path M36.9,390 L456.9,390 stroke=BorderSoft/hairline/Solid
+text 21.9 381.6 7 16.8 size=12 w=400 ink=Muted "0"
+shape path M36.9,347.1 L456.9,347.1 stroke=BorderSoft/hairline/Solid
+text 15 338.7 13.9 16.8 size=12 w=400 ink=Muted "30"
+shape path M36.9,304.3 L456.9,304.3 stroke=BorderSoft/hairline/Solid
+text 15 295.9 13.9 16.8 size=12 w=400 ink=Muted "60"
+shape path M36.9,261.4 L456.9,261.4 stroke=BorderSoft/hairline/Solid
+text 15 253 13.9 16.8 size=12 w=400 ink=Muted "90"
+shape path M36.9,218.6 L456.9,218.6 stroke=BorderSoft/hairline/Solid
+text 8 210.2 20.9 16.8 size=12 w=400 ink=Muted "120"
+shape path M36.9,175.7 L456.9,175.7 stroke=BorderSoft/hairline/Solid
+text 8 167.3 20.9 16.8 size=12 w=400 ink=Muted "150"
+shape path M36.9,132.9 L456.9,132.9 stroke=BorderSoft/hairline/Solid
+text 8 124.5 20.9 16.8 size=12 w=400 ink=Muted "180"
+shape path M36.9,90 L456.9,90 stroke=BorderSoft/hairline/Solid
+text 8 81.6 20.9 16.8 size=12 w=400 ink=Muted "210"
+shape path M36.9,90 L36.9,390 L456.9,390 stroke=Border/hairline/Solid
+shape path M89.4,390 L89.4,394 stroke=Border/hairline/Solid
+text 65.4 396 48 16.8 size=12 w=400 ink=Muted "第一季度"
+shape path M194.4,390 L194.4,394 stroke=Border/hairline/Solid
+text 170.4 396 48 16.8 size=12 w=400 ink=Muted "第二季度"
+shape path M299.4,390 L299.4,394 stroke=Border/hairline/Solid
+text 275.4 396 48 16.8 size=12 w=400 ink=Muted "第三季度"
+shape path M404.4,390 L404.4,394 stroke=Border/hairline/Solid
+text 380.4 396 48 16.8 size=12 w=400 ink=Muted "第四季度"
+shape rect 52.6 218.6 36.8 171.4 r=Xs fill=series0
+text 60.6 201.8 20.9 16.8 size=12 w=400 ink=Text "120"
+shape rect 157.6 197.1 36.8 192.9 r=Xs fill=series0
+text 165.6 180.3 20.9 16.8 size=12 w=400 ink=Text "135"
+shape rect 262.6 161.4 36.8 228.6 r=Xs fill=series0
+text 270.6 144.6 20.9 16.8 size=12 w=400 ink=Text "160"
+shape rect 367.6 90 36.8 300 r=Xs fill=series0
+text 375.6 73.2 20.9 16.8 size=12 w=400 ink=Text "210"
+shape rect 89.4 261.4 36.8 128.6 r=Xs fill=series1
+text 100.8 244.6 13.9 16.8 size=12 w=400 ink=Text "90"
+shape rect 194.4 232.9 36.8 157.1 r=Xs fill=series1
+text 202.3 216.1 20.9 16.8 size=12 w=400 ink=Text "110"
+shape rect 299.4 240 36.8 150 r=Xs fill=series1
+text 307.3 223.2 20.9 16.8 size=12 w=400 ink=Text "105"
+shape rect 404.4 175.7 36.8 214.3 r=Xs fill=series1
+text 412.3 158.9 20.9 16.8 size=12 w=400 ink=Text "150"
+shape path M89.4,247.1 L194.4,218.6 L299.4,190 L404.4,132.9 stroke=series2/thick/Solid
+shape ellipse 86.4 244.1 6 6 fill=series2 stroke=Surface/1/Solid
+shape ellipse 191.4 215.6 6 6 fill=series2 stroke=Surface/1/Solid
+shape ellipse 296.4 187 6 6 fill=series2 stroke=Surface/1/Solid
+shape ellipse 401.4 129.9 6 6 fill=series2 stroke=Surface/1/Solid
+text 232.9 420.8 28 19.6 size=14 w=400 ink=Muted "季度"
+text 173.6 8 118.7 22.4 size=16 w=600 ink=Text "各季度营收对比"

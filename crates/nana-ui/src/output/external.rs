@@ -27,7 +27,7 @@ use nana_ui_core::{OutputWorkObservation, WorkCounters};
 
 const DEFAULT_SLOTS: usize = 3;
 const MIN_SLOTS: usize = 2;
-const MAX_SLOTS: usize = 8;
+pub(crate) const MAX_SLOTS: usize = 8;
 
 /// Configuration for a retained external target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -927,6 +927,7 @@ impl ExternalSurface {
                 .as_mut()
                 .ok_or(ExternalSurfaceError::NoPainter)?,
         };
+        painter.select_presentation(self.config.presentation);
         painter.set_alpha_encoding(encoding);
         painter.paint_target(
             id,

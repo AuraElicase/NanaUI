@@ -24,6 +24,8 @@ let completed = driver.sample(consumer_id)?;
 
 `render_document` 返回 Runtime 的 flush 结果，不保证 GPU 已提交。若 `driver.work().output_deferred` 大于零，宿主应稍后重试呈现；可使用 `render_scene(document.scene(), ...)` 重试同一份 Scene，无需重复业务 mutation。仅 `poll` 不会补交被跳过的生产帧。`render_scene` 的返回值分别说明各组 `Submitted`、`Reused` 或 `Deferred`。
 
+所有不兼容组共用 driver 里的一个 `SceneWgpuPainter`，并录进同一个帧。每组的目标状态、uniform 与实例缓冲各自独立，共享的字形图集按录制顺序上传（见 [实时画面](gpu.md)）；移除某组时回收它的目标与不再使用的管线集。`PresentationDriver` 固定在创建时的 `GpuContext` 代际上：`configure` 拒绝其他代际的消费方并保留旧计划，设备丢失后 `render_scene` 返回错误且不提交；宿主换到新代际时要新建 driver。
+
 无窗口宿主可用 `set_resource_fetch_host` 注入与窗口相同的 policy-gated HTTP(S) 图片传输，用 `set_image_update_waker` 让异步图片完成时唤醒自己的调度器；应在首帧前安装 waker。切换或清空 fetch host 会取消旧 egress 的未完成请求，旧缓存不会跨 host 使用。
 
 `set_resource_producers(Some(Arc<SceneResourceProducerRegistry>))` 将图资源生产接入同一个输出帧：所有兼容/不兼容 UI 组共享一次 producer encode 和一次总提交，只有实际提交后通知 `submitted`，任何编码错误均丢弃整帧。`SceneResourceProducer::preparation_version` 默认 `None`，保持既有动态生产行为；提供稳定版本后，节点输入与版本均不变时不重新生产，未被引用的 producer 不会使输出 volatile。所有输出槽位饱和时在 producer 编码之前返回 `Deferred`。`PresentationError` 新增 `ResourceProduction`，穷尽匹配方需处理。
@@ -38,11 +40,11 @@ let completed = driver.sample(consumer_id)?;
 | `SharedTexture` | 同设备 consumer 共同租用 canonical 纹理，同一组只渲染一次 UI。 |
 | `GpuTransfer` | Window 最终呈现、原生导出复制等已实现的 GPU transfer。 |
 | `NativeShared` | 仅 adapter 明确支持直接渲染至可导出的 canonical 资源时可选；DX12 export-copy 不冒充此路径。 |
-| `Unsupported` | 没有实现的能力、无效目标或不支持的采样配置，明确拒绝，不静默改走 CPU。 |
+| `Unsupported` | 没有实现的能力或无效目标，明确拒绝，不静默改走 CPU。 |
 
-兼容性比较 presentation、viewport mapping identity、物理尺寸、profile、alpha、text AA、sample count、device generation 与 canonical ownership。`viewport_revision` 由宿主依据逻辑视口、DPR、fit 和原点的完整映射产生，不能拿内容 revision 代替。持久要求可向同组提升；native-copy transport 可消费同一个同设备 canonical，不额外渲染 UI。`OutputPlan::incompatibilities` 返回独立分组的具体原因。
+兼容性比较 presentation、viewport mapping identity、物理尺寸、profile、alpha、text AA、device generation 与 canonical ownership。`viewport_revision` 由宿主依据逻辑视口、DPR、fit 和原点的完整映射产生，不能拿内容 revision 代替。持久要求可向同组提升；native-copy transport 可消费同一个同设备 canonical，不额外渲染 UI。`OutputPlan::incompatibilities` 返回独立分组的具体原因。
 
-SDR sRGB 的 `BGRA8_UNORM`、`BGRA8_UNORM_SRGB`、`RGBA8_UNORM`、`RGBA8_UNORM_SRGB` 可以共享绘制：最终 transfer 通过纹理视图处理通道顺序与 sRGB 编解码，保留 encoded 预乘通道值；存在 `BGRA8_UNORM` 消费方时优先以它作为 canonical。线性直写兼容 profile 仍独立分组。subpixel 与 grayscale、不同 alpha、HDR/P3 或不同像素密度不会被悄悄降级以取得共享。多采样目标目前明确不支持，未承诺未实现的 MSAA resolve 路径。
+SDR sRGB 的 `BGRA8_UNORM`、`BGRA8_UNORM_SRGB`、`RGBA8_UNORM`、`RGBA8_UNORM_SRGB` 可以共享绘制：最终 transfer 通过纹理视图处理通道顺序与 sRGB 编解码，保留 encoded 预乘通道值；存在 `BGRA8_UNORM` 消费方时优先以它作为 canonical。线性直写兼容 profile 仍独立分组。subpixel 与 grayscale、不同 alpha、HDR/P3 或不同像素密度不会被悄悄降级以取得共享。consumer 目标一律是单采样纹理，requirements 里没有采样数字段。光栅化 MSAA 属于 Scene painter 内部：painter 在 consumer 读取前完成 resolve。
 
 原 `ApplicationState` / `RuntimeApplication` / `RuntimeProgramContext` 仍是窗口应用的兼容入口。无窗口应用通过 `RuntimeDocument` + `PresentationDriver` 驱动；不应把仍依赖 winit Window 的 `EmbeddedRuntime` 当作此入口。
 
@@ -94,6 +96,7 @@ fn window_output(&self, id: WindowId) -> Option<WindowOutputConfig> {
 - **静态与节流。** 输出不变时不录制输出；`max_fps` 只控制生产节拍。隐藏、最小化或遮挡窗口在 `while_hidden` 下继续排空消息/flush，并只为有变更的输出或 producer 编码；隐藏静态内容 0 UI render / submit。0 尺寸不产出帧。
 - **适配与 alpha。** 支持 `Fixed`、`MatchWindow`、`Scale`，以及等比 `Contain` / `Cover`。`Premultiplied` 使用适合外部 compositor 的 gamma 空间预乘；`Straight` 对每个 canonical slot 使用对应的转换目标，额外 pass 可观测。
 - **异步生命周期迁移。** `WindowOutputFrame::texture()` 保留回调内读取入口；异步消费必须取 `frame.lease()`。`WindowOutputLease` 可 clone，并在采样前对调用方帧使用 `keep_alive_until_complete`。不再依赖“两帧后复用”假设，慢 consumer 令池返回 `Deferred`，不会覆盖仍在使用的 slot。
+- **槽位容量。** 窗口输出池的槽数是宿主在途帧槽数加一（默认 3 + 1 = 4，上限 8）：宿主在规划输出之前已占住当帧槽位，其余在途帧各占一个输出槽直到完成，已发布帧再占一个。少于这个数时，GPU 一落后（例如 Windows WARP）输出就会按 `SourceSlots` 周期性延后，窗口照常呈现而输出缺帧。
 - **状态。** `Planned { plan }` 仅在 consumer / 尺寸 / 显示配置 / 设备等结构变化时报告实际计划；内容变化不反复通知。`Active`、`NativeUnavailable`、`NativeDeferred`、`NativeRetired`、`Failed`、`Stopped` 仅在状态改变时通知。native 不可用时仍可保留同设备输出；这不等于 CPU fallback。
 
 迁移穷尽匹配状态或错误枚举的调用方时，需要处理新增的 `Planned`、循环依赖 / 过期计划拒绝，以及 native stage 的 `ProducerBusy`。后者表示已有生产 reservation，区别于消费方尚未释放资源，不应把两种状态合并为成功或擅自释放资源。
@@ -148,7 +151,7 @@ cargo test -p nana-gpu --features native-export --test native_export
 cargo run -p nana-ui --example window-output-probe --features hosted,bundled-fonts,native-export
 ```
 
-测试覆盖：导出帧并在同一适配器的 D3D11 设备上打开、逐字节复制比对、未释放帧使下一帧 defer、drop token 自释放、丢弃帧不污染池，以及最后一枚 token 释放后退役池关闭句柄。`window-output-probe` 让一扇透明合成窗口跑过四个阶段（可见/隐藏 × 动画/静态），并在 D3D11 设备上消费每一枚原生 token。
+测试覆盖：导出帧并在同一适配器的 D3D11 设备上打开、逐字节复制比对、未释放帧使下一帧 defer、drop token 自释放、丢弃帧不污染池，以及最后一枚 token 释放后退役池关闭句柄。`window-output-probe` 让一扇透明合成窗口跑过四个阶段（可见/隐藏 × 动画/静态），并在 D3D11 设备上消费每一枚原生 token。阶段按进度推进而不是按固定时长：动画阶段拿到 30 帧输出即结束，静态阶段从输出空闲（复用已完成的帧）起观察 2.5 秒，空闲之前完成上一阶段最后内容的帧单独计为 `settle_frames`；任一阶段 60 秒内没走完即判失败。原因是软件适配器（CI 上的 WARP）前几帧要在 GPU 上执行数秒、稳态也只有每秒几帧，固定 2.5 秒的窗口实际是在判吞吐而不是功能。像素回读用 `D3D11_MAP_FLAG_DO_NOT_WAIT` 在后续帧上取：回读拷贝要等生产端的 ready 信号，而该信号可能排在一次需要事件循环继续运行才能完成的 present 之后，在事件循环线程上阻塞 `Map` 会互相等死。perf 模式（`--perf-output`）同理以 30 秒没有新 token 判为停滞，不再限制总时长。
 
 Windows CI 以 `NANA_REQUIRE_DX12_NATIVE_TESTS=1` 执行 native-export 测试：缺少 DX12 adapter 直接失败，避免本地可选 skip 被误计为平台验收通过。CI 还运行上面的真实 Window/D3D11 import probe，保存其原始证据；配置了 CI 不等于本机已经执行 Windows 测试。
 
@@ -158,7 +161,7 @@ Windows CI 以 `NANA_REQUIRE_DX12_NATIVE_TESTS=1` 执行 native-export 测试：
 
 `OutputWorkObservation`、`PresentationDriver::work`、`ExternalSurface::last_work`、Runtime `WorkCounters::output_*` 及 append-only diagnostics 记录真实规划、UI renders、提交、重建、复用、copy bytes、resolve/convert pass、readback 与 defer。未执行的阶段保持未观测，缺数据不能当作零；旧退休 diagnostics ID 不重复分配。
 
-六类实际 GPU fixture 是 `output-static`、`output-multi`、`output-nested`、`output-conversion`、`output-slow`、`output-recovery`；另由真实原生 Window/Surface probe 验收 `output-direct`。后者还运行 attach/detach、兼容/不兼容输出、resize 与 hidden/static 阶段。headless target 不得冒充 direct Surface，resize recovery 不得冒充实际设备丢失。
+七类实际 GPU fixture 是 `output-static`、`output-multi`、`output-nested`、`output-conversion`、`output-slow`、`output-recovery`、`output-incompatible`（SDR 组与其 float working 组共用一个 painter、每帧一次提交，并报告共享 painter 的纹素字节 `painter_resources`）；另由真实原生 Window/Surface probe 验收 `output-direct`。后者还运行 attach/detach、兼容/不兼容输出、resize 与 hidden/static 阶段。headless target 不得冒充 direct Surface，resize recovery 不得冒充实际设备丢失。
 
 ```bash
 cargo test --locked -p nana-ui --features hosted,bundled-fonts --lib output:: -- --test-threads=1

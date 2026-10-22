@@ -1,0 +1,11 @@
+venn-beta
+  title 四门课程的选课重叠
+  set 数学
+  set 物理
+  set 化学
+  set 生物
+  set Extra
+  union 数学,物理["理论"]
+  union 化学,生物["实验"]
+  union 数学,物理,化学,生物["全修"]
+  union 数学,Unknown["不存在"]

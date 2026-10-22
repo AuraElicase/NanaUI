@@ -397,7 +397,7 @@ where
             site,
             ..
         } = self;
-        if let Some(container) = container(stack, key, style, site).place(vb) {
+        if let Some(container) = container(stack.structural(), key, style, site).place(vb) {
             EachBinding::new(items, key_fn, row_fn, transition).mount(vb, container, site);
         }
     }
@@ -588,6 +588,8 @@ struct SwitchOptions {
     keep_alive: Option<usize>,
     key: Option<Cow<'static, str>>,
     style: ContainerStyle,
+    /// The container takes the space left along its parent's main axis.
+    grow: bool,
 }
 
 impl When {
@@ -615,6 +617,13 @@ impl When {
     /// dropping it (Vue `<KeepAlive>`): switching back shows it as it was.
     pub fn keep_alive(mut self) -> Self {
         self.options.keep_alive = Some(1);
+        self
+    }
+
+    /// Let the container take the space left along its parent's main axis,
+    /// so a branch that fills (a scroll view, an editor) has room to fill.
+    pub fn grow(mut self) -> Self {
+        self.options.grow = true;
         self
     }
 
@@ -732,6 +741,13 @@ impl<K> Dynamic<K> {
         self
     }
 
+    /// Let the container take the space left along its parent's main axis,
+    /// so a view that fills (a scroll view, an editor) has room to fill.
+    pub fn grow(mut self) -> Self {
+        self.options.grow = true;
+        self
+    }
+
     fn container_style_mut(&mut self) -> &mut ContainerStyle {
         &mut self.options.style
     }
@@ -762,8 +778,17 @@ fn build_switch<K: Clone + PartialEq + Send + 'static>(
         keep_alive,
         key: node_key,
         style,
+        grow,
     } = options;
-    let Some(container) = container(Stack::column(0.0), node_key, style, site).place(vb) else {
+    let mut column = Stack::column(0.0);
+    if grow {
+        let layout = column.layout_mut();
+        layout.flex_grow = Some(1.0);
+        layout.flex_shrink = Some(1.0);
+        layout.flex_basis = Some(nana_ui_core::LengthSpec::Px(0.0));
+        layout.min_height = Some(nana_ui_core::LengthSpec::Px(0.0));
+    }
+    let Some(container) = container(column.structural(), node_key, style, site).place(vb) else {
         return;
     };
     let id = container.stable_id();

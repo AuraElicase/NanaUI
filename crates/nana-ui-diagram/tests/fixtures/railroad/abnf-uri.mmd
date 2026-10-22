@@ -1,0 +1,8 @@
+railroad-abnf-beta
+title Host names
+
+host = label *( "." label )        ; dotted labels
+label = 1*63( ALPHA / DIGIT / "-" )
+port = 1*5DIGIT
+scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+scheme =/ %x2A <any registered name>

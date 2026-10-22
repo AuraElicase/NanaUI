@@ -114,6 +114,14 @@ enum BuiltOp {
         shadow: Option<ComponentElevation>,
         transform: Affine,
     },
+    /// Solid quads painted one after another with nothing between them, the
+    /// same corners and transform, and no border, shadow or authoring color:
+    /// one primitive however many, each with its own box and color.
+    QuadRun {
+        items: Vec<(SceneRect, [f32; 4])>,
+        radii: [f32; 4],
+        transform: Affine,
+    },
     Image {
         rect: SceneRect,
         source: Arc<str>,
@@ -194,6 +202,15 @@ pub(super) const PAINT_OVER_POST: u32 = 0xFFFF_FFF3;
 /// own layer: over the scrim, under the card's dividers and text. See
 /// `primitive_paint_layer`.
 pub(super) const MODAL_SURFACE_PAINT: u32 = 0xFFFF_FFD0;
+/// The namespace Markdown diagrams' primitives live in. Each diagram of a
+/// document takes a block of [`MARKDOWN_DIAGRAM_BLOCK`] slots, in document
+/// order; past every built-in Markdown slot, so diagrams paint over their
+/// block's selection band.
+#[cfg(feature = "rich-text")]
+pub(super) const MARKDOWN_DIAGRAM_PAINT: u32 = 14;
+/// Slots per diagram. A diagram's display list is bounded well below it.
+#[cfg(feature = "rich-text")]
+pub(super) const MARKDOWN_DIAGRAM_BLOCK: usize = 1 << 18;
 
 /// The stacking entry a painted node's primitive sorts under, after the
 /// node's own prefix (a painted node is always a stacking group).
@@ -206,14 +223,17 @@ pub(super) const MODAL_SURFACE_PAINT: u32 = 0xFFFF_FFD0;
 /// them: every namespace here is above every built-in slot.
 pub(super) fn custom_paint_stack(recording: &PaintRecording, slot: u64) -> Option<(i32, usize)> {
     let namespace = (slot >> 32) as u32;
-    let default_over = recording.default_phase() == Some(PaintPhase::OverChildren);
     match namespace {
         PAINT_BEHIND_PRE => None,
         PAINT_BEHIND_POST => Some((i32::MIN, 0)),
         PAINT_OVER_PRE => Some((i32::MAX, usize::MAX - 1)),
         PAINT_OVER_POST => Some((i32::MAX, usize::MAX)),
         // The node's built-in primitives: wherever `draw_default()` put them.
-        _ if default_over => Some((i32::MAX, usize::MAX)),
+        // Asked only for these — every painted primitive orders through here,
+        // and finding the call scans the whole recording.
+        _ if recording.default_phase() == Some(PaintPhase::OverChildren) => {
+            Some((i32::MAX, usize::MAX))
+        }
         _ => Some((i32::MIN, 0)),
     }
 }
@@ -297,12 +317,91 @@ impl UiScene {
                     (PaintPhaseOps::Over, PAINT_OVER_PRE, PAINT_OVER_POST),
                 ],
                 adjust_default: true,
+                index_base: 0,
             },
             transform,
             clips,
             opacity,
             node_order,
         );
+    }
+
+    /// Emit the native diagrams in a Markdown document's drawing. Each
+    /// diagram's recording is triangulated once and reused for as long as
+    /// the runtime hands the same recording back: scrolling, selection and
+    /// moving the document do not re-triangulate. A document with no
+    /// diagrams left drops what it held.
+    #[cfg(feature = "rich-text")]
+    pub(super) fn emit_markdown_diagrams(
+        &mut self,
+        node: &ExtractedNode,
+        drawing: &nana_ui_runtime::MarkdownDrawing,
+        transform: AffineTransform,
+        clips: &Arc<[ClipRegion]>,
+        opacity: f32,
+        node_order: usize,
+    ) {
+        let held = self.markdown_diagram_paint.get(&node.id).cloned();
+        let mut built = Vec::new();
+        let mut places = Vec::new();
+        for command in &drawing.commands {
+            let nana_ui_runtime::MarkdownDrawingCommand::Diagram { bounds, drawing } = command
+            else {
+                continue;
+            };
+            let recording = &drawing.recording;
+            let reused = held
+                .as_deref()
+                .and_then(|held| held.iter().find(|b| Arc::ptr_eq(&b.recording, recording)))
+                .cloned();
+            built.push(reused.unwrap_or_else(|| BuiltPaint {
+                recording: Arc::clone(recording),
+                node_mask: None,
+                behind: build_ops(&recording.behind_children, false).into(),
+                over: Arc::from([]),
+            }));
+            places.push((
+                [bounds.x, bounds.y],
+                [bounds.width.max(0.0), bounds.height.max(0.0)],
+            ));
+        }
+        if built.is_empty() {
+            if !self.markdown_diagram_paint.is_empty() {
+                self.markdown_diagram_paint.remove(&node.id);
+            }
+            return;
+        }
+        let built: Arc<[BuiltPaint]> = built.into();
+        self.markdown_diagram_paint
+            .insert(node.id, Arc::clone(&built));
+        for (index, (paint, (origin, size))) in built.iter().zip(places).enumerate() {
+            self.emit_built_ops(
+                node,
+                paint,
+                PaintPlacement {
+                    origin,
+                    size,
+                    phases: [
+                        (
+                            PaintPhaseOps::Behind,
+                            MARKDOWN_DIAGRAM_PAINT,
+                            MARKDOWN_DIAGRAM_PAINT,
+                        ),
+                        (
+                            PaintPhaseOps::None,
+                            MARKDOWN_DIAGRAM_PAINT,
+                            MARKDOWN_DIAGRAM_PAINT,
+                        ),
+                    ],
+                    adjust_default: false,
+                    index_base: index * MARKDOWN_DIAGRAM_BLOCK,
+                },
+                transform,
+                clips,
+                opacity,
+                node_order,
+            );
+        }
     }
 
     /// The geometry of a modal frame's card surface recording, built once
@@ -361,6 +460,7 @@ impl UiScene {
                     ),
                 ],
                 adjust_default: false,
+                index_base: 0,
             },
             transform,
             clips,
@@ -510,6 +610,28 @@ impl UiScene {
                         Arc::clone(clips),
                         under(local_transform),
                     ),
+                    BuiltOp::QuadRun {
+                        items,
+                        radii,
+                        transform: local_transform,
+                    } => {
+                        let rects: Vec<SceneRect> = items
+                            .iter()
+                            .map(|(rect, _)| offset_rect(*rect, origin))
+                            .collect();
+                        (
+                            union_rect(&rects),
+                            ScenePrimitiveKind::QuadColorBatch {
+                                bounds: rects,
+                                colors: items.iter().map(|(_, color)| *color).collect(),
+                                border_color: None,
+                                border_width: 0.0,
+                                corner_radius: *radii,
+                            },
+                            Arc::clone(clips),
+                            under(local_transform),
+                        )
+                    }
                     BuiltOp::Image {
                         rect,
                         source,
@@ -561,7 +683,7 @@ impl UiScene {
                 self.insert_primitive(ScenePrimitive {
                     id: PrimitiveId {
                         node: node.id,
-                        slot: collection_slot(namespace, index),
+                        slot: collection_slot(namespace, placement.index_base + index),
                     },
                     node: node.id,
                     bounds,
@@ -593,6 +715,9 @@ struct PaintPlacement {
     size: [f32; 2],
     phases: [(PaintPhaseOps, u32, u32); 2],
     adjust_default: bool,
+    /// Added to every op's slot index, so several recordings can share one
+    /// namespace on one node.
+    index_base: usize,
 }
 
 impl UiScene {
@@ -717,6 +842,24 @@ fn custom_text(
         layout: None,
         rich: None,
         presentation: None,
+    }
+}
+
+/// The box around `rects`, which is not empty.
+fn union_rect(rects: &[SceneRect]) -> SceneRect {
+    let [mut left, mut top] = [f32::INFINITY; 2];
+    let [mut right, mut bottom] = [f32::NEG_INFINITY; 2];
+    for rect in rects {
+        left = left.min(rect.x);
+        top = top.min(rect.y);
+        right = right.max(rect.x + rect.width);
+        bottom = bottom.max(rect.y + rect.height);
+    }
+    SceneRect {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
     }
 }
 
@@ -1107,7 +1250,59 @@ fn build_ops(ops: &[PaintOp], masked: bool) -> Vec<BuiltOp> {
             }
         }
     }
-    built
+    run_quads(built)
+}
+
+/// Fold each stretch of two or more solid quads that can share a primitive
+/// into a [`BuiltOp::QuadRun`]: a canvas of thousands of boxes then costs
+/// the scene and the painter one primitive, not one each. Order is kept —
+/// a run only ever holds quads that were adjacent.
+fn run_quads(built: Vec<BuiltOp>) -> Vec<BuiltOp> {
+    fn solid(op: &BuiltOp) -> Option<(SceneRect, [f32; 4], [f32; 4], Affine)> {
+        match op {
+            BuiltOp::Quad {
+                rect,
+                radii,
+                fill: Some(fill),
+                fill_color_space: None,
+                border: None,
+                shadow: None,
+                transform,
+                ..
+            } => Some((*rect, *fill, *radii, *transform)),
+            _ => None,
+        }
+    }
+    let mut out: Vec<BuiltOp> = Vec::with_capacity(built.len());
+    for op in built {
+        let Some((rect, fill, radii, transform)) = solid(&op) else {
+            out.push(op);
+            continue;
+        };
+        match out.last_mut() {
+            Some(BuiltOp::QuadRun {
+                items,
+                radii: run_radii,
+                transform: run_transform,
+            }) if *run_radii == radii && *run_transform == transform => {
+                items.push((rect, fill));
+            }
+            Some(last)
+                if solid(last).is_some_and(|(_, _, last_radii, last_transform)| {
+                    last_radii == radii && last_transform == transform
+                }) =>
+            {
+                let (first, first_fill, ..) = solid(last).expect("checked above");
+                *last = BuiltOp::QuadRun {
+                    items: vec![(first, first_fill), (rect, fill)],
+                    radii,
+                    transform,
+                };
+            }
+            _ => out.push(op),
+        }
+    }
+    out
 }
 
 /// The rectangle and corner radii of a path that is one (rounded)
@@ -3163,6 +3358,7 @@ mod tests {
             .map(|op| match op {
                 BuiltOp::Mesh(_) => "mesh",
                 BuiltOp::Quad { .. } => "quad",
+                BuiltOp::QuadRun { .. } => "quad-run",
                 BuiltOp::Image { .. } => "image",
                 BuiltOp::Text { .. } => "text",
                 BuiltOp::Icon { .. } => "icon",
@@ -3434,5 +3630,105 @@ mod tests {
         assert!(
             (mesh.bounds.x - area.x).abs() < 1.0 && (mesh.bounds.width - area.width).abs() < 2.0
         );
+    }
+
+    fn boxed(x: f32, radius: f32, fill: Option<ResolvedPaint>) -> PaintOp {
+        boxed_with(x, radius, fill, None, None)
+    }
+
+    fn boxed_with(
+        x: f32,
+        radius: f32,
+        fill: Option<ResolvedPaint>,
+        border: Option<([f32; 4], f32)>,
+        shadow: Option<ComponentElevation>,
+    ) -> PaintOp {
+        PaintOp::RoundedRect {
+            rect: LayoutBox {
+                x,
+                y: 0.0,
+                width: 8.0,
+                height: 8.0,
+            },
+            radii: [radius; 4],
+            fill,
+            border,
+            border_paint: None,
+            shadow,
+        }
+    }
+
+    #[test]
+    fn adjacent_solid_boxes_share_one_run_in_order() {
+        let red = Some(ResolvedPaint::Solid([1.0, 0.0, 0.0, 1.0]));
+        let blue = Some(ResolvedPaint::Solid([0.0, 0.0, 1.0, 0.5]));
+        let built = build_ops(&[
+            boxed(0.0, 2.0, red.clone()),
+            boxed(10.0, 2.0, blue.clone()),
+            boxed(20.0, 2.0, red.clone()),
+        ]);
+        let [BuiltOp::QuadRun { items, radii, .. }] = &built[..] else {
+            panic!("expected one run, got {:?}", kinds(&built));
+        };
+        assert_eq!(*radii, [2.0; 4]);
+        let xs: Vec<f32> = items.iter().map(|(rect, _)| rect.x).collect();
+        assert_eq!(xs, [0.0, 10.0, 20.0], "paint order is kept");
+        assert_eq!(items[1].1, [0.0, 0.0, 1.0, 0.5]);
+
+        // A path between them, or other corners, starts a new stretch; a lone
+        // box stays a quad.
+        let built = build_ops(&[
+            boxed(0.0, 2.0, red.clone()),
+            boxed(10.0, 2.0, red.clone()),
+            PaintOp::FillPath {
+                path: Arc::new(rect_path(0.0, 0.0, 4.0, 4.0)),
+                paint: ResolvedPaint::Solid([0.0, 1.0, 0.0, 1.0]),
+            },
+            boxed(20.0, 2.0, red.clone()),
+            boxed(30.0, 3.0, red.clone()),
+            boxed(40.0, 3.0, red.clone()),
+        ]);
+        assert_eq!(kinds(&built), ["quad-run", "mesh", "quad", "quad-run"]);
+    }
+
+    #[test]
+    fn boxes_with_more_than_a_solid_fill_keep_their_own_quads() {
+        let red = Some(ResolvedPaint::Solid([1.0, 0.0, 0.0, 1.0]));
+        let bordered = boxed_with(
+            10.0,
+            2.0,
+            red.clone(),
+            Some(([0.0, 0.0, 0.0, 1.0], 1.0)),
+            None,
+        );
+        let shadowed = boxed_with(
+            20.0,
+            2.0,
+            red.clone(),
+            None,
+            Some(ComponentElevation {
+                color: nana_ui_core::PaintColor::srgb([0.0, 0.0, 0.0, 0.5]),
+                offset_x: 0.0,
+                offset_y: 2.0,
+                blur_radius: 4.0,
+                spread_radius: 0.0,
+                inset: false,
+            }),
+        );
+        let authored = boxed(
+            30.0,
+            2.0,
+            Some(ResolvedPaint::Authoring(nana_ui_core::PaintColor::Oklch {
+                l: 0.6,
+                c: 0.1,
+                h: Some(30.0),
+                alpha: 1.0,
+            })),
+        );
+        let outline_only = boxed(40.0, 2.0, None);
+        for op in [bordered, shadowed, authored, outline_only] {
+            let built = build_ops(&[boxed(0.0, 2.0, red.clone()), op.clone()]);
+            assert_eq!(kinds(&built), ["quad", "quad"], "{op:?}");
+        }
     }
 }

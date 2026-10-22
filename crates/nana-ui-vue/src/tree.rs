@@ -764,7 +764,9 @@ impl NanaTreeDocument {
         self.host_textures = Some(textures);
     }
 
-    /// Packed revision for a registered slot. Unresolved handles stay `0`.
+    /// Packed revision for a registered slot: the bound handle and its content
+    /// version, so a re-registered slot is a new revision. Unresolved handles
+    /// stay `0`.
     fn packed_host_texture_revision(&self, slot: &str) -> u64 {
         let _ = slot;
         #[cfg(test)]
@@ -776,7 +778,7 @@ impl NanaTreeDocument {
             && let Some(binding) = registry.get(slot)
         {
             return nana_ui_runtime::pack_gpu_revision(
-                binding.texture.generation(),
+                binding.texture.id(),
                 binding.texture.version(),
             );
         }

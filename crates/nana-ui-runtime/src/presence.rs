@@ -298,8 +298,12 @@ impl PresenceLifecycle {
 
         if shown {
             self.set_painted(cx, true)?;
-            let restore = self.pointer_events.take().unwrap_or(None);
-            (self.write)(cx, self.node, &mut |layout| layout.pointer_events = restore)?;
+            // Only a conceal took the node's pointer-events away; a show
+            // with nothing saved (one already shown) keeps what it has, so
+            // an explicit `auto` under a `none` ancestor stays hittable.
+            if let Some(restore) = self.pointer_events.take() {
+                (self.write)(cx, self.node, &mut |layout| layout.pointer_events = restore)?;
+            }
         } else {
             let mut before = None;
             (self.write)(cx, self.node, &mut |layout| {
@@ -501,6 +505,31 @@ mod tests {
         let settled = run(&mut cx, &mut presence, ms(3000));
         assert_eq!(settled, vec![(ms(2200), PresenceSettled::Shown)]);
         assert_eq!(opacity(&cx, card.stable_id(), ms(2300)), 1.0);
+    }
+
+    #[test]
+    fn showing_again_keeps_the_nodes_own_pointer_events() {
+        // A card that turns input back on under a pass-through column, shown
+        // at once again while it already stands (a slot fade carrying it).
+        let (mut cx, _, card, _) = card_with_button();
+        cx.update_component(card, |stack, _| {
+            std::sync::Arc::make_mut(&mut stack.node_style_mut().layout).pointer_events =
+                Some(PointerEventsSpec::Auto);
+        })
+        .unwrap();
+        let mut presence = PresenceLifecycle::new(card, slide());
+        presence.set_shown_at_once(&mut cx, false, ms(0)).unwrap();
+        presence.set_shown_at_once(&mut cx, true, ms(0)).unwrap();
+        assert_eq!(
+            layout(&cx, card.stable_id()).pointer_events,
+            Some(PointerEventsSpec::Auto)
+        );
+        presence.set_shown_at_once(&mut cx, true, ms(10)).unwrap();
+        assert_eq!(
+            layout(&cx, card.stable_id()).pointer_events,
+            Some(PointerEventsSpec::Auto),
+            "a show with nothing to restore leaves it as it is"
+        );
     }
 
     #[test]

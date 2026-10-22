@@ -1,0 +1,51 @@
+size 409.5 402.4
+summary nodes=3 edges=2 groups=0
+shape path M204.8,135.8 L204.8,204.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M204.8,195.8 L200.2,204.2 M204.8,195.8 L209.3,204.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 202.1 187.9 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M208.3,141.7 L201.2,141.7 M208.3,145.9 L201.2,145.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M204.8,289.4 L204.8,357.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M204.8,349.4 L200.2,357.8 M204.8,349.4 L209.3,357.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 202.1 341.5 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M204.8,297.8 L209.3,289.4 M204.8,297.8 L200.2,289.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 202.1 300.3 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 187.4 159.8 34.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 192.8 161.6 24 16.8 size=12 w=400 ink=Muted "下单"
+shape rect 187.4 313.4 34.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 192.8 315.2 24 16.8 size=12 w=400 ink=Muted "包含"
+shape rect 9 9 391.5 126.8 r=Sm fill=Surface
+clip rect 9 9 391.5 126.8 r=Sm
+shape rect 9 9 391.5 35.6 fill=Subtle
+unclip
+shape path M9,44.6 L400.5,44.6 stroke=BorderStrong/hairline/Solid
+shape rect 9 9 391.5 126.8 r=Sm stroke=BorderStrong/hairline/Solid
+text 189.9 17 29.7 19.6 size=14 w=600 ink=Text "用户"
+text 20.2 48.6 41.8 16.8 size=12 w=400 ink=Muted "bigint"
+text 109.4 48.6 24 16.8 size=12 w=400 ink=Text "编号"
+text 170 48.6 14.8 16.8 size=12 w=600 ink=Accent "PK"
+text 197.3 48.6 48 16.8 size=12 w=400 ink=Muted "自增主键"
+shape path M9,69.4 L400.5,69.4 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 73.4 76.6 16.8 size=12 w=400 ink=Muted "varchar(64)"
+text 109.4 73.4 24 16.8 size=12 w=400 ink=Text "昵称"
+text 197.3 73.4 192 16.8 size=12 w=400 ink=Muted "用户可以随时修改，长度不超过六十"
+text 197.3 90.2 180 16.8 size=12 w=400 ink=Muted "四个字符，并且不能包含表情符号"
+shape path M9,111 L400.5,111 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 20.2 115 55.7 16.8 size=12 w=400 ink=Muted "datetime"
+text 109.4 115 48 16.8 size=12 w=400 ink=Text "注册时间"
+shape rect 128.7 204.2 152.1 85.2 r=Sm fill=Surface
+clip rect 128.7 204.2 152.1 85.2 r=Sm
+shape rect 128.7 204.2 152.1 35.6 fill=Subtle
+unclip
+shape path M128.7,239.8 L280.8,239.8 stroke=BorderStrong/hairline/Solid
+shape rect 128.7 204.2 152.1 85.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 189.9 212.2 29.7 19.6 size=14 w=600 ink=Text "订单"
+text 139.9 243.8 41.8 16.8 size=12 w=400 ink=Muted "bigint"
+text 194.3 243.8 24 16.8 size=12 w=400 ink=Text "编号"
+text 254.9 243.8 14.8 16.8 size=12 w=600 ink=Accent "PK"
+shape path M128.7,264.6 L280.8,264.6 stroke=SemanticColorMix{first:BorderSoft,second:None,weight:8000}/hairline/Solid
+text 139.9 268.6 41.8 16.8 size=12 w=400 ink=Muted "bigint"
+text 194.3 268.6 48 16.8 size=12 w=400 ink=Text "用户编号"
+text 254.9 268.6 14.8 16.8 size=12 w=600 ink=Accent "FK"
+shape rect 162.8 357.8 84 35.6 r=Sm fill=Surface
+shape rect 162.8 357.8 84 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 189.9 365.8 29.7 19.6 size=14 w=600 ink=Text "商品"

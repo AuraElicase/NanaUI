@@ -1,0 +1,28 @@
+size 234.9 395.2
+summary nodes=5 edges=6 groups=0
+shape path M164.1,48.6 L164.1,54.6 Q164.1,60.6 158.1,60.6 L106.6,60.6 Q98.6,60.6 98.6,68.6 L98.6,89.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M98.6,96.6 L95.1,88.2 L98.6,89.7 L102.2,88.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M73.3,168.4 L73.3,181.4 Q73.3,189.4 65.3,189.4 L53.3,189.4 Q45.3,189.4 45.3,197.4 L45.3,243.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M45.3,250.6 L41.8,242.2 L45.3,243.8 L48.8,242.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M110,175.4 L110,191.5 Q110,197.8 116.3,197.8 L116.3,197.8 Q122.7,197.8 122.7,204.2 L122.7,233.7 Q122.7,238.6 127.6,238.6 L129.9,238.6 Q132.5,238.6 132.5,241.3 L132.5,243.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M132.5,250.6 L129,242.2 L132.5,243.8 L136,242.2 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M182.6,250.6 L182.6,197.4 Q182.6,189.4 174.6,189.4 L131.1,189.4 Q124,189.4 124,182.3 L124,175.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M124,168.4 L127.5,176.8 L124,175.3 L120.4,176.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M45.3,290.2 L45.3,318.2 Q45.3,326.2 53.3,326.2 L122.7,326.2 Q126.1,326.2 126.1,329.6 L126.1,333 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M126.1,339.7 L122.5,331.3 L126.1,332.8 L129.6,331.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M215,48.6 L215,57.5 Q215,60.6 218.1,60.6 L218.1,60.6 Q221.2,60.6 221.2,63.7 L221.2,318.2 Q221.2,326.2 213.2,326.2 L143.8,326.2 Q140.4,326.2 140.4,329.6 L140.4,333 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M140.4,339.7 L136.9,331.3 L140.4,332.8 L144,331.3 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 29.5 206.2 31.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 34.9 208 20.9 16.8 size=12 w=400 ink=Muted "Yes"
+shape rect 110.3 206.2 24.7 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 115.7 208 13.9 16.8 size=12 w=400 ink=Muted "No"
+shape rect 153.3 9 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 169.3 19 40.6 19.6 size=14 w=400 ink=Text "Start"
+shape path M98.6,96.6 L183.1,138.8 L98.6,181 L14.2,138.8 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 41.8 129 113.7 19.6 size=14 w=400 ink=Text "Is it working?"
+shape rect 9 250.6 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 25 260.6 40.6 19.6 size=14 w=400 ink=Text "Great"
+shape rect 121.6 250.6 72.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+text 137.6 260.6 40.6 19.6 size=14 w=400 ink=Text "Debug"
+shape ellipse 109.3 338.2 47.9 47.9 fill=Surface stroke=BorderStrong/hairline/Solid
+text 117 352.4 32.5 19.6 size=14 w=400 ink=Text "Done"

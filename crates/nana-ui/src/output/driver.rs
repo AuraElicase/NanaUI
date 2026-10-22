@@ -5,7 +5,6 @@ use nana_gpu::{FrameContext, GpuContext, GpuRenderTarget};
 use nana_ui_core::{OutputWorkObservation, WorkCounters};
 use nana_ui_runtime::{FrameworkError, LayoutViewport};
 use nana_ui_scene::{RuntimeDocument, RuntimeFrameUpdate, UiScene};
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -55,7 +54,9 @@ pub struct PresentationDriver {
     work: WorkCounters,
     pending_plan_rebuilds: usize,
     pending_target_recreates: usize,
-    painters: HashMap<crate::ScenePresentationProfile, crate::SceneWgpuPainter>,
+    /// One painter for every group: profiles share its atlases and caches,
+    /// and each working format keeps a pipeline set inside it.
+    painter: Option<crate::SceneWgpuPainter>,
     renderer_tick: u64,
     fetch_host: Option<nana_ui_platform::SharedFetchHost>,
     image_waker: Option<ImageWaker>,
@@ -102,9 +103,15 @@ impl From<ExternalSurfaceError> for PresentationError {
 impl PresentationDriver {
     #[cfg(test)]
     pub(super) fn has_pending_image_work(&self) -> bool {
-        self.painters
-            .values()
+        self.painter
+            .iter()
             .any(|painter| painter.has_pending_images() || painter.has_image_updates())
+    }
+
+    /// The one painter every group shares, once a consumer is configured.
+    #[cfg(test)]
+    pub(super) fn shared_painter(&mut self) -> &mut crate::SceneWgpuPainter {
+        self.painter.as_mut().expect("configured painter")
     }
 
     pub fn new(gpu: &GpuContext) -> Self {
@@ -116,7 +123,7 @@ impl PresentationDriver {
             work: WorkCounters::default(),
             pending_plan_rebuilds: 0,
             pending_target_recreates: 0,
-            painters: HashMap::new(),
+            painter: None,
             renderer_tick: 0,
             fetch_host: None,
             image_waker: None,
@@ -142,7 +149,7 @@ impl PresentationDriver {
         let previous = self.fetch_host.take();
         self.fetch_host = host;
         self.resource_revision = self.resource_revision.wrapping_add(1);
-        for painter in self.painters.values_mut() {
+        if let Some(painter) = self.painter.as_mut() {
             if let Some(previous) = &previous {
                 painter.retire_resource_fetch_host(previous);
             }
@@ -153,7 +160,7 @@ impl PresentationDriver {
     /// Schedule the owning headless host when an asynchronous image completes.
     /// The callback carries the same resource key as the window image waker.
     pub fn set_image_update_waker(&mut self, wake: Arc<dyn Fn(&str) + Send + Sync>) {
-        for painter in self.painters.values_mut() {
+        if let Some(painter) = self.painter.as_mut() {
             painter.set_image_update_waker(Arc::clone(&wake));
         }
         self.image_waker = Some(wake);
@@ -273,37 +280,37 @@ impl PresentationDriver {
             };
             self.targets.push(target);
         }
-        for target in old {
-            if let Some(painter) = self.painters.get_mut(&target.requirements.profile) {
+        if let Some(painter) = self.painter.as_mut() {
+            for target in old {
                 for id in target.surface.target_ids() {
                     painter.remove_target(id);
                 }
             }
         }
-        for group in &candidate.plan().groups {
-            let fetch_host = self.fetch_host.clone();
-            let image_waker = self.image_waker.clone();
-            self.painters
-                .entry(group.requirements.profile)
-                .or_insert_with(|| {
-                    let mut painter = crate::SceneWgpuPainter::new_with_presentation(
-                        &self.gpu,
-                        group.requirements.profile,
-                    );
-                    painter.set_resource_fetch_host(fetch_host);
-                    if let Some(wake) = image_waker {
-                        painter.set_image_update_waker(wake);
-                    }
-                    painter
-                });
+        let profiles: Vec<_> = candidate
+            .plan()
+            .groups
+            .iter()
+            .map(|group| group.requirements.profile)
+            .collect();
+        if let Some(&first) = profiles.first() {
+            let painter = self.painter.get_or_insert_with(|| {
+                let mut painter = crate::SceneWgpuPainter::new_with_presentation(&self.gpu, first);
+                painter.set_resource_fetch_host(self.fetch_host.clone());
+                if let Some(wake) = self.image_waker.clone() {
+                    painter.set_image_update_waker(wake);
+                }
+                painter
+            });
+            // Build every group's pipelines here, at the structural boundary,
+            // rather than on its first frame.
+            for &profile in &profiles {
+                painter.select_presentation(profile);
+            }
+            painter.retain_presentations(&profiles);
+        } else {
+            self.painter = None;
         }
-        self.painters.retain(|profile, _| {
-            candidate
-                .plan()
-                .groups
-                .iter()
-                .any(|group| group.requirements.profile == *profile)
-        });
         self.planner.update(consumers);
         self.rebuild_output_traces(true);
         self.pending_plan_rebuilds += 1;
@@ -313,6 +320,21 @@ impl PresentationDriver {
         });
         nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_PLAN_REBUILDS);
         Ok(true)
+    }
+
+    /// Glyph counters of the one painter every group shares; `None` while no
+    /// consumer is configured and there is no painter.
+    pub fn text_glyph_counters(&self) -> Option<crate::TextGlyphCounters> {
+        self.painter
+            .as_ref()
+            .map(crate::SceneWgpuPainter::text_glyph_counters)
+    }
+
+    /// Icon-atlas and URL-texture counters of that painter.
+    pub fn painter_resource_counters(&self) -> Option<crate::ScenePainterResourceCounters> {
+        self.painter
+            .as_ref()
+            .map(crate::SceneWgpuPainter::resource_counters)
     }
 
     pub fn plan(&self) -> &OutputPlan {
@@ -630,10 +652,7 @@ impl PresentationDriver {
                 clear_color,
                 clear: true,
             };
-            let painter = self
-                .painters
-                .get_mut(&target.requirements.profile)
-                .expect("configured painter");
+            let painter = self.painter.as_mut().expect("configured painter");
             let image_revision =
                 frame_driver::PresentationFrameDriver::refresh_image_revision(painter);
             let revision = if renderer_revision.is_none()
@@ -686,7 +705,7 @@ impl PresentationDriver {
                     None,
                     frame,
                     &self.gpu,
-                    &mut self.painters,
+                    &mut self.painter,
                     Some(&mut target.surface),
                     None,
                     &mut None,

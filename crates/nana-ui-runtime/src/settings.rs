@@ -242,6 +242,7 @@ impl SettingsRow {
 impl ComponentView for SettingsRow {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         slot_assembler: Some(AppContext::assemble_settings_row),
+        lifecycle: Some(sync_row_group),
         ..crate::TypeBehavior::NONE
     };
 
@@ -474,6 +475,238 @@ impl ComponentView for SettingsCard {
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         self.card().project(id, world, mutations);
     }
+}
+
+/// A column of settings rows and other content whose group edges follow what
+/// is shown.
+///
+/// The first shown member of the group gets the group's edge air above it,
+/// the last one below it, and a divided row draws no divider under the last
+/// shown member — however the rows are shown or hidden. A [`SettingsRow`]
+/// directly in the group has its `first_in_group` / `last_in_group` written
+/// by the group; any other member (a badge, a value list, a row of buttons)
+/// takes its place in the order without being written. The container of a
+/// keyed list or a conditional block is read through, so its rows are
+/// members in their own right. A [`crate::Divider`] member is a separator:
+/// it shows only between two shown members.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingsGroup {
+    pub style: NodeStyle,
+}
+
+impl Default for SettingsGroup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SettingsGroup {
+    pub fn new() -> Self {
+        let mut style = NodeStyle::default();
+        let layout = style.layout_mut();
+        layout.direction = Some(FlexDirection::Column);
+        layout.align_items = AlignSpec::Stretch;
+        layout.width = Some(LengthSpec::Fill);
+        Self { style }
+    }
+
+    /// Space between members.
+    pub fn gap(mut self, gap: f32) -> Self {
+        self.style.layout_mut().gap = Some(LengthSpec::Px(gap.max(0.0)));
+        self
+    }
+
+    pub fn style(mut self, style: NodeStyle) -> Self {
+        self.style = style;
+        self
+    }
+}
+
+impl ComponentView for SettingsGroup {
+    const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
+        lifecycle: Some(sync_settings_group),
+        ..crate::TypeBehavior::NONE
+    };
+
+    fn share_layouts(
+        &mut self,
+        share: &mut dyn FnMut(&mut std::sync::Arc<nana_ui_core::LayoutStyle>),
+    ) {
+        share(&mut self.style.layout);
+    }
+
+    fn node_kind(&self) -> NodeKind {
+        NodeKind::Element {
+            tag: "settings-group".into(),
+        }
+    }
+
+    /// A member shown or hidden moves the group's edges.
+    fn wants_child_reproject() -> bool {
+        true
+    }
+
+    fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
+        project_common(
+            id,
+            world,
+            mutations,
+            &self.style,
+            InteractionState {
+                pointer_events: false,
+                focusable: false,
+            },
+            AccessibilityState::default(),
+        );
+    }
+}
+
+/// Whether `id` takes part in layout: neither hidden nor `display: none`.
+fn generates_box(world: &UiWorld, id: StableNodeId) -> bool {
+    world.node_style(id).is_some_and(|style| {
+        !style.layout.hidden && style.layout.display != Some(nana_ui_core::DisplaySpec::None)
+    })
+}
+
+/// A group's members in order, read through structural containers, which
+/// land in `containers`. A separator is listed whether it shows or not: the
+/// group decides that.
+fn group_members(
+    context: &AppContext,
+    node: StableNodeId,
+    members: &mut Vec<(StableNodeId, bool)>,
+    containers: &mut Vec<StableNodeId>,
+) {
+    let Some(snapshot) = context.world().node(node) else {
+        return;
+    };
+    for child in snapshot.children {
+        let separator = context
+            .read(Entity::<crate::Divider>::from_stable_id(child), |_| ())
+            .is_ok();
+        if separator {
+            members.push((child, true));
+            continue;
+        }
+        if !generates_box(context.world(), child) {
+            continue;
+        }
+        let structural = context
+            .read(Entity::<crate::Stack>::from_stable_id(child), |stack| {
+                stack.is_structural()
+            })
+            .unwrap_or(false);
+        if structural {
+            containers.push(child);
+            group_members(context, child, members, containers);
+        } else {
+            members.push((child, false));
+        }
+    }
+}
+
+std::thread_local! {
+    /// Set while a group marks its rows, so the rows it writes do not ask
+    /// it again.
+    static SYNCING_GROUP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// A row shown or hidden changes its group while the row itself is out being
+/// written, so the group cannot read it then: once the row is back, it asks
+/// its group (through any list or conditional block container) again.
+fn sync_row_group(
+    context: &mut AppContext,
+    row: Entity<SettingsRow>,
+) -> Result<(), FrameworkError> {
+    if SYNCING_GROUP.get() {
+        return Ok(());
+    }
+    let mut node = row.stable_id();
+    while let Some(parent) = context.world().parent_id(node) {
+        let group = Entity::<SettingsGroup>::from_stable_id(parent);
+        if context.read(group, |_| ()).is_ok() {
+            return sync_settings_group(context, group);
+        }
+        let structural = context
+            .read(Entity::<crate::Stack>::from_stable_id(parent), |stack| {
+                stack.is_structural()
+            })
+            .unwrap_or(false);
+        if !structural {
+            break;
+        }
+        node = parent;
+    }
+    Ok(())
+}
+
+fn sync_settings_group(
+    context: &mut AppContext,
+    group: Entity<SettingsGroup>,
+) -> Result<(), FrameworkError> {
+    if context.defer_settings_group(group.stable_id()) {
+        return Ok(());
+    }
+    mark_settings_group(context, group)
+}
+
+/// Mark `group`'s edges now.
+pub(crate) fn mark_settings_group(
+    context: &mut AppContext,
+    group: Entity<SettingsGroup>,
+) -> Result<(), FrameworkError> {
+    let reentered = SYNCING_GROUP.replace(true);
+    let result = mark_group_edges(context, group);
+    SYNCING_GROUP.set(reentered);
+    result
+}
+
+fn mark_group_edges(
+    context: &mut AppContext,
+    group: Entity<SettingsGroup>,
+) -> Result<(), FrameworkError> {
+    let mut members = Vec::new();
+    let mut containers = Vec::new();
+    group_members(context, group.stable_id(), &mut members, &mut containers);
+    // Rows inside a list or a conditional block hide on their container,
+    // not on the group, so the group watches those containers too.
+    context.watch_child_structures(group.stable_id(), &containers);
+
+    let shown: Vec<StableNodeId> = members
+        .iter()
+        .filter(|(_, separator)| !separator)
+        .map(|(id, _)| *id)
+        .collect();
+    let (first, last) = (shown.first().copied(), shown.last().copied());
+    for (index, &(id, separator)) in members.iter().enumerate() {
+        if separator {
+            let before = members[..index].iter().any(|(_, separator)| !separator);
+            let after = members[index + 1..].iter().any(|(_, separator)| !separator);
+            // Of two separators with nothing shown between them, the later
+            // one stands.
+            let next_is_separator = members
+                .get(index + 1)
+                .is_some_and(|(_, separator)| *separator);
+            let hidden = !(before && after) || next_is_separator;
+            let divider = Entity::<crate::Divider>::from_stable_id(id);
+            let current = context.read(divider, |divider| divider.style.layout.hidden);
+            if current.is_ok_and(|current| current != hidden) {
+                context.update_component(divider, |divider, _| {
+                    divider.style.layout_mut().hidden = hidden;
+                })?;
+            }
+            continue;
+        }
+        let row = Entity::<SettingsRow>::from_stable_id(id);
+        let edges = (Some(id) == first, Some(id) == last);
+        let current = context.read(row, |row| (row.first_in_group, row.last_in_group));
+        if current.is_ok_and(|current| current != edges) {
+            context.update_component(row, |row, _| {
+                (row.first_in_group, row.last_in_group) = edges;
+            })?;
+        }
+    }
+    Ok(())
 }
 
 const COLLAPSIBLE_HEADER_GAP: f32 = nana_ui_core::space::MD;

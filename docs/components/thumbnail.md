@@ -34,11 +34,9 @@ thumbnail().resource(cover).aspect(1.5_f32).label("封面")
 
 Loading 的转圈居中，边长是紧凑 `Spinner` 的两倍。
 
-## 修订
+## 换图
 
-`generation` 在宿主换掉采样视图时推进，`version` 在同一视图里像素变了时推进。晚到的纹理靠这两个数让画面从占位换成实图。`Thumbnail::replace_view` 和 `invalidate_content` 做这件事。同一帧里，同一个槽报出的 revision 必须一致。
-
-`generation` 占 revision 的高 32 位，`version` 占低 32 位。同一帧里，同一个槽报出的 revision 必须一致，否则这一帧被拒绝，什么都不画。
+换图只在宿主那边做：往同一个槽重新登记纹理（新像素、换了视图、设备重建后重新上传），所有显示这个槽的视图下一帧就采样到新纹理，不用动组件。组件上没有修订号，所以同一个槽可以同时给几个视图用。
 
 默认只采样第 0 层，宿主按 `painted_extent` 准备尺寸。有 mip 链时，组件上 `.sampling(ImageSampling::Mipmap)` 改成三线性。
 

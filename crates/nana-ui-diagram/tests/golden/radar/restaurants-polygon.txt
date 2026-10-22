@@ -1,0 +1,51 @@
+size 547.8 366
+summary nodes=4 edges=0 groups=4
+shape path M205.1,173.2 L231.7,199.8 L205.1,226.4 L178.5,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,146.6 L258.3,199.8 L205.1,253 L151.9,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,120 L284.9,199.8 L205.1,279.6 L125.3,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,93.4 L311.5,199.8 L205.1,306.2 L98.7,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,66.8 L338.1,199.8 L205.1,332.8 L72.1,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,199.8 L205.1,66.8 M205.1,199.8 L338.1,199.8 M205.1,199.8 L205.1,332.8 M205.1,199.8 L72.1,199.8 stroke=Border/hairline/Solid
+shape path M205.1,120 C236.7,120 311.5,172.7 311.5,199.8 C311.5,226.9 236.7,279.6 205.1,279.6 C173.4,279.6 125.3,226.9 125.3,199.8 C125.3,172.7 173.4,120 205.1,120 Z fill=series1.soft
+shape path M205.1,93.4 C236.7,93.4 284.9,172.7 284.9,199.8 C284.9,226.9 236.7,253 205.1,253 C173.4,253 98.7,226.9 98.7,199.8 C98.7,172.7 173.4,93.4 205.1,93.4 Z fill=series0.soft
+shape path M205.1,146.6 C227.7,146.6 284.9,172.7 284.9,199.8 C284.9,226.9 227.7,306.2 205.1,306.2 C182.5,306.2 151.9,226.9 151.9,199.8 C151.9,172.7 182.5,146.6 205.1,146.6 Z fill=series2.soft
+shape path M205.1,146.6 C227.7,146.6 258.3,172.7 258.3,199.8 C258.3,226.9 227.7,306.2 205.1,306.2 C182.5,306.2 125.3,226.9 125.3,199.8 C125.3,172.7 182.5,146.6 205.1,146.6 Z fill=series3.soft
+shape path M205.1,173.2 L231.7,199.8 L205.1,226.4 L178.5,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,146.6 L258.3,199.8 L205.1,253 L151.9,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,120 L284.9,199.8 L205.1,279.6 L125.3,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,93.4 L311.5,199.8 L205.1,306.2 L98.7,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,66.8 L338.1,199.8 L205.1,332.8 L72.1,199.8 Z stroke=BorderSoft/hairline/Solid
+shape path M205.1,199.8 L205.1,66.8 M205.1,199.8 L338.1,199.8 M205.1,199.8 L205.1,332.8 M205.1,199.8 L72.1,199.8 stroke=Border/hairline/Solid
+shape path M205.1,93.4 C236.7,93.4 284.9,172.7 284.9,199.8 C284.9,226.9 236.7,253 205.1,253 C173.4,253 98.7,226.9 98.7,199.8 C98.7,172.7 173.4,93.4 205.1,93.4 Z stroke=series0/thick/Solid
+shape ellipse 202 90.3 6.2 6.2 fill=series0
+shape ellipse 281.8 196.7 6.2 6.2 fill=series0
+shape ellipse 202 249.9 6.2 6.2 fill=series0
+shape ellipse 95.6 196.7 6.2 6.2 fill=series0
+shape path M205.1,120 C236.7,120 311.5,172.7 311.5,199.8 C311.5,226.9 236.7,279.6 205.1,279.6 C173.4,279.6 125.3,226.9 125.3,199.8 C125.3,172.7 173.4,120 205.1,120 Z stroke=series1/thick/Solid
+shape ellipse 202 116.9 6.2 6.2 fill=series1
+shape ellipse 308.4 196.7 6.2 6.2 fill=series1
+shape ellipse 202 276.5 6.2 6.2 fill=series1
+shape ellipse 122.2 196.7 6.2 6.2 fill=series1
+shape path M205.1,146.6 C227.7,146.6 284.9,172.7 284.9,199.8 C284.9,226.9 227.7,306.2 205.1,306.2 C182.5,306.2 151.9,226.9 151.9,199.8 C151.9,172.7 182.5,146.6 205.1,146.6 Z stroke=series2/thick/Solid
+shape ellipse 202 143.5 6.2 6.2 fill=series2
+shape ellipse 281.8 196.7 6.2 6.2 fill=series2
+shape ellipse 202 303.1 6.2 6.2 fill=series2
+shape ellipse 148.8 196.7 6.2 6.2 fill=series2
+shape path M205.1,146.6 C227.7,146.6 258.3,172.7 258.3,199.8 C258.3,226.9 227.7,306.2 205.1,306.2 C182.5,306.2 125.3,226.9 125.3,199.8 C125.3,172.7 182.5,146.6 205.1,146.6 Z stroke=series3/thick/Solid
+shape ellipse 202 143.5 6.2 6.2 fill=series3
+shape ellipse 255.2 196.7 6.2 6.2 fill=series3
+shape ellipse 202 303.1 6.2 6.2 fill=series3
+shape ellipse 122.2 196.7 6.2 6.2 fill=series3
+text 163.3 41.6 83.5 16.8 size=12 w=400 ink=Muted "Food Quality"
+text 346.5 191.4 48.7 16.8 size=12 w=400 ink=Muted "Service"
+text 187.7 341.2 34.8 16.8 size=12 w=400 ink=Muted "Price"
+text 8 191.4 55.7 16.8 size=12 w=400 ink=Muted "Ambiance"
+shape rect 423.2 156.3 12 12 r=Xs fill=series0
+text 442.4 152.5 97.4 19.6 size=14 w=400 ink=Text "Restaurant A"
+shape rect 423.2 181.3 12 12 r=Xs fill=series1
+text 442.4 177.5 97.4 19.6 size=14 w=400 ink=Text "Restaurant B"
+shape rect 423.2 206.3 12 12 r=Xs fill=series2
+text 442.4 202.5 97.4 19.6 size=14 w=400 ink=Text "Restaurant C"
+shape rect 423.2 231.3 12 12 r=Xs fill=series3
+text 442.4 227.5 97.4 19.6 size=14 w=400 ink=Text "Restaurant D"
+text 170.6 8 206.6 22.4 size=16 w=600 ink=Text "Restaurant Comparison"

@@ -7,8 +7,6 @@ use nana_ui_web_api::{CanvasId, SharedCanvasRuntime};
 mod host_texture_upload;
 pub(crate) use host_texture_upload::{HostTextureSlotStore, HostTextureUpload};
 
-const CANVAS_TEXTURE_ID_BIT: u64 = 1 << 63;
-
 /// Shared by every Vue window in one runtime, just like the Canvas resource
 /// store and host texture registry it connects.
 #[derive(Clone)]
@@ -61,7 +59,6 @@ impl CanvasGpuBridge {
                 id,
                 HostTextureUpload {
                     slot: &slot,
-                    texture_id: CANVAS_TEXTURE_ID_BIT | id.0,
                     width: upload.width,
                     height: upload.height,
                     version: upload.version,

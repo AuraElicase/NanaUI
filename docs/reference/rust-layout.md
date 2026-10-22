@@ -26,6 +26,10 @@ let card = Stack::column(7.0)
     .radius(16.0);
 ```
 
+`with_layout` 闭包拿到的 `&mut LayoutStyle` 上有几个就地写的简写，写的仍是 CSS 作者会写的那几个字段：`set_absolute_inset(px)`（`position: absolute` 加四边 `inset`）、`set_absolute_fill()`（四边为 0，盖住包含块）、`set_fixed_width(px)` / `set_fixed_height(px)`（尺寸与最小、最大同值，不随内容或 flex 伸缩）。它们返回 `&mut LayoutStyle`，可以连写。手上是 `NodeStyle` 时用 `NodeStyle::layout_mut()` 取可写布局（共享的默认布局会先复制，不会被写穿），不必自己 `Arc::make_mut`。
+
+布局结果 `LayoutBox` 带 `right()`、`bottom()`、`union`、`intersection`（不相交为 `None`）和 `inset(amount)`（四边内收，收过头时在中点缩成 0），算浮层、安全区和命中范围时直接用。
+
 子节点在声明式视图中通过 `.children((...))` 或 `.with(|c| c.add(...))` 挂入容器（见 [L3：用 Rust 构建保留式界面](l3-authoring.md)）。`Stack` 只负责纯排版；具备列表或表格语义的容器请使用 [`List`](../components/list.md) 或 [`Table`](../components/table.md)。
 
 | 预设构造器 | 主轴方向 | 尺寸行为 | 典型用途 |
@@ -69,7 +73,7 @@ let style = NodeStyle::default()
 
 - `SemanticColorMix::new(first_role, second_role, first_weight)`：在预乘 alpha 的 sRGB 空间对当前主题的两种语义色做混合（`first_weight` 取值 `0.0..=1.0`，精度至万分之一；切换主题时自动按新调色板重新解析）。
 - `SemanticColorMix::alpha(role, alpha)`：仅降低该表面或描边颜色自身的 alpha，**不会降低后代文本的不透明度**。
-- 通过 `NodeStyle::surface_mix(mix)` 与 `outline_mix(mix, width)` 设置基态混色（与 `surface` / `outline` 后调用者生效）；`InteractionStyle` 的各状态（`base` → `selected` → `hovered` → `pressed` → `focused` → `disabled`）可按优先级覆盖基态。
+- 通过 `NodeStyle::surface_mix(mix)` 与 `outline_mix(mix, width)` 设置基态混色（与 `surface` / `outline` 后调用者生效；`Stack` 上同名方法直接可用）；在 `bind` 闭包里改容器布局用 `Stack::layout_mut()`，不必整个替换容器；`InteractionStyle` 的各状态（`base` → `selected` → `hovered` → `pressed` → `focused` → `disabled`）可按优先级覆盖基态。
 
 ## 与 Web CSS 默认值的关键差异
 

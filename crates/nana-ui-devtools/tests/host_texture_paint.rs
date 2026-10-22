@@ -1,9 +1,9 @@
 #![cfg(feature = "runtime-agent")]
-//! Avatar / Thumbnail are host-texture slots. Asserting that a binding lands in
-//! the component (or that its accessibility box exists) does not prove the
-//! texture is ever sampled — a Scene revision that never advances paints the
-//! placeholder forever while every structural assertion stays green. These
-//! tests therefore assert on painted pixels.
+//! Avatar / Thumbnail / GpuTextureView are host-texture slots. Asserting that a
+//! binding lands in the component (or that its accessibility box exists) does
+//! not prove the texture is ever sampled — a painter cache that outlived its
+//! binding paints the placeholder forever while every structural assertion
+//! stays green. These tests therefore assert on painted pixels.
 
 use nana_ui::runtime::{Avatar, DocumentId, GpuTextureView, RuntimeDocument, Thumbnail};
 use nana_ui::{
@@ -20,26 +20,7 @@ const FILL: [u8; 4] = [255, 0, 0, 255];
 
 /// A 1×1 opaque red texture registered under [`SLOT`].
 fn register_fill(gpu: &OffscreenSnapshots, registry: &HostTextureRegistry) {
-    let texture = gpu
-        .gpu
-        .create_texture(&GpuTextureDescriptor {
-            label: Some("host texture paint evidence"),
-            width: 1,
-            height: 1,
-            format: GpuTextureFormat::RGBA8_UNORM_SRGB,
-            usage: GpuTextureUsages::SAMPLED | GpuTextureUsages::COPY_DST,
-        })
-        .unwrap();
-    gpu.gpu
-        .write_texture(&texture, GpuTextureRegion::full(1, 1), &FILL, 4)
-        .unwrap();
-    registry.register(
-        SLOT,
-        HostTexture::new(1, 1, &texture),
-        1,
-        1,
-        HostTextureAlphaMode::Opaque,
-    );
+    registry.register(SLOT, solid(gpu, FILL), 1, 1, HostTextureAlphaMode::Opaque);
 }
 
 /// Fraction of pixels close to [`FILL`].
@@ -52,10 +33,9 @@ fn fill_ratio(pixels: &[u8]) -> f32 {
     hits as f32 / chunks.len().max(1) as f32
 }
 
-/// One device and one painter throughout. The Scene revision only governs the
-/// painter's cross-frame host-texture cache, so a fresh session per paint would
-/// re-extract cold and pass no matter what the revision does — that is exactly
-/// the false green this file exists to avoid.
+/// One device and one painter throughout. A fresh painter per paint would
+/// re-extract cold and pass no matter what its cross-frame host-texture cache
+/// keys on — that is exactly the false green this file exists to avoid.
 fn paint_with(
     gpu: &mut OffscreenSnapshots,
     scene: &nana_ui::runtime::host::UiScene,
@@ -96,15 +76,13 @@ fn avatar_bound_after_mount_reaches_the_screen() {
         "nothing is bound yet, so nothing may sample the texture"
     );
 
-    // Same painter, same session: this is the frame where the revision decides
+    // Same painter, same session: this is the frame where the cache decides
     // whether the cached (empty) sample is reused or the new texture is read.
     session
         .document_mut()
         .context_mut()
         .update_component(avatar, |view, _| {
             view.resource = SLOT.into();
-            view.replace_view(1);
-            view.version = 0;
         })
         .unwrap();
     session.flush().expect("flush");
@@ -112,7 +90,7 @@ fn avatar_bound_after_mount_reaches_the_screen() {
     let after = paint_with(&mut gpu, &session.document().scene().clone(), &registry);
     assert!(
         fill_ratio(&after) > 0.2,
-        "a texture bound after mount must reach the screen; with a fixed Scene          revision the painter keeps the empty sample while every structural          assertion stays green (fill={})",
+        "a texture bound after mount must reach the screen (fill={})",
         fill_ratio(&after)
     );
 }
@@ -147,8 +125,6 @@ fn thumbnail_bound_after_mount_reaches_the_screen() {
         .update_component(thumbnail, |view, _| {
             view.resource = SLOT.into();
             view.state = nana_ui::runtime::ThumbnailState::Ready;
-            view.replace_view(1);
-            view.version = 0;
         })
         .unwrap();
     session.flush().expect("flush");
@@ -239,8 +215,6 @@ fn thumbnail_bound_after_scroll_reaches_the_screen() {
         .update_component(thumb, |view, _| {
             view.resource = SLOT.into();
             view.state = nana_ui::runtime::ThumbnailState::Ready;
-            view.replace_view(1);
-            view.version = 0;
         })
         .unwrap();
     session.flush().expect("flush");
@@ -278,12 +252,11 @@ fn thumbnail_bound_after_scroll_reaches_the_screen() {
     );
 }
 
-/// The revision is the scene's conflict key: every view of one host-texture
-/// slot in a frame must carry the same one, or `frame_graph` rejects the whole
-/// frame with `ConflictingExternalResource` and nothing paints. A component
-/// that hardcodes revision 0 therefore cannot share a slot with a
-/// `GpuTextureView` the host has re-bound — which is what a product does when
-/// the same cover appears both as an avatar and as a plain texture view.
+/// Every view of one host-texture slot in a frame must carry the same scene
+/// revision, or `frame_graph` rejects the whole frame with
+/// `ConflictingExternalResource` and nothing paints. Host-texture views carry
+/// none of their own, so any two of them can share a slot — what a product does
+/// when the same cover appears both as an avatar and as a plain texture view.
 #[test]
 fn avatar_and_texture_view_can_share_one_slot() {
     let Some(mut gpu) = offscreen::optional() else {
@@ -304,15 +277,12 @@ fn avatar_and_texture_view_can_share_one_slot() {
         nana_ui_devtools::agent::RuntimeAgentSession::new(document, W, H).expect("session");
     session.flush().expect("flush");
 
-    // Host delivery: one texture, one generation, both views re-bound.
-    const GENERATION: u64 = 4;
+    // Host delivery: one texture, both views bound to its slot.
     session
         .document_mut()
         .context_mut()
         .update_component(avatar, |node, _| {
             node.resource = SLOT.into();
-            node.replace_view(GENERATION);
-            node.version = 0;
         })
         .unwrap();
     session
@@ -320,8 +290,6 @@ fn avatar_and_texture_view_can_share_one_slot() {
         .context_mut()
         .update_component(view, |node, _| {
             node.resource = SLOT.into();
-            node.replace_view(GENERATION);
-            node.version = 0;
         })
         .unwrap();
     session.flush().expect("flush");
@@ -331,5 +299,101 @@ fn avatar_and_texture_view_can_share_one_slot() {
         fill_ratio(&painted) > 0.05,
         "both views must paint the shared texture (fill={})",
         fill_ratio(&painted)
+    );
+}
+
+/// A 1×1 texture of one colour.
+fn solid(gpu: &OffscreenSnapshots, rgba: [u8; 4]) -> HostTexture {
+    let texture = gpu
+        .gpu
+        .create_texture(&GpuTextureDescriptor {
+            label: Some("host texture paint evidence"),
+            width: 1,
+            height: 1,
+            format: GpuTextureFormat::RGBA8_UNORM_SRGB,
+            usage: GpuTextureUsages::SAMPLED | GpuTextureUsages::COPY_DST,
+        })
+        .unwrap();
+    gpu.gpu
+        .write_texture(&texture, GpuTextureRegion::full(1, 1), &rgba, 4)
+        .unwrap();
+    HostTexture::new(&texture)
+}
+
+/// A view mounted once and never touched again, over one painter.
+fn untouched_view(
+    gpu: &mut OffscreenSnapshots,
+    registry: &HostTextureRegistry,
+) -> nana_ui::runtime::host::UiScene {
+    let id = DocumentId::new(1).unwrap();
+    let mut document = RuntimeDocument::new(id);
+    document
+        .context_mut()
+        .create_component(id, GpuTextureView::new(SLOT))
+        .unwrap();
+    let mut session =
+        nana_ui_devtools::agent::RuntimeAgentSession::new(document, W, H).expect("session");
+    session.flush().expect("flush");
+    let scene = session.document().scene().clone();
+    let first = paint_with(gpu, &scene, registry);
+    assert!(
+        fill_ratio(&first) > 0.5,
+        "the first texture paints ({})",
+        fill_ratio(&first)
+    );
+    scene
+}
+
+/// The registry is the only identity of a slot's texture: a host that
+/// registers a new texture under the slot (new pixels, a replaced view) shows
+/// it on the next paint of the same, unchanged scene.
+#[test]
+fn re_registering_a_slot_reaches_an_untouched_view() {
+    let Some(mut gpu) = offscreen::optional() else {
+        return;
+    };
+    let registry = HostTextureRegistry::new();
+    register_fill(&gpu, &registry);
+    let scene = untouched_view(&mut gpu, &registry);
+
+    registry.register(
+        SLOT,
+        solid(&gpu, [0, 255, 0, 255]),
+        1,
+        1,
+        HostTextureAlphaMode::Opaque,
+    );
+    let second = paint_with(&mut gpu, &scene, &registry);
+    assert!(
+        fill_ratio(&second) < 0.01,
+        "the unchanged scene must sample the new texture (red={})",
+        fill_ratio(&second)
+    );
+}
+
+/// What a device rebuild does to a registry: every binding is dropped, then
+/// the host registers its textures again. The views showing them are not told.
+#[test]
+fn a_registry_rebuilt_after_device_loss_reaches_an_untouched_view() {
+    let Some(mut gpu) = offscreen::optional() else {
+        return;
+    };
+    let registry = HostTextureRegistry::new();
+    register_fill(&gpu, &registry);
+    let scene = untouched_view(&mut gpu, &registry);
+
+    assert_eq!(registry.invalidate_all(), 1);
+    registry.register(
+        SLOT,
+        solid(&gpu, [0, 255, 0, 255]),
+        1,
+        1,
+        HostTextureAlphaMode::Opaque,
+    );
+    let rebuilt = paint_with(&mut gpu, &scene, &registry);
+    assert!(
+        fill_ratio(&rebuilt) < 0.01,
+        "the re-registered texture must replace the old one (red={})",
+        fill_ratio(&rebuilt)
     );
 }

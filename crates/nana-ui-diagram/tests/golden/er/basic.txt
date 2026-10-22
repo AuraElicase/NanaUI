@@ -1,0 +1,31 @@
+size 310 295.2
+summary nodes=4 edges=3 groups=0
+shape path M108,78.2 L108,84.2 Q108,90.2 102,90.2 L66.9,90.2 Q58.9,90.2 58.9,98.2 L58.9,146.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M58.9,138.2 L54.3,146.6 M58.9,138.2 L63.5,146.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape ellipse 56.2 130.3 5.4 5.4 fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M111.5,84.1 L104.5,84.1 M111.5,88.3 L104.5,88.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M58.9,182.2 L58.9,250.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M58.9,242.2 L54.3,250.6 M58.9,242.2 L63.5,250.6 M55.4,239.7 L62.5,239.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M62.5,188.1 L55.4,188.1 M62.5,192.3 L55.4,192.3 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M171.9,78.2 L171.9,84.2 Q171.9,90.2 177.9,90.2 L213,90.2 Q221,90.2 221,98.2 L221,146.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M221,138.2 L216.4,146.6 M221,138.2 L225.6,146.6 M217.5,135.7 L224.5,135.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M171.9,86.6 L176.5,78.2 M171.9,86.6 L167.3,78.2 M175.4,89.1 L168.4,89.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 32.7 102.2 52.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 38.1 104 41.8 16.8 size=12 w=400 ink=Muted "places"
+shape rect 25.7 206.2 66.5 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 31.1 208 55.7 16.8 size=12 w=400 ink=Muted "contains"
+shape rect 201.7 102.2 38.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 207.1 104 27.8 16.8 size=12 w=400 ink=Muted "uses"
+shape rect 94.3 42.6 91.3 35.6 r=Sm fill=Surface
+shape rect 94.3 42.6 91.3 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 105.5 50.6 68.9 19.6 size=14 w=600 ink=Text "CUSTOMER"
+shape rect 16.9 146.6 84 35.6 r=Sm fill=Surface
+shape rect 16.9 146.6 84 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 37.4 154.6 43 19.6 size=14 w=600 ink=Text "ORDER"
+shape rect 9 250.6 99.9 35.6 r=Sm fill=Surface
+shape rect 9 250.6 99.9 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 20.2 258.6 77.5 19.6 size=14 w=600 ink=Text "LINE-ITEM"
+shape rect 140.9 146.6 160.1 35.6 r=Sm fill=Surface
+shape rect 140.9 146.6 160.1 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 152.1 154.6 137.7 19.6 size=14 w=600 ink=Text "DELIVERY-ADDRESS"
+text 91.1 8 127.9 22.4 size=16 w=600 ink=Text "Order example"

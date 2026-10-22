@@ -29,8 +29,11 @@ pub(super) struct MaterialDevice {
     sampler: wgpu::Sampler,
     bindings: Mutex<HashMap<u64, Weak<MaterialBinding>>>,
     rejected: Mutex<HashMap<u64, Weak<nana_ui_core::MaterialInstance>>>,
-    pipelines: Mutex<HashMap<(u64, wgpu::TextureFormat, u32, u64, u64), PipelineEntry>>,
+    pipelines: Mutex<HashMap<PipelineKey, PipelineEntry>>,
 }
+/// A material pipeline's identity: program key, target format, sample
+/// count and the two blend/variant keys it was built for.
+type PipelineKey = (u64, wgpu::TextureFormat, u32, u64, u64);
 struct PipelineEntry {
     owners: Vec<Weak<nana_ui_core::MaterialProgram>>,
     pipeline: Option<wgpu::RenderPipeline>,

@@ -1,10 +1,7 @@
 //! Consumer half of [`nana_frame_exchange`]: shows the latest exchanged frame
 //! in a stable [`TextureSlot`] while respecting the host's present ordering.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::Arc;
 
 use nana_diagnostics::{event, framework::gpu, metric};
 use nana_frame_exchange::{
@@ -17,10 +14,6 @@ use nana_gpu::{
 };
 
 use crate::gpu_texture::{HostTexture, HostTextureAlphaMode, TextureSlot};
-
-// Painter caches key host textures by id; keep binding ids clear of the small
-// ids applications assign by hand.
-static NEXT_TEXTURE_ID: AtomicU64 = AtomicU64::new(1 << 63);
 
 /// Binds exchanged frames to one [`TextureSlot`].
 ///
@@ -70,11 +63,7 @@ impl<E: Copy + Eq + Send + Sync + 'static, M: Send + Sync + 'static> FrameBindin
                 usage: GpuTextureUsages::SAMPLED,
             })
             .expect("a 1x1 sampled RGBA8 texture is valid on every device");
-        let texture = HostTexture::new(
-            NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed),
-            0,
-            &placeholder,
-        );
+        let texture = HostTexture::new(&placeholder);
         slot.replace(texture.clone(), 1, 1, alpha);
         Self {
             device_generation: gpu.generation(),
@@ -308,6 +297,7 @@ mod tests {
     use crate::gpu_texture::HostTextureRegistry;
     use nana_frame_exchange::{CopyOutcome, DEFAULT_CAPACITY, FrameExchange};
     use nana_gpu::__framework;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[test]
     fn payload_is_the_bound_frames_data_until_the_next_present() {
@@ -327,16 +317,28 @@ mod tests {
         );
         assert!(binding.payload().is_none());
         let publish = |exchange: &mut FrameExchange<u64, String>, width, payload: &str| {
-            assert_eq!(
-                exchange.copy_from_with_payload(
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            // A slot the binding gave back is free once the GPU reports the
+            // work that sampled it done, and the shared test device admits
+            // one frame at a time. Other tests share it, so either can make a
+            // copy report PoolFull: wait, as a producer would retry, rather
+            // than treat it as a fault.
+            loop {
+                match exchange.copy_from_with_payload(
                     &source(&gpu, width),
                     1,
                     FrameColorMetadata::unknown(),
-                    payload.into()
-                ),
-                CopyOutcome::Submitted
-            );
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                    payload.into(),
+                ) {
+                    CopyOutcome::Submitted => break,
+                    CopyOutcome::PoolFull => {
+                        assert!(std::time::Instant::now() < deadline, "no slot came back");
+                        exchange.poll();
+                        std::thread::yield_now();
+                    }
+                    other => panic!("copy {other:?}"),
+                }
+            }
             while !exchange.poll() {
                 assert!(std::time::Instant::now() < deadline);
                 std::thread::yield_now();
@@ -649,14 +651,23 @@ mod tests {
         let mut exchange = FrameExchange::new(&gpu, DEFAULT_CAPACITY, 0u64, Arc::new(|| {}));
         let inbox = exchange.inbox();
         let source = source(&gpu, 4);
-        assert_eq!(
-            exchange.copy_from_with_metadata(
+        // The shared test device admits one frame at a time; a copy that
+        // finds another test's frame open reports PoolFull and is retried.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            match exchange.copy_from_with_metadata(
                 &source,
                 0,
                 FrameColorMetadata::bt2020_pq(FrameAlphaMode::Premultiplied),
-            ),
-            CopyOutcome::Submitted
-        );
+            ) {
+                CopyOutcome::Submitted => break,
+                CopyOutcome::PoolFull => {
+                    assert!(std::time::Instant::now() < deadline, "no frame came free");
+                    std::thread::yield_now();
+                }
+                other => panic!("copy {other:?}"),
+            }
+        }
         __framework::device(&gpu)
             .poll(wgpu::PollType::wait_indefinitely())
             .unwrap();

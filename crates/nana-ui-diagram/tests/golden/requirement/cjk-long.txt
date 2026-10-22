@@ -1,0 +1,30 @@
+size 239.8 357.6
+summary nodes=2 edges=1 groups=0
+shape path M119.9,111 L119.9,178.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape path M116.4,171 L119.9,179.4 M119.9,179.4 L123.4,171 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 76.2 135 87.4 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 81.6 136.8 76.6 16.8 size=12 w=400 ink=Muted "«satisfies»"
+shape rect 9 179.4 221.8 169.2 r=Sm fill=Surface
+clip rect 9 179.4 221.8 169.2 r=Sm
+shape rect 9 179.4 221.8 52.4 fill=Subtle
+unclip
+shape path M9,231.8 L230.8,231.8 stroke=BorderStrong/hairline/Solid
+shape rect 9 179.4 221.8 169.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 74.6 187.4 90.5 16.8 size=12 w=400 ink=Muted "«Requirement»"
+text 90.2 204.2 59.4 19.6 size=14 w=600 ink=Text "数据保留"
+text 21 239.8 48.7 16.8 size=12 w=400 ink=Text "ID: R-1"
+text 21 256.6 197.8 16.8 size=12 w=400 ink=Text "Text: 用户删除账号后，系统必须在"
+text 21 273.4 192 16.8 size=12 w=400 ink=Text "三十天内清除其全部个人数据，包括"
+text 21 290.2 108 16.8 size=12 w=400 ink=Text "备份和日志中的副本"
+text 21 307 83.5 16.8 size=12 w=400 ink=Text "Risk: Medium"
+text 21 323.8 167 16.8 size=12 w=400 ink=Text "Verification: Inspection"
+shape rect 27.8 9 184.1 102 r=Sm fill=Surface
+clip rect 27.8 9 184.1 102 r=Sm
+shape rect 27.8 9 184.1 52.4 fill=Subtle
+unclip
+shape path M27.8,61.4 L211.9,61.4 stroke=BorderStrong/hairline/Solid
+shape rect 27.8 9 184.1 102 r=Sm stroke=BorderStrong/hairline/Solid
+text 88.6 17 62.6 16.8 size=12 w=400 ink=Muted "«Element»"
+text 90.2 33.8 59.4 19.6 size=14 w=600 ink=Text "清理任务"
+text 39.8 69.4 89.8 16.8 size=12 w=400 ink=Text "Type: 定时任务"
+text 39.8 86.2 160.1 16.8 size=12 w=400 ink=Text "Doc Ref: ops/cleanup.md"

@@ -1,0 +1,23 @@
+size 846.8 194.2
+summary nodes=5 edges=0 groups=0
+shape rect 9 55.9 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 177.9 64.3 76.6 16.8 size=12 w=400 ink=Text "Source Port"
+text 11 41.6 5.9 14.3 size=10.2 w=400 ink=Muted "0"
+text 409.6 41.6 11.8 14.3 size=10.2 w=400 ink=Muted "15"
+shape rect 423.4 55.9 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 574.9 64.3 111.4 16.8 size=12 w=400 ink=Text "Destination Port"
+text 425.4 41.6 11.8 14.3 size=10.2 w=400 ink=Muted "16"
+text 824 41.6 11.8 14.3 size=10.2 w=400 ink=Muted "31"
+shape rect 9 103.8 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 195.3 112.2 41.8 16.8 size=12 w=400 ink=Text "Length"
+text 11 89.5 11.8 14.3 size=10.2 w=400 ink=Muted "32"
+text 409.6 89.5 11.8 14.3 size=10.2 w=400 ink=Muted "47"
+shape rect 423.4 103.8 414.4 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 602.8 112.2 55.7 16.8 size=12 w=400 ink=Text "Checksum"
+text 425.4 89.5 11.8 14.3 size=10.2 w=400 ink=Muted "48"
+text 824 89.5 11.8 14.3 size=10.2 w=400 ink=Muted "63"
+shape rect 9 151.6 828.8 33.6 fill=Surface stroke=BorderStrong/hairline/Solid
+text 346.8 160 153.1 16.8 size=12 w=400 ink=Text "Data (variable length)"
+text 11 137.4 11.8 14.3 size=10.2 w=400 ink=Muted "64"
+text 824 137.4 11.8 14.3 size=10.2 w=400 ink=Muted "95"
+text 374.2 8 98.4 22.4 size=16 w=600 ink=Text "UDP Packet"

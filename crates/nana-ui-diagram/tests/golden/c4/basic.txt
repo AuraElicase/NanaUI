@@ -1,0 +1,46 @@
+size 1042.9 312.4
+summary nodes=5 edges=4 groups=0
+shape path M201.1,104.6 L204.1,104.6 Q207.1,104.6 207.1,101.6 L207.1,50.6 Q207.1,42.6 215.1,42.6 L514.5,42.6 Q522.5,42.6 522.5,50.6 L522.5,63 Q522.5,71 530.5,71 L574.9,71 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M581.6,71 L573.2,74.5 L574.7,71 L573.2,67.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M463.3,104.6 L574.9,104.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M581.6,104.6 L573.2,108.1 L574.7,104.6 L573.2,101.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M751.3,104.6 L862.9,104.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M869.6,104.6 L861.2,108.1 L862.8,104.6 L861.2,101.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M581.6,138.2 L558.4,138.2 Q550.4,138.2 550.4,146.2 L550.4,255.2 Q550.4,263.2 542.4,263.2 L207.8,263.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M201.1,263.2 L209.5,259.7 L208,263.2 L209.5,266.7 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 48.6 192.1 112 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape ellipse 99.2 58.6 11.8 11.8 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+shape rect 93.3 72 23.5 14.6 r=8.7 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+text 70.2 90.2 69.6 16.8 size=12 w=400 ink=Muted "<<person>>"
+text 36.2 110.6 137.7 19.6 size=14 w=600 ink=Text "Banking Customer"
+text 28.5 133.8 153.1 16.8 size=12 w=400 ink=Text "A customer of the bank"
+shape rect 319.4 48.6 143.9 112 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+shape ellipse 385.5 58.6 11.8 11.8 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+shape rect 379.6 72 23.5 14.6 r=8.7 fill=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}
+text 356.5 90.2 69.6 16.8 size=12 w=400 ink=Muted "<<person>>"
+text 335.4 110.6 111.9 19.6 size=14 w=600 ink=Text "Bank Employee"
+text 342.6 133.8 97.4 16.8 size=12 w=400 ink=Text "Internal staff"
+shape rect 581.6 48.6 169.7 112 r=Md fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 631.7 66 69.6 16.8 size=12 w=400 ink=Muted "<<system>>"
+text 597.6 86.4 137.7 19.6 size=14 w=600 ink=Text "Internet Banking"
+text 600.4 109.6 132.2 16.8 size=12 w=400 ink=Text "Allows customers to"
+text 614.3 126.4 104.4 16.8 size=12 w=400 ink=Text "manage accounts"
+shape rect 869.6 48.6 164.2 112 r=Md fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 885.6 74.4 132.2 16.8 size=12 w=400 ink=Muted "<<external_system>>"
+text 930.3 94.8 43 19.6 size=14 w=600 ink=Text "Email"
+text 889.1 118 125.3 16.8 size=12 w=400 ink=Text "Microsoft Exchange"
+shape rect 9 223 192.1 80.4 r=Md fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1400} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5000}/hairline/Solid
+text 38.9 233 132.2 16.8 size=12 w=400 ink=Muted "<<external_system>>"
+text 66.3 253.4 77.5 19.6 size=14 w=600 ink=Text "Mainframe"
+text 25 276.6 160.1 16.8 size=12 w=400 ink=Text "Stores all banking info"
+shape rect 532.7 60.2 38.6 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 538.1 62.6 27.8 16.8 size=12 w=400 ink=Muted "Uses"
+shape rect 489.2 93.8 66.5 21.6 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 494.6 96.2 55.7 16.8 size=12 w=400 ink=Muted "Supports"
+shape rect 763.3 85.4 94.3 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 768.7 87.8 83.5 16.8 size=12 w=400 ink=Muted "Sends emails"
+text 789.6 104.6 41.8 16.8 size=12 w=400 ink=Muted "[SMTP]"
+shape rect 328.6 244 94.3 38.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 334 246.4 83.5 16.8 size=12 w=400 ink=Muted "Reads/writes"
+text 354.9 263.2 41.8 16.8 size=12 w=400 ink=Muted "[JDBC]"
+text 413.2 8 216.4 22.4 size=16 w=600 ink=Text "System Context diagram"

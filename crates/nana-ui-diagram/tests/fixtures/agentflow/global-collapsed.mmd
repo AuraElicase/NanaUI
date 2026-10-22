@@ -1,0 +1,24 @@
+agentflow-beta TB
+  global
+    corpus["Shared corpus"]@{ shape: refdoc }
+  end
+
+  flow intake["Intake"]
+    receive["Receive request"]@{ shape: input }
+  end
+
+  flow processing["Processing"]
+    validate["Validate"]@{ shape: task }
+    enrich["Enrich"]@{ shape: task }
+    validate --> enrich
+    enrich -.- corpus
+  end
+  processing@{ view: "collapsed" }
+
+  flow summariser["Summariser"]
+    summarise["Summarise"]@{ shape: task }
+    summarise -.- corpus
+  end
+
+  receive --> validate
+  enrich --> summarise

@@ -1,0 +1,15 @@
+---
+title: 下单流程（中日韩与换行）
+---
+sequenceDiagram
+    participant 用户 as 用户<br/>（移动端）
+    participant サーバー
+    participant 결제 as 결제 서비스
+    用户->>サーバー: 提交订单，并附带一段很长很长的备注说明，用来检验消息文字在列间距里的换行与测宽
+    サーバー->>결제: wrap: A deliberately long English message that asks to wrap at the configured width
+    결제-->>サーバー: 承認されました
+    Note right of 결제: 便签里的文字也会<br/>按宽度换行显示
+    サーバー-->>用户: 完成 ✅
+    loop 每 30 秒轮询一次状态，直到支付完成或者超时为止
+        用户->>サーバー: 查询
+    end

@@ -74,6 +74,7 @@ struct Todo {
     title: &'static str,
 }
 
+#[view::component]
 fn todo_row(todo: Todo, done: bool) -> impl IntoView {
     row()
         .gap(4.0)
@@ -260,6 +261,16 @@ impl Probe for Slots {
     fn tree(&self) -> nana_ui_runtime::view::AnyView {
         use nana_ui_runtime::DesktopShell;
         use nana_ui_runtime::view::{settings_row, switch};
+        /// A settings row a template can name by tag.
+        mod rows {
+            use nana_ui_runtime::SettingsRow;
+            use nana_ui_runtime::view::{El, component};
+
+            #[component]
+            pub fn settings_row(label: &'static str) -> El<SettingsRow> {
+                nana_ui_runtime::view::settings_row(label)
+            }
+        }
         let checked = self.checked;
         if self.template {
             return view! {
@@ -269,9 +280,9 @@ impl Probe for Slots {
                     </template>
                     <template #navigation><Text>"导航"</Text></template>
                     <template #primary>
-                        <SettingsRow label="高亮">
+                        <rows::SettingsRow label="高亮">
                             <template #control><Switch label="开关" checked={checked} /></template>
-                        </SettingsRow>
+                        </rows::SettingsRow>
                     </template>
                 </Widget>
             }
@@ -352,6 +363,7 @@ struct Item {
     title: String,
 }
 
+#[view::component]
 fn item_row(item: Item, list: Signal<Vec<Item>>) -> impl IntoView {
     let id = item.id;
     view! {
@@ -666,7 +678,7 @@ fn media_controls_and_theme_roles_bind_from_a_template() {
     let state = std::cell::Cell::new(None);
     let mounted = cx
         .mount_view(parent.stable_id(), || {
-            let cover: Signal<std::sync::Arc<str>> = signal("".into());
+            let cover: Signal<nana_ui_runtime::TextureSlotName> = signal("".into());
             let liked = signal(false);
             let likes = signal(0u32);
             state.set(Some((cover, liked, likes)));
@@ -1616,8 +1628,9 @@ fn a_three_argument_handler_gets_the_component_and_its_context() {
 
 /// An application's own `EmptyState`, named like the built-in one.
 mod kit {
-    use nana_ui_runtime::view::{IntoView, column, text};
+    use nana_ui_runtime::view::{IntoView, column, component, text};
 
+    #[component]
     pub fn empty_state(title: &'static str) -> impl IntoView {
         column().children(text(title))
     }
@@ -1644,6 +1657,117 @@ fn a_tag_with_a_path_calls_its_function_even_when_the_name_is_built_in() {
     assert!(lines.next().unwrap().contains("\"自己的\""), "{tree}");
     // The bare tag is the built-in control.
     assert!(lines.next().unwrap().contains("empty-state"), "{tree}");
+}
+
+/// Components a template fills by property name.
+mod props {
+    use nana_ui_runtime::view::{IntoProp, IntoView, checkbox, column, component, row, text};
+
+    /// Concrete, `impl Trait` and closure properties; three with defaults.
+    #[component]
+    pub fn labelled_check(
+        label: impl IntoProp<String>,
+        #[prop(default = "")] hint: &'static str,
+        #[prop(default = false)] checked: impl IntoProp<bool>,
+        #[prop(default = || true)] shown: impl Fn() -> bool + Send + 'static,
+        gap: f32,
+    ) -> impl IntoView {
+        row()
+            .gap(gap)
+            .visible(shown)
+            .children((checkbox(label).checked(checked), text(hint)))
+    }
+
+    /// A flag left off by default.
+    #[component]
+    pub fn flag(#[prop(default)] on: bool) -> impl IntoView {
+        text(if on { "开" } else { "关" })
+    }
+
+    /// A property typed by the function's own generic, and children.
+    #[component]
+    pub fn titled<T, V>(title: T, #[prop(default)] count: usize, children: V) -> impl IntoView
+    where
+        T: IntoProp<String>,
+        V: IntoView,
+    {
+        column().children((text(title), text(format!("{count}")), children))
+    }
+}
+
+#[test]
+fn a_component_takes_its_properties_by_name_in_any_order_and_defaults_the_rest() {
+    let shown = signal(true);
+    let checked = signal(false);
+    let title = signal(String::from("甲"));
+    let render = |template: bool| {
+        move || {
+            if template {
+                view! {
+                    <Column>
+                        <props::LabelledCheck gap=8.0 checked={checked} label={title}
+                            shown={move || shown.get()} />
+                        <props::LabelledCheck label="乙" gap=4.0 hint="说明" />
+                        <props::Titled count=2 title="标题"><Text>"内容"</Text></props::Titled>
+                        <props::Titled title={String::from("无数")}><Text>"空"</Text></props::Titled>
+                    </Column>
+                }
+                .into_any()
+            } else {
+                column()
+                    .children((
+                        props::labelled_check(title, "", checked, move || shown.get(), 8.0),
+                        props::labelled_check("乙", "说明", false, || true, 4.0),
+                        props::titled("标题", 2, text("内容")),
+                        props::titled(String::from("无数"), 0, text("空")),
+                    ))
+                    .into_any()
+            }
+        }
+    };
+    let mut trees = Vec::new();
+    for template in [true, false] {
+        let mut cx = AppContext::new();
+        let mounted = cx
+            .mount_view_root(DocumentId::new(1).unwrap(), render(template))
+            .unwrap();
+        let before = dump(&cx, mounted.roots()[0]);
+        checked.set(true);
+        shown.set(false);
+        title.set(String::from("丙"));
+        cx.flush_reactive().unwrap();
+        trees.push((before, dump(&cx, mounted.roots()[0])));
+        checked.set(false);
+        shown.set(true);
+        title.set(String::from("甲"));
+    }
+    assert_eq!(trees[0], trees[1]);
+    assert!(trees[0].0.contains("\"说明\""), "{}", trees[0].0);
+    assert!(
+        trees[0].0.contains("\"2\"") && trees[0].0.contains("\"0\""),
+        "{}",
+        trees[0].0
+    );
+    assert_ne!(trees[0].0, trees[0].1, "the bound properties stay bound");
+}
+
+#[test]
+fn a_bare_attribute_on_a_component_is_true() {
+    let mut cx = AppContext::new();
+    let mounted = cx
+        .mount_view_root(DocumentId::new(1).unwrap(), || {
+            view! {
+                <Column>
+                    <props::Flag on />
+                    <props::Flag />
+                </Column>
+            }
+        })
+        .unwrap();
+    let tree = dump(&cx, mounted.roots()[0]);
+    let on = tree.find("\"开\"").expect(&tree);
+    let off = tree.find("\"关\"").expect(&tree);
+    assert!(on < off, "{tree}");
 }
 
 /// `<RangeSpan>`: both thumbs bound as one `(low, high)` pair, the indicator

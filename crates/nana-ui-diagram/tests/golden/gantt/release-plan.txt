@@ -1,0 +1,46 @@
+size 873.4 301.4
+summary nodes=6 edges=0 groups=3
+shape rect 8 69 857.4 67.2 fill=SemanticColorMix{first:Subtle,second:None,weight:9500}
+shape rect 8 136.2 857.4 100.8 fill=SemanticColorMix{first:Subtle,second:None,weight:4000}
+shape rect 8 237 857.4 33.6 fill=SemanticColorMix{first:Subtle,second:None,weight:9500}
+shape rect 179 69 61 201.6 fill=SemanticColorMix{first:Border,second:None,weight:3000}
+shape rect 392.4 69 61 201.6 fill=SemanticColorMix{first:Border,second:None,weight:3000}
+shape rect 605.7 69 61 201.6 fill=SemanticColorMix{first:Border,second:None,weight:3000}
+shape path M118.1,69 L118.1,270.6 stroke=BorderSoft/hairline/Solid
+shape path M240,69 L240,270.6 stroke=BorderSoft/hairline/Solid
+shape path M361.9,69 L361.9,270.6 stroke=BorderSoft/hairline/Solid
+shape path M483.8,69 L483.8,270.6 stroke=BorderSoft/hairline/Solid
+shape path M605.7,69 L605.7,270.6 stroke=BorderSoft/hairline/Solid
+shape path M727.6,69 L727.6,270.6 stroke=BorderSoft/hairline/Solid
+shape path M118.1,270.6 L758.1,270.6 stroke=Border/hairline/Solid
+shape path M118.1,270.6 L118.1,274.6 stroke=Border/hairline/Solid
+text 83.3 276.6 69.6 16.8 size=12 w=400 ink=Muted "2026-01-01"
+shape path M240,270.6 L240,274.6 stroke=Border/hairline/Solid
+text 205.2 276.6 69.6 16.8 size=12 w=400 ink=Muted "2026-01-05"
+shape path M361.9,270.6 L361.9,274.6 stroke=Border/hairline/Solid
+text 327.1 276.6 69.6 16.8 size=12 w=400 ink=Muted "2026-01-09"
+shape path M483.8,270.6 L483.8,274.6 stroke=Border/hairline/Solid
+text 449 276.6 69.6 16.8 size=12 w=400 ink=Muted "2026-01-13"
+shape path M605.7,270.6 L605.7,274.6 stroke=Border/hairline/Solid
+text 570.9 276.6 69.6 16.8 size=12 w=400 ink=Muted "2026-01-17"
+shape path M727.6,270.6 L727.6,274.6 stroke=Border/hairline/Solid
+text 692.8 276.6 69.6 16.8 size=12 w=400 ink=Muted "2026-01-21"
+text 20 92.8 51.6 19.6 size=14 w=600 ink=Text "Design"
+text 20 176.8 43 19.6 size=14 w=600 ink=Text "Build"
+text 20 244 86.1 19.6 size=14 w=600 ink=Text "Milestones"
+shape rect 118.1 73 213.3 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 208.5 76 32.5 19.6 size=14 w=400 ink=Text "Spec"
+shape rect 331.4 106.6 61 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 337.5 109.6 48.7 19.6 size=14 w=400 ink=Text "Review"
+shape rect 331.4 140.2 274.3 25.6 r=Xs fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/thick/Solid
+text 440.1 143.2 56.8 19.6 size=14 w=400 ink=Text "Backend"
+shape rect 331.4 173.8 274.3 25.6 r=Xs fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Accent/hairline/Solid
+text 436.1 176.8 65 19.6 size=14 w=400 ink=Text "Frontend"
+shape rect 666.6 207.4 91.4 25.6 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 764.1 210.4 89.3 19.6 size=14 w=400 ink=Text "Integration"
+shape path M118.1,244.6 L127.3,253.8 L118.1,263 L108.9,253.8 Z fill=series2
+text 133.3 244 56.8 19.6 size=14 w=400 ink=Text "Kickoff"
+shape path M544.7,63 L544.7,270.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape rect 518.5 42.6 52.6 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 523.9 44.4 41.8 16.8 size=12 w=400 ink=Muted "Freeze"
+text 377.7 8 118 22.4 size=16 w=600 ink=Text "Release plan"

@@ -11,6 +11,7 @@ title: 外围支撑 crate 一览
 | Crate | 一句话职责 | 关键架构边界 |
 | --- | --- | --- |
 | `nana-ui-charts` | 图表模型：ECharts 形状的 `ChartOption`、刻度、布局、命中与 GPU 标记数组 | 仅依赖 `nana-ui-core` + `bytemuck`；`Chart` 组件在 `runtime`，WGSL 管线在 `nana-ui` |
+| `nana-ui-diagram` | Mermaid 图表：解析、分层布局与正交连线、主题无关的矢量显示列表 | 依赖 `nana-ui-core` 与 `nana-ui-charts` 的刻度；纯 CPU，测宽由调用方传入；Markdown 绘制入口在 `runtime`（`rich-text`），细分走 `scene` 的自绘路径 |
 | `nana-diagnostics` | `event!` / `metric!` / `fault!` / `span!` 宏与静态描述符 | 生产线程零文件 I/O、零字符串格式化、零全局锁、首次注册后零堆分配 |
 | `nana-svg-raster` | CPU 侧 SVG 栅格化（`resvg → pixmap`） | 纯位图光栅化工具，不是绘制器，也不维护 SVG DOM |
 | `nana-app-icon` | 默认应用图标、PNG/ICO/ICNS 编码与 Windows PE 资源嵌入 | 只管图标编码与嵌入；目录打包布局归 `nana-packager` |
@@ -61,7 +62,7 @@ title: 外围支撑 crate 一览
 - **`nana-ui-dev`（`crates/nana-ui-dev/src/lib.rs`，209 行）**：封装防编辑器截断半写文件的安全读取（`MAX_ARTIFACT_BYTES = 64 MiB`，`:54`）、路径级静默防抖器 `Debouncer`（`watch.rs:25`）以及三档重载请求 `ReloadRequest { Full, Css, Template }`（`lib.rs:58`）。第 `:22` 行的 `#[cfg(not(debug_assertions))] compile_error!(...)` 从编译期杜绝它进入发布包（详见 [开发期热重载合同](/reference/hot-reload)）。
 - **`nana-ui-devtools`（`crates/nana-ui-devtools/src/lib.rs`，402 行）**：
   - 一方面提供容量为 `DEFAULT_EVENT_CAPACITY = 2048` 的有界诊断记录器 `DevtoolsSession`（对接 `nana-js-engine` 的异常 sink 与 host-call 耗时观察器，仅记录方法名、状态与耗时，不记录业务参数与返回值）；
-  - 另一方面提供按 feature 逐层递进的无头自动化会话（`offscreen` ⊂ `runtime-agent` ⊂ `agent` ⊂ `agent-bin`，见 `agent/mod.rs`）：支持纯 Rust 的 `RuntimeAgentSession` 与带 V8 的 `VueAgentSession` 通过标准输入输出 JSON 协议执行指针点击、键盘输入、无障碍树导出与离屏 PNG 截图比对。**全仓唯一的 GPU → CPU 像素回读严格限制在 `offscreen` 模块内**，产品 `run_runtime` 呈现路径绝不调用它。
+  - 另一方面提供按 feature 逐层递进的无头自动化会话（`offscreen` ⊂ `runtime-agent` ⊂ `agent` ⊂ `agent-bin`，见 `agent/mod.rs`）：支持纯 Rust 的 `RuntimeAgentSession` 与带 V8 的 `VueAgentSession` 通过标准输入输出 JSON 协议执行指针点击、键盘输入、无障碍树导出与离屏 PNG 截图比对。`headless-host` 在 `runtime-agent` 之上加 `HeadlessHost<P>`：用 `nana_ui::headless::HeadlessRuntime` 按原生宿主的钩子顺序跑整个 `RuntimeProgram`（含它开的辅助窗口），再画出、回读各窗口。**全仓唯一的 GPU → CPU 像素回读严格限制在 `offscreen` 模块内**，产品 `run_runtime` 呈现路径绝不调用它。
 
 ## 仓库周边生态全景
 

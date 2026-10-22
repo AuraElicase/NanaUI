@@ -68,12 +68,15 @@ mod layout_result;
 #[cfg(feature = "benchmark")]
 pub use layout_engine::plan_stats;
 mod browser_view;
+pub mod fold;
 mod menus;
 mod motion_api;
 mod mutation;
 mod native_content;
 pub use browser_view::BrowserView;
 mod i18n;
+#[cfg(feature = "rich-text")]
+mod markdown_diagram;
 #[cfg(feature = "rich-text")]
 mod markdown_drawing;
 mod media_transport;
@@ -106,6 +109,8 @@ pub use responsive::{
 };
 #[cfg(feature = "controls")]
 mod reorder_list;
+#[cfg(feature = "rich-text")]
+pub use markdown_diagram::DiagramDrawing;
 #[cfg(feature = "rich-text")]
 pub use markdown_drawing::{MarkdownDrawing, MarkdownDrawingCommand};
 #[cfg(feature = "rich-text")]
@@ -171,7 +176,7 @@ pub use animation::{
     layout_flip_play_spec, layout_flip_spec, loading_animation, retarget_track,
     toast_timeout_animation, track_completion_deadline, workspace_animation,
 };
-pub use app_menu_bar::{AppMenuBar, MenuBarActivated, menu_shortcut_label};
+pub use app_menu_bar::{AppMenuBar, MenuBarActivated, ShortcutNotation, menu_shortcut_label};
 pub use area_layout::{
     Area, AreaAxis, AreaChange, AreaEditorSelect, AreaGeometry, AreaLayout, AreaLayoutChanged,
     AreaLayoutError, AreaLayoutModel, AreaNode, AreaSplitter,
@@ -269,7 +274,8 @@ pub use framework::{EditableHooks, TypeBehavior, TypeHooks};
 pub use glyph_cache::GlyphCache;
 pub use gpu_slots::{
     GPU_TEXTURE_VIEW_RENDERER, GPU_VIEW_RENDERER, GpuTextureView, GpuView, GpuViewMode,
-    GpuViewPalette, HOST_TEXTURE_RENDERER, gpu_view_params, pack_gpu_revision, unpack_gpu_revision,
+    GpuViewPalette, HOST_TEXTURE_RENDERER, TextureSlotName, gpu_view_params, pack_gpu_revision,
+    unpack_gpu_revision,
 };
 #[cfg(feature = "graph-canvas")]
 pub use graph_canvas::{
@@ -314,7 +320,9 @@ pub use menus::{
     ActionMenuItem, AnchoredActionMenu, ContextMenu, ContextMenuEvent, ContextMenuItem,
     resolve_anchored_origin,
 };
-pub use motion_api::{FlipBuilder, NodeMotion, SpringBuilder, TimelineBuilder, TransitionBuilder};
+pub use motion_api::{
+    FlipBuilder, FoldBuilder, NodeMotion, SpringBuilder, TimelineBuilder, TransitionBuilder,
+};
 pub use mutation::{MutationQueue, UiMutation};
 /// The chart model: options, layout and the GPU mark contract.
 #[cfg(feature = "charts")]
@@ -383,8 +391,8 @@ pub use range_span::{
 };
 #[cfg(feature = "controls")]
 pub use reorder_list::{
-    ReorderDragVisual, ReorderDropMark, ReorderItem, ReorderList, ReorderListEvent,
-    ReorderListPointer, ReorderRowPaint,
+    ReorderAccepts, ReorderDragVisual, ReorderDropMark, ReorderItem, ReorderKeyMove, ReorderList,
+    ReorderListEvent, ReorderListPointer, ReorderRowPaint,
 };
 #[cfg(feature = "rich-text")]
 pub use rich_text::{
@@ -403,8 +411,8 @@ pub use selection::{
 };
 pub use settings::{
     AboutMetadata, AboutSection, AboutSectionAssembly, AppearanceSection,
-    AppearanceSectionAssembly, SettingsBack, SettingsCard, SettingsCollapsibleCard, SettingsPage,
-    SettingsPageAssembly, SettingsRow, SettingsSidebar, SettingsSidebarAssembly,
+    AppearanceSectionAssembly, SettingsBack, SettingsCard, SettingsCollapsibleCard, SettingsGroup,
+    SettingsPage, SettingsPageAssembly, SettingsRow, SettingsSidebar, SettingsSidebarAssembly,
     SettingsTabSelected, apply_appearance_event,
 };
 pub use shell::{AppShell, AppTitleBar, AppTitleBarControls, DesktopShell, WindowChromeAction};
@@ -449,11 +457,11 @@ pub use view_components::{
     DialogToggled, Divider, FileDropEvent, FocusWithinChanged, HostedTextarea, IconButton,
     IconButtonTooltip, IconGlyph, List, ListItem, ListItemRole, ListItemSlots, NumberChanged,
     NumberInput, OverlayChanged, OverlayClosing, OverlayHost, PointerHoverChanged, RangeAdjustment,
-    RangeChanged, RangeDragState, RangeDragging, RangeField, RangeInput, RangeMarker, ScrollAnchor,
-    ScrollAxes, ScrollChanged, ScrollLaidOut, ScrollView, ScrollViewportChanged,
-    ScrollbarDragState, SecondaryPress, SizeChanged, Stack, Switch, Table, TableCell,
-    TableCellFocused, TableRow, Text, TextArea, TextChanged, TextClamped, TextInput, TextSubmitted,
-    ToggleChanged, Tooltip, UserScroll,
+    RangeChanged, RangeDragState, RangeDragging, RangeField, RangeInput, RangeMarker,
+    RowToolsPresence, RowToolsRest, ScrollAnchor, ScrollAxes, ScrollChanged, ScrollLaidOut,
+    ScrollView, ScrollViewportChanged, ScrollbarDragState, SecondaryPress, SizeChanged, Stack,
+    Switch, Table, TableCell, TableCellFocused, TableRow, Text, TextArea, TextChanged, TextClamped,
+    TextInput, TextSubmitted, ToggleChanged, Tooltip, UserScroll,
 };
 pub use workspace::{Workspace, WorkspaceRegionSlot, WorkspaceResizeHandle};
 pub use world::{

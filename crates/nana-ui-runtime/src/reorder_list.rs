@@ -2,13 +2,15 @@
 //!
 //! Application code owns item identities, order, grouping, and persistence.
 //! This type reports select, before-value reorder, and tree-drop results from
-//! pointer geometry only.
+//! pointer geometry and the keyboard. Rows may stand for a flattened tree:
+//! each row's depth says which rows below it it holds, and a drag carries
+//! that subtree with it.
 
 use std::sync::Arc;
 
 #[cfg(test)]
 use nana_ui_core::UI_METRICS;
-use nana_ui_core::{ControlSize, FlexDirection, LengthSpec, reorder_changes_position};
+use nana_ui_core::{ControlSize, FlexDirection, LengthSpec};
 
 use crate::view_components::project_common;
 use crate::{
@@ -20,6 +22,7 @@ const DRAG_THRESHOLD: f32 = nana_ui_core::space::XS;
 const DEFAULT_SPACING: f32 = nana_ui_core::space::XXS;
 const INSERT_INSET: f32 = nana_ui_core::space::XS;
 const INSERT_THICKNESS: f32 = nana_ui_core::space::XXS;
+const DEFAULT_INDENT: f32 = nana_ui_core::space::LG;
 
 pub use crate::tree_view::{TreeDropIntent, TreeDropPosition};
 
@@ -61,11 +64,42 @@ pub enum ReorderListPointer {
     Cancel,
 }
 
+/// Which rows a drop place takes, by their [`ReorderItem::kind`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ReorderAccepts {
+    /// Every row, with a kind or without.
+    #[default]
+    All,
+    /// No row.
+    Nothing,
+    /// Rows of these kinds. A row without a kind is none of them.
+    Kinds(Arc<[Arc<str>]>),
+}
+
+impl ReorderAccepts {
+    pub fn kinds<K: Into<Arc<str>>>(kinds: impl IntoIterator<Item = K>) -> Self {
+        Self::Kinds(kinds.into_iter().map(Into::into).collect())
+    }
+
+    /// Whether a row of `kind` may land here.
+    pub fn accepts(&self, kind: Option<&str>) -> bool {
+        match self {
+            Self::All => true,
+            Self::Nothing => false,
+            Self::Kinds(kinds) => kind.is_some_and(|kind| kinds.iter().any(|k| &**k == kind)),
+        }
+    }
+}
+
 /// One row identity. A press on a control inside a live row (a focusable
 /// node below the row, such as a button) is the control's click unless the
 /// pointer moves past the drag threshold, when the row drags instead.
 /// Optional [`Self::tools`] is a live child that keeps the pointer to itself:
 /// hits there never start a drag.
+///
+/// For a tree, rows come in depth-first order and
+/// [`depth`](field@Self::depth) says how deep each sits: a row holds the
+/// deeper rows right below it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReorderItem {
     pub value: Arc<str>,
@@ -74,10 +108,15 @@ pub struct ReorderItem {
     pub drop_target: bool,
     pub selected: bool,
     pub disabled: bool,
-    /// With [`ReorderList::tree_drop`], a drop on the row's middle goes
-    /// inside it. A row that takes nothing inside splits into before and
-    /// after halves instead. On by default.
-    pub nest: bool,
+    /// How deep the row sits; 0 at the top level.
+    pub depth: u16,
+    /// What the row is, for the [`ReorderAccepts`] of the places it may go.
+    pub kind: Option<Arc<str>>,
+    /// Which rows a tree drop may put inside this one. All by default.
+    pub accepts_inside: ReorderAccepts,
+    /// Which rows may land right before or after this one, beside it in its
+    /// parent. All by default; the parent must take them inside too.
+    pub accepts_sibling: ReorderAccepts,
     pub tools: Option<StableNodeId>,
 }
 
@@ -90,7 +129,10 @@ impl ReorderItem {
             drop_target: true,
             selected: false,
             disabled: false,
-            nest: true,
+            depth: 0,
+            kind: None,
+            accepts_inside: ReorderAccepts::All,
+            accepts_sibling: ReorderAccepts::All,
             tools: None,
         }
     }
@@ -114,9 +156,29 @@ impl ReorderItem {
         self
     }
 
-    /// Whether a tree drop can go inside this row; see [`Self::nest`].
-    pub fn nest(mut self, nest: bool) -> Self {
-        self.nest = nest;
+    /// See [`Self::depth`](field@Self::depth).
+    pub fn depth(mut self, depth: u16) -> Self {
+        self.depth = depth;
+        self
+    }
+
+    /// See [`Self::kind`](field@Self::kind).
+    pub fn kind(mut self, kind: impl Into<Arc<str>>) -> Self {
+        self.kind = Some(kind.into());
+        self
+    }
+
+    /// See [`Self::accepts_inside`](field@Self::accepts_inside).
+    /// [`ReorderAccepts::Nothing`] splits the row into before and after
+    /// halves.
+    pub fn accepts_inside(mut self, accepts: ReorderAccepts) -> Self {
+        self.accepts_inside = accepts;
+        self
+    }
+
+    /// See [`Self::accepts_sibling`](field@Self::accepts_sibling).
+    pub fn accepts_sibling(mut self, accepts: ReorderAccepts) -> Self {
+        self.accepts_sibling = accepts;
         self
     }
 
@@ -163,10 +225,8 @@ pub struct ReorderDragVisual {
     pub source: usize,
     pub x: f32,
     pub y: f32,
-    pub drop_targets: Arc<[bool]>,
-    /// Which rows a tree drop can go inside ([`ReorderItem::nest`]).
-    pub nest_targets: Arc<[bool]>,
     pub tree_drop: bool,
+    rules: Arc<DropRules>,
 }
 
 /// Where a drop would land, as drawn: a line between rows, or the row a
@@ -178,6 +238,30 @@ pub enum ReorderDropMark {
 }
 
 impl ReorderDragVisual {
+    /// How many rows the list has.
+    pub fn rows(&self) -> usize {
+        self.rules.rows.len()
+    }
+
+    /// The rows the drag carries: the dragged row and the rows it holds.
+    pub fn carried(&self) -> std::ops::RangeInclusive<usize> {
+        self.source..=self.rules.subtree_end(self.source)
+    }
+
+    /// The box around the carried rows, among `rows`.
+    pub fn carried_box(&self, rows: &[LayoutBox]) -> Option<LayoutBox> {
+        let first = rows.get(self.source)?;
+        let last = rows.get(*self.carried().end()).unwrap_or(first);
+        let x = first.x.min(last.x);
+        let right = (first.x + first.width).max(last.x + last.width);
+        Some(LayoutBox {
+            x,
+            y: first.y,
+            width: right - x,
+            height: last.y + last.height - first.y,
+        })
+    }
+
     /// The drop indicator over `rows` inside `bounds`: the insert line, or
     /// the target's line for a tree drop; `None` where a drop changes nothing.
     pub fn insert_line(&self, bounds: LayoutBox, rows: &[LayoutBox]) -> Option<LayoutBox> {
@@ -187,30 +271,294 @@ impl ReorderDragVisual {
     }
 
     /// [`Self::insert_line`], telling a line from a row a drop goes inside.
+    /// A tree drop's line is indented to the depth the row lands at.
     pub fn drop_mark(&self, bounds: LayoutBox, rows: &[LayoutBox]) -> Option<ReorderDropMark> {
         if self.tree_drop {
-            let (target, position) = tree_drop_target(
-                rows,
-                &self.drop_targets,
-                &self.nest_targets,
-                Some(self.source),
-                self.x,
-                self.y,
-            )?;
-            let mark = tree_insert_line(rows[target], position);
-            return Some(if position == TreeDropPosition::Inside {
+            let drop = self.rules.tree_drop(rows, self.source, self.x, self.y)?;
+            let indent = f32::from(self.rules.rows[drop.target].depth) * self.rules.indent;
+            let mark = tree_insert_line(rows[drop.anchor], drop.position, indent);
+            return Some(if drop.position == TreeDropPosition::Inside {
                 ReorderDropMark::Inside(mark)
             } else {
                 ReorderDropMark::Line(mark)
             });
         }
-        let before = drop_before_index(rows, &self.drop_targets, Some(self.source), self.y);
-        if !reorder_changes_position(rows.len(), self.source, before) {
-            return None;
-        }
+        let before = self.rules.flat_drop(rows, self.source, self.y)?;
         Some(ReorderDropMark::Line(reorder_insert_line(
             bounds, rows, before,
         )))
+    }
+}
+
+/// A keyboard move of the chosen row, for [`ReorderList::key_move`]. Alt
+/// with an arrow key on a focused list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReorderKeyMove {
+    /// Before its previous sibling.
+    Up,
+    /// After its next sibling.
+    Down,
+    /// Into its previous sibling, as that row's last child.
+    Indent,
+    /// Out of its parent, right after it.
+    Outdent,
+}
+
+/// What a row is and takes, for drop resolution.
+#[derive(Debug, Clone, PartialEq)]
+struct DropRow {
+    depth: u16,
+    target: bool,
+    kind: Option<Arc<str>>,
+    inside: ReorderAccepts,
+    sibling: ReorderAccepts,
+}
+
+/// A list's rows as a flattened tree, and where a dragged subtree may land.
+#[derive(Debug, Clone, PartialEq)]
+struct DropRules {
+    rows: Vec<DropRow>,
+    root: ReorderAccepts,
+    indent: f32,
+}
+
+/// A resolved tree drop: `position` of `target`, drawn against `anchor`
+/// (the row under the pointer for a line after a deeper row).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct TreeDrop {
+    target: usize,
+    position: TreeDropPosition,
+    anchor: usize,
+}
+
+impl DropRules {
+    fn of(list: &ReorderList) -> Self {
+        Self {
+            rows: list
+                .items
+                .iter()
+                .map(|item| DropRow {
+                    depth: item.depth,
+                    target: item.is_drop_target(),
+                    kind: item.kind.clone(),
+                    inside: item.accepts_inside.clone(),
+                    sibling: item.accepts_sibling.clone(),
+                })
+                .collect(),
+            root: list.accepts_root.clone(),
+            indent: list.indent,
+        }
+    }
+
+    fn depth(&self, index: usize) -> u16 {
+        self.rows[index].depth
+    }
+
+    /// The last row `index` holds, or `index` itself.
+    fn subtree_end(&self, index: usize) -> usize {
+        let depth = self.depth(index);
+        let mut end = index;
+        while self.rows.get(end + 1).is_some_and(|row| row.depth > depth) {
+            end += 1;
+        }
+        end
+    }
+
+    fn parent(&self, index: usize) -> Option<usize> {
+        let depth = self.depth(index);
+        (0..index).rev().find(|&row| self.depth(row) < depth)
+    }
+
+    fn previous_sibling(&self, index: usize) -> Option<usize> {
+        let depth = self.depth(index);
+        (0..index)
+            .rev()
+            .find(|&row| self.depth(row) <= depth)
+            .filter(|&row| self.depth(row) == depth)
+    }
+
+    fn next_sibling(&self, index: usize) -> Option<usize> {
+        let next = self.subtree_end(index) + 1;
+        (next < self.rows.len() && self.depth(next) == self.depth(index)).then_some(next)
+    }
+
+    /// The row at `depth` that holds `index`, or `index` itself.
+    fn ancestor_at(&self, index: usize, depth: u16) -> Option<usize> {
+        (0..=index)
+            .rev()
+            .find(|&row| self.depth(row) <= depth)
+            .filter(|&row| self.depth(row) == depth)
+    }
+
+    fn takes_child(&self, parent: Option<usize>, kind: Option<&str>) -> bool {
+        match parent {
+            Some(parent) => self.rows[parent].inside.accepts(kind),
+            None => self.root.accepts(kind),
+        }
+    }
+
+    /// Whether `source` and the rows it holds may go to `position` of
+    /// `target`: never into themselves, only onto a drop target, inside a
+    /// row that takes their kind, or beside one whose parent does.
+    fn allows(&self, source: usize, target: usize, position: TreeDropPosition) -> bool {
+        if (source..=self.subtree_end(source)).contains(&target) || !self.rows[target].target {
+            return false;
+        }
+        let kind = self.rows[source].kind.as_deref();
+        match position {
+            TreeDropPosition::Inside => self.rows[target].inside.accepts(kind),
+            TreeDropPosition::Before | TreeDropPosition::After => {
+                self.rows[target].sibling.accepts(kind)
+                    && self.takes_child(self.parent(target), kind)
+            }
+        }
+    }
+
+    /// Whether the move puts `source` anywhere new.
+    fn changes(&self, source: usize, target: usize, position: TreeDropPosition) -> bool {
+        match position {
+            TreeDropPosition::Before => self.next_sibling(source) != Some(target),
+            TreeDropPosition::After => self.previous_sibling(source) != Some(target),
+            TreeDropPosition::Inside => true,
+        }
+    }
+
+    /// The first of `places` that `source` may go to, if it moves it.
+    fn first_allowed(
+        &self,
+        source: usize,
+        places: impl IntoIterator<Item = TreeDrop>,
+    ) -> Option<TreeDrop> {
+        places
+            .into_iter()
+            .find(|drop| self.allows(source, drop.target, drop.position))
+            .filter(|drop| self.changes(source, drop.target, drop.position))
+    }
+
+    /// Where a tree drop of `source` at `(x, y)` over `boxes` lands. The top
+    /// quarter of a row is before it, the middle inside (halves without
+    /// inside, for a row that does not take the source's kind), the bottom
+    /// after it — or, over a row whose children show below it, before its
+    /// first child. After the last row of nested rows, `x` picks the depth:
+    /// each [`ReorderList::indent`] left of the row's own is one level out.
+    fn tree_drop(&self, boxes: &[LayoutBox], source: usize, x: f32, y: f32) -> Option<TreeDrop> {
+        let hovered = boxes
+            .iter()
+            .take(self.rows.len())
+            .position(|row| row.contains(x, y))?;
+        let end = self.subtree_end(source);
+        if (source..=end).contains(&hovered) {
+            return None;
+        }
+        let row = boxes[hovered];
+        let offset = (y - row.y) / row.height.max(1.0);
+        let inside = self.rows[hovered]
+            .inside
+            .accepts(self.rows[source].kind.as_deref());
+        let at = |target, position, anchor| TreeDrop {
+            target,
+            position,
+            anchor,
+        };
+        if offset < if inside { 0.25 } else { 0.5 } {
+            return self.first_allowed(source, [at(hovered, TreeDropPosition::Before, hovered)]);
+        }
+        if inside && offset <= 0.75 {
+            return self.first_allowed(source, [at(hovered, TreeDropPosition::Inside, hovered)]);
+        }
+        // The row after, past what the drag carries.
+        let next = if hovered + 1 == source {
+            end + 1
+        } else {
+            hovered + 1
+        };
+        let depth = self.depth(hovered);
+        if next < self.rows.len() && self.depth(next) > depth {
+            return self.first_allowed(
+                source,
+                [
+                    at(next, TreeDropPosition::Before, next),
+                    at(hovered, TreeDropPosition::Inside, hovered),
+                ],
+            );
+        }
+        let floor = if next < self.rows.len() {
+            self.depth(next)
+        } else {
+            0
+        };
+        let wanted = if self.indent > 0.0 {
+            ((x - row.x - INSERT_INSET) / self.indent).floor().max(0.0) as u16
+        } else {
+            depth
+        };
+        let wanted = wanted.clamp(floor, depth);
+        self.first_allowed(
+            source,
+            (floor..=wanted).rev().filter_map(|level| {
+                self.ancestor_at(hovered, level)
+                    .map(|target| at(target, TreeDropPosition::After, hovered))
+            }),
+        )
+    }
+
+    /// The row a flat drop of `source` at `y` goes before (`None` for the
+    /// end); `None` overall where it changes nothing or may not land.
+    fn flat_drop(&self, boxes: &[LayoutBox], source: usize, y: f32) -> Option<Option<usize>> {
+        let end = self.subtree_end(source);
+        let before = boxes
+            .iter()
+            .take(self.rows.len())
+            .enumerate()
+            .find_map(|(index, row)| {
+                (!(source..=end).contains(&index)
+                    && self.rows[index].target
+                    && y < row.y + row.height * 0.5)
+                    .then_some(index)
+            });
+        let unchanged = match before {
+            Some(before) => before == end + 1,
+            None => end + 1 == self.rows.len(),
+        };
+        let kind = self.rows[source].kind.as_deref();
+        let accepted = before.is_none_or(|before| self.rows[before].sibling.accepts(kind));
+        (!unchanged && accepted).then_some(before)
+    }
+
+    /// Where a keyboard `step` takes `source`.
+    fn key_drop(&self, source: usize, step: ReorderKeyMove) -> Option<TreeDrop> {
+        let at = |target, position| TreeDrop {
+            target,
+            position,
+            anchor: target,
+        };
+        match step {
+            ReorderKeyMove::Up => self.first_allowed(
+                source,
+                [at(self.previous_sibling(source)?, TreeDropPosition::Before)],
+            ),
+            ReorderKeyMove::Down => self.first_allowed(
+                source,
+                [at(self.next_sibling(source)?, TreeDropPosition::After)],
+            ),
+            ReorderKeyMove::Indent => {
+                let parent = self.previous_sibling(source)?;
+                let child = self.depth(parent) + 1;
+                let last_child = (parent + 1..source)
+                    .rev()
+                    .find(|&row| self.depth(row) == child);
+                self.first_allowed(
+                    source,
+                    last_child
+                        .map(|row| at(row, TreeDropPosition::After))
+                        .into_iter()
+                        .chain([at(parent, TreeDropPosition::Inside)]),
+                )
+            }
+            ReorderKeyMove::Outdent => {
+                self.first_allowed(source, [at(self.parent(source)?, TreeDropPosition::After)])
+            }
+        }
     }
 }
 
@@ -256,6 +604,11 @@ pub struct ReorderList {
     pub spacing: f32,
     pub size: ControlSize,
     pub tree_drop: bool,
+    /// How far each level of [`ReorderItem::depth`] sits in, for the insert
+    /// line and for picking a depth with the pointer.
+    pub indent: f32,
+    /// Which rows a tree drop may put at the top level. All by default.
+    pub accepts_root: ReorderAccepts,
     /// Declared at construction: live row children own painting and the list
     /// body follows their layout. Never inferred from the tree at project time.
     pub live_rows: bool,
@@ -272,6 +625,8 @@ impl ReorderList {
             spacing: DEFAULT_SPACING,
             size: ControlSize::Small,
             tree_drop: false,
+            indent: DEFAULT_INDENT,
+            accepts_root: ReorderAccepts::All,
             live_rows: false,
             label: None,
             style: NodeStyle::default(),
@@ -292,6 +647,18 @@ impl ReorderList {
 
     pub fn tree_drop(mut self, enabled: bool) -> Self {
         self.tree_drop = enabled;
+        self
+    }
+
+    /// See [`Self::indent`](field@Self::indent).
+    pub fn indent(mut self, indent: f32) -> Self {
+        self.indent = indent.max(0.0);
+        self
+    }
+
+    /// See [`Self::accepts_root`](field@Self::accepts_root).
+    pub fn accepts_root(mut self, accepts: ReorderAccepts) -> Self {
+        self.accepts_root = accepts;
         self
     }
 
@@ -411,9 +778,50 @@ impl ReorderList {
             source,
             x: drag.x,
             y: drag.y,
-            drop_targets: self.drop_target_flags().into(),
-            nest_targets: self.nest_flags().into(),
             tree_drop: self.tree_drop,
+            rules: Arc::new(DropRules::of(self)),
+        })
+    }
+
+    /// The event a keyboard `step` of row `source` publishes: a
+    /// [`ReorderListEvent::TreeDrop`] with [`Self::tree_drop`], else a
+    /// [`ReorderListEvent::Reorder`] (only [`ReorderKeyMove::Up`] and
+    /// [`ReorderKeyMove::Down`]). `None` where the row cannot go, or would
+    /// not move. The row carries the rows it holds.
+    pub fn key_move(&self, source: &str, step: ReorderKeyMove) -> Option<ReorderListEvent> {
+        let index = self.item_index(source)?;
+        if self.drag.is_some() || !self.items[index].is_source() {
+            return None;
+        }
+        let rules = DropRules::of(self);
+        let source = Arc::clone(&self.items[index].value);
+        if self.tree_drop {
+            let drop = rules.key_drop(index, step)?;
+            return Some(ReorderListEvent::TreeDrop {
+                source,
+                intent: TreeDropIntent {
+                    target: Arc::clone(&self.items[drop.target].value),
+                    position: drop.position,
+                },
+            });
+        }
+        let before = match step {
+            ReorderKeyMove::Up => Some(rules.previous_sibling(index)?),
+            ReorderKeyMove::Down => {
+                let after = rules.subtree_end(rules.next_sibling(index)?) + 1;
+                (after < self.items.len()).then_some(after)
+            }
+            ReorderKeyMove::Indent | ReorderKeyMove::Outdent => return None,
+        };
+        let kind = self.items[index].kind.as_deref();
+        if let Some(before) = before
+            && !(rules.rows[before].target && rules.rows[before].sibling.accepts(kind))
+        {
+            return None;
+        }
+        Some(ReorderListEvent::Reorder {
+            source,
+            before: before.map(|before| Arc::clone(&self.items[before].value)),
         })
     }
 
@@ -471,26 +879,19 @@ impl ReorderList {
             self.set_selected(drag.source.as_ref());
             return Some(ReorderListEvent::Select(drag.source));
         }
-        let drop_targets = self.drop_target_flags();
+        let rules = DropRules::of(self);
         if self.tree_drop {
-            let (target, position) = tree_drop_target(
-                rows,
-                &drop_targets,
-                &self.nest_flags(),
-                Some(source),
-                drag.x,
-                drag.y,
-            )?;
-            let target = Arc::clone(&self.items[target].value);
+            let drop = rules.tree_drop(rows, source, drag.x, drag.y)?;
+            let target = Arc::clone(&self.items[drop.target].value);
             return Some(ReorderListEvent::TreeDrop {
                 source: drag.source,
-                intent: TreeDropIntent { target, position },
+                intent: TreeDropIntent {
+                    target,
+                    position: drop.position,
+                },
             });
         }
-        let before = drop_before_index(rows, &drop_targets, Some(source), drag.y);
-        if !reorder_changes_position(self.items.len(), source, before) {
-            return None;
-        }
+        let before = rules.flat_drop(rows, source, drag.y)?;
         let before = before.map(|index| Arc::clone(&self.items[index].value));
         Some(ReorderListEvent::Reorder {
             source: drag.source,
@@ -502,14 +903,6 @@ impl ReorderList {
         self.items
             .iter()
             .position(|item| item.value.as_ref() == value)
-    }
-
-    fn drop_target_flags(&self) -> Vec<bool> {
-        self.items.iter().map(ReorderItem::is_drop_target).collect()
-    }
-
-    fn nest_flags(&self) -> Vec<bool> {
-        self.items.iter().map(|item| item.nest).collect()
     }
 
     fn set_selected(&mut self, value: &str) {
@@ -635,6 +1028,60 @@ impl crate::AppContext {
             }
             id = self.world().parent_id(id)?;
         }
+    }
+
+    /// Alt with an arrow key on a focused list, or on a focused control in
+    /// one of its rows: moves that row, else the chosen one, by
+    /// [`ReorderList::key_move`] — up or down past a sibling, right into the
+    /// sibling above, left out of its parent. Publishes the move as a drop
+    /// would; returns whether one was published.
+    pub fn focused_reorder_list_key(
+        &mut self,
+        document: crate::DocumentId,
+        key: &str,
+    ) -> Result<bool, crate::FrameworkError> {
+        let step = match key {
+            "ArrowUp" => ReorderKeyMove::Up,
+            "ArrowDown" => ReorderKeyMove::Down,
+            "ArrowRight" => ReorderKeyMove::Indent,
+            "ArrowLeft" => ReorderKeyMove::Outdent,
+            _ => return Ok(false),
+        };
+        let Some(focused) = self.world().focused(document) else {
+            return Ok(false);
+        };
+        let Some(list_id) = self.nearest_reorder_list(focused) else {
+            return Ok(false);
+        };
+        let Some(entity) = self.reorder_list_entity(list_id) else {
+            return Ok(false);
+        };
+        // The live row the focus is in: the list's child on its way up.
+        let mut row = focused;
+        while row != list_id && self.world().parent_id(row) != Some(list_id) {
+            let Some(parent) = self.world().parent_id(row) else {
+                break;
+            };
+            row = parent;
+        }
+        let row = (row != list_id)
+            .then(|| {
+                self.world()
+                    .node(list_id)
+                    .and_then(|node| node.children.iter().position(|child| *child == row))
+            })
+            .flatten();
+        self.update_component(entity, |list, cx| {
+            let source = row
+                .and_then(|row| list.items.get(row))
+                .map(|item| Arc::clone(&item.value))
+                .or_else(|| list.selected_value().cloned());
+            let Some(event) = source.and_then(|source| list.key_move(&source, step)) else {
+                return false;
+            };
+            cx.emit(event);
+            true
+        })
     }
 
     /// A primary press on `target`. On a row's own surface the list takes
@@ -935,56 +1382,6 @@ fn item_at(bounds: &[LayoutBox], enabled: &[bool], x: f32, y: f32) -> Option<usi
     })
 }
 
-fn drop_before_index(
-    bounds: &[LayoutBox],
-    drop_targets: &[bool],
-    excluded: Option<usize>,
-    y: f32,
-) -> Option<usize> {
-    bounds.iter().enumerate().find_map(|(index, row)| {
-        (Some(index) != excluded
-            && drop_targets.get(index).copied().unwrap_or(false)
-            && y < row.y + row.height * 0.5)
-            .then_some(index)
-    })
-}
-
-fn tree_drop_target(
-    bounds: &[LayoutBox],
-    drop_targets: &[bool],
-    nest_targets: &[bool],
-    excluded: Option<usize>,
-    x: f32,
-    y: f32,
-) -> Option<(usize, TreeDropPosition)> {
-    bounds
-        .iter()
-        .enumerate()
-        .find(|(index, row)| {
-            Some(*index) != excluded
-                && drop_targets.get(*index).copied().unwrap_or(false)
-                && row.contains(x, y)
-        })
-        .map(|(index, row)| {
-            let offset = (y - row.y) / row.height.max(1.0);
-            let nest = nest_targets.get(index).copied().unwrap_or(true);
-            let position = if !nest {
-                if offset < 0.5 {
-                    TreeDropPosition::Before
-                } else {
-                    TreeDropPosition::After
-                }
-            } else if offset < 0.25 {
-                TreeDropPosition::Before
-            } else if offset > 0.75 {
-                TreeDropPosition::After
-            } else {
-                TreeDropPosition::Inside
-            };
-            (index, position)
-        })
-}
-
 fn reorder_insert_line(
     list_bounds: LayoutBox,
     rows: &[LayoutBox],
@@ -1002,18 +1399,20 @@ fn reorder_insert_line(
     }
 }
 
-fn tree_insert_line(target: LayoutBox, position: TreeDropPosition) -> LayoutBox {
+/// The mark for `position` against row `target`; a line starts `indent` in.
+fn tree_insert_line(target: LayoutBox, position: TreeDropPosition, indent: f32) -> LayoutBox {
+    let indent = indent.min((target.width - INSERT_INSET * 2.0).max(0.0));
     match position {
         TreeDropPosition::Before => LayoutBox {
-            x: target.x + INSERT_INSET,
+            x: target.x + INSERT_INSET + indent,
             y: target.y - 1.0,
-            width: (target.width - INSERT_INSET * 2.0).max(0.0),
+            width: (target.width - INSERT_INSET * 2.0 - indent).max(0.0),
             height: INSERT_THICKNESS,
         },
         TreeDropPosition::After => LayoutBox {
-            x: target.x + INSERT_INSET,
+            x: target.x + INSERT_INSET + indent,
             y: target.y + target.height - 1.0,
-            width: (target.width - INSERT_INSET * 2.0).max(0.0),
+            width: (target.width - INSERT_INSET * 2.0 - indent).max(0.0),
             height: INSERT_THICKNESS,
         },
         TreeDropPosition::Inside => LayoutBox {
@@ -1168,8 +1567,9 @@ mod tests {
         let list = || {
             ReorderList::new([
                 ReorderItem::new("a", "Alpha"),
-                ReorderItem::new("b", "Beta").nest(false),
+                ReorderItem::new("b", "Beta").accepts_inside(ReorderAccepts::Nothing),
                 ReorderItem::new("c", "Gamma"),
+                ReorderItem::new("d", "Delta"),
             ])
             .tree_drop(true)
         };
@@ -1181,12 +1581,13 @@ mod tests {
         ] {
             let mut list = list();
             let y = top + row * offset;
-            apply(&mut list, ReorderListPointer::Down { x: 40.0, y: 12.0 });
+            let last = 3.0 * top + 12.0;
+            apply(&mut list, ReorderListPointer::Down { x: 40.0, y: last });
             apply(&mut list, ReorderListPointer::Move { x: 40.0, y });
             assert_eq!(
                 apply(&mut list, ReorderListPointer::Up { x: 40.0, y }),
                 Some(ReorderListEvent::TreeDrop {
-                    source: Arc::from("a"),
+                    source: Arc::from("d"),
                     intent: TreeDropIntent {
                         target: Arc::from("b"),
                         position,
@@ -1195,6 +1596,365 @@ mod tests {
                 "a drop at {offset} of the row"
             );
         }
+    }
+
+    /// `rows` as `(value, depth, kind)`, a tree drop list over uniform rows.
+    fn tree(rows: &[(&str, u16, &str)]) -> ReorderList {
+        ReorderList::new(
+            rows.iter().map(|(value, depth, kind)| {
+                ReorderItem::new(*value, *value).depth(*depth).kind(*kind)
+            }),
+        )
+        .tree_drop(true)
+    }
+
+    /// The uniform rows of `list`, tall enough for every row.
+    fn tree_rows(list: &ReorderList) -> Vec<LayoutBox> {
+        list.row_bounds(
+            LayoutBox {
+                height: 400.0,
+                ..bounds()
+            },
+            UI_METRICS,
+        )
+    }
+
+    /// A drag of `source` to `(x, y)` over `list`: its drag visual, then its
+    /// release's event.
+    fn drag_to(
+        list: &mut ReorderList,
+        source: usize,
+        x: f32,
+        y: f32,
+    ) -> (Option<ReorderDragVisual>, Option<ReorderListEvent>) {
+        let rows = tree_rows(list);
+        let start = rows[source];
+        let press = ReorderListPointer::Down {
+            x: 40.0,
+            y: start.y + start.height * 0.5,
+        };
+        list.apply_pointer_with_rows(press, &rows, &[]);
+        list.apply_pointer_with_rows(ReorderListPointer::Move { x, y }, &rows, &[]);
+        let visual = list.drag_visual();
+        let event = list.apply_pointer_with_rows(ReorderListPointer::Up { x, y }, &rows, &[]);
+        (visual, event)
+    }
+
+    fn tree_drop(source: &str, target: &str, position: TreeDropPosition) -> ReorderListEvent {
+        ReorderListEvent::TreeDrop {
+            source: Arc::from(source),
+            intent: TreeDropIntent {
+                target: Arc::from(target),
+                position,
+            },
+        }
+    }
+
+    #[test]
+    fn a_dragged_row_carries_the_rows_it_holds_and_never_lands_among_them() {
+        let mut list = tree(&[
+            ("group", 0, "group"),
+            ("a", 1, "content"),
+            ("inner", 1, "group"),
+            ("b", 2, "content"),
+            ("x", 0, "content"),
+        ]);
+        let rows = tree_rows(&list);
+        // Over its own rows, the middle of each: nowhere to land.
+        for held in 1..4 {
+            let row = rows[held];
+            let (visual, event) = drag_to(&mut list, 0, 40.0, row.y + row.height * 0.5);
+            let visual = visual.expect("a moved drag");
+            assert_eq!(visual.carried(), 0..=3);
+            assert_eq!(visual.drop_mark(bounds(), &rows), None);
+            assert_eq!(event, None, "a drop on held row {held}");
+        }
+        // The carried rows are outlined as one block.
+        let row = rows[4];
+        let (visual, event) = drag_to(&mut list, 0, 40.0, row.y + row.height * 0.5);
+        assert_eq!(
+            visual.unwrap().carried_box(&rows),
+            Some(LayoutBox {
+                height: rows[3].y + rows[3].height - rows[0].y,
+                ..rows[0]
+            })
+        );
+        assert_eq!(
+            event,
+            Some(tree_drop("group", "x", TreeDropPosition::Inside))
+        );
+        // A row deeper in carries only what it holds.
+        let (visual, _) = drag_to(&mut list, 2, 40.0, row.y + row.height * 0.5);
+        assert_eq!(visual.unwrap().carried(), 2..=3);
+    }
+
+    #[test]
+    fn a_row_takes_inside_only_the_kinds_it_accepts() {
+        let rows = || {
+            ReorderList::new([
+                ReorderItem::new("image", "image")
+                    .kind("content")
+                    .accepts_inside(ReorderAccepts::kinds(["effect", "mask"])),
+                ReorderItem::new("glow", "glow")
+                    .depth(1)
+                    .kind("effect")
+                    .accepts_inside(ReorderAccepts::kinds(["mask"])),
+                ReorderItem::new("mask", "mask")
+                    .depth(2)
+                    .kind("mask")
+                    .accepts_inside(ReorderAccepts::Nothing),
+                ReorderItem::new("loose", "loose").kind("mask"),
+                ReorderItem::new("photo", "photo").kind("content"),
+            ])
+            .tree_drop(true)
+        };
+        let middle = |list: &ReorderList, row: usize| {
+            let row = tree_rows(list)[row];
+            row.y + row.height * 0.5
+        };
+        // A mask goes into the effect.
+        let mut list = rows();
+        let y = middle(&list, 1);
+        assert_eq!(
+            drag_to(&mut list, 3, 40.0, y).1,
+            Some(tree_drop("loose", "glow", TreeDropPosition::Inside))
+        );
+        // Content does not: over the effect's middle it splits into halves,
+        // and beside it is the image, which takes no content.
+        let mut list = rows();
+        let y = middle(&list, 1);
+        let (visual, event) = drag_to(&mut list, 4, 40.0, y);
+        assert_eq!(visual.unwrap().drop_mark(bounds(), &tree_rows(&list)), None);
+        assert_eq!(event, None);
+        // Nothing goes into a mask, nor content beside it in the effect, nor
+        // after the effect in the image: only out, after the image.
+        let mut list = rows();
+        let y = middle(&list, 2);
+        assert_eq!(
+            drag_to(&mut list, 4, 40.0, y).1,
+            Some(tree_drop("photo", "image", TreeDropPosition::After))
+        );
+        let mut list = rows();
+        let y = middle(&list, 2) + 1.0;
+        assert_eq!(
+            drag_to(&mut list, 3, 40.0, y).1,
+            Some(tree_drop("loose", "mask", TreeDropPosition::After))
+        );
+    }
+
+    #[test]
+    fn rows_that_take_no_siblings_and_a_root_that_takes_no_kind() {
+        let list = || {
+            ReorderList::new([
+                ReorderItem::new("actor", "actor").kind("actor"),
+                ReorderItem::new("pin", "pin")
+                    .depth(1)
+                    .kind("pinned")
+                    .accepts_sibling(ReorderAccepts::Nothing),
+                ReorderItem::new("effect", "effect").kind("effect"),
+                ReorderItem::new("image", "image").kind("content"),
+            ])
+            .tree_drop(true)
+        };
+        let mut pinned = list();
+        let pin = tree_rows(&pinned)[1];
+        assert_eq!(drag_to(&mut pinned, 3, 40.0, pin.y + 2.0).1, None);
+        // The root takes no effects: an effect may not go beside the image.
+        let mut list = list().accepts_root(ReorderAccepts::kinds(["content", "actor"]));
+        let image = tree_rows(&list)[3];
+        assert_eq!(
+            drag_to(&mut list, 2, 40.0, image.y + image.height - 2.0).1,
+            None
+        );
+    }
+
+    #[test]
+    fn a_tree_line_is_indented_to_the_depth_it_lands_at() {
+        let mut list = tree(&[
+            ("group", 0, "group"),
+            ("a", 1, "content"),
+            ("x", 0, "content"),
+        ])
+        .indent(20.0);
+        let rows = tree_rows(&list);
+        let (visual, event) = drag_to(&mut list, 2, 40.0, rows[1].y + 2.0);
+        assert_eq!(event, Some(tree_drop("x", "a", TreeDropPosition::Before)));
+        assert_eq!(
+            visual.unwrap().drop_mark(bounds(), &rows),
+            Some(ReorderDropMark::Line(LayoutBox {
+                x: rows[1].x + INSERT_INSET + 20.0,
+                y: rows[1].y - 1.0,
+                width: rows[1].width - INSERT_INSET * 2.0 - 20.0,
+                height: INSERT_THICKNESS,
+            }))
+        );
+        // The bottom of a row whose children show below it is the top of
+        // those children.
+        let (visual, event) = drag_to(&mut list, 2, 40.0, rows[0].y + rows[0].height - 2.0);
+        assert_eq!(event, Some(tree_drop("x", "a", TreeDropPosition::Before)));
+        assert!(matches!(
+            visual.unwrap().drop_mark(bounds(), &rows),
+            Some(ReorderDropMark::Line(line)) if line.x == rows[1].x + INSERT_INSET + 20.0
+        ));
+    }
+
+    #[test]
+    fn after_the_last_nested_row_the_pointer_picks_how_far_out() {
+        let list = || {
+            tree(&[
+                ("group", 0, "group"),
+                ("a", 1, "content"),
+                ("x", 0, "content"),
+                ("source", 0, "content"),
+            ])
+            .indent(20.0)
+        };
+        let a = tree_rows(&list())[1];
+        let y = a.y + a.height - 2.0;
+        // Over the row's text: at its own depth, inside the group.
+        let mut deep = list();
+        assert_eq!(
+            drag_to(&mut deep, 3, 120.0, y).1,
+            Some(tree_drop("source", "a", TreeDropPosition::After))
+        );
+        // Left of its indent: one level out, after the group.
+        let mut out = list();
+        let (visual, event) = drag_to(&mut out, 3, a.x + 4.0, y);
+        assert_eq!(
+            event,
+            Some(tree_drop("source", "group", TreeDropPosition::After))
+        );
+        assert!(matches!(
+            visual.unwrap().drop_mark(bounds(), &tree_rows(&list())),
+            Some(ReorderDropMark::Line(line)) if line.x == a.x + INSERT_INSET
+        ));
+    }
+
+    #[test]
+    fn a_drop_that_leaves_the_row_where_it_is_changes_nothing() {
+        let mut list = tree(&[("a", 0, "c"), ("b", 0, "c"), ("c", 0, "c")]);
+        let rows = tree_rows(&list);
+        // Right before its next sibling, and right after its previous one.
+        assert_eq!(drag_to(&mut list, 1, 40.0, rows[2].y + 2.0).1, None);
+        assert_eq!(
+            drag_to(&mut list, 1, 40.0, rows[0].y + rows[0].height - 2.0).1,
+            None
+        );
+    }
+
+    #[test]
+    fn the_keyboard_moves_a_row_past_its_siblings_and_in_and_out() {
+        let list = tree(&[
+            ("group", 0, "group"),
+            ("a", 1, "content"),
+            ("b", 1, "content"),
+            ("x", 0, "content"),
+            ("y", 0, "content"),
+        ]);
+        let moved = |source, step| list.key_move(source, step);
+        assert_eq!(
+            moved("x", ReorderKeyMove::Up),
+            Some(tree_drop("x", "group", TreeDropPosition::Before))
+        );
+        assert_eq!(
+            moved("group", ReorderKeyMove::Down),
+            Some(tree_drop("group", "x", TreeDropPosition::After))
+        );
+        assert_eq!(moved("a", ReorderKeyMove::Up), None, "first of its parent");
+        assert_eq!(moved("y", ReorderKeyMove::Down), None, "last of the list");
+        // Into the sibling above, after its last child; out after its parent.
+        assert_eq!(
+            moved("x", ReorderKeyMove::Indent),
+            Some(tree_drop("x", "b", TreeDropPosition::After))
+        );
+        assert_eq!(
+            moved("y", ReorderKeyMove::Indent),
+            Some(tree_drop("y", "x", TreeDropPosition::Inside))
+        );
+        assert_eq!(
+            moved("b", ReorderKeyMove::Outdent),
+            Some(tree_drop("b", "group", TreeDropPosition::After))
+        );
+        assert_eq!(moved("x", ReorderKeyMove::Outdent), None);
+        // The rules a drag keeps hold for the keyboard too.
+        let typed = ReorderList::new([
+            ReorderItem::new("mask", "mask")
+                .kind("mask")
+                .accepts_inside(ReorderAccepts::Nothing),
+            ReorderItem::new("image", "image").kind("content"),
+        ])
+        .tree_drop(true);
+        assert_eq!(typed.key_move("image", ReorderKeyMove::Indent), None);
+
+        // A flat list reorders by the row it goes before.
+        let flat = sample();
+        assert_eq!(
+            flat.key_move("b", ReorderKeyMove::Up),
+            Some(ReorderListEvent::Reorder {
+                source: Arc::from("b"),
+                before: Some(Arc::from("a")),
+            })
+        );
+        assert_eq!(
+            flat.key_move("b", ReorderKeyMove::Down),
+            Some(ReorderListEvent::Reorder {
+                source: Arc::from("b"),
+                before: None,
+            })
+        );
+        assert_eq!(flat.key_move("b", ReorderKeyMove::Indent), None);
+    }
+
+    #[test]
+    fn alt_with_an_arrow_on_a_focused_list_moves_the_chosen_row() {
+        use nana_ui_input::{
+            InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey,
+        };
+
+        let mut context = AppContext::new();
+        let document = document();
+        let list = context
+            .create_component(
+                document,
+                ReorderList::new([
+                    ReorderItem::new("a", "a"),
+                    ReorderItem::new("b", "b").selected(true),
+                ])
+                .tree_drop(true),
+            )
+            .unwrap();
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let observed = Arc::clone(&events);
+        context
+            .on(list, move |_, event: &ReorderListEvent, _| {
+                observed.lock().unwrap().push(event.clone());
+            })
+            .unwrap();
+        context.focus_node(document, list.stable_id()).unwrap();
+        let mut input = crate::HeadlessInput::bind(&mut context, document);
+        let key = |alt| {
+            InputPayload::Key(KeyInput {
+                physical: PhysicalKey("ArrowUp".into()),
+                logical: LogicalKey("ArrowUp".into()),
+                state: KeyState::Pressed,
+                repeat: false,
+                modifiers: InputModifiers {
+                    alt,
+                    ..InputModifiers::empty()
+                },
+            })
+        };
+        let outcome = input.route(&mut context, key(true)).unwrap();
+        assert!(outcome.handled);
+        assert_eq!(
+            std::mem::take(&mut *events.lock().unwrap()),
+            [tree_drop("b", "a", TreeDropPosition::Before)]
+        );
+        input.route(&mut context, key(false)).unwrap();
+        assert_eq!(
+            std::mem::take(&mut *events.lock().unwrap()),
+            Vec::<ReorderListEvent>::new()
+        );
     }
 
     #[test]

@@ -694,7 +694,36 @@ impl SemanticPalette {
     /// base accent at three alphas. Nothing enforced that before this method
     /// existed, which is why a custom accent used to produce a button whose
     /// fill and label disagreed about what the accent was.
+    ///
+    /// The focus and highlight roles move with the ramp where they followed
+    /// the previous accent (the built-in palettes derive them from it), so a
+    /// re-accented theme has no focus ring or highlight left on the old hue.
+    /// A role the palette set to a colour of its own is kept.
     pub const fn with_accent_ramp(mut self, ramp: AccentRamp) -> Self {
+        let old = AccentRamp::from_palette(&self);
+        /// `role` moved from `from` to `to` when it was `from`.
+        const fn follow(
+            role: SemanticColor,
+            from: SemanticColor,
+            to: SemanticColor,
+        ) -> SemanticColor {
+            if role.r == from.r && role.g == from.g && role.b == from.b && role.a == from.a {
+                to
+            } else {
+                role
+            }
+        }
+        self.focus_surface = follow(self.focus_surface, old.focus, ramp.focus);
+        self.focus_border = follow(
+            follow(self.focus_border, old.base, ramp.base),
+            old.strong,
+            ramp.strong,
+        );
+        self.focus_text = follow(self.focus_text, old.text, ramp.text);
+        self.highlight = follow(self.highlight, old.base, ramp.base);
+        self.highlight_hover = follow(self.highlight_hover, old.strong, ramp.strong);
+        self.highlight_pressed = follow(self.highlight_pressed, old.strong, ramp.strong);
+        self.highlight_text = follow(self.highlight_text, old.text, ramp.text);
         self.accent = ramp.base;
         self.accent_strong = ramp.strong;
         self.accent_soft = ramp.soft();

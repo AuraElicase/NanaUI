@@ -29,6 +29,16 @@ pub(super) fn spawn_task_workers<Message: Send + 'static>(
     })
 }
 
+/// Task workers for a host with no event loop to wake: results wait in
+/// `message_tx` until the host next drains it.
+pub(crate) fn spawn_detached_task_workers<Message: Send + 'static>(
+    message_tx: Sender<Message>,
+) -> SyncSender<Task<Message>> {
+    spawn_task_pool(TASK_WORKERS, move |message| {
+        message_tx.send(message).is_ok()
+    })
+}
+
 /// Start `workers` threads that run queued tasks and hand each result to
 /// `deliver`. A worker stops when the queue closes or `deliver` returns
 /// `false` (the host is gone); a panicking task only records

@@ -1,0 +1,15 @@
+swimlane-beta TB
+  subgraph Build
+    compile[Compile]
+    test[Run the suite]
+  end
+  subgraph Gate
+    green{All green?}
+  end
+  subgraph Ship
+    tag[Tag the release]
+    publish[Publish]
+  end
+  compile --> test --> green
+  green -->|Yes| tag --> publish
+  green -->|No| compile

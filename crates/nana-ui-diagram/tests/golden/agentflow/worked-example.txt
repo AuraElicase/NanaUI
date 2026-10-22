@@ -1,0 +1,34 @@
+size 416.7 588.3
+summary nodes=6 edges=4 groups=3
+shape rect 157.6 9 250 570.3 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 242.1 18.6 81.2 16.8 size=12 w=600 ink=Muted "Coffee Team"
+shape rect 173.6 137.4 218 184 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 245.8 147 73.8 16.8 size=12 w=600 ink=Muted "Researcher"
+shape rect 177.6 369.4 210.2 193.9 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 253.1 379 59 16.8 size=12 w=600 ink=Muted "Designer"
+shape path M282.7,89.4 L282.7,171.5 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M282.7,178.2 L279.1,169.8 L282.7,171.3 L286.2,169.8 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M282.7,217.8 L282.7,259.1 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M282.7,265.8 L279.1,257.4 L282.7,258.9 L286.2,257.4 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M282.7,449.8 L282.7,497.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dotted
+shape path M282.7,321.4 L282.7,362.7 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M282.7,369.4 L279.1,361 L282.7,362.5 L286.2,361 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 9 274.4 108.6 39.6 r=Full fill=Surface stroke=BorderStrong/hairline/Solid
+text 34.9 284.4 56.8 19.6 size=14 w=400 ink=Text "LLM API"
+shape path M250.4,49.8 L326.8,49.8 L314.9,89.4 L238.5,89.4 Z fill=Surface stroke=BorderStrong/hairline/Solid
+text 266.4 59.8 32.5 19.6 size=14 w=400 ink=Text "city"
+shape rect 189.6 178.2 186 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M197.6,178.2 L197.6,217.8 stroke=BorderStrong/hairline/Solid
+shape path M367.7,178.2 L367.7,217.8 stroke=BorderStrong/hairline/Solid
+text 213.6 188.2 138 19.6 size=14 w=400 ink=Text "research_location"
+shape rect 218.1 265.8 129.2 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M226.1,265.8 L226.1,305.4 stroke=BorderStrong/hairline/Solid
+shape path M339.3,265.8 L339.3,305.4 stroke=BorderStrong/hairline/Solid
+text 242.1 275.8 81.2 19.6 size=14 w=400 ink=Text "write_copy"
+shape rect 205.9 410.2 153.6 39.6 r=Xs fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M213.9,410.2 L213.9,449.8 stroke=BorderStrong/hairline/Solid
+shape path M351.4,410.2 L351.4,449.8 stroke=BorderStrong/hairline/Solid
+text 229.9 420.2 105.6 19.6 size=14 w=400 ink=Text "generate_html"
+shape path M193.6,497.8 L371.7,497.8 L371.7,541.4 C327.2,529.5 238.1,553.2 193.6,541.4 Z fill=Surface stroke=BorderStrong/hairline/Solid
+shape path M203.6,497.8 L203.6,541.4 stroke=BorderStrong/hairline/Solid
+text 209.6 509.8 146.2 19.6 size=14 w=400 ink=Text "Nordic Brand Guide"

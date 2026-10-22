@@ -186,7 +186,7 @@ def validate_scenario(scenario: Mapping[str, Any]) -> list[str]:
     if kind == "GpuScene" and params.get("composition") == "UiOnly":
         errors.extend(_validate_gpu_scene_ui_only(params))
     if kind == "PresentationOutput":
-        if params.get("workload") not in {"direct", "static", "multi", "nested", "conversion", "slow", "recovery"}:
+        if params.get("workload") not in {"direct", "static", "multi", "nested", "conversion", "slow", "recovery", "incompatible"}:
             errors.append("PresentationOutput.workload is not implemented")
         if params.get("frames") != 240:
             errors.append("PresentationOutput.frames must be 240; measurements are not rescaled")

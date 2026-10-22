@@ -1,0 +1,40 @@
+size 298.9 308.2
+summary nodes=5 edges=0 groups=3
+shape ellipse 122.8 139.6 53.2 53.2 stroke=BorderSoft/hairline/Solid
+shape ellipse 96.2 113 106.4 106.4 stroke=BorderSoft/hairline/Solid
+shape ellipse 69.6 86.4 159.6 159.6 stroke=BorderSoft/hairline/Solid
+shape ellipse 43 59.8 212.8 212.8 stroke=BorderSoft/hairline/Solid
+shape ellipse 16.4 33.2 266 266 stroke=BorderSoft/hairline/Solid
+shape path M149.4,166.2 L149.4,33.2 M149.4,166.2 L275.9,125.1 M149.4,166.2 L227.6,273.8 M149.4,166.2 L71.3,273.8 M149.4,166.2 L22.9,125.1 stroke=Border/hairline/Solid
+shape path M149.4,86.4 C175.2,86.4 217.4,117 225.3,141.5 C233.3,166.1 217.2,215.6 196.3,230.8 C175.5,245.9 123.4,245.9 102.5,230.8 C81.7,215.6 65.6,166.1 73.5,141.5 C81.5,117 123.6,86.4 149.4,86.4 Z fill=series2.soft
+shape path M149.4,33.2 C170.9,29 242.7,99.7 250.6,133.3 C258.6,166.9 218.9,217.9 196.3,230.8 C173.8,243.7 130.4,221.6 118.2,209.2 C105.9,196.9 118.8,187.9 124.1,158 C129.5,128.1 127.9,37.4 149.4,33.2 Z fill=series1.soft
+shape path M149.4,139.6 C179.5,143.8 192.1,134.3 200,149.8 C208,165.3 215.6,213.3 196.3,230.8 C177.1,248.2 116.4,270.2 86.9,252.3 C57.4,234.3 12.3,144.3 22.9,125.1 C33.6,105.9 119.3,135.4 149.4,139.6 Z fill=series0.soft
+shape ellipse 122.8 139.6 53.2 53.2 stroke=BorderSoft/hairline/Solid
+shape ellipse 96.2 113 106.4 106.4 stroke=BorderSoft/hairline/Solid
+shape ellipse 69.6 86.4 159.6 159.6 stroke=BorderSoft/hairline/Solid
+shape ellipse 43 59.8 212.8 212.8 stroke=BorderSoft/hairline/Solid
+shape ellipse 16.4 33.2 266 266 stroke=BorderSoft/hairline/Solid
+shape path M149.4,166.2 L149.4,33.2 M149.4,166.2 L275.9,125.1 M149.4,166.2 L227.6,273.8 M149.4,166.2 L71.3,273.8 M149.4,166.2 L22.9,125.1 stroke=Border/hairline/Solid
+shape path M149.4,139.6 C179.5,143.8 192.1,134.3 200,149.8 C208,165.3 215.6,213.3 196.3,230.8 C177.1,248.2 116.4,270.2 86.9,252.3 C57.4,234.3 12.3,144.3 22.9,125.1 C33.6,105.9 119.3,135.4 149.4,139.6 Z stroke=series0/thick/Solid
+shape ellipse 146.4 136.5 6.2 6.2 fill=series0
+shape ellipse 197 146.7 6.2 6.2 fill=series0
+shape ellipse 193.3 227.7 6.2 6.2 fill=series0
+shape ellipse 83.8 249.2 6.2 6.2 fill=series0
+shape ellipse 19.9 122 6.2 6.2 fill=series0
+shape path M149.4,33.2 C170.9,29 242.7,99.7 250.6,133.3 C258.6,166.9 218.9,217.9 196.3,230.8 C173.8,243.7 130.4,221.6 118.2,209.2 C105.9,196.9 118.8,187.9 124.1,158 C129.5,128.1 127.9,37.4 149.4,33.2 Z stroke=series1/thick/Solid
+shape ellipse 146.4 30.1 6.2 6.2 fill=series1
+shape ellipse 247.6 130.2 6.2 6.2 fill=series1
+shape ellipse 193.3 227.7 6.2 6.2 fill=series1
+shape ellipse 115.1 206.2 6.2 6.2 fill=series1
+shape ellipse 121.1 154.9 6.2 6.2 fill=series1
+shape path M149.4,86.4 C175.2,86.4 217.4,117 225.3,141.5 C233.3,166.1 217.2,215.6 196.3,230.8 C175.5,245.9 123.4,245.9 102.5,230.8 C81.7,215.6 65.6,166.1 73.5,141.5 C81.5,117 123.6,86.4 149.4,86.4 Z stroke=series2/thick/Solid
+shape ellipse 146.4 83.3 6.2 6.2 fill=series2
+shape ellipse 222.3 138.5 6.2 6.2 fill=series2
+shape ellipse 193.3 227.7 6.2 6.2 fill=series2
+shape ellipse 99.5 227.7 6.2 6.2 fill=series2
+shape ellipse 70.5 138.5 6.2 6.2 fill=series2
+text 146 8 7 16.8 size=12 w=400 ink=Muted "A"
+text 283.9 105.7 7 16.8 size=12 w=400 ink=Muted "B"
+text 232.6 280.6 7 16.8 size=12 w=400 ink=Muted "C"
+text 59.4 280.6 7 16.8 size=12 w=400 ink=Muted "D"
+text 8 105.7 7 16.8 size=12 w=400 ink=Muted "E"

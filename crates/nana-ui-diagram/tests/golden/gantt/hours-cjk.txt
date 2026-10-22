@@ -1,0 +1,41 @@
+size 937.7 267.8
+summary nodes=5 edges=0 groups=2
+shape rect 8 69 921.7 100.8 fill=SemanticColorMix{first:Subtle,second:None,weight:9500}
+shape rect 8 169.8 921.7 67.2 fill=SemanticColorMix{first:Subtle,second:None,weight:4000}
+shape path M61.7,69 L61.7,237 stroke=BorderSoft/hairline/Solid
+shape path M171.4,69 L171.4,237 stroke=BorderSoft/hairline/Solid
+shape path M281.1,69 L281.1,237 stroke=BorderSoft/hairline/Solid
+shape path M390.8,69 L390.8,237 stroke=BorderSoft/hairline/Solid
+shape path M500.5,69 L500.5,237 stroke=BorderSoft/hairline/Solid
+shape path M610.3,69 L610.3,237 stroke=BorderSoft/hairline/Solid
+shape path M61.7,237 L701.7,237 stroke=Border/hairline/Solid
+shape path M61.7,237 L61.7,241 stroke=Border/hairline/Solid
+text 44.3 243 34.8 16.8 size=12 w=400 ink=Muted "09:00"
+shape path M171.4,237 L171.4,241 stroke=Border/hairline/Solid
+text 154 243 34.8 16.8 size=12 w=400 ink=Muted "09:30"
+shape path M281.1,237 L281.1,241 stroke=Border/hairline/Solid
+text 263.7 243 34.8 16.8 size=12 w=400 ink=Muted "10:00"
+shape path M390.8,237 L390.8,241 stroke=Border/hairline/Solid
+text 373.4 243 34.8 16.8 size=12 w=400 ink=Muted "10:30"
+shape path M500.5,237 L500.5,241 stroke=Border/hairline/Solid
+text 483.1 243 34.8 16.8 size=12 w=400 ink=Muted "11:00"
+shape path M610.3,237 L610.3,241 stroke=Border/hairline/Solid
+text 592.9 243 34.8 16.8 size=12 w=400 ink=Muted "11:30"
+text 20 109.6 29.7 19.6 size=14 w=600 ink=Text "准备"
+text 20 193.6 29.7 19.6 size=14 w=600 ink=Text "发布"
+shape path M336,69 L336,237 stroke=Danger/thick/Solid
+shape path M61.7,76.6 L70.9,85.8 L61.7,95 L52.5,85.8 Z fill=series0
+text 76.9 76 56 19.6 size=14 w=400 ink=Text "冻结代码"
+shape rect 61.7 106.6 164.6 25.6 r=Xs fill=series0.soft stroke=series0/hairline/Solid
+text 109 109.6 70 19.6 size=14 w=400 ink=Text "构建与签名"
+shape rect 226.3 140.2 109.7 25.6 r=Xs fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/thick/Solid
+text 253.1 143.2 56 19.6 size=14 w=400 ink=Text "冒烟测试"
+shape rect 336 173.8 146.3 25.6 r=Xs fill=SemanticColorMix{first:Accent,second:None,weight:2200} stroke=Accent/hairline/Solid
+text 378.9 176.8 60.5 19.6 size=14 w=400 ink=Text "灰度 10%"
+shape rect 482.3 207.4 219.4 25.6 r=Xs fill=series1.soft stroke=series1/hairline/Solid
+text 707.7 210.4 210 19.6 size=14 w=400 ink=Text "全量发布并观察错误率与延迟指标"
+shape path M610.3,63 L610.3,237 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Dashed
+shape rect 592.9 42.6 34.8 20.4 r=Xs fill=Surface stroke=BorderSoft/hairline/Solid
+text 598.3 44.4 24 16.8 size=12 w=400 ink=Muted "公告"
+text 426.4 8 84.8 22.4 size=16 w=600 ink=Text "发布日排期"
+link 61.7 106.6 164.6 25.6 "https://example.com/build"

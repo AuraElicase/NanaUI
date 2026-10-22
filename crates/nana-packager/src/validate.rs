@@ -18,7 +18,7 @@ use serde::Serialize;
 use crate::layout::{PackageLayout, TargetPlatform};
 use crate::package::UPDATER_MARKER;
 use crate::secrets::content_key_env;
-use crate::util::{contains, content_hex, relative_path, walk_files};
+use crate::util::{contains, content_hex, copy_tree, relative_path, walk_files};
 use nana_package::pack::format;
 
 use nana_package::{SELF_CHECK_ENV, SELF_CHECK_PREFIX};
@@ -168,6 +168,9 @@ pub fn validate(options: &ValidateOptions) -> Result<ValidationReport, String> {
         options.allow_resigned,
     )?;
     check_identity(&mut report, &exe_path, &manifest);
+    if located.platform == TargetPlatform::Macos {
+        check_info_plist(&mut report, app_root);
+    }
     check_imports(&mut report, app_root, located.platform, layout, &exe_path);
     check_packs(&mut report, app_root, layout, &manifest, &trust);
     check_distribution(&mut report, app_root, &manifest)?;
@@ -425,6 +428,22 @@ fn check_files(
         );
     }
     Ok(())
+}
+
+/// The bundle's Info.plist parses: an `info_plist_extra` merged wrongly
+/// leaves a document macOS ignores, losing keys such as `LSUIElement`.
+fn check_info_plist(report: &mut ValidationReport, app_root: &Path) {
+    let plist = app_root.join("Contents/Info.plist");
+    let status = if !cfg!(target_os = "macos") {
+        Status::NotExecuted("plutil is only available on a macOS host".into())
+    } else {
+        match Command::new("plutil").arg("-lint").arg(&plist).output() {
+            Ok(out) if out.status.success() => Status::Pass,
+            Ok(out) => Status::Fail(String::from_utf8_lossy(&out.stdout).trim().to_owned()),
+            Err(error) => Status::NotExecuted(format!("cannot run plutil: {error}")),
+        }
+    };
+    report.push("macos.info-plist", status);
 }
 
 fn check_identity(report: &mut ValidationReport, exe: &Path, manifest: &PackageManifest) {
@@ -1055,7 +1074,7 @@ fn tamper_suite(
             layout.root
         ));
         let _ = std::fs::remove_dir_all(copy.parent().expect("has parent"));
-        copy_dir(app_root, &copy)?;
+        copy_tree(app_root, &copy)?;
         case.tamper.apply(&copy)?;
         let exe = PackageLayout::join(&copy, &layout.executable);
         let status = match self_check(&exe, env, case.drop_env) {
@@ -1189,40 +1208,6 @@ fn drain<R: std::io::Read + Send + 'static>(pipe: Option<R>) -> std::thread::Joi
         }
         bytes
     })
-}
-
-/// Copy a package tree for the tamper suite. Symlinks are recreated as
-/// symlinks (a `.framework` links `Versions/Current`), not followed.
-fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(to).map_err(|e| e.to_string())?;
-    for item in std::fs::read_dir(from).map_err(|e| e.to_string())? {
-        let item = item.map_err(|e| e.to_string())?;
-        let target = to.join(item.file_name());
-        let kind = item.file_type().map_err(|e| e.to_string())?;
-        if kind.is_symlink() {
-            let link = std::fs::read_link(item.path()).map_err(|e| e.to_string())?;
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(&link, &target).map_err(|e| e.to_string())?;
-            #[cfg(windows)]
-            {
-                let resolved = item
-                    .path()
-                    .parent()
-                    .map_or(link.clone(), |dir| dir.join(&link));
-                if resolved.is_dir() {
-                    std::os::windows::fs::symlink_dir(&link, &target)
-                } else {
-                    std::os::windows::fs::symlink_file(&link, &target)
-                }
-                .map_err(|e| e.to_string())?;
-            }
-        } else if kind.is_dir() {
-            copy_dir(&item.path(), &target)?;
-        } else {
-            std::fs::copy(item.path(), &target).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

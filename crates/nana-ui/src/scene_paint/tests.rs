@@ -2988,7 +2988,7 @@ fn host_texture_wrapped_with_an_srgb_view_is_decoded_when_sampled() {
     let registry = HostTextureRegistry::new();
     registry.register(
         "layer",
-        crate::HostTexture::new(1, 1, &wrapped),
+        crate::HostTexture::new(&wrapped),
         4,
         4,
         crate::HostTextureAlphaMode::Opaque,
@@ -4749,16 +4749,12 @@ fn hosted_preview_scene(device: &wgpu::Device) -> (UiScene, HostTextureRegistry)
         context.world().extract_nodes(&work.render_extraction),
         work.render_removals,
     );
-    let texture = crate::HostTexture::new(
-        1,
-        1,
-        &crate::test_gpu::wrap_view(&test_target(
-            device,
-            wgpu::TextureFormat::Rgba8Unorm,
-            64,
-            48,
-        )),
-    );
+    let texture = crate::HostTexture::new(&crate::test_gpu::wrap_view(&test_target(
+        device,
+        wgpu::TextureFormat::Rgba8Unorm,
+        64,
+        48,
+    )));
     let registry = HostTextureRegistry::new();
     registry.register(
         "preview",
@@ -4885,6 +4881,186 @@ fn a_reused_batch_without_text_is_not_rebuilt_for_gaps() {
     painter.text.assume_gapped_order();
     let rebuilds = (0..300).filter(|_| paint(&mut painter).0).count();
     assert_eq!(rebuilds, 1, "only the first frame builds a batch");
+}
+
+/// A label beside a GPU view. The view keeps every frame off the retained
+/// dest, so a repaint either reuses the prepared batch or rebuilds it.
+fn label_beside_a_gpu_view(label: &str) -> UiScene {
+    use nana_ui_runtime::GpuView;
+
+    let mut view = host_texture_child(2, 1, 0.0, 0.0, 32.0, 32.0, "0");
+    view.custom_render = Some(GpuView::new(0).custom_render());
+    let mut text = overflowing_text_child(3, 1, 0.0, 32.0, 128.0, 64.0, [1.0; 4]);
+    text.text = Some(TextContent {
+        value: label.into(),
+    });
+    text.style = Arc::new(ComputedStyle {
+        color: Some([1.0; 4]),
+        font_size: 14.0,
+        ..ComputedStyle::default()
+    });
+    let mut root = colored_quad_node(1, 0.0, 0.0, 128.0, 96.0, [0.0, 0.0, 1.0, 1.0]);
+    root.children = Arc::new(vec![view.id, text.id]);
+    let mut scene = UiScene::new();
+    scene.apply_delta([root, view, text], []);
+    scene
+}
+
+/// Paints targets of 128x96 `RGBA8_UNORM_SRGB` through `painter` with the
+/// GPU-view renderer, returning whether the batch was rebuilt and the pixels.
+fn shared_core_painter_frame(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> impl Fn(&mut SceneWgpuPainter, u64, &UiScene) -> (bool, Vec<u8>) {
+    let mut registry = SceneGpuRendererRegistry::new();
+    registry.insert("gpu-view", Arc::new(crate::DefaultGpuViewRenderer::new()));
+    let viewport = ScenePaintViewport {
+        logical_size: [128.0, 96.0],
+        physical_size: [128, 96],
+        scale_factor: 1.0,
+        scene_origin: [0.0, 0.0],
+        target_origin: [0.0, 0.0],
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        clear: true,
+    };
+    let (device, queue) = (device.clone(), queue.clone());
+    move |painter, id, scene| {
+        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+        let (texture, target) = test_copy_target(&device, format, 128, 96);
+        let mut encoder = device.create_command_encoder(&Default::default());
+        painter
+            .paint_target_encoder(
+                RenderTargetId(id),
+                scene,
+                &mut encoder,
+                &target,
+                viewport,
+                None,
+                Some(&registry),
+            )
+            .unwrap();
+        let rebuilt = painter.last_gpu_work().expect("painted").batch_rebuilds > 0;
+        (
+            rebuilt,
+            readback_rgba(&device, &queue, encoder, &texture, 128, 96),
+        )
+    }
+}
+
+#[test]
+fn one_painter_paints_every_profile_as_a_painter_of_its_own_would() {
+    let (device, queue) = test_device();
+    let gpu = crate::test_gpu::context();
+    let srgb = ScenePresentationProfile::sdr(GpuTextureFormat::RGBA8_UNORM_SRGB);
+    let float = srgb.with_force_float_working();
+    assert_ne!(
+        srgb.working_format(),
+        float.working_format(),
+        "the profiles need pipeline sets of their own"
+    );
+    let paint = shared_core_painter_frame(&device, &queue);
+    let scene = label_beside_a_gpu_view("Shared core");
+    let mut own_srgb = SceneWgpuPainter::new_with_presentation(&gpu, srgb);
+    let mut own_float = SceneWgpuPainter::new_with_presentation(&gpu, float);
+    let (_, expected_srgb) = paint(&mut own_srgb, 1, &scene);
+    let (_, expected_float) = paint(&mut own_float, 2, &scene);
+
+    let mut shared = SceneWgpuPainter::new_with_presentation(&gpu, srgb);
+    assert_eq!(paint(&mut shared, 1, &scene).1, expected_srgb);
+    shared.select_presentation(float);
+    assert_eq!(shared.working_format(), float.working_format());
+    assert_eq!(
+        paint(&mut shared, 2, &scene).1,
+        expected_float,
+        "the second profile paints through its own pipelines"
+    );
+    shared.select_presentation(srgb);
+    assert_eq!(
+        paint(&mut shared, 1, &scene),
+        (false, expected_srgb),
+        "switching back keeps the first target's batch and its pixels"
+    );
+    assert_eq!(shared.pipeline_sets.len(), 1, "the idle set is kept");
+
+    let one = own_srgb.text_glyph_counters();
+    let both = shared.text_glyph_counters();
+    assert_eq!(both.glyph_atlas_bytes, one.glyph_atlas_bytes, "one atlas");
+    assert_eq!(both.glyph_atlas_pages, one.glyph_atlas_pages);
+    assert_eq!(
+        both.glyph_raster_cache_bytes, one.glyph_raster_cache_bytes,
+        "one raster cache"
+    );
+    assert_eq!(
+        both.glyph_rasterized, one.glyph_rasterized,
+        "every glyph is rasterized once for both profiles"
+    );
+    assert_eq!(
+        both.glyph_upload_bytes, one.glyph_upload_bytes,
+        "and uploaded once"
+    );
+
+    shared.retain_presentations(&[srgb]);
+    assert!(shared.pipeline_sets.is_empty(), "an unused set is dropped");
+}
+
+#[test]
+fn a_glyph_evicted_under_one_profile_rebuilds_the_batch_another_retained() {
+    let (device, queue) = test_device();
+    let gpu = crate::test_gpu::context();
+    let srgb = ScenePresentationProfile::sdr(GpuTextureFormat::RGBA8_UNORM_SRGB);
+    let float = srgb.with_force_float_working();
+    let paint = shared_core_painter_frame(&device, &queue);
+    let mut painter = SceneWgpuPainter::new_with_presentation(&gpu, srgb);
+    // One page barely wider than a line of text: the other profile's labels
+    // cannot all coexist with this one's glyphs.
+    painter.text = TextPipeline::with_atlas_budget(
+        &device,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+        64,
+        64 * 64 + 8,
+        gpu.policy(),
+    );
+    let first = label_beside_a_gpu_view("abcdefghij");
+    let (built, expected) = paint(&mut painter, 1, &first);
+    assert!(built);
+    assert_eq!(
+        paint(&mut painter, 1, &first),
+        (false, expected.clone()),
+        "an unchanged frame reuses its batch"
+    );
+
+    painter.select_presentation(float);
+    paint(&mut painter, 2, &first);
+    painter.select_presentation(srgb);
+    assert_eq!(
+        paint(&mut painter, 1, &first),
+        (false, expected.clone()),
+        "a profile that places nothing new leaves the other's batch valid"
+    );
+
+    let epoch = painter.text.placement_epoch();
+    let before = painter.text_glyph_counters();
+    painter.select_presentation(float);
+    for label in ["KLMNOPQRST", "UVWXYZ0123", "456789!?@#"] {
+        paint(&mut painter, 2, &label_beside_a_gpu_view(label));
+    }
+    let after = painter.text_glyph_counters();
+    assert!(
+        after.glyph_atlas_evict > before.glyph_atlas_evict,
+        "the fixture evicts glyphs the first target's batch named"
+    );
+    assert_ne!(
+        painter.text.placement_epoch(),
+        epoch,
+        "the other profile's labels moved what the shared atlas holds"
+    );
+    painter.select_presentation(srgb);
+    let (rebuilt, pixels) = paint(&mut painter, 1, &first);
+    assert!(
+        rebuilt,
+        "a batch naming atlas rectangles another profile reused is rebuilt"
+    );
+    assert_eq!(pixels, expected, "and samples its own glyphs again");
 }
 
 fn runtime_button_over_host_texture_scene(
@@ -5690,7 +5866,7 @@ fn register_into(
 ) {
     registry.register(
         resource,
-        crate::HostTexture::new(1, 1, &crate::test_gpu::wrap_view(view)),
+        crate::HostTexture::new(&crate::test_gpu::wrap_view(view)),
         width,
         height,
         crate::HostTextureAlphaMode::Premultiplied,
@@ -12818,6 +12994,149 @@ fn a_target_held_by_an_unsubmitted_frame_is_not_painted_again() {
     second.submit();
 }
 
+fn label_only_scene(label: &str) -> UiScene {
+    let mut text = overflowing_text_child(2, 1, 0.0, 16.0, 96.0, 32.0, [1.0; 4]);
+    text.text = Some(TextContent {
+        value: label.into(),
+    });
+    text.style = Arc::new(ComputedStyle {
+        color: Some([1.0; 4]),
+        font_size: 24.0,
+        ..ComputedStyle::default()
+    });
+    let mut root = colored_quad_node(1, 0.0, 0.0, 96.0, 64.0, [0.0, 0.0, 1.0, 1.0]);
+    root.children = Arc::new(vec![text.id]);
+    let mut scene = UiScene::new();
+    scene.apply_delta([root, text], []);
+    scene
+}
+
+/// Every target a frame records reads the shared glyph atlas when that frame
+/// is submitted, not when its pass was recorded. A later target that evicts
+/// or repacks an earlier one's glyphs must therefore not write the freed
+/// rectangles ahead of the earlier pass.
+#[test]
+fn a_later_target_in_one_frame_cannot_overwrite_glyphs_an_earlier_one_samples() {
+    let probe = FrameProbe::new();
+    let device = __framework::device(&probe.gpu);
+    let (second_texture, second_view) = test_copy_target(
+        device,
+        wgpu::TextureFormat::Rgba8Unorm,
+        FrameProbe::SIZE[0],
+        FrameProbe::SIZE[1],
+    );
+    let second = __framework::render_target(
+        &probe.gpu,
+        second_view,
+        wgpu::TextureFormat::Rgba8Unorm,
+        FrameProbe::SIZE,
+    );
+    let small_atlas = |painter: &mut SceneWgpuPainter| {
+        // One page barely wider than a line of text: the second target's
+        // label cannot be placed without taking the first one's glyphs.
+        painter.text = TextPipeline::with_atlas_budget(
+            device,
+            wgpu::TextureFormat::Rgba8Unorm,
+            64,
+            64 * 64 + 8,
+            probe.gpu.policy(),
+        );
+    };
+    let first = label_only_scene("abcdef");
+    let other = label_only_scene("KLMNOP");
+    let mut reference = probe.painter();
+    small_atlas(&mut reference);
+    let expected = {
+        let mut frame = probe.gpu.begin_frame("reference");
+        reference
+            .paint_target(
+                RenderTargetId(1),
+                &first,
+                &mut frame,
+                &probe.target,
+                probe.viewport,
+                None,
+                None,
+            )
+            .unwrap();
+        frame.submit();
+        probe.pixels()
+    };
+
+    let mut painter = probe.painter();
+    small_atlas(&mut painter);
+    let mut frame = probe.gpu.begin_frame("shared");
+    painter
+        .paint_target(
+            RenderTargetId(1),
+            &first,
+            &mut frame,
+            &probe.target,
+            probe.viewport,
+            None,
+            None,
+        )
+        .unwrap();
+    let before = painter.text_glyph_counters();
+    painter
+        .paint_target(
+            RenderTargetId(2),
+            &other,
+            &mut frame,
+            &second,
+            probe.viewport,
+            None,
+            None,
+        )
+        .unwrap();
+    frame.submit();
+    let after = painter.text_glyph_counters();
+    assert!(
+        after.glyph_atlas_evict + after.atlas_relocations
+            > before.glyph_atlas_evict + before.atlas_relocations,
+        "the fixture makes the second target take the first one's rectangles"
+    );
+    assert!(
+        probe.pixels() == expected,
+        "the first target samples its own glyphs, not the ones placed after its pass"
+    );
+    let second_pixels = readback_rgba(
+        device,
+        __framework::queue(&probe.gpu),
+        device.create_command_encoder(&Default::default()),
+        &second_texture,
+        FrameProbe::SIZE[0],
+        FrameProbe::SIZE[1],
+    );
+    let mut alone = probe.painter();
+    small_atlas(&mut alone);
+    let mut frame = probe.gpu.begin_frame("alone");
+    alone
+        .paint_target(
+            RenderTargetId(2),
+            &other,
+            &mut frame,
+            &second,
+            probe.viewport,
+            None,
+            None,
+        )
+        .unwrap();
+    frame.submit();
+    let other_expected = readback_rgba(
+        device,
+        __framework::queue(&probe.gpu),
+        device.create_command_encoder(&Default::default()),
+        &second_texture,
+        FrameProbe::SIZE[0],
+        FrameProbe::SIZE[1],
+    );
+    assert!(
+        second_pixels == other_expected,
+        "the second target samples the glyphs it placed"
+    );
+}
+
 #[test]
 fn frames_targets_and_host_textures_from_another_device_are_refused() {
     let probe = FrameProbe::new();
@@ -12873,7 +13192,7 @@ fn frames_targets_and_host_textures_from_another_device_are_refused() {
         .unwrap();
     registry.register(
         "preview",
-        crate::HostTexture::new(1, 1, &stale),
+        crate::HostTexture::new(&stale),
         4,
         4,
         crate::HostTextureAlphaMode::Opaque,
@@ -13343,5 +13662,127 @@ fn a_host_texture_gradient_mask_takes_the_stops_alpha_not_their_luminance() {
             shown[0] > 240 && shown[2] < 16,
             "opaque black end shows the texture at x={x}: {shown:?}"
         );
+    }
+}
+
+/// A painter's adjacent solid boxes go out as one batch primitive and paint
+/// exactly what they painted one primitive each: same order, same blending.
+mod painted_quad_runs {
+    use super::*;
+    use nana_ui_runtime::{BoxPaint, PaintContext, Painter, Stack};
+
+    /// Overlapping boxes, the later ones translucent, so a reordered or
+    /// double-blended box shows. `radius` per box: unequal neighbours never
+    /// share a primitive.
+    struct Boxes(fn(usize) -> f32);
+
+    const COLORS: [[f32; 4]; 4] = [
+        [1.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.5],
+        [0.0, 1.0, 0.0, 0.5],
+        [1.0, 1.0, 1.0, 0.25],
+    ];
+
+    impl Painter for Boxes {
+        fn paint(&self, cx: &mut PaintContext<'_>) {
+            for (index, color) in COLORS.into_iter().enumerate() {
+                let at = 6.0 + index as f32 * 6.0;
+                cx.rounded_rect(
+                    LayoutBox {
+                        x: at,
+                        y: at,
+                        width: 30.0,
+                        height: 30.0,
+                    },
+                    (self.0)(index),
+                    BoxPaint::fill(color),
+                );
+            }
+        }
+
+        fn paint_key(&self) -> u64 {
+            0
+        }
+    }
+
+    fn scene(boxes: Boxes) -> UiScene {
+        let mut context = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let root = context
+            .create_component(
+                document,
+                Stack::column(0.0)
+                    .width(LengthSpec::Px(64.0))
+                    .height(LengthSpec::Px(64.0))
+                    .painter(boxes),
+            )
+            .unwrap();
+        let ids = [root.stable_id()];
+        context.resolve_styles(&ids).unwrap();
+        context
+            .layout_document(document, nana_ui_runtime::LayoutViewport::new(64.0, 64.0))
+            .unwrap();
+        let mut scene = UiScene::new();
+        scene.apply_delta(context.world().extract_document(document), []);
+        scene
+    }
+
+    fn kinds(scene: &UiScene) -> (usize, usize) {
+        scene
+            .primitives()
+            .fold((0, 0), |(quads, batches), p| match &p.kind {
+                ScenePrimitiveKind::Quad { .. } => (quads + 1, batches),
+                ScenePrimitiveKind::QuadColorBatch { .. } => (quads, batches + 1),
+                _ => (quads, batches),
+            })
+    }
+
+    #[test]
+    fn a_run_of_boxes_paints_as_one_batch_with_the_same_pixels() {
+        let run = scene(Boxes(|_| 4.0));
+        // A hair of difference in every other corner keeps each box apart.
+        let apart = scene(Boxes(|index| 4.0 + (index % 2) as f32 * 1e-3));
+        assert_eq!(kinds(&run), (0, 1), "the four boxes share one primitive");
+        assert_eq!(kinds(&apart), (4, 0), "unequal corners never share");
+
+        let (device, queue) = test_device();
+        let mut painter = SceneWgpuPainter::for_test(wgpu::TextureFormat::Rgba8Unorm);
+        let mut paint = |scene: &UiScene| {
+            paint_scene_rgba(
+                &device,
+                &queue,
+                &mut painter,
+                scene,
+                [64.0; 2],
+                [64; 2],
+                1.0,
+            )
+        };
+        let (run, apart) = (paint(&run), paint(&apart));
+        let worst = run
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(apart.as_chunks::<4>().0)
+            .map(|(a, b)| distance(*a, *b))
+            .max()
+            .unwrap();
+        assert!(worst <= 1, "batched and separate boxes differ by {worst}");
+        // Where all four overlap, each translucent box blends over the last.
+        let mut expected = [0.0f32; 3];
+        for color in COLORS {
+            for channel in 0..3 {
+                expected[channel] =
+                    expected[channel] * (1.0 - color[3]) + color[channel] * color[3];
+            }
+        }
+        let center = pixel(&run, 64, 30, 30);
+        for channel in 0..3 {
+            let want = (expected[channel] * 255.0).round() as i32;
+            assert!(
+                (i32::from(center[channel]) - want).abs() <= 2,
+                "channel {channel}: {center:?} against {expected:?}"
+            );
+        }
     }
 }

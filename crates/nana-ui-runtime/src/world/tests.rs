@@ -16,6 +16,15 @@ fn node(value: u64) -> StableNodeId {
     StableNodeId::new(value).unwrap()
 }
 
+#[test]
+fn allocated_document_ids_are_distinct_and_clear_of_hand_written_ones() {
+    let first = DocumentId::allocate();
+    let second = DocumentId::allocate();
+    assert_ne!(first, second);
+    assert!(first.get() >= FIRST_ALLOCATED_DOCUMENT);
+    assert!(second.get() >= FIRST_ALLOCATED_DOCUMENT);
+}
+
 fn seed_nodes(seeds: &[LayoutFrontierSeed]) -> Vec<StableNodeId> {
     seeds.iter().map(|seed| seed.node).collect()
 }

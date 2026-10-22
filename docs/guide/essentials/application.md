@@ -11,11 +11,11 @@
 ```rust
 use nana_ui::runtime::{DocumentId, RuntimeDocument};
 
-let document_id = DocumentId::new(1).expect("document id");
+let document_id = DocumentId::allocate();
 let mut document = RuntimeDocument::new(document_id);
 ```
 
-`DocumentId::new` 不接受 `0`，那时返回 `None`。`RuntimeDocument::new` 用一份完整的内置控件表建上下文。只从 Rust 类型建控件时，可以改用 `RuntimeDocument::typed`，没创建过的控件不会被链接进来。按标签构造的路径仍然用 `new`。
+`DocumentId::allocate` 每次给出一个进程内不重复的 id，应用的每份文档各取一个。测试和夹具要写死编号时用 `DocumentId::new`，它不接受 `0`，那时返回 `None`。`RuntimeDocument::new` 用一份完整的内置控件表建上下文。只从 Rust 类型建控件时，可以改用 `RuntimeDocument::typed`，没创建过的控件不会被链接进来。按标签构造的路径仍然用 `new`。
 
 `document()` 读回这份 id。`context()` / `context_mut()` 拿出 `AppContext`。视图挂在这个上下文上：
 
@@ -115,7 +115,7 @@ struct App {
 
 impl App {
     fn mount() -> Self {
-        let document_id = DocumentId::new(1).expect("document id");
+        let document_id = DocumentId::allocate();
         let mut document = RuntimeDocument::new(document_id);
         let cx = document.context_mut();
 

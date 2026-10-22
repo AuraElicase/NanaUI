@@ -1,0 +1,37 @@
+size 476.8 355.8
+summary nodes=5 edges=0 groups=2
+shape ellipse 189.9 166.5 66.5 66.5 stroke=BorderSoft/hairline/Solid
+shape ellipse 156.6 133.3 133 133 stroke=BorderSoft/hairline/Solid
+shape ellipse 123.4 100 199.5 199.5 stroke=BorderSoft/hairline/Solid
+shape ellipse 90.1 66.8 266 266 stroke=BorderSoft/hairline/Solid
+shape path M223.1,199.8 L223.1,66.8 M223.1,199.8 L349.6,158.7 M223.1,199.8 L301.3,307.4 M223.1,199.8 L144.9,307.4 M223.1,199.8 L96.6,158.7 stroke=Border/hairline/Solid
+shape path M223.1,106.7 C253.2,103.9 331.6,139.7 337,162.8 C342.3,186 277.7,231.1 254.4,242.8 C231,254.6 215.7,242.9 199.7,232.1 C183.6,221.3 155.9,200.6 159.9,179.3 C163.9,157.9 193,109.5 223.1,106.7 Z fill=series0.soft
+shape path M223.1,159.9 C227.4,158.5 241.8,175.7 248.4,191.6 C255.1,207.5 279.8,233.9 262.2,253.6 C244.6,273.3 151.6,316.5 144.9,307.4 C138.3,298.3 209.8,224.9 223.1,199.8 C236.4,174.7 218.8,161.3 223.1,159.9 Z fill=series1.soft
+shape ellipse 189.9 166.5 66.5 66.5 stroke=BorderSoft/hairline/Solid
+shape ellipse 156.6 133.3 133 133 stroke=BorderSoft/hairline/Solid
+shape ellipse 123.4 100 199.5 199.5 stroke=BorderSoft/hairline/Solid
+shape ellipse 90.1 66.8 266 266 stroke=BorderSoft/hairline/Solid
+shape path M223.1,199.8 L223.1,66.8 M223.1,199.8 L349.6,158.7 M223.1,199.8 L301.3,307.4 M223.1,199.8 L144.9,307.4 M223.1,199.8 L96.6,158.7 stroke=Border/hairline/Solid
+shape path M223.1,106.7 C253.2,103.9 331.6,139.7 337,162.8 C342.3,186 277.7,231.1 254.4,242.8 C231,254.6 215.7,242.9 199.7,232.1 C183.6,221.3 155.9,200.6 159.9,179.3 C163.9,157.9 193,109.5 223.1,106.7 Z stroke=series0/thick/Solid
+shape ellipse 220 103.6 6.2 6.2 fill=series0
+shape ellipse 333.9 159.7 6.2 6.2 fill=series0
+shape ellipse 251.3 239.8 6.2 6.2 fill=series0
+shape ellipse 196.6 229 6.2 6.2 fill=series0
+shape ellipse 156.8 176.2 6.2 6.2 fill=series0
+shape path M223.1,159.9 C227.4,158.5 241.8,175.7 248.4,191.6 C255.1,207.5 279.8,233.9 262.2,253.6 C244.6,273.3 151.6,316.5 144.9,307.4 C138.3,298.3 209.8,224.9 223.1,199.8 C236.4,174.7 218.8,161.3 223.1,159.9 Z stroke=series1/thick/Solid
+shape ellipse 220 156.8 6.2 6.2 fill=series1
+shape ellipse 245.3 188.5 6.2 6.2 fill=series1
+shape ellipse 259.1 250.5 6.2 6.2 fill=series1
+shape ellipse 141.9 304.3 6.2 6.2 fill=series1
+shape ellipse 220 196.7 6.2 6.2 fill=series1
+text 205.1 41.6 36 16.8 size=12 w=400 ink=Muted "攻击力"
+text 357.6 139.3 36 16.8 size=12 w=400 ink=Muted "防御力"
+text 306.2 314.2 24 16.8 size=12 w=400 ink=Muted "速度"
+text 8 314.2 132 16.8 size=12 w=400 ink=Muted "智力（包括魔法抗性与元"
+text 92 331 48 16.8 size=12 w=400 ink=Muted "素亲和）"
+text 64.6 139.3 24 16.8 size=12 w=400 ink=Muted "幸运"
+shape rect 421.6 181.3 12 12 r=Xs fill=series0
+text 440.8 177.5 28 19.6 size=14 w=400 ink=Text "骑士"
+shape rect 421.6 206.3 12 12 r=Xs fill=series1
+text 440.8 202.5 28 19.6 size=14 w=400 ink=Text "法师"
+text 187.5 8 101.8 22.4 size=16 w=600 ink=Text "角色能力对比"

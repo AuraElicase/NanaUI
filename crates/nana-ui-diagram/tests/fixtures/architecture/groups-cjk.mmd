@@ -1,0 +1,17 @@
+---
+title: 部署拓扑
+---
+architecture-beta
+    group edge(internet)[边缘]
+    group cloud(cloud)[云端区域]
+    group private(server)[私有子网] in cloud
+    service client(internet)[浏览器客户端] in edge
+    service gateway(internet)[公网网关] in cloud
+    service api(server)[接口服务] in private
+    service cache(logos:redis)[缓存] in private
+    service db(database)[主数据库] in private
+    client{group}:R --> L:gateway{group}
+    gateway:R -[HTTPS]-> L:api
+    api:B --> T:db
+    api:R <--> L:cache
+    db:R -- B:cache

@@ -321,6 +321,7 @@ impl AppContext {
                 // A secondary press outside an open popover dismisses
                 // it and goes no further, matching the primary press.
                 if self.dismiss_popovers_outside(target)? {
+                    *landed = None;
                     return Ok(CONSUMED);
                 }
                 self.cancel_menu_bar_alt();
@@ -382,6 +383,7 @@ impl AppContext {
                     // Activation needs a press recorded here to match
                     // on release, so skipping it also stops this click
                     // from reaching the control underneath.
+                    *landed = None;
                     return Ok(CONSUMED);
                 }
                 self.cancel_menu_bar_alt();
@@ -1083,6 +1085,9 @@ impl AppContext {
         } else if modifiers.shift && !modifiers.alt && !modifiers.control && !modifiers.meta {
             // Shift with an arrow extends a tree's selection
             self.focused_tree_key(document, key, true)?
+        } else if modifiers.alt && !modifiers.shift && !modifiers.control && !modifiers.meta {
+            // Alt with an arrow moves a reorder list's row
+            optional_input!("controls", self.focused_reorder_list_key(document, key))?
         } else {
             false
         };

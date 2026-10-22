@@ -1,0 +1,49 @@
+size 244 500.8
+summary nodes=4 edges=3 groups=1
+shape rect 36.3 9 188.9 341.6 r=Md fill=SemanticColorMix{first:Subtle,second:None,weight:7000} stroke=Border/hairline/Solid
+text 108.6 18.6 44.3 16.8 size=12 w=600 ink=Muted "Domain"
+shape path M115.3,203.1 L115.3,210.2 Q115.3,217.4 122.5,217.4 L144.2,217.4 Q152.2,217.4 152.2,225.4 L152.2,241.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M115.3,193.4 L119.6,203.1 L111.1,203.1 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M192.6,203.1 L192.6,215.3 Q192.6,217.4 194.7,217.4 L194.7,217.4 Q196.9,217.4 196.9,219.5 L196.9,374.6 Q196.9,382.6 188.9,382.6 L110.8,382.6 Q102.8,382.6 102.8,390.6 L102.8,398.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M192.6,193.4 L196.8,203.1 L188.4,203.1 Z fill=Surface stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M111.1,349 L111.1,358.6 Q111.1,366.6 119.1,366.6 L162.7,366.6 Q170.7,366.6 170.7,374.6 L170.7,427.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M111.1,334.6 L114.6,343 L111.1,351.4 L107.5,343 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 98.8 49.8 110.4 143.6 r=Sm fill=Surface
+clip rect 98.8 49.8 110.4 143.6 r=Sm
+shape rect 98.8 49.8 110.4 52.4 fill=Subtle
+unclip
+shape path M98.8,102.2 L209.2,102.2 stroke=BorderStrong/hairline/Solid
+shape rect 98.8 49.8 110.4 143.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 119.2 57.8 69.6 16.8 size=12 w=400 ink=Muted "«abstract»"
+text 128.1 74.6 51.6 19.6 size=14 w=600 italic ink=Text "Animal"
+shape path M98.8,147.8 L209.2,147.8 stroke=BorderStrong/hairline/Solid
+text 110.8 108.2 86.4 16.8 size=12 w=400 ink=Text "+String name"
+text 110.8 125 57.6 16.8 size=12 w=400 ink=Text "+int age"
+text 110.8 153.8 43.2 16.8 size=12 w=400 ink=Text "+eat()"
+text 110.8 170.6 57.6 16.8 size=12 w=400 ink=Text "+sleep()"
+shape rect 52.3 241.4 117.6 93.2 r=Sm fill=Surface
+clip rect 52.3 241.4 117.6 93.2 r=Sm
+shape rect 52.3 241.4 117.6 35.6 fill=Subtle
+unclip
+shape path M52.3,277 L169.9,277 stroke=BorderStrong/hairline/Solid
+shape rect 52.3 241.4 117.6 93.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 98.2 249.4 25.8 19.6 size=14 w=600 ink=Text "Dog"
+shape path M52.3,305.8 L169.9,305.8 stroke=BorderStrong/hairline/Solid
+text 64.3 283 93.6 16.8 size=12 w=400 ink=Text "+String breed"
+text 64.3 311.8 50.4 16.8 size=12 w=400 ink=Text "+bark()"
+shape rect 9 398.6 110.4 93.2 r=Sm fill=Surface
+clip rect 9 398.6 110.4 93.2 r=Sm
+shape rect 9 398.6 110.4 35.6 fill=Subtle
+unclip
+shape path M9,434.2 L119.4,434.2 stroke=BorderStrong/hairline/Solid
+shape rect 9 398.6 110.4 93.2 r=Sm stroke=BorderStrong/hairline/Solid
+text 51.3 406.6 25.8 19.6 size=14 w=600 ink=Text "Cat"
+shape path M9,463 L119.4,463 stroke=BorderStrong/hairline/Solid
+text 21 440.2 86.4 16.8 size=12 w=400 ink=Text "+bool indoor"
+text 21 469 50.4 16.8 size=12 w=400 ink=Text "+purr()"
+shape rect 159.4 427.4 75.6 35.6 r=Sm fill=Surface
+clip rect 159.4 427.4 75.6 35.6 r=Sm
+shape rect 159.4 427.4 75.6 35.6 fill=Subtle
+unclip
+shape rect 159.4 427.4 75.6 35.6 r=Sm stroke=BorderStrong/hairline/Solid
+text 171.4 435.4 51.6 19.6 size=14 w=600 ink=Text "Collar"

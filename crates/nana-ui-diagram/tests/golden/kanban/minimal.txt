@@ -1,0 +1,7 @@
+size 236 105.2
+summary nodes=1 edges=0 groups=1
+shape rect 8 8 220 89.2 r=Md fill=Subtle
+text 24 18 103.3 19.6 size=14 w=600 ink=Text "Column Title"
+text 205 19.4 7 16.8 size=12 w=400 ink=Muted "1"
+shape rect 18 47.6 200 39.6 r=Sm fill=Surface stroke=Border/hairline/Solid
+text 39 57.6 129.9 19.6 size=14 w=400 ink=Text "Task Description"

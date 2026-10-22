@@ -1,0 +1,56 @@
+size 1522.3 518
+summary nodes=7 edges=5 groups=5
+clip rect 9 9 1504.3 500 r=Md
+shape rect 9 9 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 109 1504.3 100 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 109 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 209 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 309 1504.3 100 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 309 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 409 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,109 L1513.3,109 stroke=Border/hairline/Solid
+shape path M9,209 L1513.3,209 stroke=Border/hairline/Solid
+shape path M9,309 L1513.3,309 stroke=Border/hairline/Solid
+shape path M9,409 L1513.3,409 stroke=Border/hairline/Solid
+shape path M143.7,9 L143.7,509 stroke=Border/hairline/Solid
+unclip
+shape rect 9 9 1504.3 500 r=Md stroke=Border/hairline/Solid
+text 21 50.6 110.7 16.8 size=12 w=600 ink=Muted "UI / Automation"
+text 24.7 142.2 103.3 16.8 size=12 w=600 ink=Muted "Command / Read"
+text 57.9 159 36.9 16.8 size=12 w=600 ink=Muted "Model"
+text 54.2 250.6 44.3 16.8 size=12 w=600 ink=Muted "Events"
+text 46.8 342.2 59 16.8 size=12 w=600 ink=Muted "Supplier"
+text 54.2 359 44.3 16.8 size=12 w=600 ink=Muted "Events"
+text 43.1 442.2 66.4 16.8 size=12 w=600 ink=Muted "Catalogue"
+text 54.2 459 44.3 16.8 size=12 w=600 ink=Muted "Events"
+shape path M290.3,59 L306.3,59 Q314.3,59 314.3,67 L314.3,151 Q314.3,159 322.3,159 L331.6,159 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M338.3,159 L329.9,162.5 L331.5,159 L329.9,155.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M499.5,159 L515.5,159 Q523.5,159 523.5,167 L523.5,251 Q523.5,259 531.5,259 L540.7,259 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M547.5,259 L539.1,262.5 L540.6,259 L539.1,255.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M900.5,359 L916.5,359 Q924.5,359 924.5,351 L924.5,67 Q924.5,59 932.5,59 L941.7,59 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M948.5,59 L940.1,62.5 L941.6,59 L940.1,55.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1135.4,59 L1151.4,59 Q1159.4,59 1159.4,67 L1159.4,151 Q1159.4,159 1167.4,159 L1176.7,159 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1183.4,159 L1175,162.5 L1176.5,159 L1175,155.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1310.1,159 L1326.1,159 Q1334.1,159 1334.1,167 L1334.1,451 Q1334.1,459 1342.1,459 L1351.3,459 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1358.1,459 L1349.7,462.5 L1351.2,459 L1349.7,455.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 163.7 29 126.7 60 r=Sm fill=Surface stroke=BorderStrong/hairline/Solid
+text 220 39 13.9 16.8 size=12 w=400 ink=Muted "UI"
+text 179.7 59.4 94.7 19.6 size=14 w=600 ink=Text "StockScreen"
+shape rect 338.3 129 161.1 60 r=Sm fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1600} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 394.5 139 48.7 16.8 size=12 w=400 ink=Muted "command"
+text 354.3 159.4 129.1 19.6 size=14 w=600 ink=Text "ReceiveDelivery"
+shape rect 547.5 229 169.7 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 614.9 239 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 563.5 259.4 137.7 19.6 size=14 w=600 ink=Text "DeliveryReceived"
+shape rect 765.2 329 135.3 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 815.4 339 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 781.2 359.4 103.3 19.6 size=14 w=600 ink=Text "PriceChanged"
+shape rect 948.5 29 186.9 60 r=Sm fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1200} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 1010.6 39 62.6 16.8 size=12 w=400 ink=Muted "processor"
+text 964.5 59.4 154.9 19.6 size=14 w=600 ink=Text "RepricingProcessor"
+shape rect 1183.4 129 126.7 60 r=Sm fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1600} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 1222.4 139 48.7 16.8 size=12 w=400 ink=Muted "command"
+text 1199.4 159.4 94.7 19.6 size=14 w=600 ink=Text "UpdatePrice"
+shape rect 1358.1 429 135.3 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 1408.3 439 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 1374.1 459.4 103.3 19.6 size=14 w=600 ink=Text "PriceUpdated"

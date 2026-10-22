@@ -1,0 +1,28 @@
+size 617.2 428.3
+summary nodes=9 edges=8 groups=0
+shape path M18.5,8 C105.7,8 105.7,21.8 192.9,21.8 L192.9,293 C105.7,293 105.7,279.2 18.5,279.2 Z fill=series0.soft
+shape path M203.4,21.8 C326.6,21.8 326.6,56.3 449.8,56.3 L449.8,174.9 C326.6,174.9 326.6,140.5 203.4,140.5 Z fill=series1.soft
+shape path M203.4,140.5 C326.6,140.5 326.6,188.9 449.8,188.9 L449.8,277.1 C326.6,277.1 326.6,228.6 203.4,228.6 Z fill=series1.soft
+shape path M203.4,228.6 C326.6,228.6 326.6,291.1 449.8,291.1 L449.8,372.4 C326.6,372.4 326.6,309.9 203.4,309.9 Z fill=series1.soft
+shape path M460.3,291.1 C529.5,291.1 529.5,259.4 598.7,259.4 L598.7,313.6 C529.5,313.6 529.5,345.3 460.3,345.3 Z fill=series5.soft
+shape path M18.5,293.2 C105.7,293.2 105.7,293 192.9,293 L192.9,343.8 C105.7,343.8 105.7,344 18.5,344 Z fill=series2.soft
+shape path M203.4,309.9 C326.6,309.9 326.6,386.4 449.8,386.4 L449.8,420.3 C326.6,420.3 326.6,343.8 203.4,343.8 Z fill=series1.soft
+shape path M460.3,345.3 C529.5,345.3 529.5,327.6 598.7,327.6 L598.7,354.7 C529.5,354.7 529.5,372.4 460.3,372.4 Z fill=series5.soft
+shape rect 8 8 10.5 271.2 fill=series0
+text 24.1 135.2 48 16.8 size=12 w=400 ink=Text "工资收入"
+shape rect 192.9 21.8 10.5 322 fill=series1
+text 139.3 174.4 48 16.8 size=12 w=400 ink=Text "家庭预算"
+shape rect 8 293.2 10.5 50.8 fill=series2
+text 24.1 310.2 48 16.8 size=12 w=400 ink=Text "副业收入"
+shape rect 449.8 56.3 10.5 118.6 fill=series3
+text 420.2 107.2 24 16.8 size=12 w=400 ink=Text "房租"
+shape rect 449.8 188.9 10.5 88.1 fill=series4
+text 276.2 224.6 168 16.8 size=12 w=400 ink=Text "日常开销（餐饮、交通与通讯）"
+shape rect 449.8 291.1 10.5 81.3 fill=series5
+text 420.2 323.3 24 16.8 size=12 w=400 ink=Text "储蓄"
+shape rect 449.8 386.4 10.5 33.9 fill=series6
+text 420.2 394.9 24 16.8 size=12 w=400 ink=Text "娱乐"
+shape rect 598.7 259.4 10.5 54.2 fill=series7
+text 545.1 278.1 48 16.8 size=12 w=400 ink=Text "指数基金"
+shape rect 598.7 327.6 10.5 27.1 fill=series8
+text 533.1 332.8 60 16.8 size=12 w=400 ink=Text "应急备用金"

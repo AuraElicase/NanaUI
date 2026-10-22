@@ -1,0 +1,78 @@
+size 1003 717.5
+summary nodes=7 edges=7 groups=0
+shape rect 91.6 51 840 610.9 fill=Surface
+text 172.2 668.9 48.7 16.8 size=12 w=400 ink=Muted "Genesis"
+shape path M301.6,51 L301.6,661.9 stroke=BorderSoft/hairline/Dashed
+text 385.7 668.9 41.8 16.8 size=12 w=400 ink=Muted "Custom"
+shape path M511.6,51 L511.6,661.9 stroke=BorderSoft/hairline/Dashed
+text 592.2 668.9 48.7 16.8 size=12 w=400 ink=Muted "Product"
+shape path M721.6,51 L721.6,661.9 stroke=BorderSoft/hairline/Dashed
+text 795.2 668.9 62.6 16.8 size=12 w=400 ink=Muted "Commodity"
+shape path M91.6,661.9 L933.2,661.9 stroke=Border/hairline/Solid
+shape path M940,661.9 L931.6,665.4 L933.1,661.9 L931.6,658.4 Z fill=Border stroke=Border/hairline/Solid
+shape path M91.6,661.9 L91.6,49.3 stroke=Border/hairline/Solid
+shape path M91.6,42.6 L95.1,51 L91.6,49.5 L88,51 Z fill=Border stroke=Border/hairline/Solid
+text 877.3 692.7 62.6 16.8 size=12 w=400 ink=Muted "Evolution"
+text 8 42.6 76.6 16.8 size=12 w=400 ink=Muted "Value Chain"
+text 35.8 79 48.7 16.8 size=12 w=400 ink=Muted "Visible"
+text 21.9 645.1 62.6 16.8 size=12 w=400 ink=Muted "Invisible"
+shape path M777.6,535.5 L818.4,535.5 L818.4,531.3 L833.6,539.7 L818.4,548.1 L818.4,543.9 L777.6,543.9 Z fill=SemanticColorMix{first:Success,second:None,weight:1800} stroke=Success/hairline/Solid
+text 763.8 550.1 83.5 16.8 size=12 w=400 ink=Muted "Cloud Native"
+shape path M413.6,382.8 L372.7,382.8 L372.7,378.6 L357.6,387 L372.7,395.4 L372.7,391.2 L413.6,391.2 Z fill=SemanticColorMix{first:Danger,second:None,weight:1800} stroke=Danger/hairline/Solid
+text 347.3 397.4 76.6 16.8 size=12 w=400 ink=Muted "Legacy Data"
+shape path M884.7,115.6 L810.4,169.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M884.7,115.6 L768.4,200.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M799.9,175.2 L643.2,232.2 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M757.7,205.2 L643.4,232.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M632.7,237.8 L558.4,291.8 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M632.7,237.8 L474.4,352.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M475.4,358.1 L883.8,476.9 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M644.6,234.3 L791.8,234.3 stroke=Danger/hairline/Dashed
+shape path M798.5,234.3 L790.1,237.8 L791.6,234.3 L790.1,230.7 Z fill=Danger stroke=Danger/hairline/Solid
+shape ellipse 800.5 229.2 10.1 10.1 fill=Surface stroke=Danger/hairline/Solid
+text 814.6 225.9 76.6 16.8 size=12 w=400 ink=Danger "API Gateway"
+shape path M476.6,356.5 L707.8,356.5 stroke=Danger/hairline/Dashed
+shape path M714.5,356.5 L706.1,360 L707.6,356.5 L706.1,352.9 Z fill=Danger stroke=Danger/hairline/Solid
+shape ellipse 716.5 351.4 10.1 10.1 fill=Surface stroke=Danger/hairline/Solid
+text 730.6 348.1 55.7 16.8 size=12 w=400 ink=Danger "Database"
+shape path M805.6,160.1 L818,182.4 L793.1,182.4 Z fill=SemanticColorMix{first:Text,second:None,weight:800} stroke=BorderStrong/hairline/Solid
+shape ellipse 800.5 168.1 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape path M763.6,190.6 L776,212.9 L751.1,212.9 Z fill=SemanticColorMix{first:Text,second:None,weight:800} stroke=BorderStrong/hairline/Solid
+shape ellipse 758.5 198.7 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape path M637.6,221.2 L650.7,234.3 L637.6,247.4 L624.5,234.3 Z fill=SemanticColorMix{first:Text,second:None,weight:800} stroke=BorderStrong/hairline/Solid
+shape ellipse 632.5 229.2 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape rect 543.7 285.5 19.7 19.7 fill=SemanticColorMix{first:Text,second:None,weight:800} stroke=BorderStrong/hairline/Solid
+shape ellipse 548.5 290.3 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape path M469.6,343.4 L482.7,356.5 L469.6,369.6 L456.5,356.5 Z fill=SemanticColorMix{first:Text,second:None,weight:800} stroke=BorderStrong/hairline/Solid
+shape rect 485.7 345.4 4.5 22.2 fill=Text
+shape ellipse 464.5 351.4 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+shape ellipse 876.5 465.5 26.2 26.2 fill=SemanticColorMix{first:Text,second:None,weight:800} stroke=BorderStrong/hairline/Solid
+shape ellipse 884.5 473.6 10.1 10.1 fill=Surface stroke=Text/thick/Solid
+text 847.6 125.8 132.8 16.8 size=12 w=600 ink=Text "Build mobile-first"
+text 847.6 142.6 73.8 16.8 size=12 w=600 ink=Text "experience"
+text 511.6 278.6 125.4 16.8 size=12 w=600 ink=Text "Migrate to cloud-"
+text 511.6 295.4 110.7 16.8 size=12 w=600 ink=Text "native database"
+shape rect 851.1 102.3 76.9 19.6 fill=Surface
+text 855.1 102.3 68.9 19.6 size=14 w=600 ink=Text "Customer"
+text 813.6 174.2 69.6 16.8 size=12 w=400 ink=Text "Mobile App"
+text 703.6 205.3 48.7 16.8 size=12 w=400 ink=Text "Web App"
+text 645.6 235.3 76.6 16.8 size=12 w=400 ink=Text "API Gateway"
+text 462 277.6 83.5 16.8 size=12 w=400 ink=Text "Auth Service"
+text 477.6 338.7 55.7 16.8 size=12 w=400 ink=Text "Database"
+text 897.6 460.8 97.4 16.8 size=12 w=400 ink=Text "Cloud Platform"
+shape ellipse 771.4 176.4 18 18 fill=Surface stroke=Text/hairline/Solid
+text 777.2 178.3 6.3 14.3 size=10.2 w=600 ink=Text "1"
+shape ellipse 586.6 225.3 18 18 fill=Surface stroke=Text/hairline/Solid
+text 592.4 227.1 6.3 14.3 size=10.2 w=600 ink=Text "2"
+shape ellipse 418.6 347.5 18 18 fill=Surface stroke=Text/hairline/Solid
+text 424.4 349.3 6.3 14.3 size=10.2 w=600 ink=Text "3"
+shape rect 259.6 580.3 146.6 81.6 r=Xs fill=Surface stroke=Border/hairline/Solid
+text 266.8 587.5 81.2 16.8 size=12 w=600 ink=Text "Annotations"
+text 266.8 604.3 13.9 16.8 size=12 w=400 ink=Text "1."
+text 280.7 604.3 111.4 16.8 size=12 w=400 ink=Text "User touchpoints"
+text 266.8 621.1 13.9 16.8 size=12 w=400 ink=Text "2."
+text 280.7 621.1 118.3 16.8 size=12 w=400 ink=Text "Integration layer"
+text 266.8 637.9 13.9 16.8 size=12 w=400 ink=Text "3."
+text 280.7 637.9 111.4 16.8 size=12 w=400 ink=Text "Data persistence"
+shape rect 91.6 51 840 610.9 stroke=BorderSoft/hairline/Solid
+text 373.6 8 255.8 22.4 size=16 w=600 ink=Text "Software Platform Strategy"

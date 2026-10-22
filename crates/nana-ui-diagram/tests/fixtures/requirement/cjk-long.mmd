@@ -1,0 +1,12 @@
+requirementDiagram
+    requirement 数据保留 {
+        id: R-1
+        text: 用户删除账号后，系统必须在三十天内清除其全部个人数据，包括备份和日志中的副本
+        risk: medium
+        verifymethod: inspection
+    }
+    element 清理任务 {
+        type: 定时任务
+        docref: ops/cleanup.md
+    }
+    清理任务 - satisfies -> 数据保留

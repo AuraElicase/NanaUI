@@ -30,6 +30,7 @@ let (view, start) = cx.mount_view_root(document_id, || {
 | `with_refs(view, refs)` | 挂载完成后直接返回 `(MountedView, 解析好的句柄)`，将 `EntityRef<C>` 转为 `Entity<C>` |
 | `.on(\|e\| …)` / `.on_cx(\|组件, e, cx\| …)` | 就近绑定事件；`on_cx` 可原地修改组件状态或调用 `cx.dispatch_program` |
 | `.slot` / `.child_slot` / 具名 slot | 向复合控件（如 Shell 区域、分组工具栏、列表行图标）传入子视图 |
+| `#[component]` | 让模板按属性名调用应用自己的视图函数（`<SettingsRow label="…" on={…}/>`），`#[prop(default = …)]` 的参数可以不写；Rust 里仍按顺序调用同一个函数 |
 
 在声明式视图中，`Stack`（`column()` / `row()`）仅作为样式与排版容器；复合控件在挂载时会自动执行各自的装配器（无需手动调用 `assemble_*`）。
 

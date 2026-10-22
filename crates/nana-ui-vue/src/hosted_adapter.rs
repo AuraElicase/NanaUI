@@ -2237,7 +2237,7 @@ mod tests {
         let id = canvas.lock().unwrap().create_canvas(8, 8).unwrap();
         let detached_id = canvas.lock().unwrap().create_canvas(8, 8).unwrap();
         let registry = host.host_textures().clone();
-        let texture = HostTexture::new(7, 1, &gpu_texture());
+        let texture = HostTexture::new(&gpu_texture());
         registry.register(
             "secondary",
             texture.clone(),
@@ -2319,7 +2319,7 @@ mod tests {
                 .redraw,
             RuntimeRedraw::Window(WindowId(secondary.0))
         );
-        let replacement = HostTexture::new(7, 1, &gpu_texture());
+        let replacement = HostTexture::new(&gpu_texture());
         replacement.invalidate();
         runtime.engine.on_event = Some(Box::new(move || {
             registry.register("secondary", replacement, 8, 8, HostTextureAlphaMode::Opaque);

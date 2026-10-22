@@ -1,0 +1,58 @@
+size 1223.3 516.4
+summary nodes=7 edges=6 groups=4
+clip rect 9 42.6 1205.3 464.8 r=Md
+shape rect 9 42.6 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 142.6 1205.3 124 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 142.6 134.7 124 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 266.6 134.7 140.8 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape rect 9 407.4 1205.3 100 fill=SemanticColorMix{first:Subtle,second:None,weight:4500}
+shape rect 9 407.4 134.7 100 fill=SemanticColorMix{first:Subtle,second:None,weight:7000}
+shape path M9,142.6 L1214.3,142.6 stroke=Border/hairline/Solid
+shape path M9,266.6 L1214.3,266.6 stroke=Border/hairline/Solid
+shape path M9,407.4 L1214.3,407.4 stroke=Border/hairline/Solid
+shape path M143.7,42.6 L143.7,507.4 stroke=Border/hairline/Solid
+unclip
+shape rect 9 42.6 1205.3 464.8 r=Md stroke=Border/hairline/Solid
+text 21 84.2 110.7 16.8 size=12 w=600 ink=Muted "UI / Automation"
+text 24.7 187.8 103.3 16.8 size=12 w=600 ink=Muted "Command / Read"
+text 57.9 204.6 36.9 16.8 size=12 w=600 ink=Muted "Model"
+text 54.2 328.6 44.3 16.8 size=12 w=600 ink=Muted "Events"
+text 63.6 440.6 25.4 16.8 size=12 w=600 ink=Muted "仓储"
+text 54.2 457.4 44.3 16.8 size=12 w=600 ink=Muted "Events"
+shape path M269.9,92.6 L285.9,92.6 Q293.9,92.6 293.9,100.6 L293.9,196.6 Q293.9,204.6 301.9,204.6 L311.1,204.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M317.9,204.6 L309.5,208.1 L311,204.6 L309.5,201.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M424.3,204.6 L440.3,204.6 Q448.3,204.6 448.3,212.6 L448.3,329 Q448.3,337 456.3,337 L465.5,337 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M472.3,337 L463.9,340.5 L465.4,337 L463.9,333.5 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M585.9,337 L601.9,337 Q609.9,337 609.9,329 L609.9,212.6 Q609.9,204.6 617.9,204.6 L627.1,204.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M633.9,204.6 L625.5,208.1 L627,204.6 L625.5,201.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M735.9,204.6 L751.9,204.6 Q759.9,204.6 759.9,196.6 L759.9,100.6 Q759.9,92.6 767.9,92.6 L777.1,92.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M783.9,92.6 L775.5,96.1 L777,92.6 L775.5,89.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M890.1,92.6 L906.1,92.6 Q914.1,92.6 914.1,100.6 L914.1,196.6 Q914.1,204.6 922.1,204.6 L931.3,204.6 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M938.1,204.6 L929.7,208.1 L931.2,204.6 L929.7,201.1 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1040.1,204.6 L1056.1,204.6 Q1064.1,204.6 1064.1,212.6 L1064.1,449.4 Q1064.1,457.4 1072.1,457.4 L1081.3,457.4 stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape path M1088.1,457.4 L1079.7,460.9 L1081.2,457.4 L1079.7,453.9 Z fill=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500} stroke=SemanticColorMix{first:Text,second:Some(BorderStrong),weight:5500}/hairline/Solid
+shape rect 163.7 62.6 106.2 60 r=Sm fill=Surface stroke=BorderStrong/hairline/Solid
+text 209.8 72.6 13.9 16.8 size=12 w=400 ink=Muted "UI"
+text 179.7 93 74.2 19.6 size=14 w=600 ink=Text "购物车页面"
+shape rect 317.9 162.6 106.4 84 r=Sm fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1600} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 346.7 172.6 48.7 16.8 size=12 w=400 ink=Muted "command"
+text 341.4 193 59.4 19.6 size=14 w=600 ink=Text "提交订单"
+text 333.9 219.8 74.4 16.8 size=12 w=400 ink=Muted "\"金额\": 128"
+shape rect 472.3 286.6 113.6 100.8 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 511.7 296.6 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 492 317 74.2 19.6 size=14 w=600 ink=Text "订单已创建"
+text 488.3 343.8 81.6 16.8 size=12 w=400 ink=Muted "编号: string"
+text 488.3 360.6 81.6 16.8 size=12 w=400 ink=Muted "金额: number"
+shape rect 633.9 174.6 102 60 r=Sm fill=SemanticColorMix{first:Success,second:Some(Surface),weight:1600} stroke=SemanticColorMix{first:Success,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 650.1 184.6 69.6 16.8 size=12 w=400 ink=Muted "read model"
+text 655.2 205 59.4 19.6 size=14 w=600 ink=Text "订单列表"
+shape rect 783.9 62.6 106.2 60 r=Sm fill=SemanticColorMix{first:Muted,second:Some(Surface),weight:1200} stroke=SemanticColorMix{first:Muted,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 805.6 72.6 62.6 16.8 size=12 w=400 ink=Muted "processor"
+text 799.9 93 74.2 19.6 size=14 w=600 ink=Text "库存处理器"
+shape rect 938.1 174.6 102 60 r=Sm fill=SemanticColorMix{first:Accent,second:Some(Surface),weight:1600} stroke=SemanticColorMix{first:Accent,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 964.7 184.6 48.7 16.8 size=12 w=400 ink=Muted "command"
+text 959.4 205 59.4 19.6 size=14 w=600 ink=Text "扣减库存"
+shape rect 1088.1 427.4 106.2 60 r=Sm fill=SemanticColorMix{first:Warning,second:Some(Surface),weight:2200} stroke=SemanticColorMix{first:Warning,second:Some(BorderStrong),weight:5500}/hairline/Solid
+text 1123.8 437.4 34.8 16.8 size=12 w=400 ink=Muted "event"
+text 1104.1 457.8 74.2 19.6 size=14 w=600 ink=Text "库存已扣减"
+text 577.7 8 67.8 22.4 size=16 w=600 ink=Text "下单流程"

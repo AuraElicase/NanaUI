@@ -44,6 +44,7 @@ mod modal_handles;
 mod popover_trigger;
 mod rich_editor;
 mod router;
+mod row_tools;
 mod scrollbar_lane;
 mod select_menu;
 mod terminal;

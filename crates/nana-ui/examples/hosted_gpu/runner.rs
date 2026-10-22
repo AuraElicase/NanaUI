@@ -32,8 +32,8 @@ static STARTED_AT: OnceLock<Instant> = OnceLock::new();
 #[derive(Clone, Copy)]
 struct ProducerFrame {
     size: (u32, u32),
-    background: nana_ui::Color,
-    accent: nana_ui::Color,
+    background: nana_ui::SemanticColor,
+    accent: nana_ui::SemanticColor,
     revision: u32,
 }
 

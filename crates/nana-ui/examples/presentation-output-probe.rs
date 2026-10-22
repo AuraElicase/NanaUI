@@ -542,7 +542,7 @@ impl RuntimeProgram for Probe {
             let registry = nana_ui::HostTextureRegistry::new();
             registry.register(
                 "probe-stable",
-                nana_ui::HostTexture::new(1, 1, &texture),
+                nana_ui::HostTexture::new(&texture),
                 1,
                 1,
                 nana_ui::HostTextureAlphaMode::Premultiplied,

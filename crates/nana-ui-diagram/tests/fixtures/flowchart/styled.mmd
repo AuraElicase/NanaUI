@@ -1,0 +1,11 @@
+---
+title: Release pipeline
+---
+flowchart LR
+    build[Build]:::ok --> test[Test]:::ok --> stage{Stage?}
+    stage -->|approve| deploy[Deploy]
+    stage -->|reject| fix[Fix]
+    fix -.-> build
+    classDef ok fill:#d6f5d6,stroke:#2e7d32,color:#1b5e20
+    style deploy fill:#1565c0,color:#fff
+    linkStyle 3 stroke:#c62828,stroke-width:2px

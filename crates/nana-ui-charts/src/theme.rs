@@ -118,6 +118,15 @@ impl ChartTheme {
     }
 }
 
+/// The categorical palette a chart derives from `palette` when its option
+/// names none: the accent first, then hues at the accent's lightness.
+pub fn series_palette(palette: &SemanticPalette) -> Vec<[f32; 4]> {
+    categorical(
+        palette.accent.as_rgba_array(),
+        palette.surface.as_rgba_array(),
+    )
+}
+
 /// Hue steps from the accent, in degrees. Neighbours stay far apart so the
 /// first few series read as distinct; later entries fill the gaps.
 const HUE_STEPS: [f32; 9] = [0.0, 140.0, 75.0, 300.0, 200.0, 35.0, 250.0, 105.0, 335.0];

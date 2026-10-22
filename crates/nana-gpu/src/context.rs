@@ -593,6 +593,13 @@ impl GpuContext {
     /// own; this is for callers that submit raw command buffers through
     /// `wgpu-interop` and read what they uploaded.
     pub fn flush_uploads(&self) {
+        // In submission order, as a frame takes them: see `FrameContext::submit`.
+        let _submission = self.lock_submission();
+        let _order = self
+            .inner
+            .submission_order
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let batch = std::mem::take(
             &mut *self
                 .inner
@@ -609,7 +616,6 @@ impl GpuContext {
         ) else {
             return;
         };
-        let _submission = self.lock_submission();
         let index = self.inner.queue.submit([uploads.commands]);
         self.inner.upload_ring.submitted(uploads.chunk, index);
     }

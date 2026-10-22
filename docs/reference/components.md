@@ -47,6 +47,8 @@ import "@nanaui/nanavue-components/controls.css";
 
 通知角用 [ToastStack](../components/toast-stack.md)。`push_toast` 装配并放进最新的一条，先量高度、再按 `max_visible` 和高度决定显示哪些，其余排队；`remove_toast` 让在屏上的那条在原位播完退场再拿掉，其余收拢；`clear_toasts` 全部拿掉。`ToastStack::place_in` 与 `Toast::place_in` 同一个预留合同，多一个 `max_height`。栈本身不命中，空隙落到下面的舞台。应用把栈放在模态层之上（模态卡片的 `z_index` 是 1000）时，模态打开期间栈里的提示照常可按，不算点在模态外面，焦点和 Tab 留在模态里。
 
+多窗口应用的通知用 `nana_ui::notices`。`NoticeCenter<K, A>` 只有一份，持有全部通知：带业务键 `K` 的按键原位替换，无键消息在 `repeat_window` 内同文不重复。总数超过 `max` 时，先让位普通消息，运行中的任务和它的结果不丢。每条记住来源窗口（`NoticeSource`），创建时落在聚焦窗口，否则依次是主窗、`set_visible` 给的优先窗口、最近活动的窗口。来源隐藏或关闭就迁走，优先回主窗；没有可见窗口时暂存，不计时。迁移会重建 Toast，旧窗口的回调失效，已播报过的内容不再读一遍。每个窗口挂一个 `NoticeHost`（内部是一个 `ToastStack`），每帧调用 `sync(cx, host, window, width, height, placement)` 投影，投影有变化才返回 true。动作和关闭经 `drain()` 带着来源返回。`set_shown_elsewhere(keys)` 暂停这些键的投影，留给别处原位显示。
+
 `Spinner` 自己转。挂载后由 Motion IR 无限 timeline 驱动旋转相位。宿主不逐帧喂 phase。停用改为卸载或停放该节点。
 
 `Panel` 是非模态任务面板。挂到独立 `OverlayHost` 的直接子节点。通过同一份 `activate_overlay` / `dismiss_overlay` 管理显示和退出动画。面板使用 Card 表面和具名 Region 无障碍语义。只有卡面命中。外部舞台和普通 Tab 顺序保持可用。不能用 Menu 或 Dialog 冒充非模态面板。可见标题、返回/关闭按钮和内容由应用装配为普通子节点。长内容使用 `ScrollView`。关闭按钮调用 `dismiss_overlay`。不直接删除节点。
@@ -106,7 +108,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 `InteractionRequestCard` 是中性的请求/审批表面，提供 `prompt`、`body`、`actions` 槽，并按 `InteractionRequestField::key` 保留 `FormField` 包装。字段控件和动作由应用创建并监听，卡片不携带 Pending、MCP 或导航语义。
 
-`GraphCanvas` 默认只画网格、节点框和边（Scene Quad / Stroke）。节点内部内容由应用往子节点里放。`"graph-canvas"` 自定义 GPU renderer 不会自动挂上。要直写 pass，须宿主自己登记并 `set_custom_render`。右键仍然只发 `SecondaryPress`（窗口坐标）。`AppContext::graph_canvas_hit_at` 把它换成画布局部点与命中结果（`GraphCanvasHit`）。菜单开不开、开什么由应用决定。`NativeMarkdown` 解析 mermaid 与公式围栏并给出 presenter 槽。但**不渲染**图和公式。那两样由宿主自己画进槽里。
+`GraphCanvas` 默认只画网格、节点框和边（Scene Quad / Stroke）。节点内部内容由应用往子节点里放。`"graph-canvas"` 自定义 GPU renderer 不会自动挂上。要直写 pass，须宿主自己登记并 `set_custom_render`。右键仍然只发 `SecondaryPress`（窗口坐标）。`AppContext::graph_canvas_hit_at` 把它换成画布局部点与命中结果（`GraphCanvasHit`）。菜单开不开、开什么由应用决定。`NativeMarkdown` 自己绘制公式（RaTeX）与 mermaid 图（原生图表引擎），并给出带源码的 presenter 槽，宿主可按身份接管呈现。
 
 `GraphMinimap` 是图画布的概览小地图。按 `GraphModel::bounds` 等比缩放画节点矩形和视口指示框。点击/拖拽发 `GraphMinimapEvent::ViewportRequested`。由应用写回 `GraphCanvas::set_viewport`。它自己是普通组件。`canvas_size` 传图画布的可见尺寸。位置尺寸由应用布局给定（通常是画布角落的 `PositionSpec::Absolute`）。
 
@@ -124,6 +126,20 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 相对 `Button`：Button 是动作。没有 token 的 `selected` / `dismissible`。相对 `StatusBadge`：Badge 只展示。不激活。不关闭。
 
+### 标记与分组（view::marks）
+
+不是控件，是由 `Stack` / `Text` / `IconGlyph` 拼成的视图，只说主题角色和档位：
+
+- `kbd(key)`、`kbd_glyph(icon)`、`chord("Ctrl+B")`、`chord_with(keys, draw_key)`：键帽和组合键，键帽由 `KeycapPainter` 画（表面、边框、强边框色的底边，随明暗模式），高度和底边取自已安装主题的 `ThemeMetrics::keycap`。
+- `tag(text)` / `tag_frame()`：不可交互的标签；要能选、能关的用 `Chip`。
+- `callout(icon, tone, text)`：按 `StatusTone` 着色的提示条，图标由调用方给。`text` 可以绑定，为空时整条隐藏；`.quiet()` 不带底色、不自带水平内边距，文字小一号、偏淡，和图标居中对齐，放在已有内边距的块里当一行说明；`.trailing(view)` 在行尾放一个跳转链接或按钮，行尾不收缩，文字先换行。
+- `heading_row(title, tools)` + `heading_tools(tools)`：标题行。标题先让出宽度（可省略），工具保持宽度；工具栏没有外观和竖向内边距，行高取文字和工具中较高的。工具用 `IconButton::tool(icon, label)`（紧凑 24×24，标签同时作提示）或紧凑菜单。
+- `scroll_foot_fade(height, surface)`：放在滚动区底边上的渐隐，从透明过渡到 `surface`，说明列表还没到底；不接收输入，列表末尾留出同样高度的空白，最后一行能滚出渐隐。
+- `settings_group(title, rows)` + `group_row(view).visible(cond)`：标题在上、卡片在下，行间是缩进细线，隐藏的行带走它的分隔线，第一行也一样（行和分隔线放在 `SettingsGroup` 里，分隔线只在两个显示的行之间显示）；卡片由 `RaisedSurfacePainter` 画（细边框，亮色下一道短阴影）。
+- `tone_role(tone)`：状态色调对应的颜色角色。
+
+`Avatar` 的空槽仍是 Subtle 占位，不画首字母；需要首字母的应用自己叠一层。
+
 ### ImageViewer
 
 `ImageViewer` 是整窗的大图浮层（`nana.image-viewer`）。它自己画遮罩、表面、舞台与说明行。图片由应用给（`HostTexture` / `CustomRender` 由查看器画在舞台里并按舞台裁剪。`Child` 是应用自己的子节点）。遮罩是主题的 `EffectTokens::media_scrim`。浅色主题下也是深色。图片总是放在深色上看。表面与说明行仍随主题。内置值是黑 0.99，而不是 CSS 里常写的 0.9。画家在线性光里合成。黑色 α 留下背后 `1 - α` 的线性亮度。0.99 在白底上约 `#1a1a1a`（CSS 的 0.9 那么深）。0.9 则是中灰 `#595959`。自定义主题写这个值时按同样的算法取。查看器的**操作是真控件**。关闭钮是 `assemble_image_viewer` 建的 `IconButton` 子节点。可焦点。有无障碍名（`close_label`，默认「关闭」）。有悬停与按下态。激活时查看器发 `ImageViewerEvent::Close`。这些控件总排在查看器所有其他子节点之后。所以 `Child` 内容铺满整个画面也盖不住它们。命中也先落在它们上面。内容晚于控件放进来时（子节点变化）查看器会重新装配，把控件挪回末尾。它是叶子复合件。视图建好时与每次写入后自动装配。`create_component` 手工建的查看器自己调一次 `assemble_image_viewer`。`ImageViewer::geometry(..).close` 仍给出关闭钮的位置，供应用给自己的内容留边。
@@ -134,11 +150,13 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 `Avatar` 是圆形 Cover-fit `HostTexture` 槽（`nana.avatar` / `<nana-avatar>`，采样 `nana.host-texture`）。默认不参与命中。不可焦点。空 `resource`、宿主清空、加载失败都走 Subtle 占位。**不**自绘产品字母。加载失败由宿主把 `resource` 清成空。不改缺槽拒绝帧的 GPU 合同。有 `label` 时 AccessKit 为 Image 且有名。无名则为 Image 无 name。无点击事件。与 `Thumbnail` 的区分见 rustdoc（Cover、圆形、固定边长）。
 
-`HoverCard::trigger_image` 与 `Avatar` / `Thumbnail` 一样走 generation / version。`replace_view(generation)` / `invalidate_content()` 推进 Scene revision。宿主纹理晚到时，画面才会从占位换成实图。
+`HoverCard::trigger_image` 与 `Avatar` / `Thumbnail` 一样只给槽名。宿主纹理晚到或换掉时，往槽里重新登记即可，组件不用改。
 
 ### OverlayVisibility
 
 媒体/舞台 HUD 的自动隐藏用 `OverlayVisibility` **策略对象**。`MediaTransportBar::auto_hide(true)` 让运行时自己驱动它（画面区域内的指针活动、按键与指针离开画面或窗口，加上运行时时钟），每次翻转发 `OverlayVisibilityChanged`；只放视频的窗口用这条，见 [MediaTransportBar](../components/media-transport-bar.md#自动收起)。下面是宿主自己驱动的写法。idle 超时隐藏。hover dwell 延迟显现。焦点 / 拖拽 / 菜单锁（`OverlayLocks`）保持可见。`active = false`（加载 / 暂停 / 空）保持可见。它不是叶子控件。不进 `register_component`。没有 Vue 标签。不参与布局或命中。`MediaTransportBar` 内持一份策略。用 `AppContext::sync_overlay_visibility(bar, now, active)` 从 world 收集锁（焦点 / capture 是否在条或其菜单内、任一子 `Popover.open`）、推进策略、返回 wakeup。画面上的指针活动用 `reveal_overlay`。祖先查询走公开的 `AppContext::is_descendant`。**空闲收起不写条的 `hidden`。** 条自己的 `hidden`（视图里 `.visible(..)` / `v-show`）只归应用。用来表达「传输不可用时整条不出现」。两者任一要藏，条就不出现（`MediaTransportBar::shown()` 读合起来的结果，投影出去的节点样式同样是它）。所以绑定重跑（播放进度每次刷新）不会把空闲收起的条又显出来。`reveal_overlay` 也不会显出应用藏起的条。
+
+跟着指针走的 chrome（主窗的标题、工具条、贴底 Dock）也用这一份策略，不另做一套。`OverlayVisibility::hidden(config)` 起始为已落定的隐藏；指针进来调 `set_pointer_inside(now, true)`，离开调 `conceal(now)`，`OverlayVisibilityConfig::leave_grace` 内回来就不隐藏（吸收窗口边缘的离开紧跟进入，连续离开不推迟已排的时刻）；键盘把 chrome 调出来用 `reveal(now)`，它不改「指针在外」，所以之后占用一结束 chrome 仍会收起；宿主自己判断的占用（它打开的确认框、文本编辑、手势）放进 `OverlayLocks::interaction`；`active` 传 `false`，不按时钟隐藏。`visible()` 是逻辑目标，`phase()` 给出 `PresencePhase`：淡入淡出的 chrome 把每次过渡结束报给 `transition_finished(shown)`（来自 `PresenceLifecycle::animation_events` 或自己的动画），与目标不符的完成事件（淡出途中指针回来）被忽略。占用只保住或召回仍在淡出的 chrome，不把已落定隐藏的重新显示。`MediaTransportBar` 即时显隐，翻转时同步落定；它没有离开宽限。
 
 ### MediaTransportBar
 
@@ -157,7 +175,7 @@ Compact + Overlay 适合分离窗底栏（单行加边距约 52px）。Compact +
 
 进度拖拽只预览读数（宿主暂停、没有 tick 时也会跟随）。抬手才发一次 `Seek`。取消的拖拽不发。一次拖拽前后各有 `SeekStarted` / `SeekEnded`（结束在 `Seek` 之后；取消或原地松手时只有这一对）。宿主据此在拖动期间不回写播放位置。不必去监听条内部进度控件的 `RangeInput`。`RangeField` 自己的拖动起止是 `RangeDragging { dragging }`（键盘与无障碍步进不算拖动）。键盘 / 无障碍每一步都是提交。与原生 range 一致。音量跟随拖拽实时发 `Volume`。条在发 `Seek` / `Volume` 前先把目标写进 `position` / `volume`。宿主下一次写入仍是权威值。宿主若在 seek 完成前继续写旧位置，滑块会短暂回到旧位置。
 
-`ReorderList` 可以挂 live 行子节点。按在行里的控件（按钮等能获得焦点的节点）上，不移动松开是控件的点击，移动超过拖动阈值才拖动这一行。`ReorderItem::tools` 标出绝不开始拖动的子树。没有子节点时仍按标签自绘行。`IconButton::with_tooltip` 用默认 `TooltipConfig`。
+`ReorderList` 可以挂 live 行子节点。按在行里的控件（按钮等能获得焦点的节点）上，不移动松开是控件的点击，移动超过拖动阈值才拖动这一行。`ReorderItem::tools` 标出绝不开始拖动的子树。没有子节点时仍按标签自绘行。行可以是展开的树：`ReorderItem::depth` 写深度，拖动带着整棵子树，`kind` 与 `accepts_inside` / `accepts_sibling`（`ReorderAccepts`）声明谁能放进、放到旁边，插入线按落点深度缩进；Alt 加方向键在兄弟间移动、放进前一个兄弟或移出父行。`IconButton::with_tooltip` 用默认 `TooltipConfig`。
 
 ## 交互
 

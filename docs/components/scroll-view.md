@@ -89,7 +89,7 @@ widget(
 
 淡入、淡出和变粗按主题的 `ScrollbarRecipe::motion` 播放；减少动态效果时直接到终点。空闲时不留任何 deadline。
 
-尺寸在 `ThemeMetrics::scrollbar`；颜色、动效与显隐策略在 `ScrollbarRecipe`，用 `ThemeDefinition::with_scrollbar` 安装。单个节点可以用 `PaintStyle::scrollbar`（`ScrollbarSkin`）改尺寸或颜色。CSS 的 `::-webkit-scrollbar` 与 `::-webkit-scrollbar-thumb` 写的就是它；CSS 指定的滑块宽度在悬停时不变粗。
+尺寸在 `ThemeMetrics::scrollbar`；颜色、动效与显隐策略在 `ScrollbarRecipe`，用 `ThemeDefinition::with_scrollbar` 安装。单个节点可以用 `PaintStyle::scrollbar`（`ScrollbarSkin`）改尺寸或颜色。CSS 的 `::-webkit-scrollbar` 与 `::-webkit-scrollbar-thumb` 写的就是它；CSS 指定的滑块宽度在悬停时不变粗。滚动区伸进容器边距、滚动条落在边距里时，用 `ScrollbarSkin::room` 给出边距宽度：边距放不下主题的车道和两侧内缩时，车道收窄到放得下，滑块不超过车道；绘制时才按已装主题解析，主题本身更窄时以主题为准。
 
 `overflow: auto` 和 `overflow: scroll` 共用同一份 `ScrollOffset` 和裁剪，不再另画一套滑块。自定义滚动条铬只属于 `ScrollView`。
 

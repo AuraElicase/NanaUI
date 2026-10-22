@@ -1,0 +1,10 @@
+flowchart LR
+    A[输入 Input] --> B[绘制 Scene]
+    A --> B
+    A --> C[布局 Layout]
+    A --> D[解析 Parse]
+    B --> E[输出]
+    C --> E
+    D --> E
+    E --> A
+    B --> B
