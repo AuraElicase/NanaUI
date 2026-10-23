@@ -1,0 +1,46 @@
+crates/nana-ui-runtime/src/framework.rs
+  h_8e6780fc7b4bb1 4309-4311
+crates/nana-ui-runtime/src/framework/choice.rs
+  h_8e6780fc7b4bb1 6,15,19-24,84-85,107-113,117-118,127,151-153,248,251-253
+crates/nana-ui-runtime/src/framework/choice_select_tests.rs
+  h_8e6780fc7b4bb1 1-83
+crates/nana-ui-runtime/src/framework/input/tests/text_pointer_selection.rs
+  h_8e6780fc7b4bb1 1-101
+crates/nana-ui-runtime/src/lib.rs
+  h_8e6780fc7b4bb1 406
+crates/nana-ui-runtime/src/popover.rs
+  h_8e6780fc7b4bb1 83-84,104,113-118,241,351,374,441-445,883
+crates/nana-ui-runtime/src/select.rs
+  h_8e6780fc7b4bb1 68-73,159-160,363,496,526-527,603-604,614-622,624,626,1027
+crates/nana-ui-runtime/src/world/geometry.rs
+  h_8e6780fc7b4bb1 2512,2533
+crates/nana-ui-runtime/tests/fixtures/popover_trigger_style.rs
+  h_8e6780fc7b4bb1 1-35
+crates/nana-ui-runtime/tests/fixtures/select_fitted_menu.rs
+  h_8e6780fc7b4bb1 1-35
+crates/nana-ui-scene/src/scene/attributes.rs
+  h_8e6780fc7b4bb1 108-110
+crates/nana-ui-scene/src/scene/compositor.rs
+  h_8e6780fc7b4bb1 1186-1188
+crates/nana-ui-scene/src/scene/compositor_delta_tests.rs
+  h_8e6780fc7b4bb1 1-237
+crates/nana-ui-scene/src/scene/popover_trigger_radii_tests.rs
+  h_8e6780fc7b4bb1 1-73
+crates/nana-ui-scene/src/scene/primitives/overlays.rs
+  h_8e6780fc7b4bb1 330-335,337,352
+crates/nana-ui-scene/src/scene/tests.rs
+  h_8e6780fc7b4bb1 9
+crates/nana-ui-scene/tests/select_popup_hit.rs
+  h_8e6780fc7b4bb1 1,4-5,7,322-488
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "74a66c6a96aa24784957f1aae2d2b2f6b0545d14",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
