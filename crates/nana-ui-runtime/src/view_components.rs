@@ -172,7 +172,7 @@ fn text_field_style(multiline: bool) -> NodeStyle {
                 border: Some(nana_ui_core::SemanticColorRole::BorderStrong),
                 ..SemanticPaint::default()
             },
-            focused: SemanticPaint::FOCUS_BORDER,
+            focused: SemanticPaint::FOCUS_FIELD,
             disabled: SemanticPaint {
                 foreground: Some(nana_ui_core::SemanticColorRole::Faint),
                 background: Some(nana_ui_core::SemanticColorRole::Subtle),

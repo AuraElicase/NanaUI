@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Nana trace load sink v1 (Issue #359): a control-only instrument.
+
+  It subscribes to the one kdebug point event that perf/sched_trace/loss_control.py
+  emits in kdebug mode (class 0x21 DBG_APPS, subclass 0x0a DBG_APP_SIGNPOST,
+  code 0x359), so a recording without System Trace records that flood and its
+  buffers can overflow for real. kdebug enables tracing per class/subclass, so
+  other app signposts in that subclass are recorded too; the table keeps only
+  code 0x359. It reads nothing else and adds no modeler of its own.
+
+  Frozen once published: change it by adding v2/. manifest.json pins its SHA-256.
+-->
+<package>
+    <id>dev.nanaui.trace-load-sink.v1</id>
+    <title>Nana Trace Load Sink v1</title>
+    <owner>
+        <name>NanaUI</name>
+    </owner>
+
+    <ktrace-point-schema>
+        <id>nana-trace-load-sink-v1</id>
+        <title>Nana Trace Load Sink v1</title>
+        <event-pattern>
+            <class>0x21</class>
+            <subclass>0xa</subclass>
+            <code>0x359</code>
+            <function>0</function>
+            <arg1>?arg1</arg1>
+        </event-pattern>
+        <column>
+            <mnemonic>arg1</mnemonic>
+            <title>Arg1</title>
+            <type>uint64</type>
+            <expression>?arg1</expression>
+        </column>
+    </ktrace-point-schema>
+
+    <instrument>
+        <id>dev.nanaui.trace-load-sink.v1.instrument</id>
+        <title>Nana Trace Load Sink v1</title>
+        <category>System</category>
+        <purpose>Records the trace-info overload control's own kdebug events so a recording can be driven into real loss.</purpose>
+        <icon>Generic</icon>
+
+        <create-table>
+            <id>load</id>
+            <schema-ref>nana-trace-load-sink-v1</schema-ref>
+        </create-table>
+
+        <list>
+            <title>Load</title>
+            <table-ref>load</table-ref>
+            <column>timestamp</column>
+            <column>arg1</column>
+        </list>
+    </instrument>
+</package>

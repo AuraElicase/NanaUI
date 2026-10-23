@@ -824,9 +824,15 @@ impl TextGpu {
             });
             let dual = self.dual_source.is_some();
 
-            let mut valid = [true; 3];
+            // A program the host refuses paints as the identity material.
+            let mut valid = materials
+                .each_ref()
+                .map(|m| self.material_device.admit(m.program().key()));
             let bindings = std::array::from_fn(|i| {
                 let m = &materials[i];
+                if !valid[i] {
+                    return fallback.clone();
+                }
                 if let Some(binding) = self.material_bindings.get(&m.key()) {
                     return binding.clone();
                 }
@@ -847,7 +853,10 @@ impl TextGpu {
             });
             let programs = materials.each_ref().map(|m| m.program().key());
             active.insert((programs, dual));
-            self.combination_programs.insert(*key, programs);
+            // A slot refused or admitted since: its bindings changed too.
+            if self.combination_programs.insert(*key, programs) != Some(programs) {
+                self.bundles.remove(key);
+            }
             self.bundles
                 .entry(*key)
                 .or_insert_with(|| self.material_device.bundle(device, &bindings));
@@ -1258,6 +1267,24 @@ fn shade(input:VsOut)->TextShade {
             work.write_buffer(queue, &target.globals, GLOBALS_MOTION_OFFSET, bytes);
         } else {
             queue.write_buffer(&target.globals, GLOBALS_MOTION_OFFSET, bytes);
+        }
+    }
+
+    /// Charge the host's material policy for the material programs `segments`
+    /// drew over `pixels` device pixels, each program once.
+    pub(super) fn charge_materials(&self, segments: &[DrawSegment], pixels: u64) {
+        let identity = self.identity.program().key();
+        let mut charged = Vec::new();
+        for segment in segments {
+            let Some(programs) = self.combination_programs.get(&segment.material) else {
+                continue;
+            };
+            for program in programs {
+                if *program != identity && !charged.contains(program) {
+                    charged.push(*program);
+                    self.material_device.charge(*program, pixels);
+                }
+            }
         }
     }
 

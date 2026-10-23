@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Nana trace-info provider v1 (Issue #359).
+
+  Captures only the recorder events in kdebug class 7 (DBG_TRACE) / subclass 2
+  (DBG_TRACE_INFO) that bound global retention:
+    code 2  TRACE_LOST_EVENTS
+    code 5  TRACE_RETROGRADE_EVENTS
+    code 6  TRACE_PAST_EVENTS
+  The function qualifier is bound but not constrained, and the four arguments
+  are copied verbatim. No modeler, no derived filter, no enum mapping.
+
+  This directory is frozen once published: change it by adding v2/, never by
+  editing v1 in place. manifest.json pins this file's SHA-256.
+-->
+<package>
+    <id>dev.nanaui.trace-info.v1</id>
+    <title>Nana Trace Info v1</title>
+    <owner>
+        <name>NanaUI</name>
+    </owner>
+
+    <ktrace-point-schema>
+        <id>nana-trace-info-v1-lost</id>
+        <title>Nana Trace Info v1 Lost</title>
+        <event-pattern>
+            <class>0x7</class>
+            <subclass>0x2</subclass>
+            <code>?code&amp;2</code>
+            <function>?qualifier</function>
+            <thread>?thread</thread>
+            <CPU>?cpu</CPU>
+            <arg1>?arg1</arg1>
+            <arg2>?arg2</arg2>
+            <arg3>?arg3</arg3>
+            <arg4>?arg4</arg4>
+        </event-pattern>
+        <column>
+            <mnemonic>code</mnemonic>
+            <title>Code</title>
+            <type>uint32</type>
+            <expression>?code</expression>
+        </column>
+        <column>
+            <mnemonic>qualifier</mnemonic>
+            <title>Qualifier</title>
+            <type>uint32</type>
+            <expression>?qualifier</expression>
+        </column>
+        <column>
+            <mnemonic>thread</mnemonic>
+            <title>Thread</title>
+            <type>thread</type>
+            <expression>?thread</expression>
+        </column>
+        <column>
+            <mnemonic>cpu</mnemonic>
+            <title>CPU</title>
+            <type>core</type>
+            <expression>?cpu</expression>
+        </column>
+        <column>
+            <mnemonic>arg1</mnemonic>
+            <title>Arg1</title>
+            <type>uint64</type>
+            <expression>?arg1</expression>
+        </column>
+        <column>
+            <mnemonic>arg2</mnemonic>
+            <title>Arg2</title>
+            <type>uint64</type>
+            <expression>?arg2</expression>
+        </column>
+        <column>
+            <mnemonic>arg3</mnemonic>
+            <title>Arg3</title>
+            <type>uint64</type>
+            <expression>?arg3</expression>
+        </column>
+        <column>
+            <mnemonic>arg4</mnemonic>
+            <title>Arg4</title>
+            <type>uint64</type>
+            <expression>?arg4</expression>
+        </column>
+    </ktrace-point-schema>
+
+    <ktrace-point-schema>
+        <id>nana-trace-info-v1-retrograde</id>
+        <title>Nana Trace Info v1 Retrograde</title>
+        <event-pattern>
+            <class>0x7</class>
+            <subclass>0x2</subclass>
+            <code>?code&amp;5</code>
+            <function>?qualifier</function>
+            <thread>?thread</thread>
+            <CPU>?cpu</CPU>
+            <arg1>?arg1</arg1>
+            <arg2>?arg2</arg2>
+            <arg3>?arg3</arg3>
+            <arg4>?arg4</arg4>
+        </event-pattern>
+        <column>
+            <mnemonic>code</mnemonic>
+            <title>Code</title>
+            <type>uint32</type>
+            <expression>?code</expression>
+        </column>
+        <column>
+            <mnemonic>qualifier</mnemonic>
+            <title>Qualifier</title>
+            <type>uint32</type>
+            <expression>?qualifier</expression>
+        </column>
+        <column>
+            <mnemonic>thread</mnemonic>
+            <title>Thread</title>
+            <type>thread</type>
+            <expression>?thread</expression>
+        </column>
+        <column>
+            <mnemonic>cpu</mnemonic>
+            <title>CPU</title>
+            <type>core</type>
+            <expression>?cpu</expression>
+        </column>
+        <column>
+            <mnemonic>arg1</mnemonic>
+            <title>Arg1</title>
+            <type>uint64</type>
+            <expression>?arg1</expression>
+        </column>
+        <column>
+            <mnemonic>arg2</mnemonic>
+            <title>Arg2</title>
+            <type>uint64</type>
+            <expression>?arg2</expression>
+        </column>
+        <column>
+            <mnemonic>arg3</mnemonic>
+            <title>Arg3</title>
+            <type>uint64</type>
+            <expression>?arg3</expression>
+        </column>
+        <column>
+            <mnemonic>arg4</mnemonic>
+            <title>Arg4</title>
+            <type>uint64</type>
+            <expression>?arg4</expression>
+        </column>
+    </ktrace-point-schema>
+
+    <ktrace-point-schema>
+        <id>nana-trace-info-v1-past</id>
+        <title>Nana Trace Info v1 Past</title>
+        <event-pattern>
+            <class>0x7</class>
+            <subclass>0x2</subclass>
+            <code>?code&amp;6</code>
+            <function>?qualifier</function>
+            <thread>?thread</thread>
+            <CPU>?cpu</CPU>
+            <arg1>?arg1</arg1>
+            <arg2>?arg2</arg2>
+            <arg3>?arg3</arg3>
+            <arg4>?arg4</arg4>
+        </event-pattern>
+        <column>
+            <mnemonic>code</mnemonic>
+            <title>Code</title>
+            <type>uint32</type>
+            <expression>?code</expression>
+        </column>
+        <column>
+            <mnemonic>qualifier</mnemonic>
+            <title>Qualifier</title>
+            <type>uint32</type>
+            <expression>?qualifier</expression>
+        </column>
+        <column>
+            <mnemonic>thread</mnemonic>
+            <title>Thread</title>
+            <type>thread</type>
+            <expression>?thread</expression>
+        </column>
+        <column>
+            <mnemonic>cpu</mnemonic>
+            <title>CPU</title>
+            <type>core</type>
+            <expression>?cpu</expression>
+        </column>
+        <column>
+            <mnemonic>arg1</mnemonic>
+            <title>Arg1</title>
+            <type>uint64</type>
+            <expression>?arg1</expression>
+        </column>
+        <column>
+            <mnemonic>arg2</mnemonic>
+            <title>Arg2</title>
+            <type>uint64</type>
+            <expression>?arg2</expression>
+        </column>
+        <column>
+            <mnemonic>arg3</mnemonic>
+            <title>Arg3</title>
+            <type>uint64</type>
+            <expression>?arg3</expression>
+        </column>
+        <column>
+            <mnemonic>arg4</mnemonic>
+            <title>Arg4</title>
+            <type>uint64</type>
+            <expression>?arg4</expression>
+        </column>
+    </ktrace-point-schema>
+
+    <instrument>
+        <id>dev.nanaui.trace-info.v1.instrument</id>
+        <title>Nana Trace Info v1</title>
+        <category>System</category>
+        <purpose>Records kdebug lost, retrograde and past recorder events verbatim so a trace can state what retention it can and cannot prove.</purpose>
+        <icon>Generic</icon>
+
+        <create-table>
+            <id>lost</id>
+            <schema-ref>nana-trace-info-v1-lost</schema-ref>
+        </create-table>
+        <create-table>
+            <id>retrograde</id>
+            <schema-ref>nana-trace-info-v1-retrograde</schema-ref>
+        </create-table>
+        <create-table>
+            <id>past</id>
+            <schema-ref>nana-trace-info-v1-past</schema-ref>
+        </create-table>
+
+        <list>
+            <title>Lost</title>
+            <table-ref>lost</table-ref>
+            <column>timestamp</column>
+            <column>code</column>
+            <column>qualifier</column>
+            <column>thread</column>
+            <column>cpu</column>
+            <column>arg1</column>
+            <column>arg2</column>
+            <column>arg3</column>
+            <column>arg4</column>
+        </list>
+        <list>
+            <title>Retrograde</title>
+            <table-ref>retrograde</table-ref>
+            <column>timestamp</column>
+            <column>code</column>
+            <column>qualifier</column>
+            <column>thread</column>
+            <column>cpu</column>
+            <column>arg1</column>
+            <column>arg2</column>
+            <column>arg3</column>
+            <column>arg4</column>
+        </list>
+        <list>
+            <title>Past</title>
+            <table-ref>past</table-ref>
+            <column>timestamp</column>
+            <column>code</column>
+            <column>qualifier</column>
+            <column>thread</column>
+            <column>cpu</column>
+            <column>arg1</column>
+            <column>arg2</column>
+            <column>arg3</column>
+            <column>arg4</column>
+        </list>
+    </instrument>
+</package>

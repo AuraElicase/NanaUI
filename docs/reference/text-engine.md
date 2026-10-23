@@ -1114,6 +1114,10 @@ locale 作用域有三层：
 - 虚拟列表没挂出来的行不是节点，切换不解析它们；挂出来时按当前 locale 直接解析。
 - 作用域建立、移除，节点换父节点或被摘下（Detach、Park）时，受影响的本地化节点从原作用域的登记里挪过来，只访问原作用域的节点。
 
+不挂在节点上的文字（控件标签、通知、原生对话框、程序算出的说明）用 `MessagePattern`：`parse` 一次，`format(locale, 参数)` 得到字符串，语法和格式化与本地化节点相同，参数缺了原样显示 `{name}`。它不进依赖索引，切换 locale 时由调用方重新格式化。
+
+用户的界面语言由 `nana_ui_platform::preferred_languages()` 读出（macOS／iOS 的首选语言列表、Windows 的用户界面语言、其他 Unix 依次读 `LANGUAGE`、`LC_ALL`、`LC_MESSAGES`、`LANG`），按偏好顺序给出 BCP 47 标签。`negotiate_language(偏好, 应用提供的语言)` 从中挑一个：每个偏好先只在同文字系统里匹配（区域相同的优先，其次不带区域的），全部落空才接受同语言的另一种文字；不带文字系统的中文按区域推断，台湾、香港、澳门为 `Hant`，其余为 `Hans`。何时询问、是否跟随系统、选择存在哪里，都由应用决定。
+
 计数在 `WorkCounters::i18n`（`I18nCounters`）上：
 - 索引大小：`localized_nodes`、`message_dependencies`、`language_dependencies`、`direction_dependencies`；
 - `literal_nodes`：切换解析的字面文字，恒为 0（哨兵）；

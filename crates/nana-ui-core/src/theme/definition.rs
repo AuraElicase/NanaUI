@@ -870,18 +870,23 @@ impl ThemeDefinition {
         for (token, transition) in [
             ("toast.motion.enter", motion.enter),
             ("toast.motion.exit", motion.exit),
+            ("toast.motion.change", motion.change),
             ("toast.motion.stack_move", motion.stack_move),
         ] {
             check.duration(token, transition.millis);
         }
         let _ = check.finite("toast.motion.enter_offset_y", motion.enter_offset_y);
-        if check.finite("toast.motion.enter_scale", motion.enter_scale) && motion.enter_scale <= 0.0
-        {
-            check.fail(ThemeCompileError::NegativeLength {
-                theme: self.id.clone(),
-                token: "toast.motion.enter_scale",
-                value: thousandths(motion.enter_scale),
-            });
+        for (token, scale) in [
+            ("toast.motion.enter_scale", motion.enter_scale),
+            ("toast.motion.change_scale", motion.change_scale),
+        ] {
+            if check.finite(token, scale) && scale <= 0.0 {
+                check.fail(ThemeCompileError::NegativeLength {
+                    theme: self.id.clone(),
+                    token,
+                    value: thousandths(scale),
+                });
+            }
         }
         if let Some(error) = error {
             return Err(error);
@@ -2010,6 +2015,17 @@ mod tests {
                 Err(ThemeCompileError::NegativeLength { token, .. })
                     if token == "toast.motion.enter_scale"
             ));
+            assert!(matches!(
+                refuse(ToastRecipe {
+                    motion: ToastMotion {
+                        change_scale: scale,
+                        ..ToastMotion::DEFAULT
+                    },
+                    ..ToastRecipe::DEFAULT
+                }),
+                Err(ThemeCompileError::NegativeLength { token, .. })
+                    if token == "toast.motion.change_scale"
+            ));
         }
         assert!(matches!(
             refuse(ToastRecipe {
@@ -2029,6 +2045,7 @@ mod tests {
                 motion: ToastMotion {
                     enter_offset_y: -8.0,
                     enter_scale: 0.98,
+                    change_scale: 0.94,
                     ..ToastMotion::DEFAULT
                 },
                 ..ToastRecipe::DEFAULT
