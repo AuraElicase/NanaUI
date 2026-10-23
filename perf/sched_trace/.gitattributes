@@ -1,0 +1,2 @@
+# provider/v1 is pinned by SHA-256 in its manifest; keep its bytes identical on every checkout.
+provider/** -text
