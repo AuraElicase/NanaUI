@@ -1,0 +1,24 @@
+crates/nana-ui-core/src/file_dialog.rs
+  h_8e6780fc7b4bb1 138-139,148,157,166,170-175,197-215
+crates/nana-window/Cargo.toml
+  h_8e6780fc7b4bb1 36
+crates/nana-window/src/contrast_preference.rs
+  h_8e6780fc7b4bb1 65-67,118-134
+crates/nana-window/src/file_dialog_windows.rs
+  h_8e6780fc7b4bb1 22-24,166-169,173-175,403-404
+crates/nana-window/src/file_dialog_windows_tests.rs
+  h_8e6780fc7b4bb1 1-161
+crates/nana-window/src/file_dialog_windows_types.rs
+  h_8e6780fc7b4bb1 1-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "cdf3ffa2ebcba4bdcdc47e6d433032331bcfeae4",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
