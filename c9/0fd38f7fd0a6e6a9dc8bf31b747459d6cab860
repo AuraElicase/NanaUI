@@ -1,0 +1,16 @@
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_8e6780fc7b4bb1 1111-1114,1160-1162,1187-1190,1251-1253,1359-1361,1364-1367,1384,1395-1398
+crates/nana-ui-runtime/tests/fixtures/reorder_pointer_coordinates.rs
+  h_8e6780fc7b4bb1 1-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c90fd38f7fd0a6e6a9dc8bf31b747459d6cab860",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
