@@ -1,0 +1,20 @@
+crates/nana-ui-runtime/src/framework/input/dispatch.rs
+  h_8e6780fc7b4bb1 903-913
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_8e6780fc7b4bb1 1242-1260,1505
+crates/nana-ui-runtime/src/reorder_list_escape_tests.rs
+  h_8e6780fc7b4bb1 1-80
+crates/nana-ui-runtime/tests/fixtures/reorder_pointer_coordinates.rs
+  h_8e6780fc7b4bb1 121-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "35b231f398c7b65b72a281922ff1b9b8108805a0",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
