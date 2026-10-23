@@ -1,0 +1,52 @@
+crates/nana-ui-input/src/host_services.rs
+  h_8e6780fc7b4bb1 109-122,152,174,193-207,251-262
+crates/nana-ui-platform/src/clipboard.rs
+  h_8e6780fc7b4bb1 19-25,70,86-94,285-346,385-401,463-478
+crates/nana-ui-platform/src/lib.rs
+  h_8e6780fc7b4bb1 26-27
+crates/nana-ui-runtime/src/framework.rs
+  h_8e6780fc7b4bb1 2115
+crates/nana-ui-runtime/src/framework/input.rs
+  h_8e6780fc7b4bb1 574-575
+crates/nana-ui-runtime/src/framework/input/blink.rs
+  h_8e6780fc7b4bb1 24-33,47,64-146,152-165,171-183,186-188,204
+crates/nana-ui-runtime/src/framework/input/tests/dispatch.rs
+  h_8e6780fc7b4bb1 3845,3860
+crates/nana-ui-runtime/src/framework/input/tests/mod.rs
+  h_8e6780fc7b4bb1 51
+crates/nana-ui-runtime/src/framework/input/tests/text_pointer_selection.rs
+  h_8e6780fc7b4bb1 1-101
+crates/nana-ui-runtime/src/framework/lifecycle.rs
+  h_8e6780fc7b4bb1 647
+crates/nana-ui-runtime/src/framework/text_edit.rs
+  h_8e6780fc7b4bb1 1938-1940,2084-2090,2094-2100
+crates/nana-ui-runtime/src/lib.rs
+  h_8e6780fc7b4bb1 123
+crates/nana-ui-runtime/src/rich_clipboard.rs
+  h_8e6780fc7b4bb1 1-108
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 22,36-39,207-213,229-231,329-332,344-360,929,953,1011-1013,1095-1099,1101,1174,1293-1298,1308,1332,1361-1364,1394-1400,1416-1419,1464-1475,1488-1490
+crates/nana-ui-runtime/src/world/hit_test.rs
+  h_8e6780fc7b4bb1 1409-1412,1470-1472,1478-1480
+crates/nana-ui-runtime/src/world/tests.rs
+  h_8e6780fc7b4bb1 12454-12502
+crates/nana-ui-scene/tests/rich_editor_caret.rs
+  h_8e6780fc7b4bb1 1-298
+crates/nana-ui-scene/tests/rich_preedit_pointer.rs
+  h_8e6780fc7b4bb1 1-264
+crates/nana-ui/src/scene_host/host_services.rs
+  h_8e6780fc7b4bb1 12-13,160-171
+docs/reference/components.md
+  h_8e6780fc7b4bb1 270
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "88ecab06d721c749d0bd253194701a282ce79e6f",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
