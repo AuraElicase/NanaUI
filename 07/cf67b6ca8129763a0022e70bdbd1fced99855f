@@ -1,0 +1,204 @@
+Cargo.lock
+  h_8e6780fc7b4bb1 2912
+Cargo.toml
+  h_8e6780fc7b4bb1 43-47
+crates/nana-text/src/layout/engine.rs
+  h_8e6780fc7b4bb1 253,278,359,409,417-433,733,772-776
+crates/nana-text/src/layout/key.rs
+  h_8e6780fc7b4bb1 181,250-251,273
+crates/nana-text/src/layout/lines.rs
+  h_8e6780fc7b4bb1 144,335,341-343,347,353-377
+crates/nana-text/src/source.rs
+  h_8e6780fc7b4bb1 99-102
+crates/nana-text/tests/block_objects.rs
+  h_8e6780fc7b4bb1 1-214
+crates/nana-text/tests/inline_objects.rs
+  h_8e6780fc7b4bb1 34-35
+crates/nana-text/tests/line_decision.rs
+  h_8e6780fc7b4bb1 443-444
+crates/nana-text/tests/object_labels.rs
+  h_8e6780fc7b4bb1 39-40
+crates/nana-ui-core/src/file_dialog.rs
+  h_8e6780fc7b4bb1 138-139,148,157,166,170-175,197-215
+crates/nana-ui-core/src/lib.rs
+  h_8e6780fc7b4bb1 155-156
+crates/nana-ui-core/src/rich_text.rs
+  h_8e6780fc7b4bb1 355-356,375-376,378-379,442-453,485-490,549,560,562,641-651,665-668,680-681,695-696,708-709,725-726,742-743,772-783
+crates/nana-ui-input/src/host_services.rs
+  h_8e6780fc7b4bb1 109-122,152,174,193-207,251-262
+crates/nana-ui-platform/src/clipboard.rs
+  h_8e6780fc7b4bb1 19-25,70,86-94,285-346,385-401,463-478
+crates/nana-ui-platform/src/lib.rs
+  h_8e6780fc7b4bb1 26-27
+crates/nana-ui-runtime/src/components.rs
+  h_8e6780fc7b4bb1 1089-1090
+crates/nana-ui-runtime/src/framework.rs
+  h_8e6780fc7b4bb1 2113
+crates/nana-ui-runtime/src/framework/input.rs
+  h_8e6780fc7b4bb1 574-575
+crates/nana-ui-runtime/src/framework/input/blink.rs
+  h_8e6780fc7b4bb1 24-33,47,64-146,152-165,171-183,186-188,204
+crates/nana-ui-runtime/src/framework/input/tests/dispatch.rs
+  h_8e6780fc7b4bb1 3845,3860
+crates/nana-ui-runtime/src/framework/input/tests/mod.rs
+  h_8e6780fc7b4bb1 51
+crates/nana-ui-runtime/src/framework/input/tests/text_pointer_selection.rs
+  h_8e6780fc7b4bb1 1-101
+crates/nana-ui-runtime/src/framework/lifecycle.rs
+  h_8e6780fc7b4bb1 647
+crates/nana-ui-runtime/src/framework/text_edit.rs
+  h_8e6780fc7b4bb1 1938-1940,2084-2090,2094-2100
+crates/nana-ui-runtime/src/lib.rs
+  h_8e6780fc7b4bb1 122-123
+crates/nana-ui-runtime/src/popover.rs
+  h_8e6780fc7b4bb1 83-84,104,113-118,241,351,374,441-445,883
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_8e6780fc7b4bb1 27-28,230-233,282-284,624-627,644-645,688-699,808-812,999,1486,2143,2285
+crates/nana-ui-runtime/src/reorder_list_gap.rs
+  h_8e6780fc7b4bb1 1-75
+crates/nana-ui-runtime/src/reorder_list_gap_tests.rs
+  h_8e6780fc7b4bb1 1-187
+crates/nana-ui-runtime/src/rich_clipboard.rs
+  h_8e6780fc7b4bb1 1-108
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 22,36-49,104-106,140-148,207-213,229-231,246-247,264,281-286,329-332,344-360,382,420-427,464,759-770,929,953,1011-1013,1095-1099,1101,1174,1293-1298,1308,1332,1361-1364,1394-1400,1416-1419,1464-1475,1488-1490,1584-1609
+crates/nana-ui-runtime/src/select.rs
+  h_8e6780fc7b4bb1 159-160,496,526-527,603-604,614-622,624,626,1027
+crates/nana-ui-runtime/src/text_node.rs
+  h_8e6780fc7b4bb1 396,410,488,496-511,526-527,566-572,611-614,643-644,897-932
+crates/nana-ui-runtime/src/world/extraction.rs
+  h_8e6780fc7b4bb1 4-6,185-186,258-267,667-668
+crates/nana-ui-runtime/src/world/geometry.rs
+  h_8e6780fc7b4bb1 2512,2533,2697,2735-2741
+crates/nana-ui-runtime/src/world/hit_test.rs
+  h_8e6780fc7b4bb1 1409-1412,1470-1472,1478-1480
+crates/nana-ui-runtime/src/world/reorder_preview.rs
+  h_8e6780fc7b4bb1 1-83
+crates/nana-ui-runtime/src/world/tests.rs
+  h_8e6780fc7b4bb1 12454-12502
+crates/nana-ui-runtime/tests/fixtures/popover_trigger_style.rs
+  h_8e6780fc7b4bb1 1-35
+crates/nana-ui-runtime/tests/fixtures/select_fitted_menu.rs
+  h_8e6780fc7b4bb1 1-35
+crates/nana-ui-scene/Cargo.toml
+  h_8e6780fc7b4bb1 19,30-31
+crates/nana-ui-scene/src/lib.rs
+  h_8e6780fc7b4bb1 29
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 18-23,177-178,612-613,625,653,874-875,891-892,917,995,1273-1282,1292,1428-1429,1542-1543,1584,1625,1885,1929-1940,2053-2061,2644,3640,3710-3714
+crates/nana-ui-scene/src/scene/attributes.rs
+  h_8e6780fc7b4bb1 108-110
+crates/nana-ui-scene/src/scene/compositor.rs
+  h_8e6780fc7b4bb1 1186-1188
+crates/nana-ui-scene/src/scene/compositor_delta_tests.rs
+  h_8e6780fc7b4bb1 1-237
+crates/nana-ui-scene/src/scene/popover_trigger_radii_tests.rs
+  h_8e6780fc7b4bb1 1-73
+crates/nana-ui-scene/src/scene/primitives.rs
+  h_8e6780fc7b4bb1 438-456,601-603
+crates/nana-ui-scene/src/scene/primitives/overlays.rs
+  h_8e6780fc7b4bb1 330-335,337,352
+crates/nana-ui-scene/src/scene/rich_background.rs
+  h_8e6780fc7b4bb1 1-152
+crates/nana-ui-scene/src/scene/tests.rs
+  h_8e6780fc7b4bb1 9
+crates/nana-ui-scene/src/scene/text_shader_input.rs
+  h_8e6780fc7b4bb1 1-130
+crates/nana-ui-scene/tests/rich_background_contrast.rs
+  h_8e6780fc7b4bb1 1-266
+crates/nana-ui-scene/tests/rich_editor_caret.rs
+  h_8e6780fc7b4bb1 1-298
+crates/nana-ui-scene/tests/rich_preedit_pointer.rs
+  h_8e6780fc7b4bb1 1-264
+crates/nana-ui-scene/tests/rich_stretch_emphasis.rs
+  h_8e6780fc7b4bb1 1-116
+crates/nana-ui-scene/tests/rich_typing_background.rs
+  h_8e6780fc7b4bb1 1-439
+crates/nana-ui-scene/tests/select_popup_hit.rs
+  h_8e6780fc7b4bb1 1,4-5,7,322-488
+crates/nana-ui-scene/tests/text_shader_input.rs
+  h_8e6780fc7b4bb1 1-145
+crates/nana-ui/src/gpu_view.rs
+  h_8e6780fc7b4bb1 62-72
+crates/nana-ui/src/runtime.rs
+  h_8e6780fc7b4bb1 33
+crates/nana-ui/src/scene_host/host_services.rs
+  h_8e6780fc7b4bb1 12-13,160-171
+crates/nana-ui/src/scene_paint/text/emphasis.rs
+  h_8e6780fc7b4bb1 1-206
+crates/nana-ui/src/scene_paint/text/mod.rs
+  h_8e6780fc7b4bb1 33,42-43,2195,5088-5131,5146
+crates/nana-ui/src/scene_paint/text/raster_dwrite.rs
+  h_8e6780fc7b4bb1 467,469,472-487,490-511,524-525,529-530,545,575-576,596-597
+crates/nana-ui/src/scene_paint/text/stacked_effects_tests.rs
+  h_8e6780fc7b4bb1 1-196
+crates/nana-window/Cargo.toml
+  h_8e6780fc7b4bb1 36
+crates/nana-window/src/contrast_preference.rs
+  h_8e6780fc7b4bb1 65-67,118-134
+crates/nana-window/src/file_dialog_windows.rs
+  h_8e6780fc7b4bb1 22-24,166-169,173-175,403-404
+crates/nana-window/src/file_dialog_windows_tests.rs
+  h_8e6780fc7b4bb1 1-161
+crates/nana-window/src/file_dialog_windows_types.rs
+  h_8e6780fc7b4bb1 1-193
+docs/reference/components.md
+  h_8e6780fc7b4bb1 269-270
+platform/winit-win32/Cargo.toml
+  h_8e6780fc7b4bb1 1-65
+platform/winit-win32/LICENSE
+  h_8e6780fc7b4bb1 1-201
+platform/winit-win32/README.md
+  h_8e6780fc7b4bb1 1-12
+platform/winit-win32/rustfmt.toml
+  h_8e6780fc7b4bb1 1-20
+platform/winit-win32/src/dark_mode.rs
+  h_8e6780fc7b4bb1 1-164
+platform/winit-win32/src/definitions.rs
+  h_8e6780fc7b4bb1 1-246
+platform/winit-win32/src/dnd.rs
+  h_8e6780fc7b4bb1 1-1617
+platform/winit-win32/src/dpi.rs
+  h_8e6780fc7b4bb1 1-115
+platform/winit-win32/src/event_loop.rs
+  h_8e6780fc7b4bb1 1-2853
+platform/winit-win32/src/event_loop/runner.rs
+  h_8e6780fc7b4bb1 1-626
+platform/winit-win32/src/icon.rs
+  h_8e6780fc7b4bb1 1-263
+platform/winit-win32/src/ime.rs
+  h_8e6780fc7b4bb1 1-161
+platform/winit-win32/src/keyboard.rs
+  h_8e6780fc7b4bb1 1-1264
+platform/winit-win32/src/keyboard_layout.rs
+  h_8e6780fc7b4bb1 1-984
+platform/winit-win32/src/lib.rs
+  h_8e6780fc7b4bb1 1-779
+platform/winit-win32/src/minimal_ime.rs
+  h_8e6780fc7b4bb1 1-67
+platform/winit-win32/src/monitor.rs
+  h_8e6780fc7b4bb1 1-208
+platform/winit-win32/src/raw_input.rs
+  h_8e6780fc7b4bb1 1-301
+platform/winit-win32/src/util.rs
+  h_8e6780fc7b4bb1 1-367
+platform/winit-win32/src/window.rs
+  h_8e6780fc7b4bb1 1-1704
+platform/winit-win32/src/window_owner_tests.rs
+  h_8e6780fc7b4bb1 1-127
+platform/winit-win32/src/window_state.rs
+  h_8e6780fc7b4bb1 1-566
+scripts/check-engine-boundary.py
+  h_8e6780fc7b4bb1 77-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "07cf67b6ca8129763a0022e70bdbd1fced99855f",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
