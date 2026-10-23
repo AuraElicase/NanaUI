@@ -13,6 +13,8 @@ selected XML、线程链、POI 和帧覆盖再完整，也证明不了全局事�
 perf/sched_trace/
 ├── provider/v1/nana-trace-info.instrpkg   # Instruments 包：三张 ktrace 点表
 ├── provider/v1/manifest.json              # 源码 SHA、选择范围、缺旧基线说明
+├── control/v1/nana-trace-load-sink.instrpkg  # 仅用于对照：记录负载自己的 kdebug 事件
+├── control/v1/manifest.json               # 源码 SHA 与选择范围
 ├── decode.py                              # build / record / decode / gate
 └── loss_control.py                        # 过载对照负载
 ```
@@ -75,7 +77,10 @@ qualifier、thread、CPU 和 arg1–arg4 都只绑定变量、不加约束。列
 3. 录制模式会保留整段（`Deferred` / `Immediate`），Windowed 不行；
 4. 三张表都在，而且都没有标记行；
 5. 对照采集本身满足 1–3，并且确实出现了 lost 标记，其中至少一条带 CPU（不带 CPU 的标记来源未证实）；
-6. 对照和本次的配置完全一致：Instruments 版本、模板、录制模式、OS 版本、机型和逻辑 CPU 数。
+6. 对照和本次的配置完全一致：Instruments 版本、模板、额外加载的 instrument 集合、toc 列出的
+   schema 集合、time limit、录制模式、OS 版本、机型和逻辑 CPU 数。instrument 集合是 `capture.json`
+   自述的，toc 的 schema 集合则绑定在 `.trace` 上，两者一起比，改自述也配不上另一种配置。加载了
+   load sink 的采集，sink 源码 SHA 也必须等于它的 manifest。
 
 门禁每次都从对照目录重新解码推导“收据”，不接受单独写出来的收据文件。它还会从两个目录里的
 `capture.trace` 重新导出，和目录里的 `toc.xml`、各表 XML 比对（表逐字节比；toc 的进程列表顺序每次
@@ -96,7 +101,9 @@ python3 perf/sched_trace/decode.py decode target/sched_trace/v1/runs/<name>
 python3 perf/sched_trace/decode.py gate target/sched_trace/v1/runs/<name> --control target/sched_trace/v1/runs/<control>
 ```
 
-`record` 用 System Trace 模板、`--all-processes`，并通过 `--package` 和 `--instrument` 加载 v1。
+`record` 默认用 System Trace 模板、`--all-processes`，并通过 `--package` 和 `--instrument` 加载 v1。
+`--template Blank` 表示不用模板、只加载 instrument；`--instrument NAME` 可重复，追加 Instruments
+自带的 instrument；`--load-sink` 追加对照用的 load sink（见下）。
 `--` 后面可以跟一个负载命令；它要等 xctrace 发出 `--notify-tracing-started` 通知后才启动，
 保证负载落在录制区间内，xctrace 失败时负载会被终止。输出目录已存在时直接报错，不覆盖旧采集。
 `capture.json` 在导出之前就写下（`exported: false`），导出成功后再标成 `true`；录制或导出失败时，
@@ -107,7 +114,7 @@ python3 perf/sched_trace/decode.py gate target/sched_trace/v1/runs/<name> --cont
 `Cannot save trace document`，随后 Instruments Packages 的 `NSDistributedLock` 抛异常。
 这种失败要单独记录，不能当成有效采集。
 
-## 记录器可见性（2026-10-23，Instruments 27.0）
+## 记录器可见性：System Trace（2026-10-23，Instruments 27.0）
 
 System Trace 模板、`--all-processes`、v1 包、10 秒 time limit，三种条件用最终版工具各录一次，
 都是 exit 0、`Time limit reached`、导出完整。这组之前的试录和一次因磁盘写满失败的录制都留在本地，
@@ -136,11 +143,62 @@ System Trace 模板、`--all-processes`、v1 包、10 秒 time limit，三种条
 - retrograde 和 past 三种条件下都没有出现。没有能触发它们的对照，所以它们的可见性仍是
   unknown；门禁只要求这两张表存在且无行，不把无行当成“可见且为零”。
 
+## Load sink 对照（control/v1）
+
+System Trace 的空闲 lost 来自它自己的高频 instrument，所以要找更窄的配置。窄配置下
+`loss_control.py --mode syscall` 产生的系统调用不会被记录，制造不出真实丢失；Points of Interest
+也不记录 kdebug signpost。为此加了一个只用于对照的包 `control/v1/nana-trace-load-sink.instrpkg`：
+一张 ktrace 点表，pattern 只匹配 `loss_control.py --mode kdebug` 自己发的事件（class `0x21` /
+subclass `0xa` / code `0x359` / function 0）。内核按 class/subclass 开启记录，所以同一 subclass 下
+别的 signpost 也会进缓冲区。它不选 class 7，也不改 v1。sink 表本身不导出；“丢失是负载灌满缓冲区
+造成的”是从同配置空闲与负载的对比推出来的，没有逐条核对。负载的任一进程非零退出（含被信号终止）
+都算负载失败。它同样冻结，`manifest.json` 固定源码 SHA，
+`record --load-sink` 在 SHA 不符时拒绝录制。
+
+用户态伪造：tracing 开启时，用户进程调用 `kdebug_trace()` 发 class 7 返回 `EPERM`，发 `DBG_APPS`
+则成功。所以负载只能让缓冲区溢出，不能直接写出 lost 标记；这也意味着 retrograde / past 无法从
+用户态构造正向对照。
+
+## 记录器可见性：窄配置（2026-10-23，Instruments 27.0）
+
+都是 `--all-processes`、v1 包、10 秒 time limit、Deferred，全部 exit 0、`Time limit reached`、导出完整。
+
+先把 System Trace 拆开，每次 `--template Blank` 加一个 instrument（空闲，各录一次）：
+
+| 配置 | 空闲 lost |
+| --- | --- |
+| Blank（只有 v1） | unknown（无行） |
+| + Thread Activity | observed |
+| + System Call Trace | observed |
+| + Virtual Memory Trace / Time Profiler / CPU Profiler / Points of Interest / Hangs / Run Loops / os_signpost（各自单独） | unknown（无行） |
+
+没有对照之前，这些“无行”都只是 unknown，不能当成没有丢失。于是在两种配置上加 load sink，
+按“空闲 / 负载”交替录制：
+
+| 配置 | 空闲 | `--mode kdebug` 负载（进程数） | 门禁（空闲对同配置负载） |
+| --- | --- | --- | --- |
+| Blank + sink | 4 次全部无行 | 1、2、4 和每个逻辑 CPU 一个，各次都 observed | open（3 组对照各一次） |
+| Blank + Time Profiler + sink | 1 次无行 | 每个逻辑 CPU 一个，observed | open |
+
+结论：
+
+- **门禁第一次在真实采集上打开**，但只在这两种窄配置下：空闲采集三张表都在、都无行，同配置的
+  负载对照确实出现了 lost。被证明可见的分支仍然只有 `(qualifier 0, 1, 0, 0, 0)`，负载对照里的标记
+  都带 CPU，线程为空。
+- 负载哪怕只有一个进程也会溢出，标记数随进程数增加，但标记数不是丢失条数，不能拿来量化。
+- 反例都按预期拦下：配置不同的交叉对照（空闲 Blank + sink 对 Blank + Time Profiler + sink 的负载）
+  因 instrument 集合不同而 blocked；把负载采集本身拿去过门禁，因观察到 lost 而 blocked。
+- 这些配置几乎不记录调度信息。门禁 open 只说明“这个配置、这台机器、这段空闲时间里，已证明
+  可见的那个 lost 分支没有出现”，不说明 System Trace 或任何调度研究配置的留存。真正的诊断负载要用
+  它自己的配置和自己的对照重新过门禁；从 Thread Activity、System Call Trace 的结果看，
+  带这两个 instrument 的配置空闲时就会丢失。
+
 ## 缺口
 
 - 没有 root，做不了 `ktrace trace` 原始对照，无法从内核侧独立核对 xctrace 导出的标记是否完整。
-- 没有找到能让空闲 lost 标记消失的采集配置（比如更窄的模板或进程范围）。在找到之前，
-  门禁不会为任何真实采集打开。
-- retrograde / past 缺正向对照：三种条件下 code 5 / 6 都是 0 行，所以这两种事件的原生选择是否
-  生效还没有实证，只有 CPU 侧的选择器测试。
+- 空闲时不丢失、门禁能打开的配置目前只有不记录调度的窄配置（见上）。带 Thread Activity 或
+  System Call Trace 的配置空闲时就会丢失，调度研究需要的配置还没有能打开门禁的。
+- retrograde / past 缺正向对照：所有采集里 code 5 / 6 都是 0 行，用户态又不能发 class 7，
+  所以这两种事件的原生选择是否生效还没有实证，只有 CPU 侧的选择器测试。
+- lost 只见过一个分支 `(0, 1, 0, 0, 0)`，其它分支的可见性仍是 unknown。
 - 只在一台 Apple Silicon Mac、一个 Instruments 版本上测过；换版本、换模式或换机器都需要新的对照采集。
