@@ -1,0 +1,32 @@
+crates/nana-ui-runtime/src/components.rs
+  h_8e6780fc7b4bb1 1089-1090
+crates/nana-ui-runtime/src/framework/input/dispatch.rs
+  h_8e6780fc7b4bb1 903-913
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_8e6780fc7b4bb1 27-28,230-233,282-284,624-627,644-645,688-699,808-812,999,1144-1147,1193-1195,1220-1223,1242-1260,1303-1305,1411-1413,1416-1419,1436,1447-1450,1505-1506,2163,2305
+crates/nana-ui-runtime/src/reorder_list_escape_tests.rs
+  h_8e6780fc7b4bb1 1-80
+crates/nana-ui-runtime/src/reorder_list_gap.rs
+  h_8e6780fc7b4bb1 1-75
+crates/nana-ui-runtime/src/reorder_list_gap_tests.rs
+  h_8e6780fc7b4bb1 1-187
+crates/nana-ui-runtime/src/world/extraction.rs
+  h_8e6780fc7b4bb1 4-6,185-186,258-267,667-668
+crates/nana-ui-runtime/src/world/geometry.rs
+  h_8e6780fc7b4bb1 2695,2733-2739
+crates/nana-ui-runtime/src/world/reorder_preview.rs
+  h_8e6780fc7b4bb1 1-83
+crates/nana-ui-runtime/tests/fixtures/reorder_pointer_coordinates.rs
+  h_8e6780fc7b4bb1 1-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "03923dae0fdb3409fb9dade01ba87b937a7b8a49",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
