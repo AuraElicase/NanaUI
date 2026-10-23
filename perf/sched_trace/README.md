@@ -74,7 +74,8 @@ qualifier、thread、CPU 和 arg1–arg4 都只绑定变量、不加约束。列
 1. 采集和对照的源码 SHA 都等于 manifest；
 2. 录制 exit 0、已导出，toc 的结束原因是 `Time limit reached`；带负载时，负载是收到 tracing-started
    通知后才启动的，并且 exit 0；
-3. 录制模式会保留整段（`Deferred` / `Immediate`），Windowed 不行；
+3. 录制模式会保留整段（`Deferred` / `Immediate`），Windowed 不行。实测 xctrace 命令行录出来的都是
+   Deferred，见下文“收窄 Thread Activity 的尝试”；
 4. 三张表都在，而且都没有标记行；
 5. 对照采集本身满足 1–3，并且确实出现了 lost 标记，其中至少一条带 CPU（不带 CPU 的标记来源未证实）；
 6. 对照和本次的配置完全一致：Instruments 版本、模板、额外加载的 instrument 集合、toc 列出的
@@ -193,12 +194,61 @@ subclass `0xa` / code `0x359` / function 0）。内核按 class/subclass 开启�
   它自己的配置和自己的对照重新过门禁；从 Thread Activity、System Call Trace 的结果看，
   带这两个 instrument 的配置空闲时就会丢失。
 
+### 收窄 Thread Activity 的尝试
+
+这一轮想找一个仍带 Thread Activity、空闲时又不丢失的配置。做法是直接调用 xctrace，每次录 2–5 秒，
+都用 v1 包，再用同一个严格解码器和门禁函数判读。结果如下：
+
+| 尝试 | toc 里的模式 / 结束原因 | 空闲 lost |
+| --- | --- | --- |
+| Blank + Thread Activity，`--all-processes` | Deferred / Time limit reached | observed |
+| 同上，`--attach` 一个空闲进程 | Deferred / Time limit reached | observed，单位时间的标记数不比全进程少 |
+| 同上，`--launch` 一个比时限短的进程 | Deferred / `Target app exited` | observed；目标一退出录制就结束，门禁不认这个结束原因 |
+| 同上，`--launch` 一个比时限长的进程 | Deferred / Time limit reached | observed；xctrace 在时限到时杀掉目标，自己 exit 54 |
+| Time Profiler 模板（模板里写的是 Immediate）+ Thread Activity | Deferred / Time limit reached | observed |
+| 把 Blank 模板复制一份、`recordingMode` 改成 Immediate，再加 Thread Activity | Deferred / Time limit reached | observed |
+| 同一份改过的模板，只加 v1 | Deferred / Time limit reached | unknown（无行） |
+
+结论：
+
+- **Thread Activity 不按目标进程收窄。** attach 和 launch 都只改变“录谁”，内核事件照样按全系统采集，
+  空闲丢失不减少。
+- **xctrace 命令行录不出 Immediate。** 不论模板里写什么，toc 都记 Deferred。xctrace 没有调缓冲区
+  大小的选项，`--show-recording-options` 对 Thread Activity 也给不出可调项。
+- 所以在这台机器、这个 Instruments 版本上，只要带 Thread Activity，空闲时就会丢失，门禁必然
+  blocked，加负载对照也改变不了这一点，因此没有再录负载对照。这些探测不经过 `record`，没有
+  `capture.json`，只作为可行性证据，不能当门禁的输入。
+
+## 源码依据（xnu `bsd/kern/kdebug.c`）
+
+公开的 xnu 源码当前是 `xnu-12377.1.9`；本机内核是 `xnu-13432.1.9`，这个版本的源码还没公开，
+所以下面这些只是参考，不是对本机内核的证明（`bsd/kern/kdebug.c` 的读取函数，`kdebug_common.c` 的
+`kdebug_storage_alloc`）。三种标记都由读取端合并各 CPU 缓冲区时合成，不是事件发生当时写下的：
+
+- **lost，`arg1 = 1`**：空闲存储单元用完、允许回卷时，内核回收最旧的存储单元，覆盖还没读出的事件。
+  读取端遇到被回收的单元就发这个标记，时间戳是新的读取下界，CPU 号是被回收的 CPU；如果下界没有
+  前移，CPU 号字段是 -1。实测那条 CPU 为空的标记可能就是这种情况，未证实。实测见到的全是这个分支。
+- **lost，`arg1 = 0`**：缓冲区已经整体回卷时，读取端只发一条，不给 CPU 号赋值（为 0，不代表真实
+  CPU）。所有采集里一次都没见过，可见性 unknown。
+- 两个 lost 分支都只在允许回卷时发出。不允许回卷时，存储单元用完后新事件直接丢弃，内核只置一个
+  “已回卷”状态位，读取端不发任何标记；这又是一条看不见的丢失路径。启动早期缓冲区溢出另有一条
+  `arg1 = 1` 的 lost，和录制无关。
+- **past**：协处理器带显式时间戳写入的事件早于读取下界时，事件本身被丢弃，读取端补一条 past，
+  `arg1` 是被丢弃事件里最晚的时间戳。所以 past 也表示丢失。
+- **retrograde**：同一个 CPU 上读出的时间戳比前一条早时触发，每次读取调用最多报一条；`arg1` 取自
+  本批第一条事件的 debugid，`arg2` 是倒退后的时间戳。
+- 能主动构造 past 的测试钩子只编进 DEVELOPMENT/DEBUG 内核，而且要 root。本机是 RELEASE 内核，
+  用户态又不能发 class 7，所以 retrograde / past 在这台机器上构造不出正向对照。
+
 ## 缺口
 
 - 没有 root，做不了 `ktrace trace` 原始对照，无法从内核侧独立核对 xctrace 导出的标记是否完整。
 - 空闲时不丢失、门禁能打开的配置目前只有不记录调度的窄配置（见上）。带 Thread Activity 或
-  System Call Trace 的配置空闲时就会丢失，调度研究需要的配置还没有能打开门禁的。
-- retrograde / past 缺正向对照：所有采集里 code 5 / 6 都是 0 行，用户态又不能发 class 7，
-  所以这两种事件的原生选择是否生效还没有实证，只有 CPU 侧的选择器测试。
-- lost 只见过一个分支 `(0, 1, 0, 0, 0)`，其它分支的可见性仍是 unknown。
+  System Call Trace 的配置空闲时就会丢失；attach、launch 和 Immediate 都试过，收窄不了，所以
+  调度研究需要的配置在这台机器上没有能打开门禁的。
+- retrograde / past 缺正向对照：所有采集里 code 5 / 6 都是 0 行，触发条件又只在内核和协处理器路径上
+  （见“源码依据”），所以这两种事件的原生选择是否生效还没有实证，只有 CPU 侧的选择器测试。要补，
+  需要 DEVELOPMENT 内核加 root，或者改用源码比对作为验收依据。
+- lost 只见过 `arg1 = 1` 这个分支 `(0, 1, 0, 0, 0)`；`arg1 = 0`（预期回卷）和不发标记的丢失路径
+  （不回卷时停录、记录器在用户态丢弃）仍是 unknown。
 - 只在一台 Apple Silicon Mac、一个 Instruments 版本上测过；换版本、换模式或换机器都需要新的对照采集。
