@@ -142,7 +142,8 @@ pub struct ToastMotion {
     pub change: DialogTransition,
     /// The toast's scale where [`Self::change`] starts; 1 plays nothing.
     pub change_scale: f32,
-    /// How the rest of a stack moves when a toast joins or leaves it.
+    /// How the toasts of a stack slide to a new place: one joining or
+    /// leaving below them, or one below growing or shrinking.
     pub stack_move: DialogTransition,
 }
 
