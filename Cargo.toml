@@ -77,6 +77,7 @@ futures-core = "0.3.31"
 base64 = "0.23"
 crossbeam-channel = "0.5"
 url = "2.5"
+sys-locale = "0.3.2"
 # Exact pin: nana-ui-platform/src/fetch.rs implements ureq's `unversioned`
 # resolver and transport traits, which ureq keeps outside semver.
 ureq = { version = "=3.4.2", default-features = false, features = ["rustls"] }

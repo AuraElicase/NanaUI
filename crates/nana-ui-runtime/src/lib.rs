@@ -100,8 +100,8 @@ mod responsive;
 pub use i18n::IcuFormatter;
 pub use i18n::{
     DateStyle, FormatterCounts, Locale, LocaleFormatter, LocalizedText, MessageArg, MessageArgs,
-    MessageCatalog, MessageDateTime, MessageId, MessageTable, MissingMessage, NumberStyle,
-    PlainFormatter, PluralCategory,
+    MessageCatalog, MessageDateTime, MessageId, MessagePattern, MessagePatternError, MessageTable,
+    MissingMessage, NumberStyle, PlainFormatter, PluralCategory,
 };
 pub use responsive::{
     MAX_RESPONSIVE_BREAKPOINTS, ResponsiveAxis, ResponsiveContainer, ResponsiveRule, StyleVariant,

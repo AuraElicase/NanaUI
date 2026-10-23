@@ -25,6 +25,7 @@ nana-ui-input.workspace = true
 nana-diagnostics.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sys-locale.workspace = true
 url = { workspace = true, optional = true }
 ureq = { workspace = true, optional = true }
 tungstenite = { workspace = true, optional = true }
