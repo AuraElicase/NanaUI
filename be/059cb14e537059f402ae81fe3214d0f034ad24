@@ -1,0 +1,38 @@
+crates/nana-text/src/layout/engine.rs
+  h_8e6780fc7b4bb1 253,278,359,409,417-433,733,772-776
+crates/nana-text/src/layout/key.rs
+  h_8e6780fc7b4bb1 181,250-251,273
+crates/nana-text/src/layout/lines.rs
+  h_8e6780fc7b4bb1 144,335,341-343,347,353-377
+crates/nana-text/src/source.rs
+  h_8e6780fc7b4bb1 99-102
+crates/nana-text/tests/block_objects.rs
+  h_8e6780fc7b4bb1 1-214
+crates/nana-text/tests/inline_objects.rs
+  h_8e6780fc7b4bb1 34-35
+crates/nana-text/tests/line_decision.rs
+  h_8e6780fc7b4bb1 443-444
+crates/nana-text/tests/object_labels.rs
+  h_8e6780fc7b4bb1 39-40
+crates/nana-ui-core/src/lib.rs
+  h_8e6780fc7b4bb1 155-156
+crates/nana-ui-core/src/rich_text.rs
+  h_8e6780fc7b4bb1 614-624,638-641,653-654,668-669,681-682,698-699,715-716,745-756
+crates/nana-ui-runtime/src/text_node.rs
+  h_8e6780fc7b4bb1 515-516,622-623
+crates/nana-ui/src/runtime.rs
+  h_8e6780fc7b4bb1 33
+scripts/check-engine-boundary.py
+  h_8e6780fc7b4bb1 77-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "be059cb14e537059f402ae81fe3214d0f034ad24",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
