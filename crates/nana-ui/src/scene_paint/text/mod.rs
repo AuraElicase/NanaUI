@@ -592,6 +592,8 @@ struct TextRun {
     folded: bool,
     /// Filled by [`TextPipeline::flush_runs`] for the chain head.
     segments: Range<u32>,
+    /// Device pixels the run paints; the chain head's covers the chain.
+    pixels: u64,
 }
 
 const NO_RUN: u32 = u32::MAX;
@@ -1737,6 +1739,7 @@ impl TextPipeline {
                 last: index as u32,
                 folded: false,
                 segments: 0..0,
+                pixels: 0,
             });
         }
         let epoch = self.placement_epoch();
@@ -2405,6 +2408,14 @@ impl TextPipeline {
         self.target.runs[tail as usize].next = next.index as u32;
         self.target.runs[previous.index].last = next.index as u32;
         self.target.runs[next.index].folded = true;
+        self.target.runs[previous.index].pixels += self.target.runs[next.index].pixels;
+    }
+
+    /// Record the device pixels `prepared` paints, for the material policy.
+    pub(super) fn set_painted(&mut self, prepared: &PreparedText, pixels: u64) {
+        if let Some(run) = self.target.runs.get_mut(prepared.index) {
+            run.pixels = pixels;
+        }
     }
 
     /// Give every still-open run an arena block, an index range and a run
@@ -3113,6 +3124,11 @@ impl TextPipeline {
             drawn += 1;
             slots += u64::from(segment.count);
         }
+        self.gpu.charge_materials(
+            &self.target.segments[start.min(end)..end],
+            run.pixels
+                .min(u64::from(scissor.width) * u64::from(scissor.height)),
+        );
         self.draws.set(self.draws.get() + drawn);
         self.slots_drawn.set(self.slots_drawn.get() + slots);
         if let Some(work) = gpu_work {
@@ -5650,6 +5666,7 @@ mod tests {
                 last: index as u32,
                 folded: false,
                 segments: 0..0,
+                pixels: 0,
             });
         }
         pipeline.target.runs[index].entry = id;

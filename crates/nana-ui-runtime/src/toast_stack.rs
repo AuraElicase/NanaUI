@@ -15,8 +15,8 @@ use crate::view_components::project_common;
 use crate::{
     AccessibilityRole, AccessibilityState, AnimatableProperty, AppContext, ComponentView,
     DocumentId, Entity, FocusWithinChanged, FrameworkError, InteractionState, LayoutBox,
-    MutationQueue, NodeKind, NodeStyle, PanelInsets, PointerHoverChanged, StableNodeId, Toast,
-    UiWorld,
+    MotionValue, MutationQueue, NodeKind, NodeStyle, PanelInsets, PointerHoverChanged,
+    StableNodeId, Toast, UiWorld,
 };
 
 /// A column of toasts in one corner of a window, newest at the bottom.
@@ -28,8 +28,11 @@ use crate::{
 /// [`Self::max_visible`] are on screen and their heights and the gaps between
 /// them fit the stack's height ([`Self::place_in`]). The rest wait, hidden
 /// and with their timers held, and come back when there is room. Toasts come
-/// and go with the theme's [`ToastRecipe::motion`], and the rest close up
-/// behind one that leaves; with reduced motion they appear and go at once.
+/// and go with the theme's [`ToastRecipe::motion`]. Each toast in the column
+/// keeps where it rests (its bottom edge's height above the stack's), and
+/// whatever moves it — a toast joining or leaving below it, one below growing
+/// or shrinking — slides it there from where it is seen; with reduced motion
+/// they appear, go and move at once.
 ///
 /// While the pointer is over a toast of the stack, or focus is inside it,
 /// every timer in the stack holds and later goes on with the time it had
@@ -224,10 +227,18 @@ impl ComponentView for ToastSlot {
         }
     }
 
+    /// The recipe's scaling origin is authored onto the node.
+    fn wants_recipe_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let mut style = NodeStyle::default();
         let layout = Arc::make_mut(&mut style.layout);
         layout.direction = Some(FlexDirection::Column);
+        // What scales is the slot: its entrance, exit and change in place
+        // grow out of the point the theme names.
+        layout.transform_origin = Some(world.theme().recipes().toast().motion.origin);
         // As wide as its toast, never wider than the stack: the stack's
         // alignment places it.
         layout.width = Some(LengthSpec::FitContent);
@@ -272,6 +283,10 @@ pub(crate) struct StackEntry {
     pub(crate) height: Option<f32>,
     /// The layout pass it started measuring after: a later pass measured it.
     pub(crate) measure_after: usize,
+    /// Where it rests in the column: how far its bottom edge stands above
+    /// the stack's, as last laid out in flow. `None` until then, and again
+    /// once it leaves the flow.
+    pub(crate) rest: Option<f32>,
 }
 
 /// What a stack holds, kept by the context so a stack written whole keeps it.
@@ -351,6 +366,7 @@ impl AppContext {
                 status: Slot::Measuring,
                 height: None,
                 measure_after,
+                rest: None,
             });
         self.append_child(stack, slot)?;
         self.sync_toast_timer(toast.stable_id())?;
@@ -383,8 +399,9 @@ impl AppContext {
                 let recipe = *self.world().theme().recipes().toast();
                 let motion = recipe.motion;
                 let exit = presence(&recipe, motion.exit);
-                let moves = Some((motion.stack_move.duration(), Some(motion.stack_move.easing)));
-                if !self.reduced_motion() && self.begin_leave(entry.slot, &exit, moves)? {
+                // The rest close up when the layout after it goes moves them
+                // ([`Self::slide_toast_stack`]).
+                if !self.reduced_motion() && self.begin_leave(entry.slot, &exit, None)? {
                     return Ok(true);
                 }
             }
@@ -393,6 +410,48 @@ impl AppContext {
         let mut mutations = MutationQueue::new();
         mutations.despawn_subtree(entry.slot);
         self.commit_mutations(mutations)?;
+        Ok(true)
+    }
+
+    /// Answer `toast`'s copy changing in place: one on screen springs back
+    /// to rest from the theme's [`nana_ui_core::ToastMotion::change_scale`]
+    /// about its origin, without fading. Nothing plays for a toast that is
+    /// not on screen, while it is still entering or sliding, with reduced
+    /// motion, or when the theme's change scale is 1. `Ok(false)` when
+    /// nothing plays.
+    pub fn pulse_toast(
+        &mut self,
+        stack: Entity<ToastStack>,
+        toast: Entity<Toast>,
+    ) -> Result<bool, FrameworkError> {
+        self.read(stack, |_| ())?;
+        let Some(entry) = self
+            .toast_stacks()
+            .get(&stack.stable_id())
+            .and_then(|state| state.entry(toast.stable_id()))
+            .copied()
+        else {
+            return Ok(false);
+        };
+        let motion = self.world().theme().recipes().toast().motion;
+        if entry.status != Slot::Shown || !motion.changes() || self.reduced_motion() {
+            return Ok(false);
+        }
+        // Its entrance or a slide owns the transform until it lands.
+        let moving = [
+            crate::motion_api::user_animation_id(entry.slot, AnimatableProperty::Transform),
+            crate::component_animation_id(crate::component_animation_kinds::FLIP, entry.slot),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|id| self.world().animation_is_active(id));
+        if moving {
+            return Ok(false);
+        }
+        let change = Presence::new(motion.change.duration())
+            .scale(motion.change_scale)
+            .ease(motion.change.easing);
+        self.begin_enter(&[entry.slot], &change)?;
         Ok(true)
     }
 
@@ -611,23 +670,7 @@ impl AppContext {
             .filter(|(before, after)| before.status != after.status)
             .map(|(before, after)| (after.slot, before.status, after.status))
             .collect::<Vec<_>>();
-        // The toasts that stay in the column slide to where the change puts
-        // them, from where they are now.
-        let reflows = changes
-            .iter()
-            .any(|(_, before, after)| before.flows() != after.flows());
-        let firsts = if reflows {
-            entries
-                .iter()
-                .zip(&next)
-                .filter(|(before, after)| before.status.flows() && after.status.flows())
-                .filter_map(|(_, after)| {
-                    self.flip_first(after.slot).map(|first| (after.slot, first))
-                })
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        };
+        let slides = self.slide_toast_stack(stack, &entries, &mut next);
         if let Some(state) = self.toast_stacks_mut().get_mut(&stack) {
             state.entries = next.clone();
         }
@@ -642,27 +685,8 @@ impl AppContext {
                 self.begin_enter(&[*slot], &presence(&recipe, recipe.motion.enter))?;
             }
         }
-        if !firsts.is_empty() {
-            let stack_move = recipe.motion.stack_move;
-            let mut stopped = MutationQueue::new();
-            for (slot, first) in firsts {
-                // A toast still entering slides from where it stands: the
-                // slide owns its transform from here, so it ends at rest.
-                if let Some(enter) =
-                    crate::motion_api::user_animation_id(slot, AnimatableProperty::Transform)
-                    && self.world().animation_is_active(enter)
-                {
-                    stopped.stop_animation(enter);
-                }
-                self.flip_after_layout(
-                    slot,
-                    first,
-                    (stack_move.duration(), Some(stack_move.easing)),
-                );
-            }
-            if !stopped.is_empty() {
-                self.commit_mutations(stopped)?;
-            }
+        if !slides.is_empty() {
+            self.commit_mutations(slides)?;
         }
         if !changes.is_empty() {
             for entry in &next {
@@ -670,6 +694,86 @@ impl AppContext {
             }
         }
         Ok(())
+    }
+
+    /// Take where each toast in the column rests now and slide the ones that
+    /// moved, from where they are seen, to their new place: a toast joining
+    /// or leaving below them, one below growing or shrinking (its words
+    /// changing, or wrapping anew at another width). A toast's rest is its
+    /// bottom edge's height above the stack's, so one whose own height
+    /// changes stays put and only those above it move. `before` is the
+    /// stack's entries as they stood, `next` as they stand now; a rest is
+    /// taken only from a toast already in the column before, whose box is its
+    /// place in it.
+    fn slide_toast_stack(
+        &self,
+        stack: StableNodeId,
+        before: &[StackEntry],
+        next: &mut [StackEntry],
+    ) -> MutationQueue {
+        let mut slides = MutationQueue::new();
+        let Some(stack_box) = self.world().layout_box(stack) else {
+            return slides;
+        };
+        let bottom = stack_box.y + stack_box.height;
+        let moves = !self.reduced_motion();
+        let stack_move = self.world().theme().recipes().toast().motion.stack_move;
+        let now = self.animation_now();
+        for (was, entry) in before.iter().zip(next.iter_mut()) {
+            if !(was.status.flows() && entry.status.flows()) {
+                entry.rest = None;
+                continue;
+            }
+            let Some(last) = self.flip_first(entry.slot) else {
+                continue;
+            };
+            let rest = bottom - (last.y + last.height);
+            let previous = entry.rest.replace(rest);
+            let Some(previous) = previous.filter(|previous| (rest - previous).abs() > 0.5) else {
+                continue;
+            };
+            if !moves {
+                continue;
+            }
+            // A slide still running carries on from where it has got to.
+            let flip =
+                crate::component_animation_id(crate::component_animation_kinds::FLIP, entry.slot);
+            let sliding = flip
+                .filter(|id| self.world().animation_is_active(*id))
+                .and_then(|_| {
+                    self.world().presentation_motion_value(
+                        entry.slot,
+                        AnimatableProperty::Transform,
+                        now,
+                    )
+                })
+                .map_or(0.0, |value| match value {
+                    MotionValue::Transform(transform) => transform.f,
+                    _ => 0.0,
+                });
+            // A toast still entering or springing back slides from where it
+            // stands: the slide owns its transform from here, so it ends at
+            // rest.
+            if let Some(enter) =
+                crate::motion_api::user_animation_id(entry.slot, AnimatableProperty::Transform)
+                && self.world().animation_is_active(enter)
+            {
+                slides.stop_animation(enter);
+            }
+            let first = nana_ui_core::FlipRect {
+                y: last.y + rest - previous + sliding,
+                ..last
+            };
+            slides.start_layout_flip(
+                entry.slot,
+                first,
+                last,
+                now,
+                stack_move.duration(),
+                stack_move.easing,
+            );
+        }
+        slides
     }
 
     /// The parts of stacks despawned in a commit: a stack with its toasts;
@@ -1652,6 +1756,247 @@ mod tests {
                 .presentation_motion_value(slot, AnimatableProperty::Opacity, rest),
             Some(MotionValue::Scalar(1.0)),
         );
+    }
+
+    /// Whether `id` is drawn untransformed at `now`.
+    fn at_rest(context: &AppContext, id: StableNodeId, now: Duration) -> bool {
+        match context
+            .world()
+            .presentation_motion_value(id, AnimatableProperty::Transform, now)
+        {
+            None => true,
+            Some(MotionValue::Transform(transform)) => {
+                transform == nana_ui_core::PaintTransform::default()
+            }
+            other => panic!("transform of {id:?}: {other:?}"),
+        }
+    }
+
+    /// Two toasts at rest, `start` + 1s on the animation clock: the older
+    /// above the newer.
+    fn two_at_rest(
+        context: &mut AppContext,
+        stack: Entity<ToastStack>,
+        start: Duration,
+    ) -> (Entity<Toast>, Entity<Toast>, Duration) {
+        context.advance_animations(start);
+        let older = context.push_toast(stack, notice("Older")).unwrap();
+        let newer = context.push_toast(stack, notice("Newer")).unwrap();
+        frame(context);
+        let settled = start + Duration::from_secs(1);
+        context.advance_animations(settled);
+        frame(context);
+        (older, newer, settled)
+    }
+
+    /// A toast that grows in place keeps its bottom edge where it was; the
+    /// ones above it slide up from where they stood, and come to rest.
+    #[test]
+    fn a_toast_growing_below_slides_the_ones_above_it() {
+        let mut context = AppContext::new();
+        let (stack, _) = window(&mut context, 3, 400.0);
+        let (older, newer, settled) = two_at_rest(&mut context, stack, Duration::from_secs(1));
+        let above = slot_of(&context, older);
+        let below = slot_of(&context, newer);
+        let was = bounds(&context, above);
+        let base = bounds(&context, below);
+
+        context
+            .update_component(newer, |toast, _| {
+                toast.description = Some("Saved to the library, ready to place.".into());
+            })
+            .unwrap();
+        frame(&mut context);
+        let grown = bounds(&context, below);
+        assert!(grown.height > base.height, "{base:?} -> {grown:?}");
+        assert!(
+            (grown.y + grown.height - (base.y + base.height)).abs() < 0.01,
+            "its bottom edge stays"
+        );
+        assert!(at_rest(&context, below, settled), "it does not slide");
+        let now = bounds(&context, above);
+        assert!(now.y < was.y, "pushed up: {was:?} -> {now:?}");
+        let offset = translate_y(&context, above, settled);
+        assert!(
+            (offset - (was.y - now.y)).abs() < 0.5,
+            "slides from where it stood: {offset}"
+        );
+        let landed = settled + ms(400);
+        context.advance_animations(landed);
+        assert!(at_rest(&context, above, landed));
+
+        // Shrinking back slides it down again.
+        context
+            .update_component(newer, |toast, _| toast.description = None)
+            .unwrap();
+        frame(&mut context);
+        let back = bounds(&context, above);
+        assert!((back.y - was.y).abs() < 0.01);
+        let offset = translate_y(&context, above, landed);
+        assert!(
+            (offset - (now.y - back.y)).abs() < 0.5,
+            "slides down from where it stood: {offset}"
+        );
+    }
+
+    /// A toast already sliding when the column moves again carries on from
+    /// where it has got to, never from its old place.
+    #[test]
+    fn a_toast_moved_again_while_sliding_carries_on_from_where_it_is() {
+        let mut context = AppContext::new();
+        let (stack, _) = window(&mut context, 3, 400.0);
+        let start = Duration::from_secs(1);
+        context.advance_animations(start);
+        let first = context.push_toast(stack, notice("First")).unwrap();
+        frame(&mut context);
+        let joined = start + Duration::from_secs(1);
+        context.advance_animations(joined);
+        context.push_toast(stack, notice("Second")).unwrap();
+        frame(&mut context);
+        let slot = slot_of(&context, first);
+        let midway = joined + ms(60);
+        context.advance_animations(midway);
+        let seen = translate_y(&context, slot, midway);
+        assert!(seen > 0.5, "still sliding: {seen}");
+        let was = bounds(&context, slot);
+
+        context.push_toast(stack, notice("Third")).unwrap();
+        frame(&mut context);
+        let now = bounds(&context, slot);
+        assert!(now.y < was.y);
+        let offset = translate_y(&context, slot, midway);
+        assert!(
+            (offset - (was.y - now.y + seen)).abs() < 0.5,
+            "from where it was seen: {offset}, {seen} + {}",
+            was.y - now.y
+        );
+        assert!(at_rest(&context, slot, midway + ms(400)));
+    }
+
+    /// A narrower stack wraps a toast taller: the ones above it slide up
+    /// as they do for any change of height below them.
+    #[test]
+    fn a_toast_wrapping_taller_at_a_new_width_slides_the_ones_above_it() {
+        let mut context = AppContext::new();
+        let (stack, _) = window(&mut context, 3, 400.0);
+        let (older, newer, settled) = two_at_rest(&mut context, stack, Duration::from_secs(1));
+        context
+            .update_component(newer, |toast, _| {
+                toast.description =
+                    Some("A description long enough to wrap once the stack narrows.".into());
+            })
+            .unwrap();
+        frame(&mut context);
+        let later = settled + Duration::from_secs(1);
+        context.advance_animations(later);
+        frame(&mut context);
+        let above = slot_of(&context, older);
+        let was = bounds(&context, above);
+
+        context
+            .update_component(stack, |stack, _| {
+                stack.place_in(WINDOW, PopoverAlignment::End, 180.0, INSETS, 400.0)
+            })
+            .unwrap();
+        frame(&mut context);
+        let now = bounds(&context, above);
+        assert!(now.y < was.y, "the newer wraps taller: {was:?} -> {now:?}");
+        let offset = translate_y(&context, above, later);
+        assert!(
+            (offset - (was.y - now.y)).abs() < 0.5,
+            "slides from where it stood: {offset}"
+        );
+    }
+
+    /// The slot scales about the theme's origin: a stack in the
+    /// bottom-right corner grows its toasts out of that corner.
+    #[test]
+    fn a_slot_scales_about_the_theme_s_origin() {
+        let mut context = AppContext::new();
+        let corner = nana_ui_core::TransformOrigin {
+            x: LengthSpec::Percent(100.0),
+            y: LengthSpec::Percent(100.0),
+        };
+        let cornered = ThemeDefinition::NANA_DARK.with_toast(ToastRecipe {
+            motion: ToastMotion {
+                origin: corner,
+                ..ToastMotion::DEFAULT
+            },
+            ..ToastRecipe::DEFAULT
+        });
+        assert!(context.set_theme_definition(&cornered).unwrap());
+        let (stack, _) = window(&mut context, 3, 400.0);
+        let toast = context.push_toast(stack, notice("Saved")).unwrap();
+        frame(&mut context);
+        let slot = slot_of(&context, toast);
+        assert_eq!(
+            context
+                .world()
+                .node_style(slot)
+                .and_then(|style| style.layout.transform_origin),
+            Some(corner),
+        );
+    }
+
+    /// A toast on screen whose copy changes springs back to rest from the
+    /// theme's change scale without fading; nothing plays while it is still
+    /// entering, or when the theme's change scale is 1.
+    #[test]
+    fn a_toast_on_screen_springs_back_when_its_copy_changes() {
+        let mut context = AppContext::new();
+        let springy = ThemeDefinition::NANA_DARK.with_toast(ToastRecipe {
+            motion: ToastMotion {
+                enter: DialogTransition::new(200, Easing::EaseOutCubic),
+                enter_scale: 0.96,
+                change: DialogTransition::new(200, Easing::EaseOutCubic),
+                change_scale: 0.9,
+                ..ToastMotion::DEFAULT
+            },
+            ..ToastRecipe::DEFAULT
+        });
+        assert!(context.set_theme_definition(&springy).unwrap());
+        let (stack, _) = window(&mut context, 3, 400.0);
+        let start = Duration::from_secs(1);
+        context.advance_animations(start);
+        let toast = context.push_toast(stack, notice("Optimising")).unwrap();
+        frame(&mut context);
+        assert!(
+            !context.pulse_toast(stack, toast).unwrap(),
+            "its entrance owns the motion"
+        );
+
+        let settled = start + Duration::from_secs(1);
+        context.advance_animations(settled);
+        frame(&mut context);
+        assert!(context.pulse_toast(stack, toast).unwrap());
+        let slot = slot_of(&context, toast);
+        let scale = |context: &AppContext, now| match context.world().presentation_motion_value(
+            slot,
+            AnimatableProperty::Transform,
+            now,
+        ) {
+            Some(MotionValue::Transform(transform)) => transform.a,
+            other => panic!("transform of {slot:?}: {other:?}"),
+        };
+        let early = scale(&context, settled + ms(10));
+        assert!((0.9..1.0).contains(&early), "starts small: {early}");
+        assert_eq!(
+            context.world().presentation_motion_value(
+                slot,
+                AnimatableProperty::Opacity,
+                settled + ms(10)
+            ),
+            Some(MotionValue::Scalar(1.0)),
+            "without fading"
+        );
+        let rest = settled + Duration::from_secs(1);
+        context.advance_animations(rest);
+        assert_eq!(scale(&context, rest), 1.0);
+
+        let still = ThemeDefinition::NANA_DARK.with_toast(ToastRecipe::DEFAULT);
+        assert!(context.set_theme_definition(&still).unwrap());
+        frame(&mut context);
+        assert!(!context.pulse_toast(stack, toast).unwrap());
     }
 
     /// A toast the application despawns itself leaves the stack, and its

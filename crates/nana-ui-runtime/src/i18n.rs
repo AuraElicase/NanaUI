@@ -247,6 +247,58 @@ impl MessageCatalog for MessageTable {
     }
 }
 
+/// A message pattern parsed once and formatted to a string: text that no
+/// localized node holds, such as a control's label, a notification or a
+/// native dialog. The syntax is the one catalogs use (see
+/// [`MessageCatalog`]); a localized node formats the same way.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessagePattern(message::CompiledMessage);
+
+/// Why a pattern is not a message: the byte it stopped at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MessagePatternError {
+    pub at: usize,
+}
+
+impl fmt::Display for MessagePatternError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "malformed message pattern at byte {}", self.at)
+    }
+}
+
+impl std::error::Error for MessagePatternError {}
+
+impl MessagePattern {
+    pub fn parse(pattern: &str) -> Result<Self, MessagePatternError> {
+        message::CompiledMessage::parse(pattern)
+            .map(Self)
+            .map_err(|error| MessagePatternError { at: error.at })
+    }
+
+    /// The message for `args` in `locale`, formatted as a world without its
+    /// own formatter would. An argument the pattern names and `args` lacks
+    /// shows as written, `{name}`.
+    pub fn format(&self, locale: &LanguageTag, args: &MessageArgs) -> String {
+        static FORMATTER: OnceLock<Arc<dyn LocaleFormatter>> = OnceLock::new();
+        let formatter = FORMATTER.get_or_init(default_formatter);
+        let mut out = String::new();
+        self.format_with(locale, args, formatter.as_ref(), &mut out);
+        out
+    }
+
+    /// Append the message for `args` in `locale` to `out` through
+    /// `formatter`.
+    pub fn format_with(
+        &self,
+        locale: &LanguageTag,
+        args: &MessageArgs,
+        formatter: &dyn LocaleFormatter,
+        out: &mut String,
+    ) {
+        self.0.format(locale, args, formatter, out, &mut Vec::new());
+    }
+}
+
 /// A scope's locale: the messages it selects, and the language, direction
 /// and formatting that follow them unless named apart.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -352,4 +404,38 @@ pub enum MissingMessage {
     Key,
     /// What the node showed before.
     KeepPrevious,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pattern_formats_on_its_own_as_a_localized_node_would() {
+        let en = LanguageTag::new("en").expect("a tag");
+        let pattern = MessagePattern::parse(
+            "{count, plural, one {Imported # model} other {Imported # models}} into {scene}",
+        )
+        .expect("a pattern");
+        let args = |count: u32| {
+            MessageArgs::new()
+                .with("count", count)
+                .with("scene", "Stage")
+        };
+        assert_eq!(pattern.format(&en, &args(1)), "Imported 1 model into Stage");
+        assert_eq!(
+            pattern.format(&en, &args(3)),
+            "Imported 3 models into Stage"
+        );
+        assert_eq!(
+            MessagePattern::parse("{name} 已导入")
+                .expect("a pattern")
+                .format(&en, &MessageArgs::new()),
+            "{name} 已导入"
+        );
+        assert_eq!(
+            MessagePattern::parse("{open").map(|_| ()),
+            Err(MessagePatternError { at: 5 })
+        );
+    }
 }

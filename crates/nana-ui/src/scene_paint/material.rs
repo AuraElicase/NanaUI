@@ -4,8 +4,31 @@ use nana_gpu::{LogicalBinding, LogicalBindingType, ResourceTable, ShaderInterfac
 use nana_ui_core::{MATERIAL_ABI, MaterialRef};
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock, Mutex, Weak},
+    sync::{Arc, LazyLock, Mutex, RwLock, Weak},
 };
+
+/// The host's say over the material programs it hands the painter, for hosts
+/// that run programs they did not write. Without one, every program that
+/// validates compiles and draws.
+pub trait MaterialPolicy: Send + Sync {
+    /// Whether the program keyed `program` ([`MaterialProgram::key`]) may
+    /// compile, or draw, on the device of `generation` (`None` on a painter
+    /// built without a device policy). Asked before every compile and every
+    /// draw; a refused program paints natively until it is admitted again.
+    ///
+    /// [`MaterialProgram::key`]: nana_ui_core::MaterialProgram::key
+    fn admit(&self, generation: Option<nana_gpu::DeviceGeneration>, program: u64) -> bool;
+    /// The program keyed `program` just shaded about `pixels` device pixels:
+    /// the area it covered, at most the draw's scissor.
+    fn charge(&self, generation: Option<nana_gpu::DeviceGeneration>, program: u64, pixels: u64);
+}
+
+static POLICY: RwLock<Option<Arc<dyn MaterialPolicy>>> = RwLock::new(None);
+
+/// Install the process-wide [`MaterialPolicy`], or remove it with `None`.
+pub fn set_material_policy(policy: Option<Arc<dyn MaterialPolicy>>) {
+    *POLICY.write().unwrap_or_else(|e| e.into_inner()) = policy;
+}
 
 static DEVICES: LazyLock<Mutex<HashMap<nana_gpu::DeviceGeneration, Weak<MaterialDevice>>>> =
     LazyLock::new(Default::default);
@@ -22,6 +45,7 @@ struct MaterialImage {
 }
 static WHITE: LazyLock<Arc<[u8]>> = LazyLock::new(|| Arc::from([255u8; 4]));
 pub(super) struct MaterialDevice {
+    generation: Option<nana_gpu::DeviceGeneration>,
     interface: ShaderInterface,
     images: Mutex<HashMap<(usize, u32, u32), Arc<MaterialImage>>>,
     pub layout: wgpu::BindGroupLayout,
@@ -89,6 +113,7 @@ impl MaterialDevice {
             ],
         });
         let result = Arc::new(Self {
+            generation: policy.map(nana_gpu::GpuDeviceState::generation),
             interface,
             images: Mutex::new(HashMap::new()),
             layout,
@@ -134,6 +159,20 @@ impl MaterialDevice {
             devices.insert(policy.generation(), Arc::downgrade(&result));
         }
         result
+    }
+    /// Whether the host's [`MaterialPolicy`] lets `program` compile or draw.
+    pub(super) fn admit(&self, program: u64) -> bool {
+        POLICY
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .is_none_or(|policy| policy.admit(self.generation, program))
+    }
+    /// Tell the host's [`MaterialPolicy`] that `program` shaded `pixels`.
+    pub(super) fn charge(&self, program: u64, pixels: u64) {
+        if let Some(policy) = POLICY.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            policy.charge(self.generation, program, pixels);
+        }
     }
     pub(super) fn bundle(
         &self,

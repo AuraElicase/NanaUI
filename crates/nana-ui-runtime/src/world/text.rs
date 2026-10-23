@@ -4032,7 +4032,9 @@ impl UiWorld {
                     // drawing a layout of what it used to say.
                     self.nodes.release_text_layout(id);
                 }
-                if empty {
+                // An editor is reshaped with nothing in it too: its empty
+                // line, where the caret stands, follows the box like any line.
+                if empty && presentation.is_none() {
                     // A box with no text of its own resolves to nothing, and
                     // stays resolved until text or a text-bearing visual
                     // arrives: a scope of containers costs one read of the text
@@ -4040,15 +4042,15 @@ impl UiWorld {
                     // pass. An empty Text node is not such a box: its line box
                     // is measured by the scheduled pass, which this pass must
                     // not pre-empt with a stamp that carries no metrics.
-                    if presentation.is_none()
-                        && !matches!(self.record(id).kind.as_ref(), NodeKind::Text)
-                    {
+                    if !matches!(self.record(id).kind.as_ref(), NodeKind::Text) {
                         resolved.push(PlainResolution::nothing(id));
                     }
                     continue;
                 }
                 #[cfg(any(test, feature = "benchmark"))]
-                crate::text_shape_stats::note_nonempty();
+                if !empty {
+                    crate::text_shape_stats::note_nonempty();
+                }
                 let constraints =
                     self.text_shape_constraints_for(id, presentation.as_ref().map(|s| s.multiline));
                 let Some(presentation) = presentation else {

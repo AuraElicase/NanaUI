@@ -501,6 +501,9 @@ fn pointer_drag_on_a_graph_minimap_requests_viewport_navigation() {
     assert!(context.world().pointer_capture(document, 1).is_none());
 }
 
+/// A press moves the focus to the text input it hits and shows it there, as
+/// the web's `:focus-visible` holds for an element that takes typing. A
+/// pressed button, or read-only field, is focused without saying so.
 #[test]
 fn pointer_down_moves_focus_to_the_hit_text_input() {
     let mut context = AppContext::new();
@@ -511,42 +514,55 @@ fn pointer_down_moves_focus_to_the_hit_text_input() {
     let input = context
         .create_component(document, TextInput::new("NanaUI"))
         .unwrap();
+    let read_only = context
+        .create_component(document, TextInput::new("fixed").read_only(true))
+        .unwrap();
     assert!(context.focus_node(document, button.stable_id()).unwrap());
     let mut layout = MutationQueue::new();
-    layout.write_layout(
-        button.stable_id(),
-        LayoutBox {
-            x: 0.0,
-            y: 0.0,
-            width: 120.0,
-            height: 32.0,
-        },
-    );
-    layout.write_layout(
-        input.stable_id(),
-        LayoutBox {
-            x: 0.0,
-            y: 40.0,
-            width: 160.0,
-            height: 32.0,
-        },
-    );
+    for (node, y) in [
+        (button.stable_id(), 0.0),
+        (input.stable_id(), 40.0),
+        (read_only.stable_id(), 80.0),
+    ] {
+        layout.write_layout(
+            node,
+            LayoutBox {
+                x: 0.0,
+                y,
+                width: 160.0,
+                height: 32.0,
+            },
+        );
+    }
     context.commit_mutations(layout).unwrap();
     context.take_system_work();
     context.rebuild_hit_test(document);
 
     let mut adapter = TestInput::default();
-    assert!(
+    for (y, target, shown) in [
+        (52.0, input.stable_id(), true),
+        (12.0, button.stable_id(), false),
+        (92.0, read_only.stable_id(), false),
+    ] {
+        assert!(
+            adapter
+                .dispatch(
+                    &mut context,
+                    document,
+                    &pointer(PointerPhase::Down, 24.0, y)
+                )
+                .unwrap()
+                .prevent_default
+        );
         adapter
-            .dispatch(
-                &mut context,
-                document,
-                &pointer(PointerPhase::Down, 24.0, 52.0)
-            )
-            .unwrap()
-            .prevent_default
-    );
-    assert_eq!(context.world().focused(document), Some(input.stable_id()));
+            .dispatch(&mut context, document, &pointer(PointerPhase::Up, 24.0, y))
+            .unwrap();
+        assert_eq!(context.world().focused(document), Some(target));
+        assert_eq!(
+            context.world().focus_visible(document),
+            shown.then_some(target)
+        );
+    }
 }
 
 #[test]
@@ -6573,6 +6589,82 @@ fn arrow_keys_move_an_open_context_menu_and_enter_activates_it() {
     assert!(press(&mut context, &mut input, "Enter"));
     assert!(!context.read(menu, |menu| menu.open).unwrap());
     assert!(context.active_runtime_overlay(document).is_none());
+}
+
+/// The row under the pointer takes an open context menu's highlight, the one
+/// the arrow keys move and a screen reader is on. A disabled row does not,
+/// leaving the menu clears it, and a press still chooses the row.
+#[test]
+fn the_pointer_moves_an_open_context_menu_highlight() {
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let host = context
+        .create_component(document, OverlayHost::new())
+        .unwrap();
+    let menu = context
+        .create_component(
+            document,
+            crate::ContextMenu::new(8.0, 12.0)
+                .items([
+                    crate::ContextMenuItem::new("pin", "取消窗口置顶").disabled(true),
+                    crate::ContextMenuItem::new("full", "全屏"),
+                    crate::ContextMenuItem::new("close", "关闭"),
+                ])
+                .open(true),
+        )
+        .unwrap();
+    context.append_child(host, menu).unwrap();
+    context.activate_overlay(host, menu).unwrap();
+    context
+        .layout_document(document, crate::LayoutViewport::new(400.0, 300.0))
+        .unwrap();
+    context.rebuild_hit_test(document);
+    let chosen = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&chosen);
+    context
+        .on(menu, move |_, event: &crate::ContextMenuEvent, _| {
+            sink.lock().unwrap().push(event.clone())
+        })
+        .unwrap();
+    let Some(ComponentGeometry::MenuSurface { options, .. }) =
+        context.world().component_geometry(menu.stable_id())
+    else {
+        panic!("an open context menu draws its rows");
+    };
+    let row = |index: usize| {
+        let bounds = options[index].bounds;
+        (
+            bounds.x + bounds.width / 2.0,
+            bounds.y + bounds.height / 2.0,
+        )
+    };
+    let highlighted = |context: &AppContext| context.read(menu, |menu| menu.highlighted).unwrap();
+    let mut input = TestInput::default();
+    let mut send = |context: &mut AppContext, phase, (x, y): (f32, f32)| {
+        input
+            .dispatch(context, document, &pointer(phase, x, y))
+            .unwrap();
+    };
+    send(&mut context, PointerPhase::Move, row(2));
+    assert_eq!(highlighted(&context), Some(2));
+    let focused = context
+        .world()
+        .project_accessibility(document)
+        .into_iter()
+        .find(|node| node.role == crate::AccessibilityRole::MenuItem && node.focused)
+        .and_then(|node| node.label);
+    assert_eq!(focused.as_deref(), Some("关闭"));
+    send(&mut context, PointerPhase::Move, row(0));
+    assert_eq!(highlighted(&context), Some(2));
+    send(&mut context, PointerPhase::Move, (390.0, 290.0));
+    assert_eq!(highlighted(&context), None);
+    for phase in [PointerPhase::Move, PointerPhase::Down, PointerPhase::Up] {
+        send(&mut context, phase, row(1));
+    }
+    assert_eq!(
+        chosen.lock().unwrap().as_slice(),
+        [crate::ContextMenuEvent::Select(Arc::from("full"))]
+    );
 }
 
 /// A mouse is one pointer for all its buttons: the middle button going down

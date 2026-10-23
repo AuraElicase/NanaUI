@@ -144,6 +144,16 @@ impl<A> Notice<A> {
             && self.dismissible == other.dismissible
     }
 
+    /// Whether `other` says something else, not just how far along it is:
+    /// its words, tone or icon differ. Only that is worth a change in place
+    /// ([`AppContext::pulse_toast`]); a bar moving is not.
+    fn reads_otherwise(&self, other: &Self) -> bool {
+        self.title != other.title
+            || self.description != other.description
+            || self.tone != other.tone
+            || self.icon != other.icon
+    }
+
     fn toast(&self) -> Toast {
         let mut toast = Toast::new(self.title.as_str(), self.tone);
         self.dress(&mut toast);
@@ -684,6 +694,9 @@ impl<K: PartialEq + Clone, A: Clone> NoticeCenter<K, A> {
                         projection.notice.announcement() == entry.notice.announcement();
                     let _ =
                         cx.update_component(projection.toast, |toast, _| entry.notice.dress(toast));
+                    if entry.notice.reads_otherwise(&projection.notice) {
+                        let _ = cx.pulse_toast(host.stack, projection.toast);
+                    }
                     projection.notice = entry.notice.clone();
                     changed = true;
                 }
