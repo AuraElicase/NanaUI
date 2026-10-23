@@ -21,6 +21,7 @@ use super::dialog::{DialogInsets, DialogTransition};
 use super::recipe::RecipeText;
 use super::tokens::ElevationRole;
 use super::{RadiusTier, space, type_scale};
+use crate::box_layout::{LengthSpec, TransformOrigin};
 use crate::icon::Icon;
 use crate::motion::Easing;
 use crate::semantics::{ButtonKind, ControlSize, ToastTone};
@@ -129,26 +130,48 @@ pub struct ToastMotion {
     /// Where the entrance starts, in px below the toast's place (CSS
     /// `translateY`); negative is above.
     pub enter_offset_y: f32,
-    /// The toast's scale where the entrance starts, about its own centre.
+    /// The toast's scale where the entrance starts, about [`Self::origin`].
     pub enter_scale: f32,
+    /// The point a toast scales about (CSS `transform-origin` on the toast's
+    /// box): its entrance, its exit and [`Self::change`]. A stack in a
+    /// corner reads best growing out of that corner.
+    pub origin: TransformOrigin,
+    /// How a toast on screen answers its copy changing in place (a task's
+    /// notice turning into its result): it springs back to rest from
+    /// [`Self::change_scale`], without fading.
+    pub change: DialogTransition,
+    /// The toast's scale where [`Self::change`] starts; 1 plays nothing.
+    pub change_scale: f32,
     /// How the rest of a stack moves when a toast joins or leaves it.
     pub stack_move: DialogTransition,
 }
 
 impl ToastMotion {
-    /// The 140ms ease-out fade overlays have, without a move; a stack closes
+    /// The 140ms ease-out fade overlays have, without a move, about the
+    /// toast's centre; a change in place plays nothing, and a stack closes
     /// up over 180ms.
     pub const DEFAULT: Self = Self {
         enter: DialogTransition::new(140, Easing::EaseOutCubic),
         exit: DialogTransition::new(140, Easing::EaseOutCubic),
         enter_offset_y: 0.0,
         enter_scale: 1.0,
+        origin: TransformOrigin {
+            x: LengthSpec::Percent(50.0),
+            y: LengthSpec::Percent(50.0),
+        },
+        change: DialogTransition::new(180, Easing::EaseOutCubic),
+        change_scale: 1.0,
         stack_move: DialogTransition::new(180, Easing::EaseOutCubic),
     };
 
     /// Whether the toast moves at all on its way in.
     pub fn moves(&self) -> bool {
         self.enter_offset_y != 0.0 || self.enter_scale != 1.0
+    }
+
+    /// Whether a change in place plays at all.
+    pub fn changes(&self) -> bool {
+        self.change_scale != 1.0
     }
 }
 

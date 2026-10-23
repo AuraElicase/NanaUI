@@ -216,6 +216,69 @@ fn a_task_updates_and_settles_in_place_even_after_it_moved() {
     assert_eq!(center.len(), 2, "a quick task still reports its result");
 }
 
+/// A task's notice that turns into something else in place springs back
+/// from the theme's change scale; its bar moving does not.
+#[test]
+fn new_words_in_place_spring_the_toast_but_a_moving_bar_does_not() {
+    use nana_ui_core::{DialogTransition, Easing, ThemeDefinition, ToastMotion, ToastRecipe};
+    use nana_ui_runtime::{AnimatableProperty, MotionValue};
+
+    let mut center = center();
+    let mut main = Window::new(MAIN);
+    let springy = ThemeDefinition::NANA_DARK.with_toast(ToastRecipe {
+        motion: ToastMotion {
+            change: DialogTransition::new(200, Easing::EaseOutCubic),
+            change_scale: 0.9,
+            ..ToastMotion::DEFAULT
+        },
+        ..ToastRecipe::DEFAULT
+    });
+    assert!(
+        main.document
+            .context_mut()
+            .set_theme_definition(&springy)
+            .unwrap()
+    );
+    let now = Instant::now();
+    center.show(NoticeSource::Window(MAIN), Key::Operation, running(), now);
+    main.frame(&mut center, 1_000);
+    main.frame(&mut center, 2_000);
+    let slot = main
+        .document
+        .context()
+        .world()
+        .parent_id(main.toast().stable_id())
+        .unwrap();
+    let scale =
+        |main: &Window, ms: u64| match main.document.context().world().presentation_motion_value(
+            slot,
+            AnimatableProperty::Transform,
+            Duration::from_millis(ms),
+        ) {
+            Some(MotionValue::Transform(transform)) => transform.a,
+            other => panic!("transform of {slot:?}: {other:?}"),
+        };
+
+    // What a sync starts starts now, at 2s; read it before time moves on.
+    let mut progress = running();
+    progress.progress = Some(ToastProgress::Determinate(0.5));
+    center.show(NoticeSource::Window(MAIN), Key::Operation, progress, now);
+    main.sync(&mut center);
+    assert_eq!(scale(&main, 2_010), 1.0, "a moving bar stays put");
+    main.frame(&mut center, 3_000);
+
+    center.settle(
+        NoticeSource::Window(MAIN),
+        &Key::Operation,
+        Some(Notice::message("已完成", ToastTone::Success)),
+        now,
+    );
+    main.sync(&mut center);
+    let early = scale(&main, 3_010);
+    assert!((0.9..1.0).contains(&early), "new words spring: {early}");
+    assert_eq!(scale(&main, 3_200), 1.0);
+}
+
 #[test]
 fn a_moved_notice_does_not_repeat_what_was_said_but_new_words_are_live() {
     let mut center = center();
