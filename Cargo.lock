@@ -2743,6 +2743,7 @@ dependencies = [
  "ndk-context",
  "serde",
  "serde_json",
+ "sys-locale",
  "tungstenite",
  "ureq",
  "url",
