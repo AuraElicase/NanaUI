@@ -1,0 +1,24 @@
+crates/nana-ui-scene/src/lib.rs
+  h_8e6780fc7b4bb1 29
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 18-22
+crates/nana-ui-scene/src/scene/text_shader_input.rs
+  h_8e6780fc7b4bb1 1-130
+crates/nana-ui-scene/tests/text_shader_input.rs
+  h_8e6780fc7b4bb1 1-145
+crates/nana-ui/src/application.rs
+  h_8e6780fc7b4bb1 159-167,271-282,463-466
+crates/nana-ui/tests/fixtures/application_animation.rs
+  h_8e6780fc7b4bb1 1-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b5cde7bec119890307118dde8bd24b5d1010e766",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
