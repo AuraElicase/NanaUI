@@ -64,6 +64,10 @@ cx.remove_toast(stack, toast)?;
 
 动效读配方的 `motion`：进场从透明、从 `enter_offset_y` 和 `enter_scale` 回到原位，时长和缓动是 `enter`；`remove_toast` 让在屏上的那条在原位把进场倒着放一遍（`exit`），播完才拿掉，其余的按 `stack_move` 滑到新的位置。排队的或还在量的直接拿掉。`clear_toasts` 把所有提示照这样拿掉。
 
+缩放都绕配方的 `origin`（写在每条提示的槽上的 `transform-origin`，默认中心）：栈放在右下角时设成 `100% 100%`，提示就从那个角长出来、缩回去。
+
+提示的文字在原位改了（任务的通知变成结果）时，`pulse_toast(stack, toast)` 让在屏上的那条从配方的 `change_scale` 弹回原尺寸，时长和缓动是 `change`，不淡入淡出。`NoticeCenter` 换装时只在标题、描述、色调或图标变了才调它，进度条走动不算。还没在屏上、进场或滑动没放完、减弱动态效果，或 `change_scale` 是 1（内置值）时不播。
+
 正在进场时被挤动的提示从它站着的地方滑过去，最后停在原位、没有变换。减弱动态效果时什么都不播：直接出现，直接消失，其余的直接到位。
 
 ## 计时
@@ -96,6 +100,7 @@ cx.remove_toast(stack, toast)?;
 | `AppContext::remove_toast(stack, toast)` | 在屏上的播完退场再拿掉，其余收拢；排队的和还在量的直接拿掉。栈里没有这条时返回 `false` |
 | `AppContext::clear_toasts(stack)` | 全部拿掉 |
 | `AppContext::shown_toasts(stack)` | 在屏上的提示，最新优先 |
+| `AppContext::pulse_toast(stack, toast)` | 文字原位改了时从 `change_scale` 弹回原尺寸；没播时返回 `false` |
 | `ToastStack::place_in(..)` | 见[放置](#放置) |
 
 ## 事件

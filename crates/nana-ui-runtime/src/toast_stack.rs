@@ -224,10 +224,18 @@ impl ComponentView for ToastSlot {
         }
     }
 
+    /// The recipe's scaling origin is authored onto the node.
+    fn wants_recipe_reproject() -> bool {
+        true
+    }
+
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let mut style = NodeStyle::default();
         let layout = Arc::make_mut(&mut style.layout);
         layout.direction = Some(FlexDirection::Column);
+        // What scales is the slot: its entrance, exit and change in place
+        // grow out of the point the theme names.
+        layout.transform_origin = Some(world.theme().recipes().toast().motion.origin);
         // As wide as its toast, never wider than the stack: the stack's
         // alignment places it.
         layout.width = Some(LengthSpec::FitContent);
@@ -393,6 +401,48 @@ impl AppContext {
         let mut mutations = MutationQueue::new();
         mutations.despawn_subtree(entry.slot);
         self.commit_mutations(mutations)?;
+        Ok(true)
+    }
+
+    /// Answer `toast`'s copy changing in place: one on screen springs back
+    /// to rest from the theme's [`nana_ui_core::ToastMotion::change_scale`]
+    /// about its origin, without fading. Nothing plays for a toast that is
+    /// not on screen, while it is still entering or sliding, with reduced
+    /// motion, or when the theme's change scale is 1. `Ok(false)` when
+    /// nothing plays.
+    pub fn pulse_toast(
+        &mut self,
+        stack: Entity<ToastStack>,
+        toast: Entity<Toast>,
+    ) -> Result<bool, FrameworkError> {
+        self.read(stack, |_| ())?;
+        let Some(entry) = self
+            .toast_stacks()
+            .get(&stack.stable_id())
+            .and_then(|state| state.entry(toast.stable_id()))
+            .copied()
+        else {
+            return Ok(false);
+        };
+        let motion = self.world().theme().recipes().toast().motion;
+        if entry.status != Slot::Shown || !motion.changes() || self.reduced_motion() {
+            return Ok(false);
+        }
+        // Its entrance or a slide owns the transform until it lands.
+        let moving = [
+            crate::motion_api::user_animation_id(entry.slot, AnimatableProperty::Transform),
+            crate::component_animation_id(crate::component_animation_kinds::FLIP, entry.slot),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|id| self.world().animation_is_active(id));
+        if moving {
+            return Ok(false);
+        }
+        let change = Presence::new(motion.change.duration())
+            .scale(motion.change_scale)
+            .ease(motion.change.easing);
+        self.begin_enter(&[entry.slot], &change)?;
         Ok(true)
     }
 
@@ -1652,6 +1702,97 @@ mod tests {
                 .presentation_motion_value(slot, AnimatableProperty::Opacity, rest),
             Some(MotionValue::Scalar(1.0)),
         );
+    }
+
+    /// The slot scales about the theme's origin: a stack in the
+    /// bottom-right corner grows its toasts out of that corner.
+    #[test]
+    fn a_slot_scales_about_the_theme_s_origin() {
+        let mut context = AppContext::new();
+        let corner = nana_ui_core::TransformOrigin {
+            x: LengthSpec::Percent(100.0),
+            y: LengthSpec::Percent(100.0),
+        };
+        let cornered = ThemeDefinition::NANA_DARK.with_toast(ToastRecipe {
+            motion: ToastMotion {
+                origin: corner,
+                ..ToastMotion::DEFAULT
+            },
+            ..ToastRecipe::DEFAULT
+        });
+        assert!(context.set_theme_definition(&cornered).unwrap());
+        let (stack, _) = window(&mut context, 3, 400.0);
+        let toast = context.push_toast(stack, notice("Saved")).unwrap();
+        frame(&mut context);
+        let slot = slot_of(&context, toast);
+        assert_eq!(
+            context
+                .world()
+                .node_style(slot)
+                .and_then(|style| style.layout.transform_origin),
+            Some(corner),
+        );
+    }
+
+    /// A toast on screen whose copy changes springs back to rest from the
+    /// theme's change scale without fading; nothing plays while it is still
+    /// entering, or when the theme's change scale is 1.
+    #[test]
+    fn a_toast_on_screen_springs_back_when_its_copy_changes() {
+        let mut context = AppContext::new();
+        let springy = ThemeDefinition::NANA_DARK.with_toast(ToastRecipe {
+            motion: ToastMotion {
+                enter: DialogTransition::new(200, Easing::EaseOutCubic),
+                enter_scale: 0.96,
+                change: DialogTransition::new(200, Easing::EaseOutCubic),
+                change_scale: 0.9,
+                ..ToastMotion::DEFAULT
+            },
+            ..ToastRecipe::DEFAULT
+        });
+        assert!(context.set_theme_definition(&springy).unwrap());
+        let (stack, _) = window(&mut context, 3, 400.0);
+        let start = Duration::from_secs(1);
+        context.advance_animations(start);
+        let toast = context.push_toast(stack, notice("Optimising")).unwrap();
+        frame(&mut context);
+        assert!(
+            !context.pulse_toast(stack, toast).unwrap(),
+            "its entrance owns the motion"
+        );
+
+        let settled = start + Duration::from_secs(1);
+        context.advance_animations(settled);
+        frame(&mut context);
+        assert!(context.pulse_toast(stack, toast).unwrap());
+        let slot = slot_of(&context, toast);
+        let scale = |context: &AppContext, now| match context.world().presentation_motion_value(
+            slot,
+            AnimatableProperty::Transform,
+            now,
+        ) {
+            Some(MotionValue::Transform(transform)) => transform.a,
+            other => panic!("transform of {slot:?}: {other:?}"),
+        };
+        let early = scale(&context, settled + ms(10));
+        assert!((0.9..1.0).contains(&early), "starts small: {early}");
+        assert_eq!(
+            context.world().presentation_motion_value(
+                slot,
+                AnimatableProperty::Opacity,
+                settled + ms(10)
+            ),
+            Some(MotionValue::Scalar(1.0)),
+            "without fading"
+        );
+        let rest = settled + Duration::from_secs(1);
+        context.advance_animations(rest);
+        assert_eq!(scale(&context, rest), 1.0);
+
+        let still = ThemeDefinition::NANA_DARK.with_toast(ToastRecipe::DEFAULT);
+        assert!(context.set_theme_definition(&still).unwrap());
+        frame(&mut context);
+        assert!(!context.pulse_toast(stack, toast).unwrap());
     }
 
     /// A toast the application despawns itself leaves the stack, and its
