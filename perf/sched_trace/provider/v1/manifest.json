@@ -1,0 +1,18 @@
+{
+  "provider": "dev.nanaui.trace-info.v1",
+  "version": "v1",
+  "source": "nana-trace-info.instrpkg",
+  "source_sha256": "6fb0495a62d69939a0fbf27e32700ae16324829ff1f6398891a4f8225f14f1e9",
+  "built_with": "Xcode 27.0 (27A266a) instrumentbuilder",
+  "build_output_pinned": false,
+  "build_output_note": "instrumentbuilder output differs byte-for-byte between builds of the same source; captures pin source_sha256 instead.",
+  "supersedes": null,
+  "baseline_note": "The Issue #354 scheduling provider was deleted from the local workspace and never committed, so v1 is a new definition with no line-by-line diff against it. v1 cannot recover events that earlier traces did not record.",
+  "selection": {
+    "kdebug_class": 7,
+    "kdebug_subclass": 2,
+    "codes": {"lost": 2, "retrograde": 5, "past": 6},
+    "qualifier": "bound, unconstrained",
+    "args": "arg1-arg4 verbatim, no mapping"
+  }
+}
