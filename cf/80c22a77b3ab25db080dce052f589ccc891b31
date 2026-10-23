@@ -1,0 +1,14 @@
+crates/nana-ui/src/gpu_view.rs
+  h_8e6780fc7b4bb1 62-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "cf80c22a77b3ab25db080dce052f589ccc891b31",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
