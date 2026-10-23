@@ -440,6 +440,11 @@ impl QuadPipeline {
     ) {
         let bg = background.map_or(0, |m| m.program().key());
         let br = border.map_or(0, |m| m.program().key());
+        // A refused program is never compiled, and nothing is cached for it,
+        // so it compiles once the host admits it again.
+        if !self.admitted(bg, br) {
+            return;
+        }
         for samples in [1, 4] {
             self.material_pipelines.entry((bg,br,samples,masked)).or_insert_with(|| {
                 if background.is_some_and(|m| m.program().source.len()>65536) || border.is_some_and(|m| m.program().source.len()>65536) { return None; }
@@ -478,6 +483,13 @@ impl QuadPipeline {
                 })
             });
         }
+    }
+
+    /// Whether the host's material policy lets both programs (0: none) run.
+    fn admitted(&self, background: u64, border: u64) -> bool {
+        [background, border]
+            .into_iter()
+            .all(|program| program == 0 || self.material_device.admit(program))
     }
 
     /// The scene's corner curve exponent, for the corners and clips of the
@@ -1150,10 +1162,24 @@ impl QuadPipeline {
                 .get(&material.0)
                 .or_else(|| self.material_bindings.get(&material.1));
             // Two material instances use separate parameter/texture groups.
-            if let (Some(pipeline), Some(binding)) = (
+            if let (Some(pipeline), Some(binding), true) = (
                 self.material_pipelines.get(&key).and_then(Option::as_ref),
                 binding,
+                self.admitted(key.0, key.1),
             ) {
+                // The batch's area in device pixels, at most its scissor.
+                let scale = f64::from(self.grid_scale);
+                let area: f64 = self.pending[batch_start..index]
+                    .iter()
+                    .map(|q| f64::from(q.size[0]) * f64::from(q.size[1]) * scale * scale)
+                    .sum();
+                let pixels =
+                    (area as u64).min(u64::from(scissor.width) * u64::from(scissor.height));
+                for program in [key.0, key.1] {
+                    if program != 0 {
+                        self.material_device.charge(program, pixels);
+                    }
+                }
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(2, &binding.group, &[]);
                 if let Some(border) = self

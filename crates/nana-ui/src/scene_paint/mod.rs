@@ -23,6 +23,7 @@ mod presentation_color;
 mod quad;
 mod text;
 
+pub use self::material::{MaterialPolicy, set_material_policy};
 pub use self::natural_sizes::{ImageNaturalSize, commit_image_natural_sizes};
 pub use self::text::SubpixelOrder;
 pub use self::text::TextGlyphCounters;
@@ -3063,6 +3064,10 @@ fn push_text_run(
     painted: PhysicalRect,
 ) {
     batching.note_glyph();
+    text.set_painted(
+        &prepared,
+        u64::from(painted.width) * u64::from(painted.height),
+    );
     if let Some(target) = batching.target(commands, painted, |command| {
         matches!(command, DrawCommand::Text { prepared: previous, scissor: open }
             if *open == scissor && text.can_merge_runs(previous, &prepared))
