@@ -67,9 +67,10 @@ pub use error::{ErrorBoundary, error_boundary, report_error};
 pub use hot::{__hot_register, __hot_text};
 pub use hot::{HotReloadError, apply_hot_literals};
 pub use marks::{
-    Callout, GroupRow, KeycapPainter, RaisedSurfacePainter, callout, chord, chord_joiner,
-    chord_with, group_row, heading_row, heading_tools, kbd, kbd_glyph, keycap_face, keycap_label,
-    scroll_foot_fade, settings_group, tag, tag_frame, tone_role,
+    Callout, GroupRow, HeadingRow, HeadingTools, KeycapPainter, RaisedSurfacePainter,
+    SettingsGroupView, callout, chord, chord_joiner, chord_with, group_row, heading_row,
+    heading_tools, kbd, kbd_glyph, keycap_face, keycap_label, scroll_foot_fade, settings_group,
+    tag, tag_frame, tone_role,
 };
 #[doc(hidden)]
 pub use node::ViewSource;
