@@ -183,8 +183,10 @@ impl Popover {
         self
     }
 
-    /// Fit an icon trigger into a 24×24 logical-pixel heading tool. Text and
-    /// custom-content triggers retain their regular layout.
+    /// Fit an icon trigger into a 24×24 logical-pixel heading tool. A
+    /// custom-content trigger instead takes exactly its content's box, with
+    /// no inset and no fixed height. Text triggers retain their regular
+    /// layout.
     pub fn compact_trigger(mut self, compact: bool) -> Self {
         self.compact_trigger = compact;
         self
@@ -446,6 +448,8 @@ pub(crate) fn project_menu_surface(
     };
     let style = if compact_trigger && trigger_icon.is_some() && trigger_content.is_none() {
         crate::view_components::compact_icon_style(style)
+    } else if compact_trigger && trigger_content.is_some() {
+        fitted_content_style(style)
     } else {
         style
     };
@@ -627,6 +631,16 @@ pub(crate) fn trigger_content_style() -> NodeStyle {
     let layout = Arc::make_mut(&mut style.layout);
     layout.direction = Some(FlexDirection::Row);
     layout.align_items = nana_ui_core::AlignSpec::Center;
+    style
+}
+
+/// A compact content trigger is exactly its content: no inset and no fixed
+/// height, so a child that is itself the target (a color well) fills it to
+/// the edge. It keeps the control corners, so the wash follows a well
+/// drawn with them.
+fn fitted_content_style(mut style: NodeStyle) -> NodeStyle {
+    style.control_height = None;
+    style.control_padding_x = None;
     style
 }
 

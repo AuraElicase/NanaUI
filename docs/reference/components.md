@@ -319,7 +319,8 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 Rust 行内标题工具使用 `IconButton::compact(true)`：固定 24×24 logical px，
 保留标准图标、焦点、提示、选中与禁用语义，不随普通控件密度增高。
 `Popover::compact_trigger(true)` 和 `ActionMenu::compact_trigger(true)` 的图标触发器
-使用同一尺寸配方；文字与自定义内容触发器不受影响。菜单打开时锚点保持原尺寸。
+使用同一尺寸配方；自定义内容触发器改为正好等于内容大小（没有内边距和固定高度，
+`ColorField` 的色块就是这样）；文字触发器不受影响。菜单打开时锚点保持原尺寸。
 这些选项默认关闭；关闭后恢复原有 `size`／主题尺寸。静息无底色的菜单入口可另配
 `bare_trigger(true)`，菜单内容区和菜单项仍沿用标准尺寸。
 
