@@ -21,12 +21,21 @@ use crate::view_components::{
     RangeChanged, RangeField, RangeInput, TextChanged, TextInput, project_common,
 };
 use crate::{
-    AccessibilityRole, AccessibilityState, AppContext, ComponentView, Entity, FrameworkError,
-    InteractionState, MutationQueue, NodeKind, NodeStyle, Popover, PopoverToggled, StableNodeId,
-    Stack, TextContent, UiWorld, XYPad, XYPadEvent, XYPadSurface, XYPadValue, xy_pad_height,
+    AccessibilityRole, AccessibilityState, AppContext, ComponentView, Entity, FocusWithinChanged,
+    FrameworkError, InteractionState, MutationQueue, NodeKind, NodeStyle, Popover, PopoverToggled,
+    StableNodeId, Stack, TextContent, UiWorld, XYPad, XYPadEvent, XYPadSurface, XYPadValue,
+    xy_pad_height,
 };
 
-const SWATCH_SIZE: f32 = nana_ui_core::space::PAGE_TIGHT + nana_ui_core::space::XXS;
+/// The gap between the frame's inner edge and the well, on its top, bottom
+/// and start, so the well sits evenly inside the one frame the field draws.
+const SWATCH_INSET: f32 = nana_ui_core::space::XXS + nana_ui_core::HAIRLINE;
+
+/// The well's side for a field of `size`: the control height less the
+/// frame's border and the inset on both sides.
+fn swatch_side(size: ControlSize, metrics: nana_ui_core::ThemeMetrics) -> f32 {
+    (size.height_in(metrics) - 2.0 * (nana_ui_core::HAIRLINE + SWATCH_INSET)).max(0.0)
+}
 
 /// Committed RGBA in 0..=1.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,6 +71,9 @@ pub struct ColorField {
     pub pad: Option<StableNodeId>,
     pub hue_slider: Option<StableNodeId>,
     pub style: NodeStyle,
+    /// Focus is somewhere in the field (the hex text, the well): the frame
+    /// draws the focus border for its borderless parts, as `:focus-within`.
+    pub(crate) focus_within: bool,
 }
 
 impl ColorField {
@@ -98,6 +110,7 @@ impl ColorField {
             pad: None,
             hue_slider: None,
             style: field_style(ControlSize::Medium),
+            focus_within: false,
         }
     }
 
@@ -141,6 +154,13 @@ impl ColorField {
 
     fn effective_style(&self) -> NodeStyle {
         let mut style = self.style.clone();
+        // The frame is the field's only box, so it paints the text field's
+        // states for the parts inside it.
+        if self.disabled {
+            style.background = Some(SemanticColorRole::Subtle);
+        } else if self.focus_within {
+            style.border = Some(SemanticColorRole::FocusBorder);
+        }
         if self.invalid {
             style.border = Some(SemanticColorRole::Danger);
         }
@@ -149,7 +169,7 @@ impl ColorField {
             layout.direction = Some(FlexDirection::Row);
             layout.align_items = AlignSpec::Center;
             layout.justify_content = JustifySpec::Start;
-            layout.gap = Some(LengthSpec::Px(6.0));
+            layout.gap = Some(LengthSpec::Px(0.0));
             layout.width = Some(LengthSpec::Fill);
         }
         style.control_height = Some(nana_ui_core::ControlHeight::Min(self.size));
@@ -187,6 +207,7 @@ impl ComponentView for ColorField {
         next.picker = self.picker;
         next.pad = self.pad;
         next.hue_slider = self.hue_slider;
+        next.focus_within = self.focus_within;
         *self = next;
     }
 
@@ -245,9 +266,15 @@ impl AppContext {
             .document;
         let snapshot = self.read(field, Clone::clone)?;
         let created = snapshot.hex.is_none();
+        let metrics = self.world().theme_metrics();
+        let side = swatch_side(snapshot.size, metrics);
+        let height = snapshot.size.height_in(metrics);
+        let scale = if height > 0.0 { side / height } else { 1.0 };
         let swatch = match snapshot.swatch.filter(|id| self.world().contains(*id)) {
             Some(id) => Entity::<Stack>::from_stable_id(id),
-            None => self.create_detached_component(document, swatch_well(snapshot.value))?,
+            None => {
+                self.create_detached_component(document, swatch_well(snapshot.value, side, scale))?
+            }
         };
         let hex = match snapshot.hex.filter(|id| self.world().contains(*id)) {
             Some(id) => Entity::<TextInput>::from_stable_id(id),
@@ -270,6 +297,9 @@ impl AppContext {
         };
 
         if created {
+            self.on(field, |field, event: &FocusWithinChanged, _| {
+                field.focus_within = event.focused;
+            })?;
             // The well's press, Enter / Space on it, light dismiss and Escape
             // all toggle the popover itself; mirror that so a later reassembly
             // keeps it, and close it again at once on a disabled field.
@@ -311,7 +341,7 @@ impl AppContext {
         }
 
         self.update_component(swatch, |well, _| {
-            *well = swatch_well(snapshot.value);
+            *well = swatch_well(snapshot.value, side, scale);
         })?;
         self.update_component(hex, |input, _| {
             // The text is the user's until the color changes: text that
@@ -388,14 +418,19 @@ impl AppContext {
     }
 }
 
+/// The field's one frame: a text field's fill and border, exactly a control
+/// tall, the well inset on three sides and the bare hex text running to the
+/// end edge (the text keeps its own end inset).
 fn field_style(size: ControlSize) -> NodeStyle {
     let mut style = NodeStyle::default();
-    style.background = Some(SemanticColorRole::Subtle);
+    style.background = Some(SemanticColorRole::Background);
     style.border = Some(SemanticColorRole::Border);
     {
         let layout = std::sync::Arc::make_mut(&mut style.layout);
-        layout.padding_left = Some(LengthSpec::Px(nana_ui_core::space::SM));
-        layout.padding_right = Some(LengthSpec::Px(nana_ui_core::space::SM));
+        layout.padding_left = Some(LengthSpec::Px(SWATCH_INSET));
+        layout.padding_top = Some(LengthSpec::Px(SWATCH_INSET));
+        layout.padding_bottom = Some(LengthSpec::Px(SWATCH_INSET));
+        layout.padding_right = Some(LengthSpec::Px(0.0));
         layout.border_width = Some(nana_ui_core::HAIRLINE);
     }
     style.radius = Some(nana_ui_core::RadiusTier::Sm);
@@ -406,9 +441,31 @@ fn field_style(size: ControlSize) -> NodeStyle {
 /// The hex text takes the field's width beside the swatch, and gives it up
 /// in a narrow field instead of running past the frame: a text input's
 /// natural width is wider than a short hex needs.
+///
+/// It is bare: no fill, border or corners of its own, and the frame's full
+/// inner height, so the field reads as one control. The frame paints its
+/// focus and invalid states instead (see [`ColorField::effective_style`]).
 fn hex_input(field: &ColorField) -> TextInput {
     let mut input = TextInput::new(format_hex(field.value)).size(field.size);
+    input.style.background = None;
+    input.style.border = None;
+    input.style.radius = None;
+    input.style.corner_radii = None;
+    input.style.control_height = None;
+    input.style.interaction = crate::InteractionStyle {
+        disabled: crate::SemanticPaint {
+            foreground: Some(SemanticColorRole::Faint),
+            ..crate::SemanticPaint::default()
+        },
+        ..crate::InteractionStyle::default()
+    };
+    // Its own invalid border is the frame's now.
+    input.style_override = true;
     let layout = std::sync::Arc::make_mut(&mut input.style.layout);
+    layout.border_width = Some(0.0);
+    layout.theme.border_width = None;
+    layout.align_self = Some(AlignSpec::Stretch);
+    layout.min_height = None;
     layout.flex_grow = Some(1.0);
     layout.flex_shrink = Some(1.0);
     layout.min_width = Some(LengthSpec::Px(0.0));
@@ -423,6 +480,7 @@ fn picker_popover(field: &ColorField, well: Entity<Stack>, name: Arc<str>) -> Po
         .trigger(name)
         .trigger_content(well.stable_id())
         .bare_trigger(true)
+        .compact_trigger(true)
         .alignment(crate::PopoverAlignment::Start)
         .width(220.0);
     popover.open = field.opened;
@@ -498,23 +556,32 @@ pub fn hue_spectrum() -> Arc<[GradientStop]> {
         .collect()
 }
 
-/// The color itself: a square well, display only (the press is the
-/// picker's, which it draws the trigger of).
-fn swatch_well(value: [f32; 4]) -> Stack {
+/// The color itself: a square well `side` across, display only (the press is
+/// the picker's, which it draws the trigger of). Its corners are the frame's
+/// scaled by `scale`, the well's side over the frame's height.
+fn swatch_well(value: [f32; 4], side: f32, scale: f32) -> Stack {
     let mut style = NodeStyle::default();
     {
         let layout = std::sync::Arc::make_mut(&mut style.layout);
         layout.direction = Some(FlexDirection::Row);
-        layout.width = Some(LengthSpec::Px(SWATCH_SIZE));
-        layout.height = Some(LengthSpec::Px(SWATCH_SIZE));
-        layout.min_width = Some(LengthSpec::Px(SWATCH_SIZE));
-        layout.min_height = Some(LengthSpec::Px(SWATCH_SIZE));
+        layout.width = Some(LengthSpec::Px(side));
+        layout.height = Some(LengthSpec::Px(side));
+        layout.min_width = Some(LengthSpec::Px(side));
+        layout.min_height = Some(LengthSpec::Px(side));
         layout.flex_grow = Some(0.0);
         layout.flex_shrink = Some(0.0);
         layout.border_width = Some(nana_ui_core::HAIRLINE);
         layout.background = Some(sanitize_rgba(value));
+        // The frame's corner scaled down to the well, so the well is the
+        // field's own shape in small: the same tier, the same proportion,
+        // and it follows the installed theme's radius.
+        layout.theme.border_radius = Some(
+            nana_ui_core::ThemeExpr::token(nana_ui_core::ThemeToken::Radius(
+                nana_ui_core::RadiusTier::Sm,
+            ))
+            .scaled(scale),
+        );
     }
-    style.radius = Some(nana_ui_core::RadiusTier::Sm);
     style.border = Some(SemanticColorRole::Border);
     Stack::row(0.0).style(style)
 }
@@ -626,6 +693,27 @@ mod tests {
     use crate::framework::AppContext;
 
     #[test]
+    fn the_frame_draws_the_focus_border_while_the_hex_text_has_focus() {
+        let mut context = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let field = context
+            .create_component(document, ColorField::new([1.0, 0.0, 0.0, 1.0]))
+            .unwrap();
+        context.assemble_color_field(field).unwrap();
+        let hex = context.read(field, |field| field.hex).unwrap().unwrap();
+        let border = |context: &AppContext| {
+            context
+                .world()
+                .node_style(field.stable_id())
+                .unwrap()
+                .border
+        };
+        assert_eq!(border(&context), Some(SemanticColorRole::Border));
+        assert!(context.focus_node(document, hex).unwrap());
+        assert_eq!(border(&context), Some(SemanticColorRole::FocusBorder));
+    }
+
+    #[test]
     fn hex_round_trips_opaque_and_alpha() {
         assert_eq!(parse_hex("#ff8800"), Some([1.0, 136.0 / 255.0, 0.0, 1.0]));
         assert_eq!(format_hex([1.0, 0.0, 0.0, 1.0]), "#ff0000");
@@ -676,15 +764,41 @@ mod tests {
             "hex {hex:?} runs past the field {frame:?}"
         );
         assert!(
-            (swatch.width - SWATCH_SIZE).abs() < 0.5,
+            (swatch.width - swatch_side(ControlSize::Medium, world.theme_metrics())).abs() < 0.5,
             "swatch {swatch:?}"
         );
+        // One frame, exactly a control tall: the well sits the same inset
+        // from its top, bottom and start, and the bare hex text fills the
+        // inner height instead of drawing a second box inside it.
+        let edge = nana_ui_core::HAIRLINE + SWATCH_INSET;
+        assert!(
+            (frame.height - ControlSize::Medium.height_in(world.theme_metrics())).abs() < 0.5,
+            "frame {frame:?}"
+        );
+        assert!(
+            (swatch.x - frame.x - edge).abs() < 0.5,
+            "start inset {swatch:?}"
+        );
+        assert!(
+            (swatch.y - frame.y - edge).abs() < 0.5,
+            "top inset {swatch:?}"
+        );
+        assert!(
+            (frame.y + frame.height - swatch.y - swatch.height - edge).abs() < 0.5,
+            "bottom inset {swatch:?}"
+        );
+        assert!(
+            hex.y >= frame.y && hex.y + hex.height <= frame.y + frame.height + 0.5,
+            "hex {hex:?} inside {frame:?}"
+        );
+        let hex_style = world.node_style(snapshot.hex.unwrap()).unwrap();
+        assert_eq!((hex_style.background, hex_style.border), (None, None));
         assert!(hex.width > 40.0, "the hex input still reads, {hex:?}");
         // The well is the picker's trigger, first in the field; the closed
         // picker's surface is not laid out in the row, so neither its sliders
         // nor a pixel of them show at the field's edge.
         let picker = world.layout_box(snapshot.picker.unwrap()).unwrap();
-        assert!(picker.x < swatch.x && swatch.x + swatch.width <= picker.x + picker.width);
+        assert!(picker.x <= swatch.x && swatch.x + swatch.width <= picker.x + picker.width);
         assert!(picker.x + picker.width <= hex.x);
         for item in [snapshot.pad.unwrap(), snapshot.hue_slider.unwrap()] {
             let shown = world.is_overlay_reachable(item)
