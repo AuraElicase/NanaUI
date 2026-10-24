@@ -854,6 +854,20 @@ macro_rules! container_styles {
 pub(crate) use container_styles;
 
 impl ContainerStyle {
+    /// Take out the `.visible` conditions, for a view whose container has a
+    /// visibility rule of its own to combine them with.
+    pub(crate) fn take_visible(&mut self) -> Vec<PropSource<bool>> {
+        let mut visible = Vec::new();
+        self.0.retain_mut(|op| match op {
+            ContainerStyleOp::Visible(source, _) => {
+                visible.push(std::mem::replace(source, PropSource::Const(true)));
+                false
+            }
+            _ => true,
+        });
+        visible
+    }
+
     pub(crate) fn push_class(&mut self, class: Class, at: &'static Location<'static>) {
         self.0.push(ContainerStyleOp::Class(class, at));
     }

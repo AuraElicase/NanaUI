@@ -1254,6 +1254,91 @@ mod styles {
         assert_eq!(anchors[2].flex_grow, Some(1.0));
     }
 
+    /// A callout's row takes `.css` like an element: centring it puts a
+    /// one-line note level with a taller button. A `.visible` joins the
+    /// callout's own rule (hidden while its text is empty).
+    #[test]
+    fn a_callout_row_takes_css_and_visible() {
+        use nana_ui_core::{AlignSpec, Icon, StatusTone};
+        use nana_ui_runtime::view::{button, callout};
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let shown = std::cell::Cell::new(None);
+        let view = cx
+            .mount_view_root(document, || {
+                let open = signal(true);
+                let note = signal(String::from("未开启"));
+                shown.set(Some((open, note)));
+                column().children((
+                    callout(Icon::Add, StatusTone::Warning, note)
+                        .trailing(button("帮我开启"))
+                        .css(css! { align-items: center; })
+                        .visible(open),
+                    callout(Icon::Add, StatusTone::Warning, "默认").trailing(button("打开")),
+                ))
+            })
+            .unwrap();
+        let (open, note) = shown.get().unwrap();
+        let rows = cx.world().node(view.roots()[0]).unwrap().children.clone();
+        let (centred, plain) = (rows[0], rows[1]);
+        assert_eq!(layout_of(&cx, centred).align_items, AlignSpec::Center);
+        assert_eq!(layout_of(&cx, plain).align_items, AlignSpec::Start);
+        assert!(!layout_of(&cx, centred).hidden);
+        open.set(false);
+        cx.flush_reactive().unwrap();
+        assert!(layout_of(&cx, centred).hidden, "its own .visible hides it");
+        open.set(true);
+        note.set(String::new());
+        cx.flush_reactive().unwrap();
+        assert!(layout_of(&cx, centred).hidden, "empty text still hides it");
+        note.set("又有了".into());
+        cx.flush_reactive().unwrap();
+        assert!(!layout_of(&cx, centred).hidden);
+        assert_eq!(layout_of(&cx, centred).align_items, AlignSpec::Center);
+    }
+
+    /// A heading line, its tools and a settings group style their own
+    /// container from `.css` and `.visible`, over the layout they build.
+    #[test]
+    fn heading_rows_tools_and_settings_groups_take_css_and_visible() {
+        use nana_ui_core::AlignSpec;
+        use nana_ui_runtime::view::{group_row, heading_row, heading_tools, settings_group};
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let shown = std::cell::Cell::new(None);
+        let view = cx
+            .mount_view_root(document, || {
+                let open = signal(true);
+                shown.set(Some(open));
+                column().children((
+                    heading_row(
+                        text("标题"),
+                        heading_tools(text("工具")).css(css! { align-items: flex-end; }),
+                    )
+                    .css(css! { align-items: flex-start; }),
+                    settings_group(Some("分组".into()), vec![group_row(text("一行"))])
+                        .css(css! { align-items: center; })
+                        .visible(open),
+                    heading_row(text("默认"), heading_tools(text("工具"))),
+                ))
+            })
+            .unwrap();
+        let open = shown.get().unwrap();
+        let roots = cx.world().node(view.roots()[0]).unwrap().children.clone();
+        let (heading, group, plain) = (roots[0], roots[1], roots[2]);
+        let tools = cx.world().node(heading).unwrap().children[1];
+        assert_eq!(layout_of(&cx, heading).align_items, AlignSpec::Start);
+        assert_eq!(layout_of(&cx, tools).align_items, AlignSpec::End);
+        assert_eq!(layout_of(&cx, group).align_items, AlignSpec::Center);
+        assert_eq!(layout_of(&cx, plain).align_items, AlignSpec::Center);
+        let plain_tools = cx.world().node(plain).unwrap().children[1];
+        assert_eq!(layout_of(&cx, plain_tools).align_items, AlignSpec::Center);
+        assert!(!layout_of(&cx, group).hidden);
+        open.set(false);
+        cx.flush_reactive().unwrap();
+        assert!(layout_of(&cx, group).hidden);
+    }
+
     /// The space in `.panel .open` is a descendant combinator, which L3
     /// views do not compile; without it `.panel.open` is a compound that
     /// applies. Quoted values are spliced bare.
