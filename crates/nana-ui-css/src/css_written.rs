@@ -361,13 +361,6 @@ fn reference() -> &'static (Value, Value) {
         layout.theme.border_radius = Some(nana_ui_core::ThemeExpr::token(
             nana_ui_core::ThemeToken::Space(nana_ui_core::SpacingStep::Md),
         ));
-        layout.equal_wrap = true;
-        let material = nana_ui_core::MaterialRef::new(nana_ui_core::MaterialProgram::new(
-            "fn material(input: MaterialInput) -> vec4<f32> { return input.color; }",
-        ));
-        layout.paint.background_material = Some(material.clone());
-        layout.paint.border_material = Some(material.clone());
-        layout.paint.text_material = Some(material);
         layout.layout_isolation = true;
         layout.adaptation = Some(nana_ui_core::dynamic_layout::AdaptationProfile::RIGID);
         layout.equal_wrap = true;
