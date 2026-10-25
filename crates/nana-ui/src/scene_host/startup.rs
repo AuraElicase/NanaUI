@@ -379,6 +379,7 @@ impl<Message: Send + 'static> PendingStartup<Message> {
             requested_material.wants_transparent_surface(),
             surface_mode_for(target),
             instance,
+            self.options.adapter.clone(),
         )
         .map_err(|error| error.to_string())?;
         let device = spawn_device_request(request, self.channels.proxy.clone())?;

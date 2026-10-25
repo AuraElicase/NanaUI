@@ -49,6 +49,7 @@ pub struct RuntimeProgramContext<Message: Send + 'static> {
     high_contrast: bool,
     store: SharedStore,
     startup: crate::StartupHandle,
+    gpu_adapters: Arc<crate::GpuAdapterSelection>,
 }
 
 // Cloning host handles never clones a message. A derived implementation would
@@ -70,6 +71,7 @@ impl<Message: Send + 'static> Clone for RuntimeProgramContext<Message> {
             high_contrast: self.high_contrast,
             store: Arc::clone(&self.store),
             startup: self.startup.clone(),
+            gpu_adapters: Arc::clone(&self.gpu_adapters),
         }
     }
 }
@@ -105,6 +107,7 @@ impl<Message: Send + 'static> RuntimeProgramContext<Message> {
             high_contrast: false,
             store: memory_store(),
             startup,
+            gpu_adapters: Arc::default(),
         }
     }
 
@@ -120,6 +123,11 @@ impl<Message: Send + 'static> RuntimeProgramContext<Message> {
 
     pub(crate) fn with_store(mut self, store: SharedStore) -> Self {
         self.store = store;
+        self
+    }
+
+    pub(crate) fn with_gpu_adapters(mut self, adapters: Arc<crate::GpuAdapterSelection>) -> Self {
+        self.gpu_adapters = adapters;
         self
     }
 
@@ -176,6 +184,13 @@ impl<Message: Send + 'static> RuntimeProgramContext<Message> {
 
     pub fn gpu(&self) -> &GpuContext {
         &self.gpu
+    }
+
+    /// The adapters that could present the primary window when [`Self::gpu`]
+    /// was created, and which one it runs on. Empty for a host that did not
+    /// choose its device (headless and staged tests).
+    pub fn gpu_adapters(&self) -> &crate::GpuAdapterSelection {
+        &self.gpu_adapters
     }
 
     /// What this window is actually presenting, with the fallback reason when

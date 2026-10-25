@@ -4,6 +4,9 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::gpu_adapter::{
+    GpuAdapterChoice, GpuAdapterInfo, GpuAdapterSelection, automatic_adapter, pick_adapter,
+};
 use crate::{ResolvedSurfaceProfile, SurfacePresentationPolicy, SurfaceProfileFallback};
 use nana_gpu::{__framework, GpuContext, GpuDeviceLost, GpuTextureFormat};
 
@@ -646,6 +649,11 @@ pub struct HostedGpuShared {
     loss_handled: Arc<AtomicBool>,
     /// This device's loss was reported to diagnostics.
     loss_reported: Arc<AtomicBool>,
+    /// The adapter the program asked for, asked for again by a replacement
+    /// device.
+    choice: GpuAdapterChoice,
+    /// What was found and chosen when this device was created.
+    selection: Arc<GpuAdapterSelection>,
 }
 
 impl std::ops::Deref for HostedGpuContext {
@@ -730,6 +738,7 @@ impl HostedGpuContext {
             mode,
             policy,
             None,
+            GpuAdapterChoice::Automatic,
         )?;
         pending.finish(request.acquire().await?)
     }
@@ -751,6 +760,7 @@ impl HostedGpuContext {
             required_features,
             &self.primary.target,
             None,
+            self.shared.choice.clone(),
         )?
         .acquire()
         .await?;
@@ -839,17 +849,27 @@ impl HostedGpuShared {
     }
 
     fn adopt(instance: wgpu::Instance, gpu: GpuContext) -> Self {
+        // An adopted device was not chosen here: the selection only names it.
+        let selection = GpuAdapterSelection {
+            adapters: vec![GpuAdapterInfo::from_wgpu(__framework::adapter_info(&gpu))],
+            active: Some(0),
+            requested_missing: false,
+        };
         Self {
             instance,
             gpu,
             loss_handled: Arc::new(AtomicBool::new(false)),
             loss_reported: Arc::new(AtomicBool::new(false)),
+            choice: GpuAdapterChoice::Automatic,
+            selection: Arc::new(selection),
         }
     }
 
-    /// A replacement device seeded by `surface`, which is rebound onto it.
+    /// A replacement device seeded by `surface`, which is rebound onto it,
+    /// on the adapter `choice` asks for.
     pub(crate) async fn rebuild_for_surface(
         surface: &mut HostedGpuSurface,
+        choice: GpuAdapterChoice,
     ) -> Result<Self, HostedGpuError> {
         let AcquiredDevice {
             shared,
@@ -860,6 +880,7 @@ impl HostedGpuShared {
             wgpu::Features::empty(),
             &surface.target,
             None,
+            choice,
         )?
         .acquire()
         .await?;
@@ -870,6 +891,14 @@ impl HostedGpuShared {
     /// The device every surface of this host renders with.
     pub fn gpu(&self) -> &GpuContext {
         &self.gpu
+    }
+    /// The adapters that could present the window when this device was
+    /// created, and which one it runs on.
+    pub fn adapter_selection(&self) -> Arc<GpuAdapterSelection> {
+        Arc::clone(&self.selection)
+    }
+    pub(crate) fn adapter_choice(&self) -> &GpuAdapterChoice {
+        &self.choice
     }
     pub(crate) fn adapter_info(&self) -> &wgpu::AdapterInfo {
         __framework::adapter_info(&self.gpu)
@@ -1107,9 +1136,13 @@ pub(crate) struct DeviceRequest {
     instance: wgpu::Instance,
     surface: wgpu::Surface<'static>,
     required_features: wgpu::Features,
+    /// The backends `instance` was created for, to enumerate when nothing
+    /// was probed.
+    backends: wgpu::Backends,
     /// What a bootstrap probe already enumerated on `instance`; empty when
     /// nothing was probed.
     adapters: Vec<wgpu::Adapter>,
+    choice: GpuAdapterChoice,
 }
 
 /// A device and the surface it was chosen for, not yet configured.
@@ -1150,6 +1183,7 @@ impl PendingPrimarySurface {
         want_transparent: bool,
         mode: HostedSurfaceMode,
         instance: Option<ProbedInstance>,
+        choice: GpuAdapterChoice,
     ) -> Result<(Self, DeviceRequest), HostedGpuError> {
         Self::begin_with_policy(
             window,
@@ -1158,6 +1192,7 @@ impl PendingPrimarySurface {
             mode,
             SurfacePresentationPolicy::Auto,
             instance,
+            choice,
         )
     }
 
@@ -1168,9 +1203,11 @@ impl PendingPrimarySurface {
         mode: HostedSurfaceMode,
         policy: SurfacePresentationPolicy,
         instance: Option<ProbedInstance>,
+        choice: GpuAdapterChoice,
     ) -> Result<(Self, DeviceRequest), HostedGpuError> {
         let target = HostedSurfaceTarget::new(mode, window.clone())?;
-        let request = DeviceRequest::new(window.clone(), required_features, &target, instance)?;
+        let request =
+            DeviceRequest::new(window.clone(), required_features, &target, instance, choice)?;
         Ok((
             Self {
                 window,
@@ -1206,6 +1243,7 @@ impl DeviceRequest {
         required_features: wgpu::Features,
         target: &HostedSurfaceTarget,
         instance: Option<ProbedInstance>,
+        choice: GpuAdapterChoice,
     ) -> Result<Self, HostedGpuError> {
         #[allow(unused_mut)]
         let mut backends = wgpu::Backends::from_env().unwrap_or_default();
@@ -1230,7 +1268,9 @@ impl DeviceRequest {
             instance,
             surface,
             required_features,
+            backends,
             adapters,
+            choice,
         })
     }
 
@@ -1241,37 +1281,96 @@ impl DeviceRequest {
             instance,
             surface,
             required_features,
-            adapters,
+            backends,
+            mut adapters,
+            choice,
         } = self;
-        let adapter = match probed_adapter(adapters, &surface) {
-            Some(adapter) => adapter,
-            None => wgpu::util::initialize_adapter_from_env_or_default(&instance, Some(&surface))
-                .await
-                .map_err(|error| HostedGpuError::Adapter(error.to_string()))?,
+        if adapters.is_empty() {
+            adapters = instance.enumerate_adapters(backends).await;
+        }
+        let compatible: Vec<wgpu::Adapter> = adapters
+            .into_iter()
+            .filter(|adapter| adapter.is_surface_supported(&surface))
+            .collect();
+        let infos: Vec<GpuAdapterInfo> = compatible
+            .iter()
+            .map(|adapter| GpuAdapterInfo::from_wgpu(&adapter.get_info()))
+            .collect();
+        let env_name = std::env::var("WGPU_ADAPTER_NAME").ok();
+        let power = wgpu::PowerPreference::from_env().unwrap_or_default();
+        let (picked, mut requested_missing) =
+            pick_adapter(&infos, &choice, env_name.as_deref(), power);
+        // An adapter the program asked for that cannot make a device is
+        // passed over for the automatic one, not a failed start.
+        let mut chosen = None;
+        if let (Some(index), GpuAdapterChoice::Matching(_)) = (picked, &choice)
+            && !requested_missing
+        {
+            match request_shared_device(&compatible[index], required_features).await {
+                Ok(device) => chosen = Some((index, device)),
+                Err(_) => requested_missing = true,
+            }
+        }
+        let (active, adapter, (device, queue)) = match chosen {
+            Some((index, device)) => (Some(index), compatible[index].clone(), device),
+            None => {
+                let index = if requested_missing {
+                    automatic_adapter(&infos, env_name.as_deref(), power)
+                } else {
+                    picked
+                };
+                let adapter = match index {
+                    Some(index) => compatible[index].clone(),
+                    None => wgpu::util::initialize_adapter_from_env_or_default(
+                        &instance,
+                        Some(&surface),
+                    )
+                    .await
+                    .map_err(|error| HostedGpuError::Adapter(error.to_string()))?,
+                };
+                let device = request_shared_device(&adapter, required_features)
+                    .await
+                    .map_err(|error| HostedGpuError::Device(error.to_string()))?;
+                let info = GpuAdapterInfo::from_wgpu(&adapter.get_info());
+                let active = index.or_else(|| infos.iter().position(|known| *known == info));
+                (active, adapter, device)
+            }
         };
         let capabilities = surface.get_capabilities(&adapter);
         let format = preferred_surface_format(&capabilities.formats)
             .ok_or(HostedGpuError::SurfaceHasNoFormats)?;
-        let required_features = shared_device_features(adapter.features(), required_features);
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: Some("NanaUI hosted shared device"),
-                required_features,
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::MemoryUsage,
-                trace: wgpu::Trace::Off,
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-            })
-            .await
-            .map_err(|error| HostedGpuError::Device(error.to_string()))?;
         let gpu = __framework::adopt_tracking_loss(adapter, device, queue);
+        let mut shared = HostedGpuShared::adopt(instance, gpu);
+        shared.choice = choice;
+        shared.selection = Arc::new(GpuAdapterSelection {
+            adapters: infos,
+            active,
+            requested_missing,
+        });
         Ok(AcquiredDevice {
-            shared: HostedGpuShared::adopt(instance, gpu),
+            shared,
             surface,
             capabilities,
             format,
         })
     }
+}
+
+/// The one shared device on `adapter`.
+async fn request_shared_device(
+    adapter: &wgpu::Adapter,
+    required_features: wgpu::Features,
+) -> Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError> {
+    adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("NanaUI hosted shared device"),
+            required_features: shared_device_features(adapter.features(), required_features),
+            required_limits: wgpu::Limits::default(),
+            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            trace: wgpu::Trace::Off,
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+        })
+        .await
 }
 
 /// What acquiring a surface texture produced.
@@ -1398,49 +1497,6 @@ fn dx12_shader_compiler(
         .map_or(wgpu::Dx12Compiler::Fxc, |dxc_path| {
             wgpu::Dx12Compiler::DynamicDxc { dxc_path }
         })
-}
-
-/// The adapter `request_adapter` would choose for `surface`, picked from a
-/// probe's enumeration of the same instance instead of enumerating again:
-/// the first compatible adapter whose name contains `WGPU_ADAPTER_NAME` when
-/// that is set, else the first compatible one in enumeration order after the
-/// stable `WGPU_POWER_PREF` sort `request_adapter` applies. `None` sends the
-/// caller to the regular request, which also reports why nothing fits.
-fn probed_adapter(
-    adapters: Vec<wgpu::Adapter>,
-    surface: &wgpu::Surface<'_>,
-) -> Option<wgpu::Adapter> {
-    let compatible = adapters
-        .into_iter()
-        .filter(|adapter| adapter.is_surface_supported(surface));
-    if let Ok(name) = std::env::var("WGPU_ADAPTER_NAME") {
-        let name = name.to_lowercase();
-        return compatible
-            .into_iter()
-            .find(|adapter| adapter.get_info().name.to_lowercase().contains(&name));
-    }
-    let mut compatible: Vec<_> = compatible
-        .map(|adapter| (adapter.get_info().device_type, adapter))
-        .collect();
-    let preference = wgpu::PowerPreference::from_env().unwrap_or_default();
-    if preference != wgpu::PowerPreference::None {
-        let integrated_first = preference == wgpu::PowerPreference::LowPower;
-        compatible.sort_by_key(|(device_type, _)| adapter_order(*device_type, integrated_first));
-    }
-    compatible.into_iter().next().map(|(_, adapter)| adapter)
-}
-
-/// `request_adapter`'s power-preference rank (wgpu-core `get_order`).
-fn adapter_order(device_type: wgpu::DeviceType, integrated_first: bool) -> u8 {
-    match device_type {
-        wgpu::DeviceType::DiscreteGpu if integrated_first => 2,
-        wgpu::DeviceType::IntegratedGpu if integrated_first => 1,
-        wgpu::DeviceType::DiscreteGpu => 1,
-        wgpu::DeviceType::IntegratedGpu => 2,
-        wgpu::DeviceType::Other => 3,
-        wgpu::DeviceType::VirtualGpu => 4,
-        wgpu::DeviceType::Cpu => 5,
-    }
 }
 
 fn preferred_surface_format(formats: &[wgpu::TextureFormat]) -> Option<wgpu::TextureFormat> {
