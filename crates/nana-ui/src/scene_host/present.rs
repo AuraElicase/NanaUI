@@ -706,9 +706,13 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         // Any live window may seed the replacement device, since adapter choice
         // depends on its surface. A device failure does not, so stop there.
         let mut rebuilt = None;
+        let choice = self.graphics.adapter_choice().clone();
         for &id in &recovery_windows {
             let surface = &mut self.window_contexts.get_mut(&id).unwrap().surface;
-            match pollster::block_on(crate::HostedGpuShared::rebuild_for_surface(surface)) {
+            match pollster::block_on(crate::HostedGpuShared::rebuild_for_surface(
+                surface,
+                choice.clone(),
+            )) {
                 Ok(graphics) => {
                     rebuilt = Some((id, graphics));
                     break;
