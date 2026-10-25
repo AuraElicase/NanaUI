@@ -22,7 +22,7 @@ Rust 宿主侧引入 `nana_ui_vue::prelude`，通过 `VueRuntimeProgram::run`（
 
 ## 两阶段启动（Early Splash）
 
-Early Splash 在 Rust 侧通过 `nana_ui::with_startup(StartupOptions { splash: Some(spec) }, || VueRuntimeProgram::run(...))` 配置。JS bundle 在 `UiReady` 阶段求值，此时原生启动 Logo 已经在屏幕上显示。
+Early Splash 在 Rust 侧通过 `nana_ui::with_startup(StartupOptions::default().with_splash(spec), || VueRuntimeProgram::run(...))` 配置。JS bundle 在 `UiReady` 阶段求值，此时原生启动 Logo 已经在屏幕上显示。
 
 前端通过 `Nana.startup` 访问宿主启动状态的投影：
 

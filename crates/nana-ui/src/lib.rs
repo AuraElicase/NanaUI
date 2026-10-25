@@ -33,6 +33,8 @@ mod font_face_ingest;
 #[cfg(feature = "gpu")]
 mod frame_binding;
 pub mod geometry;
+#[cfg(feature = "hosted")]
+mod gpu_adapter;
 #[cfg(feature = "gpu")]
 mod gpu_raw;
 #[cfg(feature = "gpu")]
@@ -45,6 +47,8 @@ mod gpu_work;
 pub mod graph;
 #[cfg(feature = "hosted")]
 mod host_diagnostics;
+#[cfg(feature = "hosted")]
+pub use gpu_adapter::{GpuAdapterChoice, GpuAdapterId, GpuAdapterInfo, GpuAdapterSelection};
 #[cfg(feature = "hosted")]
 mod hosted_context;
 #[cfg(feature = "gpu")]
