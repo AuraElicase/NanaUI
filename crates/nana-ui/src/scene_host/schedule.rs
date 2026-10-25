@@ -306,7 +306,21 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         }
         let mut next = None;
         for id in self.known_window_ids() {
-            if self.render_suspended || self.window_contexts[&id].surface_retry.is_some() {
+            // `redraw` and `tick_hidden_gpu` below can close another window
+            // still in this snapshot, or exit the process. The id was copied
+            // out before that, so indexing it panics once it is gone.
+            if event_loop.exiting() {
+                break;
+            }
+            let Some(retrying) = self
+                .window_contexts
+                .get(&id)
+                .map(|host| host.surface_retry.is_some())
+            else {
+                self.frame_schedules.remove(&id);
+                continue;
+            };
+            if self.render_suspended || retrying {
                 self.frame_schedules.remove(&id);
                 continue;
             }
