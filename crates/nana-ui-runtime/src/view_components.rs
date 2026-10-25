@@ -136,8 +136,6 @@ fn range_field_style() -> NodeStyle {
     }
 }
 
-const MULTILINE_LINE_HEIGHT: f32 = 1.45;
-
 fn text_field_style(multiline: bool) -> NodeStyle {
     let mut layout = (*control_layout()).clone();
     layout.width = Some(nana_ui_core::LengthSpec::Percent(100.0));
@@ -145,9 +143,7 @@ fn text_field_style(multiline: bool) -> NodeStyle {
     layout.overflow_y = nana_ui_core::OverflowSpec::Hidden;
     if multiline {
         layout.theme.line_height = None;
-        layout.line_height = Some(nana_ui_core::LineHeightSpec::Relative(
-            MULTILINE_LINE_HEIGHT,
-        ));
+        layout.line_height = Some(nana_ui_core::LineHeightSpec::Relative(1.45));
         layout.min_height = Some(nana_ui_core::LengthSpec::Px(
             nana_ui_core::ControlSize::Medium.height_in(nana_ui_core::UI_METRICS) * 3.0,
         ));
@@ -3034,10 +3030,7 @@ impl TextArea {
             // Bind the compact default here, before declarative CSS can
             // override it with an authored absolute or relative line-height.
             if layout.theme.line_height.is_none()
-                && layout.line_height
-                    == Some(nana_ui_core::LineHeightSpec::Relative(
-                        MULTILINE_LINE_HEIGHT,
-                    ))
+                && layout.line_height == text_field_style(true).layout.line_height
             {
                 layout.theme.line_height =
                     Some(nana_ui_core::ThemeToken::Line(nana_ui_core::LineRole::Line).into());
