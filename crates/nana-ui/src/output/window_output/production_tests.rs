@@ -438,3 +438,46 @@ fn every_other_host_frame_in_flight_still_leaves_the_output_a_slot() {
         in_flight.push(step);
     }
 }
+
+#[test]
+fn a_resend_records_an_unchanged_scene_again() {
+    let gpu = test_gpu::context();
+    let config = WindowOutputConfig::default().with_extent(WindowOutputExtent::MatchWindow);
+    let mut state = WindowOutputState::new(WindowId(244));
+    let mut painters = HashMap::new();
+    let content = scene(false);
+    state.set_config(Some(config));
+    drop(initial(&mut state, &mut painters, &content));
+    let begin = |state: &mut WindowOutputState| {
+        state.begin(
+            &gpu,
+            &geometry(),
+            &content,
+            0,
+            false,
+            None,
+            [0.0; 4],
+            Instant::now(),
+        )
+    };
+    // Once that frame completed, nothing changed: nothing is recorded or due.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        gpu.poll();
+        if matches!(begin(&mut state), OutputStep::Idle) && state.throttled_until.is_none() {
+            break;
+        }
+        state.throttled_until = None;
+        assert!(Instant::now() < deadline, "the output never settled");
+        std::thread::yield_now();
+    }
+    assert_eq!(state.frame_demand(true), crate::FrameDemand::OnDemand);
+    // Its consumer missed that frame: one is due shortly, and recorded.
+    let now = Instant::now();
+    state.resend(now);
+    assert!(matches!(
+        state.frame_demand(true),
+        crate::FrameDemand::At(at) if at > now && at <= now + NATIVE_RETRY
+    ));
+    assert!(matches!(begin(&mut state), OutputStep::Record { .. }));
+}

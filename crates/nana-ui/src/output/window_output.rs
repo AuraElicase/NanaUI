@@ -54,6 +54,8 @@ pub const WINDOW_OUTPUT_HIDDEN_FPS: NonZeroU32 = match NonZeroU32::new(30) {
 /// the pool is retired and a fresh one opened.
 #[cfg(all(windows, feature = "native-export"))]
 const NATIVE_STALL: Duration = Duration::from_secs(2);
+/// How soon an output held back for its consumer is tried again.
+const NATIVE_RETRY: Duration = Duration::from_millis(4);
 
 /// Output size.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -252,9 +254,21 @@ pub struct WindowOutputFrame {
     traces: [Option<super::OutputTraceSnapshot>; 3],
     #[cfg(all(windows, feature = "native-export"))]
     native: std::cell::RefCell<Option<nana_gpu::NativeFrameToken>>,
+    resend: std::cell::Cell<bool>,
 }
 
 impl WindowOutputFrame {
+    /// The consumer could not take this frame (a Spout receiver held its
+    /// lock, say). Produce the output again soon even if the scene stays the
+    /// same, so the last picture of an animation is not lost.
+    pub fn request_resend(&self) {
+        self.resend.set(true);
+    }
+
+    pub(crate) fn resend_requested(&self) -> bool {
+        self.resend.get()
+    }
+
     pub fn source_id(&self) -> super::OutputSurfaceId {
         self.lease.provenance().source()
     }
@@ -728,6 +742,17 @@ impl WindowOutputState {
         self.native_unavailable = None;
     }
 
+    /// Record this output again soon, scene changed or not: the last frame
+    /// never reached its consumer.
+    pub(crate) fn resend(&mut self, now: Instant) {
+        if self.config.is_none() {
+            return;
+        }
+        self.volatile = self.volatile.wrapping_add(1);
+        let at = now + NATIVE_RETRY;
+        self.throttled_until = Some(self.throttled_until.map_or(at, |due| due.min(at)));
+    }
+
     fn release(&mut self) {
         if let Some(surface) = self.surface.take() {
             self.retired_targets.extend(surface.target_ids());
@@ -838,6 +863,28 @@ impl WindowOutputState {
             return OutputStep::Idle;
         };
         if config.suspended && !self.suspend_pending {
+            return OutputStep::Idle;
+        }
+        // The consumer still reads the last frame, so this one could not be
+        // exported: hold it back and record the then-current scene shortly
+        // instead of rendering a frame only to drop it. A consumer stalled
+        // past NATIVE_STALL falls through, and staging gives it a new pool.
+        #[cfg(all(windows, feature = "native-export"))]
+        if config.export == WindowOutputExport::Native
+            && self
+                .native
+                .as_ref()
+                .and_then(nana_gpu::NativeExportPool::consumer_wait)
+                .is_some_and(|waiting| waiting < NATIVE_STALL)
+        {
+            self.work.deferred += 1;
+            self.throttled_until = Some(now + NATIVE_RETRY);
+            nana_diagnostics::metric!(nana_diagnostics::framework::gpu::OUTPUT_DEFERRED);
+            if let Some(trace) = &mut self.trace
+                && let Some(consumer) = &mut trace.snapshots[window_trace::TRANSPORT]
+            {
+                consumer.deferral_reason = super::trace::OutputTraceDeferral::NativeRelease;
+            }
             return OutputStep::Idle;
         }
         let host_textures = if config.suspended {
@@ -1332,6 +1379,9 @@ impl WindowOutputState {
                 } else {
                     self.report(Reported::NativeDeferred, WindowOutputStatus::NativeDeferred);
                 }
+                // This frame is dropped; an unchanged scene would otherwise
+                // never be exported again.
+                self.resend(Instant::now());
                 None
             }
             Ok(nana_gpu::NativeExportOutcome::Deferred(
@@ -1350,6 +1400,7 @@ impl WindowOutputState {
                     },
                 );
                 self.report(Reported::NativeDeferred, WindowOutputStatus::NativeDeferred);
+                self.resend(Instant::now());
                 None
             }
             Err(error) => {
@@ -1460,6 +1511,7 @@ impl WindowOutputState {
             traces: self.output_traces(),
             #[cfg(all(windows, feature = "native-export"))]
             native: std::cell::RefCell::new(native),
+            resend: std::cell::Cell::new(false),
         })
     }
 
