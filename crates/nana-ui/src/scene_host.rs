@@ -1637,6 +1637,7 @@ fn program_context<Message: Send + 'static>(
         appearance,
         startup.clone(),
     )
+    .with_gpu_adapters(graphics.adapter_selection())
 }
 
 fn accessibility_snapshot<Program: RuntimeProgram>(

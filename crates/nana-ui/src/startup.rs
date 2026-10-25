@@ -30,14 +30,23 @@ pub use nana_window::{
 };
 
 /// What an application asks of its startup, before anything else of it runs.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct StartupOptions {
     pub splash: Option<SplashSpec>,
+    /// The GPU adapter the shared device is created on, at startup and again
+    /// when it is replaced after a device loss. What was found and chosen is
+    /// [`RuntimeProgramContext::gpu_adapters`](crate::RuntimeProgramContext::gpu_adapters).
+    pub adapter: crate::GpuAdapterChoice,
 }
 
 impl StartupOptions {
     pub const fn with_splash(mut self, splash: SplashSpec) -> Self {
         self.splash = Some(splash);
+        self
+    }
+
+    pub fn with_adapter(mut self, adapter: crate::GpuAdapterChoice) -> Self {
+        self.adapter = adapter;
         self
     }
 }
