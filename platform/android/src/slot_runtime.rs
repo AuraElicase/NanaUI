@@ -1,6 +1,9 @@
-//! Experimental Android slot as a NanaUI Runtime document.
+//! Experimental Android window content as a NanaUI Runtime document.
 //!
-//! Hosts [`RuntimeDocument`] + one input source + host text shaping — the same
+//! The document covers the whole surface. Its root paints the theme
+//! background and pads itself by the system insets, so its content fills the
+//! Primary region: an appearance page (theme and text size) above the control
+//! strip. Hosts [`RuntimeDocument`] + one input source + host text shaping — the same
 //! routing `run_runtime` uses on desktop. The Android Activity still owns the
 //! window and event loop; this type does not call `run_runtime` (winit).
 //! Soft keyboard show/hide is driven by the host from [`Self::text_input_focused`];
@@ -14,14 +17,19 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use nana_ui::runtime::view::{entity_ref, widget, with_refs};
+use nana_ui::runtime::view::{
+    entity_ref, segmented, segmented_option, settings_row, widget, with_refs,
+};
 use nana_ui::runtime::{
     AccessibilityActionRequest, Activate, Button, DocumentId, Entity, FrameworkError,
-    LayoutViewport, List, NodeStyle, RuntimeDocument, Switch, Text, TextChanged, TextInput,
-    ToggleChanged,
+    LayoutViewport, List, NodeStyle, RuntimeDocument, SettingsCard, Switch, Text, TextChanged,
+    TextInput, ToggleChanged,
 };
 use nana_ui::{AccessibilityNode, NanaTextShaper, RuntimeAnimationClock};
-use nana_ui_core::{AlignSpec, FlexDirection, JustifySpec, LengthSpec, PhysicalRect};
+use nana_ui_core::{
+    AlignSpec, FlexDirection, JustifySpec, LengthSpec, PhysicalRect, SemanticColorRole,
+    ThemeAppearance, builtin_theme_arc,
+};
 use nana_ui_platform::{
     CanonicalInputEvent, CommittedText, CompositionInput, CursorIcon, DeviceId, EndpointGeneration,
     HostServiceError, HostServices, InputPayload, InputSequencer, InputSourceId,
@@ -29,7 +37,7 @@ use nana_ui_platform::{
     write_shared_clipboard,
 };
 
-use crate::control_slot::{CONTROL_SLOT_INSET, CONTROL_SLOT_LOGICAL_HEIGHT};
+use crate::shell::{SystemInsets, primary_rect};
 use crate::slot_ime::{SlotEditorInfo, SlotImeBuffer, editor_info_from_request};
 use crate::slot_input::{
     SlotInputGate, SlotKeyDispatch, SlotKeyMods, SlotLogicalKey, SlotTouchKind, logical_point,
@@ -41,12 +49,70 @@ const SLOT_TEXT_LABEL: &str = "Shell";
 const SLOT_ICON_GLYPH: &str = "⚙";
 const SLOT_SWITCH_LABEL: &str = "On";
 const SLOT_INPUT_PLACEHOLDER: &str = "Type…";
+const PAGE_TITLE: &str = "外观";
+const THEME_LABEL: &str = "主题";
+const TEXT_SIZE_LABEL: &str = "文字大小";
+
+/// Logical height of the control strip.
+const STRIP_HEIGHT: f32 = 64.0;
+/// Logical inset between the Primary edges and the content.
+const CONTENT_INSET: f32 = 12.0;
+
+/// The theme the page asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ThemeChoice {
+    Light,
+    Dark,
+    #[default]
+    System,
+}
+
+/// The text size the page asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum TextSizeChoice {
+    #[default]
+    System,
+    Small,
+    Standard,
+    Large,
+}
+
+impl TextSizeChoice {
+    fn scale(self, system: f32) -> f32 {
+        match self {
+            Self::System => system,
+            Self::Small => 0.85,
+            Self::Standard => 1.0,
+            Self::Large => 1.2,
+        }
+    }
+}
+
+/// What the host reads from the Android `Configuration`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SystemAppearance {
+    /// `uiMode` night bit.
+    pub dark: bool,
+    /// `fontScale`, the system text-size setting.
+    pub font_scale: f32,
+}
+
+impl Default for SystemAppearance {
+    fn default() -> Self {
+        Self {
+            dark: false,
+            font_scale: 1.0,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 struct SlotStripState {
     press_count: u32,
     switch_on: bool,
     input_value: String,
+    theme: ThemeChoice,
+    text_size: TextSizeChoice,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,7 +145,7 @@ impl HostServices for SlotServices {
 /// The slot's one input source.
 const SLOT_SOURCE: InputSourceId = InputSourceId(1);
 
-/// Retained NanaUI document for the bottom control strip.
+/// Retained NanaUI document for the window: appearance page and control strip.
 pub struct SlotRuntime {
     document: RuntimeDocument,
     shaper: NanaTextShaper,
@@ -88,6 +154,10 @@ pub struct SlotRuntime {
     clock: RuntimeAnimationClock,
     physical_size: (u32, u32),
     scale: f32,
+    insets: SystemInsets,
+    system: SystemAppearance,
+    /// The theme and text scale last installed on the document.
+    applied: Option<(ThemeAppearance, f32)>,
     state: Arc<Mutex<SlotStripState>>,
     gate: SlotInputGate,
     last_touch_in_slot: bool,
@@ -95,6 +165,7 @@ pub struct SlotRuntime {
     #[cfg_attr(not(test), allow(dead_code))]
     button: Entity<Button>,
     field: Entity<TextInput>,
+    root: Entity<List>,
 }
 
 impl SlotRuntime {
@@ -106,42 +177,78 @@ impl SlotRuntime {
         let presses = Arc::clone(&state);
         let toggles = Arc::clone(&state);
         let inputs = Arc::clone(&state);
+        let theme = |choice: ThemeChoice| {
+            let state = Arc::clone(&state);
+            move || lock_state(&state).theme = choice
+        };
+        let text_size = |choice: TextSizeChoice| {
+            let state = Arc::clone(&state);
+            move || lock_state(&state).text_size = choice
+        };
         document
             .context_mut()
             .bind_input_source(SLOT_SOURCE, EndpointGeneration(1), document_id)
             .expect("a fresh slot document binds its source");
-        let (_, (button, field)) = document.context_mut().mount_view_root(document_id, || {
-            let (button, field) = (entity_ref(), entity_ref());
-            let strip = widget(row_strip()).key("row").children((
-                widget(Text::new(SLOT_ICON_GLYPH)).key("icon"),
-                widget(Text::new(SLOT_TEXT_LABEL)).key("caption"),
-                widget(slot_text_input())
-                    .key("field")
-                    .entity_ref(field)
-                    .on_cx(move |field: &mut TextInput, event: &TextChanged, _cx| {
-                        field.state.replace_value(event.value.clone());
-                        lock_state(&inputs).input_value = event.value.to_string();
-                    }),
-                widget(Switch::new(SLOT_SWITCH_LABEL, false))
-                    .key("switch")
-                    .on_cx(move |switch: &mut Switch, event: &ToggleChanged, _cx| {
-                        switch.checked = event.checked;
-                        lock_state(&toggles).switch_on = event.checked;
-                    }),
-                widget(Button::new(SLOT_BUTTON_LABEL))
-                    .key("button")
-                    .entity_ref(button)
-                    .on_cx(move |button: &mut Button, _event: &Activate, _cx| {
-                        let mut slot = lock_state(&presses);
-                        slot.press_count = slot.press_count.saturating_add(1);
-                        button.label = format!("{SLOT_BUTTON_LABEL} · {}", slot.press_count);
-                    }),
-            ));
-            with_refs(
-                widget(column_host()).key("column").children(strip),
-                (button, field),
-            )
-        })?;
+        let (_, (button, field, root)) =
+            document.context_mut().mount_view_root(document_id, || {
+                let (button, field, root) = (entity_ref(), entity_ref(), entity_ref());
+                let page = widget(SettingsCard::new(PAGE_TITLE))
+                    .key("appearance")
+                    .children((
+                        settings_row(THEME_LABEL).control(
+                            segmented().key("theme").children((
+                                segmented_option("浅色").on_select(theme(ThemeChoice::Light)),
+                                segmented_option("深色").on_select(theme(ThemeChoice::Dark)),
+                                segmented_option("跟随系统")
+                                    .selected(true)
+                                    .on_select(theme(ThemeChoice::System)),
+                            )),
+                        ),
+                        settings_row(TEXT_SIZE_LABEL).control(
+                            segmented().key("text-size").children((
+                                segmented_option("跟随系统")
+                                    .selected(true)
+                                    .on_select(text_size(TextSizeChoice::System)),
+                                segmented_option("小").on_select(text_size(TextSizeChoice::Small)),
+                                segmented_option("标准")
+                                    .on_select(text_size(TextSizeChoice::Standard)),
+                                segmented_option("大").on_select(text_size(TextSizeChoice::Large)),
+                            )),
+                        ),
+                    ));
+                let strip = widget(row_strip()).key("row").children((
+                    widget(Text::new(SLOT_ICON_GLYPH)).key("icon"),
+                    widget(Text::new(SLOT_TEXT_LABEL)).key("caption"),
+                    widget(slot_text_input())
+                        .key("field")
+                        .entity_ref(field)
+                        .on_cx(move |field: &mut TextInput, event: &TextChanged, _cx| {
+                            field.state.replace_value(event.value.clone());
+                            lock_state(&inputs).input_value = event.value.to_string();
+                        }),
+                    widget(Switch::new(SLOT_SWITCH_LABEL, false))
+                        .key("switch")
+                        .on_cx(move |switch: &mut Switch, event: &ToggleChanged, _cx| {
+                            switch.checked = event.checked;
+                            lock_state(&toggles).switch_on = event.checked;
+                        }),
+                    widget(Button::new(SLOT_BUTTON_LABEL))
+                        .key("button")
+                        .entity_ref(button)
+                        .on_cx(move |button: &mut Button, _event: &Activate, _cx| {
+                            let mut slot = lock_state(&presses);
+                            slot.press_count = slot.press_count.saturating_add(1);
+                            button.label = format!("{SLOT_BUTTON_LABEL} · {}", slot.press_count);
+                        }),
+                ));
+                with_refs(
+                    widget(column_host())
+                        .key("column")
+                        .entity_ref(root)
+                        .children((page, strip)),
+                    (button, field, root),
+                )
+            })?;
 
         let mut runtime = Self {
             document,
@@ -153,28 +260,64 @@ impl SlotRuntime {
             clock: RuntimeAnimationClock::now(),
             physical_size: (physical_size.0.max(1), physical_size.1.max(1)),
             scale: scale.max(0.25),
+            insets: SystemInsets::default(),
+            system: SystemAppearance::default(),
+            applied: None,
             state,
             gate: SlotInputGate::default(),
             last_touch_in_slot: false,
             ime_enabled: false,
             button,
             field,
+            root,
         };
+        runtime.pad_root()?;
         runtime.flush()?;
         Ok(runtime)
     }
 
-    pub fn resize(&mut self, physical_size: (u32, u32), scale: f32) {
-        self.physical_size = (physical_size.0.max(1), physical_size.1.max(1));
-        self.scale = scale.max(0.25);
+    /// The surface size and scale, and the system bands over it.
+    pub fn resize(
+        &mut self,
+        physical_size: (u32, u32),
+        scale: f32,
+        insets: SystemInsets,
+    ) -> Result<(), FrameworkError> {
+        let physical_size = (physical_size.0.max(1), physical_size.1.max(1));
+        let scale = scale.max(0.25);
+        if (physical_size, scale, insets) == (self.physical_size, self.scale, self.insets) {
+            return Ok(());
+        }
+        self.physical_size = physical_size;
+        self.scale = scale;
+        self.insets = insets;
+        self.pad_root()
+    }
+
+    /// Dark mode and text size from the Android `Configuration`; the page's
+    /// “跟随系统” choices follow them.
+    pub fn set_system_appearance(&mut self, system: SystemAppearance) {
+        self.system = system;
     }
 
     pub fn scale(&self) -> f32 {
         self.scale
     }
 
-    pub fn physical_size(&self) -> (u32, u32) {
-        self.physical_size
+    /// The surface below the status bar and above the navigation bar or soft
+    /// keyboard, in physical px. Touches outside it stay with the system.
+    pub fn primary(&self) -> PhysicalRect {
+        primary_rect(self.physical_size, self.insets)
+    }
+
+    /// The theme installed on the document.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn theme_appearance(&self) -> ThemeAppearance {
+        self.document
+            .context()
+            .world()
+            .installed_theme()
+            .appearance()
     }
 
     pub fn press_count(&self) -> u32 {
@@ -225,6 +368,7 @@ impl SlotRuntime {
     }
 
     pub fn flush(&mut self) -> Result<(), FrameworkError> {
+        self.apply_appearance()?;
         let (logical_w, logical_h) = self.logical_size();
         self.document
             .flush(LayoutViewport::new(logical_w, logical_h), &mut self.shaper)?;
@@ -238,24 +382,62 @@ impl SlotRuntime {
         )
     }
 
+    /// Install the theme and text scale the page's choices resolve to, when
+    /// they changed.
+    fn apply_appearance(&mut self) -> Result<(), FrameworkError> {
+        let (theme, text_size) = {
+            let state = lock_state(&self.state);
+            (state.theme, state.text_size)
+        };
+        let appearance = match theme {
+            ThemeChoice::Light => ThemeAppearance::Light,
+            ThemeChoice::Dark => ThemeAppearance::Dark,
+            ThemeChoice::System if self.system.dark => ThemeAppearance::Dark,
+            ThemeChoice::System => ThemeAppearance::Light,
+        };
+        let text_scale = text_size.scale(self.system.font_scale);
+        if self.applied == Some((appearance, text_scale)) {
+            return Ok(());
+        }
+        let document = self.document.document();
+        let context = self.document.context_mut();
+        context.set_theme_tokens(builtin_theme_arc(appearance))?;
+        context.set_document_text_scale(document, Some(text_scale));
+        self.applied = Some((appearance, text_scale));
+        Ok(())
+    }
+
+    /// Pad the root by the system insets so the content fills Primary.
+    fn pad_root(&mut self) -> Result<(), FrameworkError> {
+        let scale = self.scale;
+        let top = self.insets.top as f32 / scale + CONTENT_INSET;
+        let bottom = self.insets.bottom as f32 / scale + CONTENT_INSET;
+        self.document
+            .context_mut()
+            .update_component(self.root, move |root, _| {
+                let layout = Arc::make_mut(&mut root.style.layout);
+                layout.padding_top = Some(LengthSpec::Px(top));
+                layout.padding_bottom = Some(LengthSpec::Px(bottom));
+            })
+    }
+
     /// Queue a physical pointer sample (Android MotionEvent coords + pointer id).
     ///
-    /// Returns `false` when the sample is outside the slot (and not part of
-    /// an in-slot drag) so the host can leave it `Unhandled` for the system.
+    /// Returns `false` when the sample is outside Primary (and not part of
+    /// a drag that started inside) so the host can leave it `Unhandled` for
+    /// the system.
     pub fn push_touch(
         &mut self,
-        slot: Option<PhysicalRect>,
         kind: SlotTouchKind,
         physical_x: f32,
         physical_y: f32,
         pointer_id: i32,
     ) -> Result<bool, FrameworkError> {
-        self.last_touch_in_slot = slot
-            .map(|rect| pointer_in_slot(rect, physical_x, physical_y))
-            .unwrap_or(false);
+        let primary = self.primary();
+        self.last_touch_in_slot = pointer_in_slot(primary, physical_x, physical_y);
         if !self
             .gate
-            .accept_pointer(slot, kind, physical_x, physical_y, pointer_id)
+            .accept_pointer(Some(primary), kind, physical_x, physical_y, pointer_id)
         {
             return Ok(false);
         }
@@ -501,15 +683,17 @@ fn lock_state(state: &Arc<Mutex<SlotStripState>>) -> std::sync::MutexGuard<'_, S
 }
 
 fn column_host() -> List {
-    let mut list = List::new().label("Slot");
+    let mut list = List::new();
+    list.style.background = Some(SemanticColorRole::Background);
     let layout = std::sync::Arc::make_mut(&mut list.style.layout);
     layout.direction = Some(FlexDirection::Column);
     layout.width = Some(LengthSpec::Fill);
     layout.height = Some(LengthSpec::Fill);
-    layout.justify_content = JustifySpec::End;
-    layout.padding_left = Some(LengthSpec::Px(CONTROL_SLOT_INSET));
-    layout.padding_right = Some(LengthSpec::Px(CONTROL_SLOT_INSET));
-    layout.padding_bottom = Some(LengthSpec::Px(CONTROL_SLOT_INSET));
+    layout.justify_content = JustifySpec::SpaceBetween;
+    layout.padding_left = Some(LengthSpec::Px(CONTENT_INSET));
+    layout.padding_right = Some(LengthSpec::Px(CONTENT_INSET));
+    layout.padding_top = Some(LengthSpec::Px(CONTENT_INSET));
+    layout.padding_bottom = Some(LengthSpec::Px(CONTENT_INSET));
     list
 }
 
@@ -519,7 +703,7 @@ fn row_strip() -> List {
     let layout = std::sync::Arc::make_mut(&mut list.style.layout);
     layout.direction = Some(FlexDirection::Row);
     layout.width = Some(LengthSpec::Fill);
-    layout.height = Some(LengthSpec::Px(CONTROL_SLOT_LOGICAL_HEIGHT));
+    layout.height = Some(LengthSpec::Px(STRIP_HEIGHT));
     layout.align_items = AlignSpec::Center;
     layout.gap = Some(LengthSpec::Px(10.0));
     layout.overflow_x = nana_ui_core::OverflowSpec::Hidden;
@@ -538,11 +722,19 @@ fn slot_text_input() -> TextInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::control_slot::control_slot_paint_bounds;
     use nana_ui::runtime::{AccessibilityAction, AccessibilityRole};
 
+    /// Status bar and navigation bar of a 1080×1920 phone at density 2.
+    const INSETS: SystemInsets = SystemInsets {
+        top: 63,
+        bottom: 126,
+    };
+
     fn runtime() -> SlotRuntime {
-        SlotRuntime::new((1080, 1920), 2.0).expect("slot runtime")
+        let mut slot = SlotRuntime::new((1080, 1920), 2.0).expect("slot runtime");
+        slot.resize((1080, 1920), 2.0, INSETS).expect("insets");
+        slot.flush().expect("flush");
+        slot
     }
 
     fn field_id(slot: &SlotRuntime) -> nana_ui::runtime::StableNodeId {
@@ -563,15 +755,8 @@ mod tests {
         let scale = slot.scale();
         let x = (layout.x + layout.width * 0.5) * scale;
         let y = (layout.y + layout.height * 0.5) * scale;
-        let bounds = control_slot_paint_bounds(slot.physical_size(), scale);
-        assert!(
-            slot.push_touch(bounds, SlotTouchKind::Down, x, y, 0)
-                .expect("down")
-        );
-        assert!(
-            slot.push_touch(bounds, SlotTouchKind::Up, x, y, 0)
-                .expect("up")
-        );
+        assert!(slot.push_touch(SlotTouchKind::Down, x, y, 0).expect("down"));
+        assert!(slot.push_touch(SlotTouchKind::Up, x, y, 0).expect("up"));
     }
 
     fn node_with_role(nodes: &[AccessibilityNode], role: AccessibilityRole) -> &AccessibilityNode {
@@ -603,20 +788,13 @@ mod tests {
         let scale = slot.scale();
         let x = (layout.x + layout.width * 0.5) * scale;
         let y = (layout.y + layout.height * 0.5) * scale;
-        let bounds = control_slot_paint_bounds(slot.physical_size(), scale);
-        let slot_rect = bounds.expect("slot bounds");
+        let slot_rect = slot.primary();
         assert!(
             crate::slot_input::pointer_in_slot(slot_rect, x, y),
             "button center ({x}, {y}) layout={layout:?} must sit in slot {slot_rect:?}"
         );
-        assert!(
-            slot.push_touch(bounds, SlotTouchKind::Down, x, y, 0)
-                .expect("down")
-        );
-        assert!(
-            slot.push_touch(bounds, SlotTouchKind::Up, x, y, 0)
-                .expect("up")
-        );
+        assert!(slot.push_touch(SlotTouchKind::Down, x, y, 0).expect("down"));
+        assert!(slot.push_touch(SlotTouchKind::Up, x, y, 0).expect("up"));
         assert_eq!(slot.press_count(), 1);
         assert!(slot.last_touch_in_slot());
     }
@@ -634,13 +812,12 @@ mod tests {
         let scale = slot.scale();
         let x = (layout.x + layout.width * 0.5) * scale;
         let y = (layout.y + layout.height * 0.5) * scale;
-        let bounds = control_slot_paint_bounds(slot.physical_size(), scale);
         assert!(
-            slot.push_touch(bounds, SlotTouchKind::Down, x, y, 0)
+            slot.push_touch(SlotTouchKind::Down, x, y, 0)
                 .expect("focus down")
         );
         assert!(
-            slot.push_touch(bounds, SlotTouchKind::Up, x, y, 0)
+            slot.push_touch(SlotTouchKind::Up, x, y, 0)
                 .expect("focus up")
         );
         assert!(
@@ -658,7 +835,6 @@ mod tests {
     #[test]
     fn text_input_focus_tracks_taps_for_soft_input_mirror() {
         let mut slot = runtime();
-        let bounds = control_slot_paint_bounds(slot.physical_size(), slot.scale());
         let field_center = |slot: &SlotRuntime| {
             let layout = slot
                 .document()
@@ -689,11 +865,11 @@ mod tests {
 
         let (fx, fy) = field_center(&slot);
         assert!(
-            slot.push_touch(bounds, SlotTouchKind::Down, fx, fy, 0)
+            slot.push_touch(SlotTouchKind::Down, fx, fy, 0)
                 .expect("field down")
         );
         assert!(
-            slot.push_touch(bounds, SlotTouchKind::Up, fx, fy, 0)
+            slot.push_touch(SlotTouchKind::Up, fx, fy, 0)
                 .expect("field up")
         );
         assert!(
@@ -703,11 +879,11 @@ mod tests {
 
         let (bx, by) = button_center(&slot);
         assert!(
-            slot.push_touch(bounds, SlotTouchKind::Down, bx, by, 0)
+            slot.push_touch(SlotTouchKind::Down, bx, by, 0)
                 .expect("button down")
         );
         assert!(
-            slot.push_touch(bounds, SlotTouchKind::Up, bx, by, 0)
+            slot.push_touch(SlotTouchKind::Up, bx, by, 0)
                 .expect("button up")
         );
         assert!(
@@ -719,10 +895,9 @@ mod tests {
     #[test]
     fn pointer_outside_slot_is_not_handled() {
         let mut slot = runtime();
-        let bounds = control_slot_paint_bounds(slot.physical_size(), slot.scale());
         assert!(
             !slot
-                .push_touch(bounds, SlotTouchKind::Down, 10.0, 10.0, 0)
+                .push_touch(SlotTouchKind::Down, 10.0, 10.0, 0)
                 .expect("outside")
         );
         assert_eq!(slot.press_count(), 0);
@@ -800,13 +975,11 @@ mod tests {
         let field = field_id(&slot);
         tap_entity(&mut slot, field);
         assert!(slot.accepts_key());
-
-        let bounds = control_slot_paint_bounds(slot.physical_size(), slot.scale());
-        let outside = bounds.map(|rect| (rect.x as f32 - 4.0, rect.y as f32 - 4.0));
-        let (x, y) = outside.expect("slot bounds");
+        // The status bar, above Primary.
+        let (x, y) = (540.0, 10.0);
         assert!(
             !slot
-                .push_touch(bounds, SlotTouchKind::Down, x, y, 1)
+                .push_touch(SlotTouchKind::Down, x, y, 1)
                 .expect("down outside")
         );
         assert!(
@@ -1036,5 +1209,197 @@ mod tests {
             "and in the Java side's UTF-16 units"
         );
         assert_eq!(slot.input_value(), "abcd", "nothing committed");
+    }
+
+    fn node_labelled(slot: &SlotRuntime, label: &str) -> nana_ui::runtime::StableNodeId {
+        slot.accessibility_nodes()
+            .into_iter()
+            .find(|node| node.label.as_deref() == Some(label))
+            .unwrap_or_else(|| panic!("missing {label:?}"))
+            .id
+    }
+
+    /// The `index`th option labelled `label` (both segmented controls offer
+    /// “跟随系统”: 0 is the theme's, 1 the text size's).
+    fn option_labelled(
+        slot: &SlotRuntime,
+        label: &str,
+        index: usize,
+    ) -> nana_ui::runtime::StableNodeId {
+        slot.accessibility_nodes()
+            .into_iter()
+            .filter(|node| node.label.as_deref() == Some(label))
+            .nth(index)
+            .unwrap_or_else(|| panic!("missing {label:?} #{index}"))
+            .id
+    }
+
+    #[test]
+    fn content_fills_primary_and_the_background_covers_the_window() {
+        let slot = runtime();
+        let world = slot.document().context().world();
+        let scale = slot.scale();
+        let root = world.layout_box(slot.root.stable_id()).expect("root");
+        assert_eq!((root.x, root.y), (0.0, 0.0));
+        assert!((root.width - 540.0).abs() < 0.01 && (root.height - 960.0).abs() < 0.01);
+        assert_eq!(
+            world
+                .node_style(slot.root.stable_id())
+                .and_then(|style| style.background),
+            Some(SemanticColorRole::Background)
+        );
+
+        let primary = slot.primary();
+        let top = primary.y as f32 / scale;
+        let bottom = (primary.y + primary.height) as f32 / scale;
+        let page = world
+            .layout_box(node_labelled(&slot, PAGE_TITLE))
+            .expect("page");
+        assert!(
+            page.y >= top,
+            "page {page:?} must start below the status bar"
+        );
+        let button = world.layout_box(button_id(&slot)).expect("button");
+        assert!(
+            button.y + button.height <= bottom,
+            "strip {button:?} must end above the navigation bar ({bottom})"
+        );
+        assert!(
+            page.y + page.height <= button.y,
+            "page sits above the strip"
+        );
+    }
+
+    #[test]
+    fn insets_move_the_content_without_resizing_the_document() {
+        let mut slot = runtime();
+        let before = slot
+            .document()
+            .context()
+            .world()
+            .layout_box(button_id(&slot))
+            .expect("button");
+        // The soft keyboard takes over the bottom band.
+        slot.resize(
+            (1080, 1920),
+            2.0,
+            SystemInsets {
+                top: INSETS.top,
+                bottom: 800,
+            },
+        )
+        .expect("ime");
+        slot.flush().expect("flush");
+        let after = slot
+            .document()
+            .context()
+            .world()
+            .layout_box(button_id(&slot))
+            .expect("button");
+        assert!(
+            (before.y - after.y - (800 - INSETS.bottom) as f32 / 2.0).abs() < 0.01,
+            "strip must ride the keyboard: {before:?} → {after:?}"
+        );
+        assert_eq!(slot.primary().y + slot.primary().height, 1920 - 800);
+    }
+
+    #[test]
+    fn theme_follows_the_system_until_a_choice_is_made() {
+        let mut slot = runtime();
+        assert_eq!(slot.theme_appearance(), ThemeAppearance::Light);
+        slot.set_system_appearance(SystemAppearance {
+            dark: true,
+            font_scale: 1.0,
+        });
+        slot.flush().expect("flush");
+        assert_eq!(slot.theme_appearance(), ThemeAppearance::Dark);
+
+        let light = option_labelled(&slot, "浅色", 0);
+        tap_entity(&mut slot, light);
+        assert_eq!(slot.theme_appearance(), ThemeAppearance::Light);
+        slot.set_system_appearance(SystemAppearance {
+            dark: false,
+            font_scale: 1.0,
+        });
+        slot.set_system_appearance(SystemAppearance {
+            dark: true,
+            font_scale: 1.0,
+        });
+        slot.flush().expect("flush");
+        assert_eq!(
+            slot.theme_appearance(),
+            ThemeAppearance::Light,
+            "an explicit choice no longer follows the system"
+        );
+
+        let system = option_labelled(&slot, "跟随系统", 0);
+        tap_entity(&mut slot, system);
+        assert_eq!(slot.theme_appearance(), ThemeAppearance::Dark);
+    }
+
+    #[test]
+    fn tapping_dark_installs_the_dark_theme() {
+        let mut slot = runtime();
+        let dark = option_labelled(&slot, "深色", 0);
+        tap_entity(&mut slot, dark);
+        assert_eq!(slot.theme_appearance(), ThemeAppearance::Dark);
+        let nodes = slot.accessibility_nodes();
+        let dark = nodes.iter().find(|node| node.id == dark).expect("dark");
+        assert_eq!(dark.selected, Some(true), "the control shows the choice");
+    }
+
+    #[test]
+    fn talkback_click_on_an_option_switches_the_theme() {
+        let mut slot = runtime();
+        let target = option_labelled(&slot, "深色", 0);
+        assert!(
+            slot.apply_accessibility_action(AccessibilityActionRequest {
+                target,
+                action: AccessibilityAction::Click,
+            })
+            .expect("click")
+        );
+        assert_eq!(slot.theme_appearance(), ThemeAppearance::Dark);
+    }
+
+    fn caption_height(slot: &SlotRuntime) -> f32 {
+        slot.document()
+            .context()
+            .world()
+            .layout_box(node_labelled(slot, SLOT_TEXT_LABEL))
+            .expect("caption")
+            .height
+    }
+
+    #[test]
+    fn text_size_choices_relayout_the_document() {
+        let mut slot = runtime();
+        let standard = caption_height(&slot);
+        let large = option_labelled(&slot, "大", 0);
+        tap_entity(&mut slot, large);
+        let enlarged = caption_height(&slot);
+        assert!(
+            enlarged > standard,
+            "大 must grow the text: {standard} → {enlarged}"
+        );
+        let small = option_labelled(&slot, "小", 0);
+        tap_entity(&mut slot, small);
+        assert!(caption_height(&slot) < standard);
+    }
+
+    #[test]
+    fn text_size_follows_the_system_font_scale() {
+        let mut slot = runtime();
+        let standard = caption_height(&slot);
+        slot.set_system_appearance(SystemAppearance {
+            dark: false,
+            font_scale: 1.3,
+        });
+        slot.flush().expect("flush");
+        assert!(caption_height(&slot) > standard);
+
+        let fixed = option_labelled(&slot, "标准", 0);
+        tap_entity(&mut slot, fixed);
+        assert!((caption_height(&slot) - standard).abs() < 0.01);
     }
 }

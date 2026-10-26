@@ -2,11 +2,13 @@
 
 This crate is an **experimental** GameActivity host. **Android is not a
 current NanaUI product target** and is **not a second product paint kernel**.
-The control slot is a NanaUI Runtime / UiScene path painted by
-`SceneWgpuPainter`. It is not DesktopShell.
+The window is one NanaUI Runtime document — an appearance page above a
+control strip, filling the Primary region — painted by `SceneWgpuPainter`.
+It is not DesktopShell.
 
 Phase 2 wires GameTextInput `InputConnection`, JNI `ClipboardManager`, and
-TalkBack Click/Focus/SetValue/SetSelection for Button / Switch / TextInput.
+TalkBack Click/Focus/SetValue/SetSelection for Button / Switch / TextInput
+and the appearance page's segmented options.
 Scroll / virtual lists stay later. Cross-compile and `--lib` tests are not
 device CJK / TalkBack evidence.
 
@@ -18,10 +20,13 @@ Rust owns the wgpu Vulkan Surface, the Runtime document and
 | Path | Role |
 |------|------|
 | `src/lib.rs` | `android_main` entry (`cdylib`) |
-| `src/shell.rs` | `AndroidShellStub` — `WorkspaceLayout` / `WorkspaceGeometry` |
-| `src/runtime.rs` | GameActivity lifecycle + GameTextInput + Scene present |
-| `src/gpu.rs` | Host-owned wgpu 30 Surface (Vulkan) |
-| `src/slot_runtime.rs` | RuntimeDocument + pointer/key/IME into Runtime |
+| `src/shell.rs` | `AndroidShellStub` — window size, scale, system insets → Primary |
+| `src/runtime.rs` | GameActivity lifecycle + GameTextInput + insets / Configuration (JNI) + Scene present |
+| `src/gpu.rs` | Host-owned wgpu 30 Surface (Vulkan), cleared each frame |
+| `src/slot_runtime.rs` | RuntimeDocument (appearance page + control strip) + pointer/key/IME into Runtime |
+| `src/slot_paint.rs` | `SceneWgpuPainter` over the full surface |
+| `src/slot_input.rs` | MotionEvent / KeyEvent mapping and the Primary input gate |
+| `src/slot_ax.rs` | AccessKit (TalkBack) publication |
 | `src/slot_ime.rs` | GameTextInput buffer → `ImeEvent` (host-testable) |
 | `app/` | Gradle GameActivity wrapper (`NanaActivity`) |
 
@@ -44,11 +49,13 @@ cargo check -p nana-android-host --locked
 cargo test -p nana-android-host --lib --locked
 ```
 
-## Shell
+## Primary
 
-**`AndroidShellStub`** sizes regions from the same `nana-ui-core` geometry as
-desktop `DesktopShell`. Frame presentation is wgpu chrome fill plus a NanaUI
-Runtime control-slot strip; this is not DesktopShell.
+GameActivity lays the surface out edge to edge. **`AndroidShellStub`** takes
+the status bar (with display cutout) and the navigation bar or soft keyboard
+off the window (`WindowInsets` through JNI) to get Primary. The document root
+paints the theme background over the whole surface and pads its content into
+Primary; touches outside Primary stay `Unhandled` for the system.
 
 ## Packaging
 
@@ -69,10 +76,15 @@ GameActivity prefab C++ glue; `android-activity` already links its own.
 Requires SDK `build-tools`, `platforms;android-34`, and Gradle. Metadata under
 `[package.metadata.android]` remains documentation.
 
-## NanaUI control slot (experimental host test)
+## Window document (experimental host test)
 
-- Geometry: `control_slot` / `chrome_present_bands`
-- Widget strip: Nana Runtime `Button` / `Text` / `TextInput` / `Switch`.
+- Appearance page: `SettingsCard` with two `SegmentedControl`s. Theme
+  (浅色 / 深色 / 跟随系统) installs the built-in light or dark theme;
+  跟随系统 follows `Configuration` `uiMode` night. Text size
+  (跟随系统 / 小 / 标准 / 大) sets the document text scale; 跟随系统 follows
+  `Resources.getConfiguration().fontScale`. The manifest handles
+  `uiMode|fontScale|density` as config changes.
+- Control strip: Nana Runtime `Button` / `Text` / `TextInput` / `Switch`.
   `desktop_shell_available()` stays `false`.
 - Pointer: GameActivity `MotionEvent` → `RuntimeInputAdapter`.
 - Keyboard / IME: GameTextInput `TextEvent` diffs into
@@ -80,10 +92,11 @@ Requires SDK `build-tools`, `platforms;android-34`, and Gradle. Metadata under
   Hardware KeyEvents still cover editing keys. Soft keyboard show/hide follows
   `SlotRuntime::text_input_focused`. `PlatformCapabilities::ime` is true.
 - Accessibility: `slot_ax.rs` / `accesskit_android::InjectingAdapter` publishes
-  the control-slot tree; TalkBack Click/Focus/SetValue/SetSelection activate
-  Button, Switch, and TextInput. Scroll / virtual lists are later.
+  the document tree; TalkBack Click/Focus/SetValue/SetSelection activate
+  Button, Switch, TextInput and the segmented options. Scroll / virtual lists
+  are later.
 - Clipboard: JNI `ClipboardManager` (`AndroidClipboard`);
-  `default_shared_clipboard()` and slot `with_clipboard` use it;
+  `default_shared_clipboard()` and the document's `HostServices` use it;
   `PlatformCapabilities::clipboard` is true.
 
 ## Device checklist

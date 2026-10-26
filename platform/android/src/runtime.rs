@@ -1,4 +1,4 @@
-//! Android activity loop: window lifecycle → wgpu Surface → NanaUI slot.
+//! Android activity loop: window lifecycle → wgpu Surface → NanaUI document.
 
 use std::time::{Duration, Instant};
 
@@ -6,11 +6,12 @@ use android_activity::input::{
     ImeOptions, InputEvent, InputType, KeyAction, Keycode, MetaState, MotionAction,
     TextInputAction, TextInputState, TextSpan,
 };
+use android_activity::ndk::configuration::UiModeNight;
 use android_activity::{AndroidApp, InputStatus, MainEvent, PollEvent};
 use nana_ui_platform::SurfacePhase;
 
 use crate::gpu::GpuSurface;
-use crate::shell::{AndroidShellStub, scale_factor_from_density_dpi};
+use crate::shell::{AndroidShellStub, SystemInsets, scale_factor_from_density_dpi};
 use crate::slot_ax::SlotAccessibility;
 use crate::slot_ime::{SlotEditorInfo, SlotImeBuffer, ime_events_from_buffer_delta};
 use crate::slot_input::{
@@ -18,6 +19,7 @@ use crate::slot_input::{
     logical_key_from_android_keycode,
 };
 use crate::slot_paint::SlotPainter;
+use crate::slot_runtime::SystemAppearance;
 
 struct HostState {
     gpu: Option<GpuSurface>,
@@ -33,9 +35,6 @@ struct HostState {
     ime_buffer: SlotImeBuffer,
     /// Last EditorInfo pushed to GameActivity.
     editor_info: Option<SlotEditorInfo>,
-    /// Physical px the soft keyboard covers. GameActivity keeps the surface
-    /// full-window, so layout stops above this band.
-    ime_bottom_inset: u32,
 }
 
 impl HostState {
@@ -50,7 +49,6 @@ impl HostState {
             ime_shown: false,
             ime_buffer: SlotImeBuffer::default(),
             editor_info: None,
-            ime_bottom_inset: 0,
         }
     }
 
@@ -74,7 +72,28 @@ impl HostState {
         }
         self.shell.resize(w, h, scale);
         if let Some(painter) = self.slot.as_mut() {
-            painter.resize((w, h), scale);
+            painter.resize((w, h), scale, self.shell.insets());
+        }
+    }
+
+    /// Re-read the system bands over the edge-to-edge surface.
+    fn on_insets_changed(&mut self, app: &AndroidApp) {
+        self.shell.set_insets(system_insets(app));
+        let (w, h) = self.shell.physical_size();
+        let scale = self.shell.scale_factor();
+        if let Some(painter) = self.slot.as_mut() {
+            painter.resize((w, h), scale, self.shell.insets());
+        }
+    }
+
+    /// Dark mode and text size, for the page's “跟随系统” choices.
+    fn sync_system_appearance(&mut self, app: &AndroidApp) {
+        let system = SystemAppearance {
+            dark: app.config().ui_mode_night() == UiModeNight::Yes,
+            font_scale: font_scale(app),
+        };
+        if let Some(painter) = self.slot.as_mut() {
+            painter.set_system_appearance(system);
         }
     }
 
@@ -97,25 +116,29 @@ impl HostState {
         )?);
         self.gpu = Some(gpu);
         self.shell.resize(w, h, scale);
+        self.on_insets_changed(app);
+        self.sync_system_appearance(app);
         self.phase = SurfacePhase::Ready;
         match SlotAccessibility::new(app, self.slot.as_ref().expect("slot painter").runtime()) {
             Ok(ax) => self.ax = Some(ax),
             Err(err) => log::warn!("nana-android-host: accessibility attach failed: {err}"),
         }
-        log::info!("nana-android-host: NanaUI slot ready scale={scale}");
+        log::info!("nana-android-host: NanaUI document ready scale={scale}");
         self.paint_frame()?;
         self.publish_accessibility();
         Ok(())
     }
 
-    /// Density / orientation config change — refresh scale then resize geometry.
+    /// Density / orientation / dark mode / font scale change — refresh scale,
+    /// geometry and the system appearance.
     fn on_config_changed(&mut self, app: &AndroidApp) {
         let scale = Self::scale_from_app(app);
         let physical = app
             .native_window()
             .map(|win| (win.width().max(1) as u32, win.height().max(1) as u32))
-            .unwrap_or_else(|| self.shell.geometry().physical_size);
+            .unwrap_or_else(|| self.shell.physical_size());
         self.apply_scale_and_size(physical, scale);
+        self.sync_system_appearance(app);
         log::info!("nana-android-host: ConfigChanged scale={scale} physical={physical:?}");
     }
 
@@ -160,13 +183,11 @@ impl HostState {
             };
             (gpu.config.width, gpu.config.height)
         };
-        let visible = (fw, fh.saturating_sub(self.ime_bottom_inset).max(1));
-        self.shell.resize(visible.0, visible.1, scale);
+        self.shell.resize(fw, fh, scale);
         if let Some(painter) = self.slot.as_mut() {
-            painter.resize(visible, scale);
+            painter.resize((fw, fh), scale, self.shell.insets());
         }
 
-        let bands = self.shell.chrome_present_bands();
         let HostState {
             gpu,
             slot,
@@ -176,7 +197,7 @@ impl HostState {
         let Some(gpu) = gpu.as_mut() else {
             return Ok(());
         };
-        gpu.present_chrome_bands_with_overlay(&bands, |target, frame| {
+        gpu.present_with_overlay(|target, frame| {
             if let Some(painter) = slot.as_mut() {
                 painter.paint_slot(frame, target, (fw, fh));
             }
@@ -199,18 +220,19 @@ impl HostState {
         };
         let focused = painter.text_input_focused();
         let next_info = painter.editor_info();
-        if focused && next_info != self.editor_info {
-            if let Some(info) = next_info {
-                apply_editor_info(app, info);
-                self.editor_info = Some(info);
-            }
+        if focused
+            && next_info != self.editor_info
+            && let Some(info) = next_info
+        {
+            apply_editor_info(app, info);
+            self.editor_info = Some(info);
         }
         if focused {
-            if let Some(buffer) = painter.ime_buffer() {
-                if buffer != self.ime_buffer {
-                    set_text_input_state(app, &buffer);
-                    self.ime_buffer = buffer;
-                }
+            if let Some(buffer) = painter.ime_buffer()
+                && buffer != self.ime_buffer
+            {
+                set_text_input_state(app, &buffer);
+                self.ime_buffer = buffer;
             }
         } else {
             self.editor_info = None;
@@ -245,12 +267,12 @@ impl HostState {
             MotionAction::Cancel => SlotTouchKind::Cancel,
             _ => return false,
         };
-        let slot = self.shell.control_slot().map(|b| b.rect);
         let Some(painter) = self.slot.as_mut() else {
             return false;
         };
-        // Only slot-local (or captured drag) samples are Handled; outside → system.
-        painter.push_touch(slot, kind, physical_x, physical_y, pointer_id)
+        // Only samples in Primary (or a captured drag) are Handled; the
+        // status and navigation bars stay with the system.
+        painter.push_touch(kind, physical_x, physical_y, pointer_id)
     }
 
     /// GameActivity KeyEvent → Runtime keyboard (US-QWERTY subset + editing keys).
@@ -388,7 +410,7 @@ pub fn run(app: AndroidApp) -> Result<(), String> {
                     state.publish_accessibility();
                 }
                 MainEvent::InsetsChanged { .. } => {
-                    state.ime_bottom_inset = ime_bottom_inset(&app);
+                    state.on_insets_changed(&app);
                     if let Err(err) = state.paint_frame() {
                         log::warn!("nana-android-host: insets paint: {err}");
                     }
@@ -412,13 +434,12 @@ pub fn run(app: AndroidApp) -> Result<(), String> {
                 }
                 _ => {}
             },
-            PollEvent::Timeout => {
+            PollEvent::Timeout
                 if state.phase == SurfacePhase::Ready
-                    && state.last_paint.elapsed() > Duration::from_millis(500)
-                {
-                    if let Err(err) = state.paint_frame() {
-                        log::warn!("nana-android-host: heartbeat paint: {err}");
-                    }
+                    && state.last_paint.elapsed() > Duration::from_millis(500) =>
+            {
+                if let Err(err) = state.paint_frame() {
+                    log::warn!("nana-android-host: heartbeat paint: {err}");
                 }
             }
             _ => {}
@@ -541,27 +562,49 @@ fn apply_editor_info(app: &AndroidApp, info: SlotEditorInfo) {
     app.set_ime_editor_info(input_type, action, options);
 }
 
-/// Bottom px covered by the soft keyboard (decor view root insets). Before API
-/// 30 the IME is the system-window inset minus the stable (navigation) part.
-fn ime_bottom_inset(app: &AndroidApp) -> u32 {
+/// Run `read` against the Activity on this thread's JNI env; `None` (and a
+/// warning) when any call fails.
+fn with_activity<T>(
+    app: &AndroidApp,
+    what: &str,
+    read: impl FnOnce(
+        &mut accesskit_android::jni::JNIEnv<'_>,
+        &accesskit_android::jni::objects::JObject<'_>,
+    ) -> accesskit_android::jni::errors::Result<T>,
+) -> Option<T> {
     use std::mem::ManuallyDrop;
 
-    use accesskit_android::jni::{self, objects::JObject, objects::JValue};
+    use accesskit_android::jni::{self, objects::JObject};
 
-    let Ok(vm) = (unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) }) else {
-        return 0;
-    };
-    let Ok(mut env) = vm.attach_current_thread() else {
-        return 0;
-    };
+    let vm = unsafe { jni::JavaVM::from_raw(app.vm_as_ptr().cast()) }.ok()?;
+    let mut env = vm.attach_current_thread().ok()?;
     // android_main never returns to Java, so only a frame frees these locals.
-    let bottom = env.with_local_frame(8, |env| -> jni::errors::Result<i32> {
+    let result = env.with_local_frame(16, |env| {
         // `activity_as_ptr` is a global ref; never drop it as a local ref.
         let activity = ManuallyDrop::new(unsafe {
             JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject)
         });
+        read(env, &activity)
+    });
+    match result {
+        Ok(value) => Some(value),
+        Err(error) => {
+            let _ = env.exception_clear();
+            log::warn!("nana-android-host: {what}: {error}");
+            None
+        }
+    }
+}
+
+/// Status bar (with display cutout) and navigation bar or soft keyboard, in
+/// physical px, from the decor view's root insets. Before API 30 the system
+/// window insets already include the keyboard under `adjustResize`.
+fn system_insets(app: &AndroidApp) -> SystemInsets {
+    use accesskit_android::jni::objects::JValue;
+
+    with_activity(app, "window insets", |env, activity| {
         let window = env
-            .call_method(&*activity, "getWindow", "()Landroid/view/Window;", &[])?
+            .call_method(activity, "getWindow", "()Landroid/view/Window;", &[])?
             .l()?;
         let decor = env
             .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])?
@@ -575,39 +618,73 @@ fn ime_bottom_inset(app: &AndroidApp) -> u32 {
             )?
             .l()?;
         if insets.is_null() {
-            return Ok(0);
+            return Ok(SystemInsets::default());
         }
         let sdk = env
             .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
             .i()?;
-        if sdk >= 30 {
-            let ime = env
-                .call_static_method("android/view/WindowInsets$Type", "ime", "()I", &[])?
+        let (top, bottom) = if sdk >= 30 {
+            let types = "android/view/WindowInsets$Type";
+            let bars = env
+                .call_static_method(types, "systemBars", "()I", &[])?
                 .i()?;
-            let rect = env
-                .call_method(
-                    &insets,
-                    "getInsets",
-                    "(I)Landroid/graphics/Insets;",
-                    &[JValue::Int(ime)],
-                )?
-                .l()?;
-            env.get_field(&rect, "bottom", "I")?.i()
+            let cutout = env
+                .call_static_method(types, "displayCutout", "()I", &[])?
+                .i()?;
+            let ime = env.call_static_method(types, "ime", "()I", &[])?.i()?;
+            let mut edge = |mask: i32, side: &str| -> accesskit_android::jni::errors::Result<i32> {
+                let rect = env
+                    .call_method(
+                        &insets,
+                        "getInsets",
+                        "(I)Landroid/graphics/Insets;",
+                        &[JValue::Int(mask)],
+                    )?
+                    .l()?;
+                env.get_field(&rect, side, "I")?.i()
+            };
+            let top = edge(bars | cutout, "top")?;
+            let bottom = edge(bars | cutout, "bottom")?.max(edge(ime, "bottom")?);
+            (top, bottom)
         } else {
-            let system = env
+            let top = env
+                .call_method(&insets, "getSystemWindowInsetTop", "()I", &[])?
+                .i()?;
+            let bottom = env
                 .call_method(&insets, "getSystemWindowInsetBottom", "()I", &[])?
                 .i()?;
-            let stable = env
-                .call_method(&insets, "getStableInsetBottom", "()I", &[])?
-                .i()?;
-            Ok(system - stable)
-        }
-    });
-    bottom
-        .unwrap_or_else(|error| {
-            let _ = env.exception_clear();
-            log::warn!("nana-android-host: ime insets: {error}");
-            0
+            (top, bottom)
+        };
+        Ok(SystemInsets {
+            top: top.max(0) as u32,
+            bottom: bottom.max(0) as u32,
         })
-        .max(0) as u32
+    })
+    .unwrap_or_default()
+}
+
+/// The system text-size setting, `Resources.getConfiguration().fontScale`.
+/// `AConfiguration` does not carry it.
+fn font_scale(app: &AndroidApp) -> f32 {
+    with_activity(app, "font scale", |env, activity| {
+        let resources = env
+            .call_method(
+                activity,
+                "getResources",
+                "()Landroid/content/res/Resources;",
+                &[],
+            )?
+            .l()?;
+        let configuration = env
+            .call_method(
+                &resources,
+                "getConfiguration",
+                "()Landroid/content/res/Configuration;",
+                &[],
+            )?
+            .l()?;
+        env.get_field(&configuration, "fontScale", "F")?.f()
+    })
+    .filter(|scale| scale.is_finite() && *scale > 0.0)
+    .unwrap_or(1.0)
 }
