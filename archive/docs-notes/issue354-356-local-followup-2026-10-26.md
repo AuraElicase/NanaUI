@@ -1,12 +1,12 @@
 # Issue #354 / #356 本机跟进（2026-10-26）
 
-基于 `main` 的 `1f91962c744d7c0f3d8c99cf2ae10b94ad0a60dc`，继续前一份 [#242 本机收尾](issue242-closeout-2026-10-26.md)。改动保留在当前分支，没有提交或推送。Runtime / Scene 的同期 sticky、layout 及其 fixture 改动不属于本报告的验收输入。
+基于 `main` 的 `1f91962c744d7c0f3d8c99cf2ae10b94ad0a60dc`，继续前一份 [#242 本机收尾](issue242-closeout-2026-10-26.md)。本机验证结束时改动尚未提交；随后经用户授权使用 CI，已提交并推送到当前 `main`，见下文专项验收跟进。Runtime / Scene 的同期 sticky、layout 及其 fixture 改动不属于本报告的验收输入。
 
 ## 本次修复与观察边界
 
 #356 发现真实代码问题：OpenVR / Electron 参考生产端使用保留宿主 callback 的 `GpuContext::from_wgpu`，但自身并未安装或转发 device-lost callback。新增 `from_wgpu_with_loss_tracking` 显式交出 callback 所有权，复用原有共享 loss authority；两个独立生产端改用它。原构造函数继续保留已有宿主 callback，公共 WGPU 签名仍限定在 `wgpu-interop`。
 
-`controlled_device_loss` 在 Metal 上真实执行 `device.destroy()`：验证原构造函数保留宿主通知、跟踪构造函数令所有 clone 观察到粘性丢失、持有旧纹理和提交 ticket 时替换设备、拒绝旧代际纹理，以及新设备上传/提交完成。它不声称模拟一次提交一定还在 GPU 执行，也不是硬件 driver reset、外部消费者 outstanding lease 或两代池上限的实机验收。CI 新增此测试的执行命令，尚未推送运行。
+`controlled_device_loss` 在 Metal 上真实执行 `device.destroy()`：验证原构造函数保留宿主通知、跟踪构造函数令所有 clone 观察到粘性丢失、持有旧纹理和提交 ticket 时替换设备、拒绝旧代际纹理，以及新设备上传/提交完成。它不声称模拟一次提交一定还在 GPU 执行，也不是硬件 driver reset、外部消费者 outstanding lease 或两代池上限的实机验收。CI 新增此测试的执行命令，随后已随 `657c0d2` 推送；执行结果由专项运行单独记录。
 
 #354 新增冷路径 `WindowHandle::surface_info()`。由宿主线程返回实际已配置 Surface 的尺寸、格式、色彩空间、present mode、alpha、最大帧延迟、设备代际和当前显示器；窗口代际过期、挂起或恢复未完成明确报错。查询不 acquire、提交、等待或重配。自动模式保持自动身份，不能解释为测得的扫描节拍。
 
@@ -93,4 +93,20 @@ Instruments 已在运行，但按应用名称两次、按实际 bundle id 一次
 
 ## Issue 同步
 
-#354 与 #356 正文均已更新，并回读确认仍为 OPEN。#354 仅勾选新诊断 population 的实际配置观测，受控负载、完整身份/TG tenure、历史根因和产品修复验收继续开放；#356 记录具体 callback 修复与本机/交叉检查，但实机矩阵不勾选。源码和本报告没有提交或推送。最终检查磁盘约 7.0 GiB，尚未达到新 trace 的前提。
+#354 与 #356 正文均已更新，并回读确认仍为 OPEN。#354 仅勾选新诊断 population 的实际配置观测，受控负载、完整身份/TG tenure、历史根因和产品修复验收继续开放；#356 记录具体 callback 修复与本机/交叉检查，但实机矩阵不勾选。该次同步发生在源码/报告提交之前；其后提交见下文。最终检查磁盘约 7.0 GiB，尚未达到新 trace 的前提。
+
+
+## 专项 CI 跟进
+
+用户允许以可信现有证据或 CI 完成验收。已核对 [2026-10-26 绿灯运行 40299654534](https://github.com/sena-nana/NanaUI/actions/runs/40299654534)，其 Windows job 121494121326 的 10 个 native-export 测试无 ignored；真实 native-host 消费 240 次，Microsoft Basic Render Driver（WARP）→同 LUID D3D11，producer CPU readback / explicit CPU fence wait 为 0。实际 GPU copy 为 consumer 240 次 / 884,736,000 字节；GPU execution / driver VRAM 仍为 null。此证据更新了此前 10-23 的子集，不扩展为 SteamVR、Electron 或硬件性能结论。
+
+本轮修复已作为 [`657c0d2`](https://github.com/sena-nana/NanaUI/commit/657c0d2efe4612997ca4966af80891de83bf9d64) 推送到 `main`；以独立 index 仅提交已测源码、证据和工作流，提交前后 80 个工作文件字节保持一致。Runtime / Scene 等其他任务修改仍保留在工作区，没有创建临时分支或 worktree。
+
+新增 `Presentation conformance` 手动工作流并启动 [40318042410](https://github.com/sena-nana/NanaUI/actions/runs/40318042410)，冻结上述提交。Windows Release 下执行真实 controlled-device-destruction / native-export 测试，再串行五轮 native-host 与固定 Electron 44.9.1 的实际 sharedTexture→VideoFrame→WebGPU / 双凭据释放，分别送入维护的 perf extractor 与 invariant gate。缺报告、unsupported、非零退出或超时均不能通过；原始失败产物按 always 上传。YAML 解析及 actionlint 1.7.12 已通过。执行结果见下文。
+
+没有自托管 runner。SteamVR live、硬件 driver reset、硬件性能与当前 Mac 历史调度根因不能由普通 hosted runner 的通过代替。
+
+
+专项运行 40318042410 已完成，结论为 **failure**。Windows Release 真实 controlled destruction 1 passed / 0 ignored，native-export 10 passed / 0 ignored；第一轮 native-host 240 次实际消费及维护 invariant gate 通过。Electron 44.9.1 实际启动后，`navigator.gpu.requestAdapter({powerPreference: "high-performance"})` 返回空：报告 `status=unsupported`、`reason=No WebGPU adapter`，消费/绘制/提交均为 0。按预先规则中止，没有将 unsupported 写成通过，也没有继续取其余轮次凑满五轮。所有失败产物已保存到该 run 的 `presentation-conformance-windows` artifact。
+
+因此普通 Windows hosted runner 目前只证明了上述 native / callback 子集，尚不能证明 Electron 实际 import / GPU draw / 双凭据释放。新增轻量 `WebGPU capability` 入口：同一版本、本地页与 ANGLE d3d11 配置下分别观察默认请求和标准的显式 fallback 请求，记录 adapter/device 与 feature status，不增加 Chromium 覆盖参数，不导入纹理或声称外部消费通过。分类/实际执行源码的 Node 回归合计 24 passed；WebGPU 选项依据见 fixture README。待轻量运行结果判断该 runner 是否存在可用 fallback device，再决定是否值得重跑完整桥接。

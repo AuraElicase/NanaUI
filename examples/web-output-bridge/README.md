@@ -107,3 +107,19 @@ No historical Release timing baseline is inferred.
 - [Shared-handle transport and ownership design](https://github.com/electron/electron/blob/v44.9.1/shell/common/api/shared_texture/README.md).
 - [WebGPU queue completion](https://gpuweb.github.io/types/interfaces/GPUQueue.html#onSubmittedWorkDone).
 - [Electron stable releases](https://releases.electronjs.org/release?channel=stable).
+
+## Adapter preflight on a CI runner
+
+`node node_modules/electron/cli.js adapter-probe.cjs --output adapter-report.json`
+loads the same local page and observes both the default high-performance request
+and an explicit `forceFallbackAdapter: true` request. It records adapter identity,
+software-fallback status, device creation and Chromium feature status. Missing
+adapters return exit 2; a request/device error returns exit 1. It applies no
+Chromium feature overrides. A successful capability report is separate from
+shared-texture import/draw/release evidence and is not accepted by the transport
+conformance gate.
+
+The [WebGPU adapter options](https://gpuweb.github.io/types/interfaces/GPURequestAdapterOptions.html)
+allow an explicit fallback request to resolve to null when the implementation
+has no supported fallback adapter. The manual `WebGPU capability` workflow makes
+this environment prerequisite cheap to check before a Rust Release build.
