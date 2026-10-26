@@ -1,13 +1,17 @@
 //! Cancellation of the platform's composition buffer, separate from the
 //! host adapter's IME enable state.
 
-/// Discard the text client's and AppKit's pending marked text without committing it.
+/// Discard the text client's and the input method's pending composition
+/// without committing it.
 ///
 /// Call on the window event thread when cancelling preedit, before any
 /// required IME disable. Clearing winit's marked-text buffer alone does not discard the
 /// input method's own buffer: Pinyin can otherwise resume invisible text
-/// after a window switch. Other backends cancel through their IME disable
-/// request and need no additional native operation here.
+/// after a window switch. On Windows the cancel also has to come first:
+/// winit's disable calls IMM while holding its window-state lock, and IMM
+/// ends a live composition by sending `WM_IME_ENDCOMPOSITION` back into the
+/// window procedure, which takes the same lock and hangs. Other backends
+/// cancel through their IME disable request.
 pub fn discard_native_ime_preedit<W: raw_window_handle::HasWindowHandle + ?Sized>(window: &W) {
     #[cfg(target_os = "macos")]
     {
@@ -41,6 +45,31 @@ pub fn discard_native_ime_preedit<W: raw_window_handle::HasWindowHandle + ?Sized
             let _: () = unsafe { msg_send![view, unmarkText] };
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        use raw_window_handle::RawWindowHandle;
+        use windows_sys::Win32::Foundation::HWND;
+        use windows_sys::Win32::UI::Input::Ime::{
+            CPS_CANCEL, ImmGetContext, ImmNotifyIME, ImmReleaseContext, NI_COMPOSITIONSTR,
+        };
+
+        let Ok(handle) = window.window_handle() else {
+            return;
+        };
+        let RawWindowHandle::Win32(handle) = handle.as_raw() else {
+            return;
+        };
+        let hwnd = handle.hwnd.get() as HWND;
+        // SAFETY: the live window's HWND on its own thread. No context means
+        // no IME is associated, and nothing is composing.
+        unsafe {
+            let context = ImmGetContext(hwnd);
+            if !context.is_null() {
+                ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
+                ImmReleaseContext(hwnd, context);
+            }
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let _ = window;
 }
