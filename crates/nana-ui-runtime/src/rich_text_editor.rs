@@ -178,6 +178,15 @@ struct Snapshot {
     focus: usize,
 }
 
+/// A pointer selecting by drag and where it last was: a move that only
+/// re-reports that point (after cancelling preedit changed the layout under
+/// it) does not move the selection.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct DragState {
+    pointer: u64,
+    position: (f32, f32),
+}
+
 /// Runtime-owned editing state: not the application's, and kept when the
 /// application hands the component back with the same document.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -193,7 +202,7 @@ struct EditState {
     redo: Vec<Snapshot>,
     /// The last edit was typing at a caret, so the next one joins its step.
     coalesce: bool,
-    dragging: Option<u64>,
+    dragging: Option<DragState>,
     click: Option<(u64, std::time::Duration, f32, f32, u8)>,
     drag_range: Option<Range<usize>>,
     drag_unit: u8,
@@ -291,6 +300,25 @@ impl RichTextEditor {
 
     fn range(&self) -> Range<usize> {
         self.state.anchor.min(self.state.focus)..self.state.anchor.max(self.state.focus)
+    }
+
+    /// The committed-document byte a hit on the displayed text means. The
+    /// display carries the preedit in place of the selection: a hit inside it
+    /// is its start, a hit after it shifts back by the length difference.
+    fn document_offset(&self, display_byte: usize) -> usize {
+        let range = self.range();
+        let byte = match &self.state.preedit {
+            Some((preedit, _)) if display_byte > range.start => {
+                let end = range.start + preedit.len();
+                if display_byte < end {
+                    range.start
+                } else {
+                    range.end + display_byte - end
+                }
+            }
+            _ => display_byte,
+        };
+        floor_char(self.value.text(), byte.min(self.value.text().len()))
     }
 
     fn editable(&self) -> bool {
@@ -841,7 +869,7 @@ impl Geometry {
         if !end {
             return Some(line.source.start);
         }
-        let mut edge = line.source.end.min(self.text.len());
+        let mut edge = floor_char(&self.text, line.source.end.min(self.text.len()));
         if self.text[..edge].ends_with('\n') && edge > line.source.start {
             edge -= 1;
         }
@@ -1138,6 +1166,7 @@ impl AppContext {
                         .unwrap_or(if key == "End" { text.len() } else { 0 }),
                     _ => focus,
                 };
+                let target = floor_char(&text, target.min(text.len()));
                 view.state.focus = target;
                 if !shift {
                     view.state.anchor = target;
@@ -1256,8 +1285,12 @@ impl AppContext {
                 })
         } else {
             self.focused_rich_editor(document).filter(|entity| {
-                self.read(*entity, |view| view.state.dragging == Some(pointer))
-                    .unwrap_or(false)
+                self.read(*entity, |view| {
+                    view.state
+                        .dragging
+                        .is_some_and(|drag| drag.pointer == pointer)
+                })
+                .unwrap_or(false)
             })
         };
         let Some(entity) = entity else {
@@ -1267,6 +1300,7 @@ impl AppContext {
         if phase >= 2 {
             self.set_rich_drag_scroll(None);
         }
+        let mut scrolled = false;
         if phase == 1 {
             let (px, py) = self
                 .world()
@@ -1290,6 +1324,7 @@ impl AppContext {
                 if (dx != 0.0 || dy != 0.0)
                     && self.scroll_node_by(id, crate::ScrollOffset { x: dx, y: dy })?
                 {
+                    scrolled = true;
                     self.set_rich_drag_scroll(Some((
                         document,
                         id,
@@ -1318,7 +1353,10 @@ impl AppContext {
         self.edit_with(entity, |view, cx| {
             match phase {
                 0 => {
-                    view.state.dragging = Some(pointer);
+                    view.state.dragging = Some(DragState {
+                        pointer,
+                        position: (x, y),
+                    });
                     view.state.preedit = None;
                     view.state.preferred_x = None;
                     let count = match view.state.click {
@@ -1348,7 +1386,12 @@ impl AppContext {
                     }
                 }
                 1 => {
-                    if let Some((byte, _)) = hit {
+                    let moved = scrolled
+                        || view
+                            .state
+                            .dragging
+                            .is_some_and(|drag| drag.position != (x, y));
+                    if moved && let Some((byte, _)) = hit {
                         let range = selection_unit(view.value.text(), byte, view.state.drag_unit);
                         if view.state.drag_unit == 1 {
                             view.state.focus = byte;
@@ -1364,6 +1407,10 @@ impl AppContext {
                             }
                         }
                     }
+                    view.state.dragging = Some(DragState {
+                        pointer,
+                        position: (x, y),
+                    });
                 }
                 2 => {
                     view.state.dragging = None;
@@ -1408,7 +1455,20 @@ impl AppContext {
                 && local_y <= line.metrics.top_y_px + line.metrics.height_px;
             inside.then_some((placed.id, placed.offset))
         });
-        Some((byte, object))
+        // The layout shows the preedit; the editor's state is the committed
+        // document, and an object id may repeat in it.
+        self.read(Entity::<RichTextEditor>::from_stable_id(id), |view| {
+            let byte = view.document_offset(byte);
+            let object = object.and_then(|(id, display_offset)| {
+                let offset = view.document_offset(display_offset);
+                view.value
+                    .object_at(offset)
+                    .filter(|object| object.id == id)
+                    .map(|_| (id, offset))
+            });
+            (byte, object)
+        })
+        .ok()
     }
 
     /// Run an edit on the editor's state and report what it changed.
