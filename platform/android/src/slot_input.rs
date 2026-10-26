@@ -9,7 +9,7 @@
 //!   Composition (CJK) arrives from GameTextInput and is mapped in
 //!   [`crate::slot_ime`].
 //!
-//! Hit-testing uses the same viewport-bottom rect as [`crate::control_slot`].
+//! Hit-testing uses the Primary rect ([`crate::shell::primary_rect`]).
 //! The soft keyboard is driven by the activity loop's focus mirror;
 //! accessibility publication lives in [`crate::slot_ax`].
 

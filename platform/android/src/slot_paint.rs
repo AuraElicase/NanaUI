@@ -1,9 +1,8 @@
-//! Draw the NanaUI control strip through [`SceneWgpuPainter`].
+//! Draw the window's Runtime document through [`SceneWgpuPainter`].
 //!
-//! Uses the host-owned wgpu Device/Queue. Layout is a bottom-aligned Runtime
-//! strip on the **full window viewport** — **not** [`nana_ui::runtime::DesktopShell`].
-//! Hit-testing must use [`crate::control_slot::control_slot_paint_bounds`].
-//! Pointer + KeyEvent + GameTextInput events are applied through
+//! Uses the host-owned wgpu Device/Queue. The document covers the **full
+//! window viewport** and pads its content into Primary — **not**
+//! [`nana_ui::runtime::DesktopShell`]. Pointer + KeyEvent + GameTextInput events are applied through
 //! [`crate::slot_runtime::SlotRuntime`]. Composition maps to
 //! [`nana_ui_platform::CompositionInput`] routed like other input. Accessibility
 //! publication lives in [`crate::slot_ax`].
@@ -12,14 +11,15 @@ use nana_ui::{
     FrameContext, GpuContext, GpuRenderTarget, GpuTextureFormat, ScenePaintViewport,
     SceneWgpuPainter,
 };
-use nana_ui_core::PhysicalRect;
 use nana_ui_platform::CompositionInput;
+
+use crate::shell::SystemInsets;
 
 use crate::slot_ime::{SlotEditorInfo, SlotImeBuffer};
 use crate::slot_input::{SlotKeyMods, SlotLogicalKey, SlotTouchKind};
-use crate::slot_runtime::{SlotRuntime, SlotSnapshot};
+use crate::slot_runtime::{SlotRuntime, SlotSnapshot, SystemAppearance};
 
-/// Retained Scene painter for the Primary control-slot strip.
+/// Retained Scene painter for the window document.
 pub struct SlotPainter {
     runtime: SlotRuntime,
     painter: SceneWgpuPainter,
@@ -39,13 +39,18 @@ impl SlotPainter {
         })
     }
 
-    pub fn resize(&mut self, physical_size: (u32, u32), scale: f32) {
-        self.runtime.resize(physical_size, scale);
+    pub fn resize(&mut self, physical_size: (u32, u32), scale: f32, insets: SystemInsets) {
+        if let Err(error) = self.runtime.resize(physical_size, scale, insets) {
+            log::warn!("nana-android-host: slot resize: {error}");
+        }
+    }
+
+    pub fn set_system_appearance(&mut self, system: SystemAppearance) {
+        self.runtime.set_system_appearance(system);
     }
 
     pub fn push_touch(
         &mut self,
-        slot: Option<PhysicalRect>,
         kind: SlotTouchKind,
         physical_x: f32,
         physical_y: f32,
@@ -54,7 +59,7 @@ impl SlotPainter {
         let before = self.runtime.snapshot();
         match self
             .runtime
-            .push_touch(slot, kind, physical_x, physical_y, pointer_id)
+            .push_touch(kind, physical_x, physical_y, pointer_id)
         {
             Ok(handled) => {
                 if handled {
@@ -136,8 +141,7 @@ impl SlotPainter {
         &mut self.runtime
     }
 
-    /// Draw the flushed Runtime scene over chrome already encoded on `view`.
-    /// `target_size` is the surface; the Runtime viewport may stop above the IME.
+    /// Draw the flushed Runtime scene over the cleared surface.
     pub fn paint_slot(
         &mut self,
         frame: &mut FrameContext,

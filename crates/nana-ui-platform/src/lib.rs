@@ -72,21 +72,18 @@ pub struct PlatformCapabilities {
     pub vulkan_surface: bool,
     /// Nana `DesktopShell` paint wired on this target.
     pub desktop_shell: bool,
-    /// Shell chrome band plan (title / regions) available.
-    pub shell_chrome_bands: bool,
-    /// Solid-color scissor fill for chrome bands.
-    pub shell_chrome_fill: bool,
-    /// Primary-region control-slot geometry reserved (not full DesktopShell).
-    pub control_slot: bool,
-    /// Runtime controls (Text + Input + Switch + Button) can paint into the slot.
+    /// One Runtime document fills the Primary region below the system bars.
+    pub primary_document: bool,
+    /// Runtime controls (appearance page, Text + Input + Switch + Button) paint
+    /// through the Scene painter.
     pub control_widget: bool,
-    /// Host pointer events route into the slot control.
+    /// Host pointer events inside Primary route into the document.
     pub control_input: bool,
 }
 
 #[cfg(feature = "experimental-android")]
 impl PlatformCapabilities {
-    /// Android ARM64 host: Surface + slot controls/input.
+    /// Android ARM64 host: Surface + Primary document controls/input.
     ///
     /// `ime` and `clipboard` are true once GameActivity InputConnection and
     /// JNI `ClipboardManager` are wired. This is not a second product paint
@@ -98,9 +95,7 @@ impl PlatformCapabilities {
             clipboard: true,
             vulkan_surface: true,
             desktop_shell: false,
-            shell_chrome_bands: true,
-            shell_chrome_fill: true,
-            control_slot: true,
+            primary_document: true,
             control_widget: true,
             control_input: true,
         }
@@ -119,9 +114,9 @@ mod tests {
         assert!(!caps.desktop_shell);
     }
 
-    /// Shared L1 fields via [`Default`] — Android does not fork `LayoutStyle`.
+    /// Shared layout fields via [`Default`] — Android does not fork `LayoutStyle`.
     #[test]
-    fn experimental_android_shares_l1_layout_fields() {
+    fn experimental_android_shares_layout_fields() {
         let style = nana_ui_core::LayoutStyle::default();
         let _pointer_events: Option<nana_ui_core::PointerEventsSpec> = style.pointer_events;
         let _transform_3d: Option<nana_ui_core::PaintMat4> = style.transform_3d;

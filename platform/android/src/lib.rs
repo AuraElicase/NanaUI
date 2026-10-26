@@ -1,13 +1,12 @@
 //! Experimental Android ARM64 host — not a current NanaUI product target.
 //!
 //! GameActivity + GameTextInput InputConnection + `ANativeWindow` Surface
-//! (wgpu 30 / Vulkan). The control slot is NanaUI Runtime + UiScene +
-//! `SceneWgpuPainter` — not a second product paint kernel.
+//! (wgpu 30 / Vulkan). The window is one NanaUI Runtime document — an
+//! appearance page and a control strip filling Primary — painted through
+//! UiScene + `SceneWgpuPainter`, not a second product paint kernel.
 
 #![cfg_attr(target_os = "android", allow(clippy::unnecessary_wraps))]
 
-mod chrome_fill;
-mod control_slot;
 #[cfg(target_os = "android")]
 mod gpu;
 #[cfg(target_os = "android")]
@@ -23,10 +22,9 @@ mod slot_input;
 mod slot_paint;
 mod slot_runtime;
 
-pub use chrome_fill::{band_draw_list, clamp_scissor};
-
 pub use shell::{
-    ANDROID_MDPI_DPI, AndroidShellStub, DEFAULT_ANDROID_SCALE_FACTOR, scale_factor_from_density_dpi,
+    ANDROID_MDPI_DPI, AndroidShellStub, DEFAULT_ANDROID_SCALE_FACTOR, SystemInsets, primary_rect,
+    scale_factor_from_density_dpi,
 };
 
 #[cfg(target_os = "android")]
@@ -57,12 +55,6 @@ mod android_not_product {
         assert!(!caps.desktop_shell);
         assert!(caps.ime);
         assert!(caps.clipboard);
-
-        #[cfg(target_os = "android")]
-        {
-            assert!(cfg!(target_os = "android"));
-            assert!(!crate::AndroidShellStub::desktop_shell_available());
-        }
     }
 
     /// Same `LayoutStyle` as desktop Runtime/Scene — no Android field fork.
