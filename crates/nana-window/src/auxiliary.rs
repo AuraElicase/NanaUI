@@ -23,8 +23,8 @@ pub struct AuxiliaryWindow {
 }
 
 impl AuxiliaryWindow {
-    /// Associate two live windows on the host thread. Windows ownership must
-    /// already have been specified in the creation attributes.
+    /// Associate two live windows on the host thread, before the window is
+    /// first shown. On Windows this installs the owner HWND.
     pub fn attach<P, W>(parent: &P, window: &W) -> Result<Self, AuxiliaryWindowError>
     where
         P: HasWindowHandle + HasDisplayHandle + ?Sized,
@@ -74,10 +74,70 @@ mod platform {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongPtrW, HWND_NOTOPMOST, HWND_TOPMOST,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WINDOWPOS,
-        WM_NCDESTROY, WM_WINDOWPOSCHANGING, WS_EX_TOPMOST,
+        GW_OWNER, GWL_EXSTYLE, GWLP_HWNDPARENT, GetWindow, GetWindowLongPtrW, HWND_NOTOPMOST,
+        HWND_TOPMOST, STYLESTRUCT, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+        SetWindowLongPtrW, SetWindowPos, WINDOWPOS, WM_NCDESTROY, WM_STYLECHANGING,
+        WM_WINDOWPOSCHANGING, WS_EX_APPWINDOW, WS_EX_TOPMOST,
     };
+
+    /// Subclass identity for the owned window's extended-style guard.
+    const OWNED_STYLE_SUBCLASS_ID: usize = 0x4E_41_4F_57;
+
+    /// Keeps an owned window off the taskbar. winit writes `WS_EX_APPWINDOW`
+    /// back from its own flags on every style change, and that bit gives an
+    /// owned window a taskbar button. Applied after the chain, like the frame
+    /// guard in `chrome.rs`; removes itself on `WM_NCDESTROY`.
+    unsafe extern "system" fn owned_style_proc(
+        window: HWND,
+        message: u32,
+        wparam: usize,
+        lparam: isize,
+        id: usize,
+        _data: usize,
+    ) -> isize {
+        if message == WM_NCDESTROY {
+            unsafe {
+                RemoveWindowSubclass(window, Some(owned_style_proc), id);
+            }
+        }
+        let result = unsafe { DefSubclassProc(window, message, wparam, lparam) };
+        if message == WM_STYLECHANGING && wparam == GWL_EXSTYLE as usize && lparam != 0 {
+            // SAFETY: `WM_STYLECHANGING` passes a `STYLESTRUCT` the handler
+            // edits in place; the sender owns it for the call.
+            let style = unsafe { &mut *(lparam as *mut STYLESTRUCT) };
+            style.styleNew &= !WS_EX_APPWINDOW;
+        }
+        result
+    }
+
+    /// Make `parent` the owner of the still hidden `window`.
+    ///
+    /// The owner is not handed to winit at creation: its Win32 backend turns
+    /// every owned window into `WS_POPUP`, which drops the system caption,
+    /// adds `WS_EX_NOACTIVATE` and reads positions relative to the owner's
+    /// client area (`GetParent` answers the owner of a popup). Set after
+    /// creation, the window stays an ordinary overlapped top-level window.
+    fn install_owner(parent: HWND, window: HWND) -> Result<(), AuxiliaryWindowError> {
+        // SAFETY: both HWNDs belong to live windows on the host thread.
+        unsafe {
+            if SetWindowSubclass(window, Some(owned_style_proc), OWNED_STYLE_SUBCLASS_ID, 0) == 0 {
+                return Err(AuxiliaryWindowError(
+                    std::io::Error::last_os_error().to_string(),
+                ));
+            }
+            SetWindowLongPtrW(window, GWLP_HWNDPARENT, parent as isize);
+            let ex_style = GetWindowLongPtrW(window, GWL_EXSTYLE);
+            if ex_style & WS_EX_APPWINDOW as isize != 0 {
+                SetWindowLongPtrW(window, GWL_EXSTYLE, ex_style & !(WS_EX_APPWINDOW as isize));
+            }
+            if GetWindow(window, GW_OWNER) != parent {
+                return Err(AuxiliaryWindowError(
+                    "native owner was not installed".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
 
     pub(super) struct Binding {
         parent: HWND,
@@ -148,14 +208,9 @@ mod platform {
             else {
                 return Err(AuxiliaryWindowError("expected HWNDs".into()));
             };
-            // SAFETY: both HWNDs come from live windows on the host thread.
-            if unsafe { GetWindow(window.hwnd.get() as _, GW_OWNER) } != parent.hwnd.get() as _ {
-                return Err(AuxiliaryWindowError(
-                    "native owner was not installed".into(),
-                ));
-            }
             let parent = parent.hwnd.get() as HWND;
             let window = window.hwnd.get() as HWND;
+            install_owner(parent, window)?;
             let actual =
                 unsafe { GetWindowLongPtrW(parent, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST != 0;
             let guard = Rc::new(LevelGuard {
@@ -227,6 +282,101 @@ mod platform {
                     0,
                     SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE,
                 );
+            }
+        }
+    }
+
+    /// On real HWNDs: ownership is Win32 window-manager state with no model
+    /// worth asserting against.
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use windows_sys::Win32::Foundation::RECT;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetWindowRect,
+            RegisterClassW, WNDCLASSW, WS_CAPTION, WS_OVERLAPPEDWINDOW, WS_POPUP, WS_SYSMENU,
+        };
+
+        use crate::win32::wide;
+
+        fn fixture_window(class: &[u16], x: i32) -> HWND {
+            // SAFETY: a hidden top-level window of the fixture's class, with
+            // the taskbar bit winit gives every unowned window.
+            let hwnd = unsafe {
+                CreateWindowExW(
+                    WS_EX_APPWINDOW,
+                    class.as_ptr(),
+                    wide("fixture").as_ptr(),
+                    WS_OVERLAPPEDWINDOW,
+                    x,
+                    120,
+                    200,
+                    160,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            };
+            assert!(!hwnd.is_null(), "fixture window");
+            hwnd
+        }
+
+        fn ex_style(hwnd: HWND) -> u32 {
+            // SAFETY: `hwnd` is a live fixture window.
+            unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32 }
+        }
+
+        #[test]
+        fn an_owned_window_keeps_its_caption_and_screen_position_and_stays_off_the_taskbar() {
+            let class_name = wide("NanaOwnedWindowFixture");
+            let class = WNDCLASSW {
+                lpfnWndProc: Some(DefWindowProcW),
+                lpszClassName: class_name.as_ptr(),
+                // SAFETY: all-zero is the documented unset state of WNDCLASSW.
+                ..unsafe { std::mem::zeroed() }
+            };
+            // SAFETY: a plain registration with DefWindowProcW.
+            unsafe {
+                RegisterClassW(&class);
+            }
+            let parent = fixture_window(&class_name, 100);
+            let window = fixture_window(&class_name, 340);
+            let mut before = RECT::default();
+            // SAFETY: live window, valid output buffer.
+            unsafe { GetWindowRect(window, &mut before) };
+
+            install_owner(parent, window).unwrap();
+
+            // SAFETY: live windows.
+            unsafe {
+                assert_eq!(GetWindow(window, GW_OWNER), parent);
+                let style = GetWindowLongPtrW(window, GWL_STYLE) as u32;
+                assert_eq!(style & (WS_CAPTION | WS_SYSMENU), WS_CAPTION | WS_SYSMENU);
+                assert_eq!(style & WS_POPUP, 0);
+                let mut after = RECT::default();
+                GetWindowRect(window, &mut after);
+                assert_eq!((after.left, after.top), (before.left, before.top));
+            }
+            assert_eq!(ex_style(window) & WS_EX_APPWINDOW, 0);
+
+            // winit rewrites the extended style from its own flags.
+            // SAFETY: live window.
+            unsafe {
+                SetWindowLongPtrW(
+                    window,
+                    GWL_EXSTYLE,
+                    (ex_style(window) | WS_EX_APPWINDOW) as isize,
+                );
+            }
+            assert_eq!(ex_style(window) & WS_EX_APPWINDOW, 0);
+            // The parent is not owned and keeps its taskbar button.
+            assert_ne!(ex_style(parent) & WS_EX_APPWINDOW, 0);
+
+            // SAFETY: destroying the fixture windows, owned one first.
+            unsafe {
+                DestroyWindow(window);
+                DestroyWindow(parent);
             }
         }
     }

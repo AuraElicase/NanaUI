@@ -69,8 +69,6 @@ use winit::platform::macos::{WindowAttributesMacOS, WindowExtMacOS};
 #[cfg(target_os = "windows")]
 use winit::platform::windows::{CornerPreference, WindowAttributesWindows, WindowExtWindows};
 use winit::raw_window_handle::HasWindowHandle;
-#[cfg(target_os = "windows")]
-use winit::raw_window_handle::RawWindowHandle;
 use winit::window::Theme as WinitTheme;
 
 #[cfg(not(target_os = "android"))]
@@ -2389,40 +2387,9 @@ fn scene_aux_window_attributes(
     } else {
         attributes
     };
-    #[cfg(target_os = "windows")]
-    let parent = parent.filter(|_| !underlay);
-    // Any child is owned by its parent HWND, modal or not: it stays above the
-    // parent, minimizes with it and never gets its own taskbar button.
-    #[cfg(target_os = "windows")]
-    let attributes = if let Some(parent) = parent {
-        let handle = parent
-            .window_handle()
-            .map_err(|error| format!("failed to acquire owner handle: {error}"))?;
-        let RawWindowHandle::Win32(handle) = handle.as_raw() else {
-            return Err("Windows owner is not an HWND".into());
-        };
-        {
-            let chrome =
-                windows_scene_chrome(settings.system_caption, settings.transparent, target);
-            let mut win = WindowAttributesWindows::default()
-                .with_no_redirection_bitmap(chrome.no_redirection_bitmap)
-                .with_undecorated_shadow(chrome.undecorated_shadow)
-                .with_owner_window(handle.hwnd.get() as _);
-            if !chrome.decorations {
-                win = win.with_corner_preference(if chrome.rounded_corners {
-                    CornerPreference::Round
-                } else {
-                    CornerPreference::DoNotRound
-                });
-            }
-            if let Some(icon) = winit_icon(&resolved_scene_icon(settings.icon.as_ref())) {
-                win = win.with_taskbar_icon(Some(icon));
-            }
-            attributes.with_platform_attributes(Box::new(win))
-        }
-    } else {
-        attributes
-    };
+    // Windows ownership is not a creation attribute: winit would make the
+    // window a `WS_POPUP` without its caption. `AuxiliaryWindow::attach`
+    // installs the owner before the first show.
     Ok(attributes)
 }
 
