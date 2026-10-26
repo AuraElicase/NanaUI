@@ -10,6 +10,10 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # This version tag selects the declared Rust MSRV, not an action release.
+      # Update it with rust-version in the manifests, never independently.
+      - dependency-name: dtolnay/rust-toolchain
 
   - package-ecosystem: cargo
     directories:

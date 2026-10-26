@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const { TextureLifecycle } = require('./lifecycle.cjs');
 const { FrameMeasurements } = require('./measurements.cjs');
 const { classifyBridgeFailure, classifyProducerSummary } = require('./failures.cjs');
+const electronVersion = require('./package.json').devDependencies.electron;
 
 // This is a foreign host fixture, never the NanaUI product shell.
 app.commandLine.appendSwitch('use-angle', 'd3d11');
@@ -124,8 +125,8 @@ ipcMain.on('bridge-error', (event, error) => {
   }
 });
 app.whenReady().then(() => {
-  if (process.platform !== 'win32' || process.arch !== 'x64' || process.versions.electron !== '44.7.2' || typeof sharedTexture?.importSharedTexture !== 'function')
-    return finish({ status: 'unsupported', evidence: null, reason: 'Windows x64 Electron 44.7.2 managed sharedTexture API is required' }, 2);
+  if (process.platform !== 'win32' || process.arch !== 'x64' || process.versions.electron !== electronVersion || typeof sharedTexture?.importSharedTexture !== 'function')
+    return finish({ status: 'unsupported', evidence: null, reason: `Windows x64 Electron ${electronVersion} managed sharedTexture API is required` }, 2);
   window = new BrowserWindow({ width: 680, height: 420, webPreferences: {
     preload: path.join(__dirname, 'preload.cjs'), sandbox: false, contextIsolation: true, nodeIntegration: false
   }});
