@@ -24,6 +24,12 @@ const INSERT_INSET: f32 = nana_ui_core::space::XS;
 const INSERT_THICKNESS: f32 = nana_ui_core::space::XXS;
 const DEFAULT_INDENT: f32 = nana_ui_core::space::LG;
 
+/// The `z-index` a row stacks at while it follows the pointer in a live,
+/// flat drag ([`ReorderDragVisual::preview`]): over the rows it passes, under
+/// an open menu, which stacks at [`crate::MENU_OVERLAY_Z_INDEX`].
+pub const REORDER_PREVIEW_Z_INDEX: i32 = 100;
+const _: () = assert!(REORDER_PREVIEW_Z_INDEX < crate::popover::MENU_OVERLAY_Z_INDEX);
+
 pub use crate::tree_view::{TreeDropIntent, TreeDropPosition};
 
 /// Results published by [`ReorderList`]. Order and persistence stay with the
@@ -225,7 +231,16 @@ pub struct ReorderDragVisual {
     pub source: usize,
     pub x: f32,
     pub y: f32,
+    /// Where the press that started the drag landed, in the same layout
+    /// coordinates as [`Self::x`] and [`Self::y`].
+    pub press_x: f32,
+    pub press_y: f32,
     pub tree_drop: bool,
+    /// Live rows in a flat drag: the carried rows follow the pointer and the
+    /// rows between make room where they would land, both on the
+    /// presentation layer over unchanged layout. The list draws no outline or
+    /// insert line then; a tree drop keeps them.
+    pub preview: bool,
     rules: Arc<DropRules>,
 }
 
@@ -287,6 +302,48 @@ impl ReorderDragVisual {
         Some(ReorderDropMark::Line(reorder_insert_line(
             bounds, rows, before,
         )))
+    }
+
+    /// How far the carried rows have been moved from where they were
+    /// pressed, `[x, y]`.
+    pub fn preview_offset(&self) -> [f32; 2] {
+        [self.x - self.press_x, self.y - self.press_y]
+    }
+
+    /// How far each of `rows` moves down (up when negative) to make room for
+    /// the carried rows where they would land: the rows between their place
+    /// and that spot shift by the carried block's height, its spacing
+    /// included. All zero where the drop changes nothing or may not land,
+    /// and for the carried rows themselves, which follow the pointer.
+    pub fn shift_offsets(&self, rows: &[LayoutBox]) -> Vec<f32> {
+        let mut offsets = vec![0.0; rows.len()];
+        let carried = self.carried();
+        let (start, end) = (*carried.start(), *carried.end());
+        if rows.len() != self.rows() || end >= rows.len() {
+            return offsets;
+        }
+        let Some(before) = self.rules.flat_drop(rows, self.source, self.y) else {
+            return offsets;
+        };
+        // The carried block's height with one gap: from its top to the next
+        // row's top, or from the bottom of the row above it to its bottom.
+        let block = match (rows.get(end + 1), start.checked_sub(1)) {
+            (Some(next), _) => next.y - rows[start].y,
+            (None, Some(above)) => {
+                rows[end].y + rows[end].height - (rows[above].y + rows[above].height)
+            }
+            (None, None) => 0.0,
+        };
+        if !block.is_finite() {
+            return offsets;
+        }
+        let before = before.unwrap_or(rows.len());
+        if before > end {
+            offsets[end + 1..before].fill(-block);
+        } else {
+            offsets[before..start].fill(block);
+        }
+        offsets
     }
 }
 
@@ -778,7 +835,10 @@ impl ReorderList {
             source,
             x: drag.x,
             y: drag.y,
+            press_x: drag.start_x,
+            press_y: drag.start_y,
             tree_drop: self.tree_drop,
+            preview: self.live_rows && !self.tree_drop,
             rules: Arc::new(DropRules::of(self)),
         })
     }
@@ -1466,6 +1526,10 @@ fn tree_insert_line(target: LayoutBox, position: TreeDropPosition, indent: f32) 
         },
     }
 }
+
+#[cfg(test)]
+#[path = "reorder_list/preview_tests.rs"]
+mod preview_tests;
 
 #[cfg(test)]
 mod tests {
@@ -2184,11 +2248,16 @@ mod tests {
     }
 
     #[test]
-    fn a_moved_drag_over_live_rows_outlines_its_row_and_shows_where_it_lands() {
+    fn a_moved_tree_drop_over_live_rows_outlines_its_row_and_shows_where_it_lands() {
         let mut context = AppContext::new();
         let document = document();
+        // A flat drag over live rows previews on the rows instead; a tree
+        // drop keeps the marks (see `preview_tests`).
         let list = context
-            .create_component(document, sample().live_rows(true).spacing(4.0))
+            .create_component(
+                document,
+                sample().live_rows(true).tree_drop(true).spacing(4.0),
+            )
             .unwrap();
         // Live rows taller than the self-drawn ones, so a box taken from the
         // uniform rows would land in the wrong place.
@@ -2234,8 +2303,8 @@ mod tests {
             .update_reorder_list_pointer(document, 1, x, start + 2.0)
             .unwrap();
         assert_eq!(geometry(&context), (None, None));
-        // Past the middle of the last row: it goes to the end.
-        let end = boxes[2].y + 30.0;
+        // In the bottom quarter of the last row: it goes after it.
+        let end = boxes[2].y + 38.0;
         context
             .update_reorder_list_pointer(document, 1, x, end)
             .unwrap();
@@ -2243,8 +2312,8 @@ mod tests {
         assert_eq!(dragged, Some(boxes[0]));
         let insert = insert.expect("an insert line");
         assert!(
-            insert.y >= boxes[2].y + boxes[2].height,
-            "the line {insert:?} sits under the last live row {:?}",
+            insert.y + insert.height >= boxes[2].y + boxes[2].height,
+            "the line {insert:?} sits at the bottom of the last live row {:?}",
             boxes[2]
         );
         context

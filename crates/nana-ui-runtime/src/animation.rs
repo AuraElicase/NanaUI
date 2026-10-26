@@ -76,6 +76,10 @@ pub mod component_animation_kinds {
     pub const SCROLLBAR_EXPAND_Y: u64 = 15;
     /// An indeterminate progress bar's sweep.
     pub const PROGRESS: u64 = 16;
+    /// A reorder list's carried row following the pointer.
+    pub const REORDER_PREVIEW: u64 = 17;
+    /// A reorder list's row making room where a drag would land.
+    pub const REORDER_SHIFT: u64 = 18;
 }
 
 /// Derives the animation ID for one component-owned timeline from the
@@ -93,7 +97,7 @@ pub fn component_animation_id(kind_tag: u64, target: StableNodeId) -> Option<Ani
 /// Whether `id` is one of the built-in component timelines of `target`
 /// ([`component_animation_kinds`]).
 pub(crate) fn is_component_animation(id: AnimationId, target: StableNodeId) -> bool {
-    (component_animation_kinds::SKELETON..=component_animation_kinds::PROGRESS)
+    (component_animation_kinds::SKELETON..=component_animation_kinds::REORDER_SHIFT)
         .any(|kind| component_animation_id(kind, target) == Some(id))
 }
 

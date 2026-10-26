@@ -2815,7 +2815,9 @@ impl UiWorld {
                             .collect()
                     }
                 };
-                let drag = drag.as_ref().map(|drag| {
+                // A previewed drag shows itself on its rows' presentation:
+                // the carried rows follow the pointer, the rest make room.
+                let drag = drag.as_ref().filter(|drag| !drag.preview).map(|drag| {
                     let boxes = row_boxes(drag.rows());
                     (drag.drop_mark(bounds, &boxes), drag.carried_box(&boxes))
                 });
