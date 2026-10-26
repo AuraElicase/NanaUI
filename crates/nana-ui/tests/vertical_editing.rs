@@ -2,6 +2,9 @@
 //! columns, draws its caret across the column, walks the column with Up/Down
 //! and crosses columns with Left/Right, and a click lands on the glyph under
 //! it — end to end, through the real engine.
+//!
+//! Fixed-size fixtures clear the control's theme font-size binding when
+//! setting a literal, so shaping uses the 16px assumed by their geometry.
 
 use nana_ui::{HeadlessInput, NanaTextShaper, runtime::*};
 use nana_ui_platform::{
@@ -70,6 +73,7 @@ fn a_vertical_text_area_edits_in_columns() {
         let style = Arc::make_mut(&mut view.style.layout);
         style.writing_mode = Some(nana_ui_core::WritingModeSpec::VerticalRl);
         style.font_size = Some(16.0);
+        style.theme.font_size = None;
         style.width = Some(nana_ui_core::LengthSpec::Px(200.0));
         style.height = Some(nana_ui_core::LengthSpec::Px(64.0));
         style.padding_top = Some(nana_ui_core::LengthSpec::Px(0.0));
@@ -170,6 +174,7 @@ fn a_wheel_scrolls_a_vertical_rl_editor_towards_its_later_columns() {
         let style = Arc::make_mut(&mut view.style.layout);
         style.writing_mode = Some(nana_ui_core::WritingModeSpec::VerticalRl);
         style.font_size = Some(16.0);
+        style.theme.font_size = None;
         style.width = Some(nana_ui_core::LengthSpec::Px(120.0));
         style.height = Some(nana_ui_core::LengthSpec::Px(64.0));
     }
@@ -247,6 +252,7 @@ fn a_vertical_rl_editor_hands_its_column_scroll_to_the_painter() {
         let style = Arc::make_mut(&mut view.style.layout);
         style.writing_mode = Some(nana_ui_core::WritingModeSpec::VerticalRl);
         style.font_size = Some(16.0);
+        style.theme.font_size = None;
         style.width = Some(nana_ui_core::LengthSpec::Px(120.0));
         style.height = Some(nana_ui_core::LengthSpec::Px(64.0));
     }
@@ -349,6 +355,7 @@ fn a_vertical_rtl_editor_starts_its_lines_at_the_bottom() {
         style.writing_mode = Some(nana_ui_core::WritingModeSpec::VerticalRl);
         style.dir = Some(nana_ui_core::DirSpec::Rtl);
         style.font_size = Some(16.0);
+        style.theme.font_size = None;
         style.width = Some(nana_ui_core::LengthSpec::Px(120.0));
         style.height = Some(nana_ui_core::LengthSpec::Px(height));
         style.padding_top = Some(nana_ui_core::LengthSpec::Px(0.0));
@@ -443,6 +450,7 @@ fn arrow_keys_in_a_vertical_rtl_editor_follow_its_reading_direction() {
         style.writing_mode = Some(nana_ui_core::WritingModeSpec::VerticalRl);
         style.dir = Some(nana_ui_core::DirSpec::Rtl);
         style.font_size = Some(16.0);
+        style.theme.font_size = None;
         style.width = Some(nana_ui_core::LengthSpec::Px(120.0));
         style.height = Some(nana_ui_core::LengthSpec::Px(100.0));
         style.padding_top = Some(nana_ui_core::LengthSpec::Px(0.0));
