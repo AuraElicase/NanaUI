@@ -83,6 +83,12 @@ pub struct Popover {
     pub bare_trigger: bool,
     /// Use the shared 24px target when this popover has an icon trigger.
     pub compact_trigger: bool,
+    /// What the application writes over the trigger's own style while the
+    /// popover has a trigger. Each field it sets replaces the recipe's and
+    /// the rest stay the recipe's: the hover and press washes, the open
+    /// state's, a compact trigger's fit. A radius it writes is the
+    /// trigger's corners. See [`Self::trigger_style`].
+    pub trigger_style: Option<NodeStyle>,
 }
 
 impl Popover {
@@ -104,11 +110,21 @@ impl Popover {
             close_on_outside: true,
             bare_trigger: false,
             compact_trigger: false,
+            trigger_style: None,
         }
     }
 
     pub fn trigger(mut self, trigger: impl Into<Arc<str>>) -> Self {
         self.trigger = trigger.into();
+        self
+    }
+
+    /// Style the trigger: `style`'s fields are written over the trigger's
+    /// recipe, which keeps everything `style` leaves unset — set only a
+    /// width, and the trigger still washes on hover and press. The hanging
+    /// surface keeps [`Self::width`] and [`Self::padding`].
+    pub fn trigger_style(mut self, style: NodeStyle) -> Self {
+        self.trigger_style = Some(style);
         self
     }
 
@@ -244,6 +260,7 @@ impl crate::ComponentView for Popover {
             self.bare_trigger,
             self.compact_trigger,
             &self.accessible_name,
+            self.trigger_style.as_ref(),
         );
     }
 }
@@ -307,6 +324,12 @@ impl ActionMenu {
         self.popover = self.popover.compact_trigger(compact);
         self
     }
+
+    /// Style the trigger over its recipe; see [`Popover::trigger_style`].
+    pub fn trigger_style(mut self, style: NodeStyle) -> Self {
+        self.popover = self.popover.trigger_style(style);
+        self
+    }
 }
 
 impl Default for ActionMenu {
@@ -363,6 +386,7 @@ impl crate::ComponentView for ActionMenu {
             self.popover.bare_trigger,
             self.popover.compact_trigger,
             &self.popover.accessible_name,
+            self.popover.trigger_style.as_ref(),
         );
     }
 }
@@ -385,6 +409,7 @@ pub(crate) fn project_menu_surface(
     bare_trigger: bool,
     compact_trigger: bool,
     accessible_name: &Arc<str>,
+    trigger_style: Option<&NodeStyle>,
 ) {
     let open = world.project_menu_presence(id, open, mutations);
     // A child that draws the trigger only counts while it is one.
@@ -457,6 +482,10 @@ pub(crate) fn project_menu_surface(
         bare_trigger_style(style, open)
     } else {
         style
+    };
+    let style = match trigger_style.filter(|_| has_trigger) {
+        Some(over) => style.overlaid(over),
+        None => style,
     };
     project_common(
         id,
@@ -1961,5 +1990,207 @@ mod tests {
             Some(last_id),
             "overlay a11y center must ignore ancestor page scroll: {bounds:?} -> {hit:?}"
         );
+    }
+
+    /// The trigger's background, at rest and with the pointer over it, for a
+    /// node styled `style`.
+    fn trigger_wash(style: NodeStyle) -> ([f32; 4], [f32; 4]) {
+        let mut world = UiWorld::new();
+        let mut queue = MutationQueue::new();
+        let id = StableNodeId::new(1).unwrap();
+        queue.create(
+            id,
+            document(),
+            NodeKind::Element {
+                tag: "popover".into(),
+            },
+        );
+        queue.write_layout(
+            id,
+            LayoutBox {
+                x: 0.0,
+                y: 0.0,
+                width: 120.0,
+                height: TRIGGER_HEIGHT,
+            },
+        );
+        queue.set_style(id, style);
+        queue.set_standard_visual(
+            id,
+            Some(StandardVisual::MenuSurface {
+                kind: MenuSurfaceKind::Popover,
+                open: false,
+                trigger: Some(Arc::from("Actions")),
+                trigger_icon: None,
+                trigger_image: None,
+                gap: 0.0,
+                overlay: None,
+                query: None,
+                rows: Arc::from([]),
+                highlighted: None,
+            }),
+        );
+        world.commit(queue).unwrap();
+        fn background(world: &mut UiWorld, id: StableNodeId) -> [f32; 4] {
+            world.resolve_styles(&[id]).unwrap();
+            let Some(ComponentGeometry::MenuSurface {
+                trigger_surface: Some(chrome),
+                ..
+            }) = world.component_geometry(id)
+            else {
+                panic!("expected trigger chrome");
+            };
+            chrome.background.expect("a filled trigger")
+        }
+        let idle = background(&mut world, id);
+        world.set_pointer_hover(document(), 1, Some(id)).unwrap();
+        world.advance_animations(nana_ui_core::motion::HOVER_COLOR);
+        (idle, background(&mut world, id))
+    }
+
+    #[test]
+    fn a_trigger_style_is_written_over_the_recipe_not_instead_of_it() {
+        let mut over = NodeStyle::default();
+        over.layout_mut().width = Some(LengthSpec::Px(120.0));
+        let mut context = AppContext::new();
+        let popover = context
+            .create_component(
+                document(),
+                Popover::new()
+                    .trigger("Actions")
+                    .trigger_style(over.clone()),
+            )
+            .unwrap();
+        let id = popover.stable_id();
+        let recipe = trigger_button_style();
+        for open in [false, true, false] {
+            context
+                .update_component(popover, |popover, _| popover.open = open)
+                .unwrap();
+            let style = context.world().node_style(id).unwrap();
+            assert_eq!(style.layout.width, Some(LengthSpec::Px(120.0)));
+            // All it left unset is the recipe's: chrome, corners, height,
+            // inset and the hover and press washes.
+            assert_eq!(style.layout.border_width, recipe.layout.border_width);
+            assert_eq!(
+                (style.background, style.border, style.radius),
+                (recipe.background, recipe.border, recipe.radius)
+            );
+            assert_eq!(
+                (style.control_height, style.control_padding_x),
+                (recipe.control_height, recipe.control_padding_x)
+            );
+            assert_eq!(style.interaction, recipe.interaction);
+            // The surface keeps its own width and padding.
+            assert_eq!(
+                context
+                    .read(popover, |popover| (popover.width, popover.padding))
+                    .unwrap(),
+                (POPOVER_WIDTH, POPOVER_PADDING)
+            );
+        }
+        // And the trigger still answers the pointer.
+        let (idle, hovered) = trigger_wash(context.world().node_style(id).unwrap().clone());
+        assert_ne!(idle, hovered, "hover still washes the trigger");
+        // A hover wash of its own replaces the recipe's, and only that one.
+        over.interaction.hovered.background = Some(SemanticColorRole::Selected);
+        let style = trigger_button_style().overlaid(&over);
+        assert_eq!(
+            style.interaction.hovered.background,
+            Some(SemanticColorRole::Selected)
+        );
+        assert_eq!(
+            style.interaction.pressed.background,
+            Some(SemanticColorRole::Active)
+        );
+    }
+
+    #[test]
+    fn a_number_the_trigger_style_writes_wins_over_the_recipe_step() {
+        let mut over = NodeStyle::default();
+        {
+            let layout = over.layout_mut();
+            layout.border_radius = Some(18.0);
+            layout.height = Some(LengthSpec::Px(36.0));
+            layout.padding_left = Some(LengthSpec::Px(4.0));
+        }
+        let style = trigger_button_style().overlaid(&over);
+        // A step would resolve over the number; the recipe's give way.
+        assert_eq!(style.radius, None);
+        assert_eq!(style.layout.border_radius, Some(18.0));
+        assert_eq!(style.control_height, None);
+        assert_eq!(style.layout.height, Some(LengthSpec::Px(36.0)));
+        assert_eq!(style.control_padding_x, None);
+        // Per-corner radii take the step's place too; a step of its own wins.
+        let mut corners = NodeStyle::default();
+        corners.layout_mut().paint.border_radii = Some([LengthSpec::Px(2.0); 4]);
+        assert_eq!(trigger_button_style().overlaid(&corners).radius, None);
+        let mut tier = NodeStyle::default();
+        tier.radius = Some(nana_ui_core::RadiusTier::Lg);
+        assert_eq!(
+            trigger_button_style().overlaid(&tier).radius,
+            Some(nana_ui_core::RadiusTier::Lg)
+        );
+    }
+
+    #[test]
+    fn a_trigger_style_keeps_a_compact_content_trigger_fitted_to_its_content() {
+        let mut context = AppContext::new();
+        let well = context
+            .create_component(document(), crate::Stack::row(0.0))
+            .unwrap();
+        let mut over = NodeStyle::default();
+        over.background = Some(SemanticColorRole::Selected);
+        let popover = context
+            .create_component(
+                document(),
+                Popover::new()
+                    .trigger("Colour")
+                    .trigger_content(well.stable_id())
+                    .compact_trigger(true)
+                    .trigger_style(over),
+            )
+            .unwrap();
+        context.append_child(popover, well).unwrap();
+        let style = context.world().node_style(popover.stable_id()).unwrap();
+        assert_eq!(style.background, Some(SemanticColorRole::Selected));
+        assert_eq!(style.control_height, None, "still fitted");
+        assert_eq!(style.control_padding_x, None, "still fitted");
+        assert_eq!(
+            style.interaction.hovered.background,
+            Some(SemanticColorRole::Hover)
+        );
+    }
+
+    #[test]
+    fn a_layout_overlay_writes_only_the_fields_it_sets() {
+        let mut base = NodeStyle::default();
+        {
+            let layout = base.layout_mut();
+            layout.width = Some(LengthSpec::Px(80.0));
+            layout.min_width = Some(LengthSpec::Percent(50.0));
+            layout.align_items = nana_ui_core::AlignSpec::Center;
+            layout.paint.border_radii = Some([LengthSpec::Px(3.0); 4]);
+        }
+        let mut over = NodeStyle::default();
+        {
+            let layout = over.layout_mut();
+            layout.min_width = Some(LengthSpec::Px(40.0));
+            layout.overflow_x = nana_ui_core::OverflowSpec::Hidden;
+            layout.paint.border_radii = Some([LengthSpec::Px(6.0); 4]);
+        }
+        let style = base.clone().overlaid(&over);
+        let layout = style.layout.as_ref();
+        assert_eq!(layout.width, Some(LengthSpec::Px(80.0)));
+        assert_eq!(
+            layout.min_width,
+            Some(LengthSpec::Px(40.0)),
+            "another variant, whole"
+        );
+        assert_eq!(layout.align_items, nana_ui_core::AlignSpec::Center);
+        assert_eq!(layout.overflow_x, nana_ui_core::OverflowSpec::Hidden);
+        assert_eq!(layout.paint.border_radii, Some([LengthSpec::Px(6.0); 4]));
+        // An empty overlay is the base.
+        assert_eq!(base.clone().overlaid(&NodeStyle::default()), base);
     }
 }

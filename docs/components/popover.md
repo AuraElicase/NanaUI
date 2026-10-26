@@ -48,6 +48,17 @@ widget(Popover::new().trigger("更多")).children(widget(ActionMenuItem::new("�
 
 触发器宽度随内容收缩，交叉轴对齐由父容器决定：在居中的横向工具栏里垂直居中，在默认拉伸的纵向容器里也不会占满整行。
 
+`.trigger_style(style)` 改触发器的样式。`style` 里写了的字段盖在触发器原本的样式上，没写的保持原样：只写一个宽度时，悬停和按下照样变色，打开时的样子、`compact_trigger` 收紧到内容的尺寸、`bare_trigger` 的去底色也都还在。写了圆角（`layout.border_radius` 或逐角的 `layout.paint.border_radii`）时按你写的画，不再用主题的小圆角；写了 `layout.height` 时不再套控件高度档位；写了左右或上下内边距时不再套控件内边距档位。只作用于触发器，面板的宽度和内边距仍由 `.width`、`.padding` 决定。`ActionMenu` 同样转发。
+
+```rust
+let mut round = NodeStyle::default();
+let layout = round.layout_mut();
+layout.width = Some(LengthSpec::Px(36.0));
+layout.height = Some(LengthSpec::Px(36.0));
+layout.border_radius = Some(18.0);
+Popover::new().trigger_icon(Icon::Add, "更多").trigger_style(round)
+```
+
 ## 位置
 
 `.placement` 用 `nana_ui::PopoverPlacement`：`Top`、`Bottom`、`Left`、`Right`，默认 `Bottom`。
@@ -81,6 +92,7 @@ widget(Popover::new().trigger("更多")).children(widget(ActionMenuItem::new("�
 | `.trigger` | — | 写可访问名，也是纯文本触发器显示的字。`new()` 的触发文字是空的 |
 | `.trigger_icon` | — | `(icon, label)` 画成 28×28 的方形按钮，图标居中，`label` 是可访问名 |
 | `.bare_trigger` | — | `true` 去掉静止时的底色和描边。悬停、按下和打开时仍有一层洗色。不传则保持浅底加描边 |
+| `.trigger_style` | `NodeStyle` | 盖在触发器原有样式上，只替换写了的字段；悬停、按下和收紧尺寸都保留，写了的圆角按你写的画。默认 `None` |
 | `.placement` | `nana_ui::PopoverPlacement` | `Top`、`Bottom`、`Left`、`Right`，默认 `Bottom`。`new()` 位置在下方 |
 | `.alignment` | `PopoverAlignment` | `new()` 对齐居中 |
 | `open` | — | 它自己切换。写成 `false` 会关上 |

@@ -32,6 +32,53 @@ pub use nana_text::Affinity as TextAffinity;
 static DEFAULT_LAYOUT_STYLE: LazyLock<Arc<LayoutStyle>> =
     LazyLock::new(|| Arc::new(LayoutStyle::default()));
 
+/// `base` with each field `over` sets written over it: every field whose
+/// value differs from the default layout's. A nested struct is written field
+/// by field; anything else (a value, an `Option`, an enum, a map) whole.
+fn overlay_layout(base: &LayoutStyle, over: &LayoutStyle) -> LayoutStyle {
+    use serde_json::Value;
+
+    fn overlay(base: &mut Value, default: &Value, over: Value) {
+        let Value::Object(over) = over else {
+            *base = over;
+            return;
+        };
+        for (key, field) in over {
+            let default = default.get(&key).unwrap_or(&Value::Null);
+            if *default == field {
+                continue;
+            }
+            let Some(slot) = base
+                .as_object_mut()
+                .map(|base| base.entry(key).or_insert(Value::Null))
+            else {
+                return;
+            };
+            // A struct has the same fields in all three; an enum variant or a
+            // map need not, and is replaced whole.
+            let same_shape = |value: &Value| match (value, default, &field) {
+                (Value::Object(value), Value::Object(default), Value::Object(field)) => {
+                    value.keys().eq(default.keys()) && field.keys().eq(default.keys())
+                }
+                _ => false,
+            };
+            if same_shape(slot) {
+                overlay(slot, default, field);
+            } else {
+                *slot = field;
+            }
+        }
+    }
+
+    static DEFAULT: LazyLock<Value> = LazyLock::new(|| {
+        serde_json::to_value(LayoutStyle::default()).expect("a layout serializes")
+    });
+    let mut value = serde_json::to_value(base).expect("a layout serializes");
+    let over = serde_json::to_value(over).expect("a layout serializes");
+    overlay(&mut value, &DEFAULT, over);
+    serde_json::from_value(value).expect("an overlaid layout deserializes")
+}
+
 pub(crate) fn layout_style_is_default(style: &Arc<LayoutStyle>) -> bool {
     Arc::ptr_eq(style, &DEFAULT_LAYOUT_STYLE)
 }
@@ -2134,6 +2181,103 @@ impl NodeStyle {
             && self.background.is_none()
             && self.border.is_none()
             && self.interaction.is_empty()
+    }
+
+    /// This style with what `over` sets written over it, the way an
+    /// application's style overlays a component's recipe: each design step
+    /// and colour `over` names replaces this one's, each interaction state's
+    /// paint is overlaid ([`SemanticPaint::overlay`]), and each layout field
+    /// `over` sets (one that differs from the default layout) replaces this
+    /// one's, a nested struct field by field. Anything `over` leaves unset
+    /// stays as it was, the hover and press washes included.
+    ///
+    /// A step yields to a number `over` writes for what it decides: a
+    /// corner radius (`layout.border_radius`, `layout.paint.border_radii`)
+    /// drops this style's [`Self::radius`] and [`Self::corner_radii`], a
+    /// `layout.height` its [`Self::control_height`], and a horizontal or
+    /// vertical padding its [`Self::control_padding_x`] or
+    /// [`Self::control_padding_y`]; a step resolves over the number
+    /// otherwise.
+    pub(crate) fn overlaid(self, over: &NodeStyle) -> NodeStyle {
+        let layout = &over.layout;
+        let writes_radius = layout.border_radius.is_some() || layout.paint.border_radii.is_some();
+        let writes_padding_x = layout.padding.is_some()
+            || layout.padding_left.is_some()
+            || layout.padding_right.is_some();
+        let writes_padding_y = layout.padding.is_some()
+            || layout.padding_top.is_some()
+            || layout.padding_bottom.is_some();
+        let (radius, corner_radii) = if writes_radius {
+            (over.radius, over.corner_radii)
+        } else {
+            (
+                over.radius.or(self.radius),
+                over.corner_radii.or(self.corner_radii),
+            )
+        };
+        fn unless<T>(written: bool, base: Option<T>) -> Option<T> {
+            base.filter(|_| !written)
+        }
+        let interaction = InteractionStyle {
+            base: self.interaction.base.overlay(over.interaction.base),
+            selected: self.interaction.selected.overlay(over.interaction.selected),
+            selected_hovered: self
+                .interaction
+                .selected_hovered
+                .overlay(over.interaction.selected_hovered),
+            selected_pressed: self
+                .interaction
+                .selected_pressed
+                .overlay(over.interaction.selected_pressed),
+            hovered: self.interaction.hovered.overlay(over.interaction.hovered),
+            pressed: self.interaction.pressed.overlay(over.interaction.pressed),
+            focused: self.interaction.focused.overlay(over.interaction.focused),
+            disabled: self.interaction.disabled.overlay(over.interaction.disabled),
+        };
+        let unset = NodeStyle::default();
+        NodeStyle {
+            layout: if layout_style_is_default(layout) {
+                self.layout
+            } else {
+                Arc::new(overlay_layout(&self.layout, layout))
+            },
+            foreground: over.foreground.or(self.foreground),
+            background: over.background.or(self.background),
+            border: over.border.or(self.border),
+            radius,
+            corner_radii,
+            control_height: over
+                .control_height
+                .or(unless(layout.height.is_some(), self.control_height)),
+            control_padding_x: over
+                .control_padding_x
+                .or(unless(writes_padding_x, self.control_padding_x)),
+            control_padding_y: over
+                .control_padding_y
+                .or(unless(writes_padding_y, self.control_padding_y)),
+            surface_padding: over.surface_padding.or(self.surface_padding),
+            square: over.square.or(self.square),
+            type_role: over.type_role.or(self.type_role),
+            type_weight: over.type_weight.or(self.type_weight),
+            gap_step: over.gap_step.or(self.gap_step),
+            padding_step: over.padding_step.or(self.padding_step),
+            interaction,
+            text_horizontal_alignment: if over.text_horizontal_alignment
+                == unset.text_horizontal_alignment
+            {
+                self.text_horizontal_alignment
+            } else {
+                over.text_horizontal_alignment
+            },
+            text_vertical_alignment: if over.text_vertical_alignment
+                == unset.text_vertical_alignment
+            {
+                self.text_vertical_alignment
+            } else {
+                over.text_vertical_alignment
+            },
+            painter: over.painter.clone().or(self.painter),
+        }
     }
 
     pub fn visible() -> Self {
