@@ -490,7 +490,9 @@ fn gpu() -> std::result::Result<GpuContext, ProbeError> {
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .map_err(|e| e.to_string())?;
-    Ok(GpuContext::from_wgpu(adapter, device, queue))
+    Ok(GpuContext::from_wgpu_with_loss_tracking(
+        adapter, device, queue,
+    ))
 }
 
 fn quantile(values: &[u64], q: f64) -> Option<f64> {

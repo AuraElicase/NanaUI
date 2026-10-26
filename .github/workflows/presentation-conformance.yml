@@ -1,0 +1,69 @@
+name: Presentation conformance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-native-electron:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      WGPU_BACKEND: dx12
+      NANA_REQUIRE_DX12_NATIVE_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install the pinned foreign consumer
+        working-directory: examples/web-output-bridge
+        run: |
+          npm ci --ignore-scripts=false
+          if ($LASTEXITCODE -ne 0) { throw "Electron installation failed" }
+          npm run check
+          if ($LASTEXITCODE -ne 0) { throw "Electron syntax check failed" }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "Electron protocol tests failed" }
+      - name: Build the real Windows producers
+        run: |
+          cargo build --release --locked -p nana-ui --features hosted,bundled-fonts,native-export,wgpu-interop --example window-output-probe --example web-output-producer
+          if ($LASTEXITCODE -ne 0) { throw "Producer build failed" }
+      - name: Test actual backend loss and native resource ownership
+        run: |
+          New-Item -ItemType Directory -Force target/conformance | Out-Null
+          cargo test --release --locked -p nana-gpu --features native-export,wgpu-interop --test controlled_device_loss --test native_export -- --test-threads=1 --nocapture 2>&1 | Tee-Object target/conformance/native-tests.log
+          if ($LASTEXITCODE -ne 0) { throw "Native or controlled-loss test failed" }
+      - name: Measure five native and Electron rounds serially
+        timeout-minutes: 10
+        run: |
+          $producer = (Resolve-Path target/release/examples/web-output-producer.exe).Path
+          $electron = "examples/web-output-bridge/node_modules/electron/cli.js"
+          for ($round = 1; $round -le 5; $round++) {
+            $native = "target/conformance/native-$round.json"
+            & target/release/examples/window-output-probe.exe --perf-output $native 2>&1 | Tee-Object "target/conformance/native-$round.log"
+            if ($LASTEXITCODE -ne 0) { throw "Native round $round failed" }
+            python perf/runners/nana/run.py --scenario transport-native-host --from-report $native --output "target/conformance/native-gate-$round.json"
+            if ($LASTEXITCODE -ne 0) { throw "Native round $round report rejected" }
+            python perf/contract.py --evaluate-invariants "target/conformance/native-gate-$round.json"
+            if ($LASTEXITCODE -ne 0) { throw "Native round $round invariant failed" }
+            $web = Join-Path (Resolve-Path target/conformance).Path "electron-$round.json"
+            node $electron examples/web-output-bridge --producer $producer --frames 240 --output $web 2>&1 | Tee-Object "target/conformance/electron-$round.log"
+            if ($LASTEXITCODE -ne 0) { throw "Electron round $round failed or unsupported" }
+            python perf/runners/nana/run.py --scenario transport-web-native --from-report $web --output "target/conformance/electron-gate-$round.json"
+            if ($LASTEXITCODE -ne 0) { throw "Electron round $round report rejected" }
+            python perf/contract.py --evaluate-invariants "target/conformance/electron-gate-$round.json"
+            if ($LASTEXITCODE -ne 0) { throw "Electron round $round invariant failed" }
+          }
+      - name: Preserve reports and failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: presentation-conformance-windows
+          if-no-files-found: warn
+          path: target/conformance

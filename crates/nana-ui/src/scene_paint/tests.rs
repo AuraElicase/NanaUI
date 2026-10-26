@@ -5941,7 +5941,7 @@ fn solid_texture_view(
     view
 }
 
-fn test_copy_target(
+pub(super) fn test_copy_target(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
     width: u32,
@@ -5965,7 +5965,7 @@ fn test_copy_target(
     (texture, view)
 }
 
-fn readback_rgba(
+pub(super) fn readback_rgba(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     mut encoder: wgpu::CommandEncoder,

@@ -55,6 +55,21 @@ impl GpuContext {
         Self::adopt(adapter, device, queue, false)
     }
 
+    /// Adopt a device and own its device-lost callback. Use this for a
+    /// standalone producer that has no existing host loss callback to keep.
+    /// Loss is shared by all clones through [`Self::is_lost`] and
+    /// [`Self::lost_report`]; recovery requires a new context and generation.
+    ///
+    /// This replaces any previously installed callback. Hosts that retain
+    /// callback ownership use [`Self::from_wgpu`] instead.
+    pub fn from_wgpu_with_loss_tracking(
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+    ) -> Self {
+        Self::adopt(adapter, device, queue, true)
+    }
+
     pub fn wgpu(&self) -> WgpuInterop<'_> {
         WgpuInterop { gpu: self }
     }

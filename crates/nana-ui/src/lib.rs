@@ -426,8 +426,9 @@ mod window_service;
 mod window_shadow;
 #[cfg(feature = "hosted")]
 pub use window_service::{
-    WindowCapture, WindowCursor, WindowDescriptor, WindowEffects, WindowError, WindowHandle,
-    WindowLevel, WindowRequest, WindowService, WindowSurfacePreference,
+    SurfacePresentMode, WindowCapture, WindowCursor, WindowDescriptor, WindowEffects, WindowError,
+    WindowHandle, WindowLevel, WindowRequest, WindowService, WindowSurfaceInfo,
+    WindowSurfacePreference,
 };
 
 /// Native event-loop integration for advanced hosts.

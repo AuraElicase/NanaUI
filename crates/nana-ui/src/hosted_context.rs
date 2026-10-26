@@ -253,6 +253,27 @@ impl HostedGpuSurface {
         self.profile
     }
 
+    pub(crate) fn surface_info(
+        &self,
+        generation: nana_gpu::DeviceGeneration,
+        display: Option<nana_ui_platform::DisplayInfo>,
+    ) -> Option<crate::WindowSurfaceInfo> {
+        if self.needs_recovery || self.needs_reconfigure || self.needs_target_commit {
+            return None;
+        }
+        let config = &self.configuration;
+        Some(crate::WindowSurfaceInfo {
+            extent: [config.width, config.height],
+            format: __framework::format_from_wgpu(config.format),
+            color_space: self.profile.scene_profile().color_space,
+            present_mode: crate::SurfacePresentMode::from_wgpu(config.present_mode),
+            alpha_mode: crate::SurfaceAlphaMode::from_wgpu(config.alpha_mode),
+            desired_maximum_frame_latency: config.desired_maximum_frame_latency,
+            device_generation: generation,
+            display,
+        })
+    }
+
     /// Return the latest advisory display HDR metadata for an interop host.
     /// The returned value is a snapshot; call this after a display/window
     /// event rather than polling it on every frame.

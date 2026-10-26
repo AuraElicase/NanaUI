@@ -243,6 +243,7 @@ struct Probe {
     phase_frames: usize,
     observations: Vec<Observed>,
     tick: u64,
+    presented_counter: bool,
     original_extent: [u32; 2],
     resized_extent: Option<[u32; 2]>,
     last_output_extent: Option<[u32; 2]>,
@@ -261,9 +262,39 @@ struct Probe {
     trace_samples: Option<Vec<(usize, nana_ui::output::OutputTraceSnapshot)>>,
     trace_abort_expected: bool,
     trace_abort_seen: bool,
+    observe_surface: bool,
+    surface_request: Option<nana_ui::WindowRequest<nana_ui::WindowSurfaceInfo>>,
+    surface_info: Option<nana_ui::WindowSurfaceInfo>,
+    surface_error: Option<String>,
+    surface_observed_at_frame: Option<usize>,
+    direct_configuration_changes: usize,
+    native_process_start: Option<presentation_timing::NativeProcessSnapshot>,
+    native_process_end: Option<presentation_timing::NativeProcessSnapshot>,
 }
 
 impl Probe {
+    fn surface_report(&self) -> serde_json::Value {
+        self.surface_info.as_ref().map_or(serde_json::Value::Null, |info| {
+            serde_json::json!({
+                "extent": info.extent,
+                "format": format!("{:?}", info.format),
+                "color_space": format!("{:?}", info.color_space),
+                "configured_present_mode": format!("{:?}", info.present_mode),
+                "alpha_mode": format!("{:?}", info.alpha_mode),
+                "desired_maximum_frame_latency": info.desired_maximum_frame_latency,
+                "device_generation": info.device_generation.get(),
+                "display": info.display.as_ref().map(|display| serde_json::json!({
+                    "id": display.id.0.to_string(), "name": display.name,
+                    "physical_position": display.physical_position, "physical_size": display.physical_size,
+                    "scale_factor": display.scale_factor,
+                    "refresh_rate_millihertz": display.refresh_rate_millihertz.map(NonZeroU32::get),
+                    "primary": display.primary,
+                })),
+                "scope": "explicit host-thread query after the first direct presentation; configured Surface values, not measured scanout cadence",
+            })
+        })
+    }
+
     fn finish(&self, failure: Option<&str>) -> ! {
         let direct = &self.observations[0];
         let compatible = &self.observations[1];
@@ -335,13 +366,20 @@ impl Probe {
         };
         let passed = failure.is_none()
             && timing_sampling_complete
+            && (!self.observe_surface
+                || (self.surface_info.is_some()
+                    && self.surface_error.is_none()
+                    && self
+                        .surface_observed_at_frame
+                        .is_some_and(|frame| frame <= self.timing_options.warmup)
+                    && self.direct_configuration_changes == 0))
             && checks
                 .as_object()
                 .unwrap()
                 .values()
                 .all(|value| value == true);
         let direct_ok = checks["direct_surface"] == true;
-        let report = serde_json::json!({
+        let mut report = serde_json::json!({
             "schema_version": 1,
             "benchmark": "presentation-output-probe",
             "output_cases": {"direct": {
@@ -388,7 +426,12 @@ impl Probe {
                 "observer":"bounded preallocated storage; opt-in thread CPU clock and prepare observations add overhead; no diagnostics metrics enabled by these flags",
                 "qos_scope":"cold requested QoS only; not effective QoS, CPU frequency or core residency; fixture does not set QoS",
                 "gap_scope":"wall minus current-thread CPU; includes off-thread work/scheduling/native waits and clock-observer boundary differences, not a pure drawable wait timer",
-                "actual_surface_present_mode":null,"cpu_frequency_hz":null,
+                "actual_surface_present_mode": self.surface_info.as_ref().and_then(|info| match info.present_mode {
+                    nana_ui::SurfacePresentMode::AutoVsync | nana_ui::SurfacePresentMode::AutoNoVsync => None,
+                    mode => Some(format!("{mode:?}")),
+                }),
+                "present_mode_scope":"configured concrete Surface mode; automatic backend choice and display scanout cadence remain unobserved",
+                "cpu_frequency_hz":null,
             })),
             "stage_profile": self.stage_samples.as_ref().map(|samples| serde_json::json!({
                 "names": STAGE_NAMES, "phases": CASES, "samples": samples, "requested_frame_rate": self.frame_rate.get(),
@@ -410,6 +453,21 @@ impl Probe {
                 "waits": trace.waits.map(|waits| serde_json::json!({"frame_slot_waits": waits.frame_slot_waits, "frame_slot_stalls": waits.frame_slot_stalls})),
             })).collect::<Vec<_>>()),
         });
+        let observations = serde_json::json!({
+            "surface_configuration": self.surface_report(),
+            "surface_observation_requested": self.observe_surface,
+            "surface_observation_error": self.surface_error,
+            "surface_observed_at_direct_presented_frame": self.surface_observed_at_frame,
+            "direct_configuration_changes": self.direct_configuration_changes,
+            "presented_counter": self.presented_counter,
+            "counter_scope": if self.presented_counter { "diagnostic content counter advances on successful presentation; prepare-only attempts repeat the value" } else { "default content counter advances on every prepare attempt" },
+            "native_process_start": self.native_process_start,
+            "native_process_end": self.native_process_end,
+            "native_process_scope": "opt-in public task-policy/thread-id reads after warmup and after the last measured sample; interior task-role changes and TG/coalition/CPU residency are unobserved",
+        });
+        if let serde_json::Value::Object(observations) = observations {
+            report.as_object_mut().unwrap().extend(observations);
+        }
         println!("{report}");
         if let Some(path) = output_path() {
             if let Some(parent) = path.parent() {
@@ -562,6 +620,7 @@ impl RuntimeProgram for Probe {
                 phase_frames: 0,
                 observations: (0..CASES.len()).map(|_| Observed::default()).collect(),
                 tick: 0,
+                presented_counter: std::env::args().any(|arg| arg == "--presented-counter"),
                 original_extent: [0; 2],
                 resized_extent: None,
                 last_output_extent: None,
@@ -583,6 +642,14 @@ impl RuntimeProgram for Probe {
                 timing_samples,
                 trace_abort_expected,
                 trace_abort_seen: false,
+                observe_surface: std::env::args().any(|arg| arg == "--surface-info"),
+                surface_request: None,
+                surface_info: None,
+                surface_error: None,
+                surface_observed_at_frame: None,
+                direct_configuration_changes: 0,
+                native_process_start: None,
+                native_process_end: None,
                 trace_samples: std::env::args()
                     .any(|arg| arg == "--trace-outputs" || arg == "--probe-trace-aborts")
                     .then(|| Vec::with_capacity(DIRECT_FRAMES * 12)),
@@ -630,6 +697,14 @@ impl RuntimeProgram for Probe {
             WindowEvent::CloseRequested { .. } => {
                 self.finish(Some("window closed before acceptance completed"))
             }
+            WindowEvent::Resized { .. }
+            | WindowEvent::Moved { .. }
+            | WindowEvent::ModeChanged { .. } => {
+                if self.observe_surface && self.phase == 0 && self.phase_frames != 0 {
+                    self.direct_configuration_changes += 1;
+                }
+                RuntimeProgramUpdate::default()
+            }
             _ => RuntimeProgramUpdate::default(),
         }
     }
@@ -654,6 +729,20 @@ impl RuntimeProgram for Probe {
     }
 
     fn prepare_window_frame(&mut self, _: WindowId, _: &RuntimeProgramContext<()>) {
+        if let Some(result) = self
+            .surface_request
+            .as_mut()
+            .and_then(|request| request.try_take())
+        {
+            self.surface_request = None;
+            match result {
+                Ok(info) => {
+                    self.surface_info = Some(info);
+                    self.surface_observed_at_frame = Some(self.phase_frames);
+                }
+                Err(error) => self.surface_error = Some(error.to_string()),
+            }
+        }
         self.frame_heap_started = HeapCounts::snapshot();
         self.frame_started = Instant::now();
         if self.stage_samples.is_some() || self.timing_samples.is_some() {
@@ -675,7 +764,9 @@ impl RuntimeProgram for Probe {
             }
             return;
         }
-        self.tick += 1;
+        if !self.presented_counter {
+            self.tick += 1;
+        }
         let value = format!("presentation {:08}", self.tick);
         self.document
             .context_mut()
@@ -700,11 +791,17 @@ impl RuntimeProgram for Probe {
         } else {
             None
         };
+        if self.presented_counter {
+            self.tick += 1;
+        }
         self.phase_frames += 1;
         if self.phase == 0 && self.phase_frames == 1 {
             // Direct-only exits before the resize phase refreshes this baseline.
             let size = context.geometry().physical_size;
             self.original_extent = [size.0, size.1];
+            if self.observe_surface {
+                self.surface_request = Some(context.window().surface_info());
+            }
         }
         let count = if self.phase == 0 {
             self.timing_options.measured
@@ -767,6 +864,15 @@ impl RuntimeProgram for Probe {
                     thread_cpu_ms,
                     stages_ns: stage_values(),
                 });
+            }
+        }
+        // Outside the recorded sample interval. The first endpoint is at the
+        // end of warmup, the second after all measured samples are stored.
+        if self.observe_surface && self.phase == 0 {
+            if self.phase_frames == warmup {
+                self.native_process_start = Some(presentation_timing::native_process_snapshot());
+            } else if self.observations[0].frames == count {
+                self.native_process_end = Some(presentation_timing::native_process_snapshot());
             }
         }
         if self.observations[self.phase].frames == count {

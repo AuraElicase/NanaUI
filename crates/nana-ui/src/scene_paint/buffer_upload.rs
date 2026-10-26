@@ -17,14 +17,25 @@ pub(super) fn upload_changed_with_work(
     next: &[u8],
     work: Option<&crate::gpu_work::GpuWorkSink>,
 ) -> usize {
+    upload_changed(previous, next, |offset, bytes| {
+        if let Some(work) = work {
+            work.write_buffer(queue, buffer, offset, bytes);
+        } else {
+            queue.write_buffer(buffer, offset, bytes);
+        }
+    })
+}
+
+/// Send changed runs through the caller's upload ordering policy.
+pub(super) fn upload_changed(
+    previous: &[u8],
+    next: &[u8],
+    mut write: impl FnMut(u64, &[u8]),
+) -> usize {
     debug_assert_eq!(next.len() % wgpu::COPY_BUFFER_ALIGNMENT as usize, 0);
     let mut uploaded = 0;
     changed_ranges(previous, next, |range| {
-        if let Some(work) = work {
-            work.write_buffer(queue, buffer, range.start as u64, &next[range.clone()]);
-        } else {
-            queue.write_buffer(buffer, range.start as u64, &next[range.clone()]);
-        }
+        write(range.start as u64, &next[range.clone()]);
         uploaded += range.len();
     });
     uploaded

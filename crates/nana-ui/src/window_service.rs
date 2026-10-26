@@ -13,6 +13,46 @@ use std::{
 
 pub use nana_ui_platform::{WindowDescriptor, WindowLevel, WindowSurfacePreference};
 
+/// The mode configured on a window surface, not a measured display cadence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfacePresentMode {
+    AutoVsync,
+    AutoNoVsync,
+    Fifo,
+    FifoRelaxed,
+    Immediate,
+    Mailbox,
+}
+
+impl SurfacePresentMode {
+    pub(crate) fn from_wgpu(mode: wgpu::PresentMode) -> Self {
+        match mode {
+            wgpu::PresentMode::AutoVsync => Self::AutoVsync,
+            wgpu::PresentMode::AutoNoVsync => Self::AutoNoVsync,
+            wgpu::PresentMode::Fifo => Self::Fifo,
+            wgpu::PresentMode::FifoRelaxed => Self::FifoRelaxed,
+            wgpu::PresentMode::Immediate => Self::Immediate,
+            wgpu::PresentMode::Mailbox => Self::Mailbox,
+        }
+    }
+}
+
+/// An explicit host-thread query of the configured surface and its display.
+/// This does not acquire a drawable, reconfigure the surface or wait for GPU work.
+/// Automatic modes retain their automatic identity; display pacing and the
+/// backend's final automatic choice are not inferred from them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowSurfaceInfo {
+    pub extent: [u32; 2],
+    pub format: nana_gpu::GpuTextureFormat,
+    pub color_space: crate::ScenePresentationColorSpace,
+    pub present_mode: SurfacePresentMode,
+    pub alpha_mode: crate::SurfaceAlphaMode,
+    pub desired_maximum_frame_latency: u32,
+    pub device_generation: nana_gpu::DeviceGeneration,
+    pub display: Option<DisplayInfo>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowError {
     HostStopped,
@@ -175,6 +215,7 @@ pub(crate) enum Request {
         Reply<crate::MaterialOutcome>,
     ),
     Displays(Reply<Vec<DisplayInfo>>),
+    SurfaceInfo(WindowId, u64, Reply<WindowSurfaceInfo>),
     Create(WindowDescriptor, Reply<WindowHandle>),
     Control(WindowId, u64, Control, Reply<()>),
     Native(WindowId, u64, NativeCallback),
@@ -184,6 +225,7 @@ impl Request {
         match self {
             Self::Material(_, _, _, reply) => reply.finish(Err(error)),
             Self::Displays(reply) => reply.finish(Err(error)),
+            Self::SurfaceInfo(_, _, reply) => reply.finish(Err(error)),
             Self::Create(_, reply) => reply.finish(Err(error)),
             Self::Control(_, _, _, reply) => reply.finish(Err(error)),
             Self::Native(_, _, callback) => {
@@ -274,6 +316,16 @@ pub struct WindowHandle {
     service: WindowService,
 }
 impl WindowHandle {
+    /// Query the current surface configuration on the host thread. Call after
+    /// the first presentation when comparing measured frames. A closed/reused
+    /// window identity or a pending surface recovery returns an error.
+    pub fn surface_info(&self) -> WindowRequest<WindowSurfaceInfo> {
+        let (request, reply) = WindowRequest::pair(self.service.host_thread);
+        self.service
+            .submit(Request::SurfaceInfo(self.id, self.generation, reply));
+        request
+    }
+
     /// Runs on the window thread. The borrowed native handle is valid only
     /// during the callback; do not retain raw pointers or use them after return.
     pub fn with_native_handle<R: Send + 'static>(
@@ -732,5 +784,48 @@ mod tests {
             service.handle(WindowId(1)).close().wait(),
             Err(WindowError::HostThreadWait)
         );
+    }
+
+    #[test]
+    fn surface_queries_are_generation_bound_and_fail_when_the_host_stops() {
+        let (service, rx) = WindowService::channel(Arc::new(|| {}));
+        let id = WindowId(17);
+        service.register(id);
+        let handle = service.handle(id);
+        let mut request = handle.surface_info();
+        let Request::SurfaceInfo(queried, generation, reply) = rx.try_recv().unwrap() else {
+            panic!("surface query expected");
+        };
+        assert_eq!(queried, id);
+        service.unregister(id);
+        service.register(id);
+        assert!(!service.is_current(queried, generation));
+        drop(reply);
+        assert_eq!(request.try_take(), Some(Err(WindowError::HostStopped)));
+        drop(rx);
+        assert_eq!(
+            handle.surface_info().try_take(),
+            Some(Err(WindowError::HostStopped))
+        );
+    }
+
+    #[test]
+    fn automatic_surface_modes_are_not_reported_as_concrete_modes() {
+        for (raw, expected) in [
+            (wgpu::PresentMode::AutoVsync, SurfacePresentMode::AutoVsync),
+            (
+                wgpu::PresentMode::AutoNoVsync,
+                SurfacePresentMode::AutoNoVsync,
+            ),
+            (wgpu::PresentMode::Fifo, SurfacePresentMode::Fifo),
+            (
+                wgpu::PresentMode::FifoRelaxed,
+                SurfacePresentMode::FifoRelaxed,
+            ),
+            (wgpu::PresentMode::Immediate, SurfacePresentMode::Immediate),
+            (wgpu::PresentMode::Mailbox, SurfacePresentMode::Mailbox),
+        ] {
+            assert_eq!(SurfacePresentMode::from_wgpu(raw), expected);
+        }
     }
 }

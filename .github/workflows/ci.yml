@@ -78,9 +78,10 @@ jobs:
         run: |
           cargo test -p nana-ui --lib --features gpu --locked output:: -- --test-threads=1
           cargo test -p nana-ui --test output_trace_owner --features gpu,wgpu-interop --locked -- --test-threads=1
+          cargo test -p nana-gpu --features wgpu-interop --test controlled_device_loss --locked -- --test-threads=1
           cargo run -p nana-ui --features gpu --bin nana-output-benchmark --locked -- \
             --output target/performance/output-live.json
-          for workload in static multi nested conversion slow recovery; do
+          for workload in static multi nested conversion slow recovery incompatible; do
             python3 perf/runners/nana/run.py --scenario "output-${workload}" \
               --from-report target/performance/output-live.json \
               --output "target/performance/output-gates/output-${workload}.json"

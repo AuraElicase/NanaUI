@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "scope": "Separate stage-metric and stack-sampling population; not a source comparison or TG/core/wait classification. sample observes all wall-clock states, not CPU-only samples.",
+  "cpu_median_ms": 0.968625,
+  "wall_ms": {
+    "p50": 1.067791,
+    "p95": 4.191083,
+    "p99": 6.559333
+  },
+  "stage_median_ms": {
+    "prepare": 0.03925,
+    "settle": 0.193729,
+    "reserve": 0.004,
+    "acquire": 0.0425415,
+    "resources": 0.004542,
+    "plan": 0.001417,
+    "encode": 0.240791,
+    "submit": 0.3783955,
+    "post_submit": 0.002875,
+    "present": 0.0391875,
+    "finish": 0.020791
+  },
+  "raw_sha256": {
+    "B.json": "1e918fe208171a310be5ef23cffe97ae911bb3c74a4290ae839726899bd9b687",
+    "sample.txt": "87c0d69f73ead1cfbc4651c1f70838676dbb9a0ee5346474f2f253360de2dffe",
+    "receipt.json": "8b91f62494eb10a1d1b9a58c362b2452d9d51a53a27b39dbfbbb07e4df99a110"
+  }
+}
