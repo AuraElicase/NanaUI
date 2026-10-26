@@ -171,7 +171,8 @@ impl Source {
 
     fn retained_bytes(&self) -> u64 {
         match self {
-            Self::Url(_) => 0,
+            // A `data:` URL is the whole encoded image.
+            Self::Url(url) => url.capacity() as u64,
             Self::Bytes { bytes, .. } => bytes.len() as u64,
         }
     }
@@ -974,7 +975,10 @@ impl UrlTextureCache {
                 if entry.used.get() == self.frame {
                     continue;
                 }
-                let size = entry.bytes();
+                // The key is the URL too, held even by a failed entry.
+                let size = entry.bytes()
+                    + key.capacity() as u64
+                    + std::mem::size_of::<(String, Entry)>() as u64;
                 bytes += size;
                 inactive.push((entry.used.get(), *egress, key.clone(), size));
             }
@@ -1494,6 +1498,37 @@ mod tests {
         cache.trim();
         let bytes: u64 = cache.entries().map(Entry::bytes).sum();
         assert!(bytes <= RETAINED_BYTES);
+    }
+
+    #[test]
+    fn data_url_source_and_key_count_toward_the_residency_budget() {
+        let mut cache = UrlTextureCache::default();
+        cache.begin_frame();
+        // One-pixel texture, 34 MiB of base64 held twice: as key and source.
+        let url = format!("data:image/png;base64,{}", "A".repeat(34 * 1024 * 1024));
+        let mut entry = Entry::new(None, (1, 1), cache.frame);
+        entry.source = Some(Source::Url(url.clone()));
+        cache
+            .bucket_mut(cache.partition(&url))
+            .entries
+            .insert(url, entry);
+        cache.begin_frame();
+        cache.trim();
+        assert_eq!(cache.entries().count(), 0);
+    }
+
+    #[test]
+    fn a_failed_data_url_still_counts_its_key() {
+        let mut cache = UrlTextureCache::default();
+        cache.begin_frame();
+        let url = format!(
+            "data:image/png;base64,{}",
+            "A".repeat(RETAINED_BYTES as usize)
+        );
+        cache.insert(url, None);
+        cache.begin_frame();
+        cache.trim();
+        assert_eq!(cache.entries().count(), 0);
     }
 
     #[test]
