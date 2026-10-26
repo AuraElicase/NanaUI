@@ -630,11 +630,23 @@ impl Default for RichLabelStyle {
     }
 }
 
-/// An object inline in the text: a sticker, an emote, an editor chip.
+/// Whether a rich object shares its line with the text around it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RichObjectFlow {
+    /// Among the text, wrapping with it.
+    #[default]
+    Inline,
+    /// On a line of its own, as a picture between two paragraphs. Its one
+    /// character stays where it is: the lines break around it without a
+    /// newline, so the text, its offsets and its paragraphs do not change.
+    Block,
+}
+
+/// An object in the text: a sticker, an emote, an editor chip, a picture.
 ///
 /// It stands on the baseline: `height_px - descent_px` above it, `descent_px`
-/// below. Changing its size relays the paragraph out without shaping it
-/// again; changing only what it shows repaints it.
+/// below. Changing its size, flow or fitting relays the paragraph out without
+/// shaping it again; changing only what it shows repaints it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RichObject {
     /// The application's name for it, handed back by the editor's events and
@@ -643,6 +655,14 @@ pub struct RichObject {
     pub width_px: f32,
     pub height_px: f32,
     pub descent_px: f32,
+    /// Inline, or on a line of its own.
+    pub flow: RichObjectFlow,
+    /// Scaled down, keeping its aspect, to the width a line has for it when
+    /// it is wider, as an image with CSS `max-width: 100%`: a box may shrink
+    /// below it, and it shrinks with the box. Never scaled up; the authored
+    /// size here is kept. A tag or a styled label is sized by its label and
+    /// does not scale.
+    pub fit_width: bool,
     pub content: RichObjectContent,
 }
 
@@ -654,6 +674,8 @@ impl RichObject {
             width_px,
             height_px,
             descent_px: 0.0,
+            flow: RichObjectFlow::Inline,
+            fit_width: false,
             content: RichObjectContent::Image {
                 source: source.into(),
             },
@@ -667,6 +689,8 @@ impl RichObject {
             width_px,
             height_px,
             descent_px: 0.0,
+            flow: RichObjectFlow::Inline,
+            fit_width: false,
             content: RichObjectContent::HostTexture { slot: slot.into() },
         }
     }
@@ -678,6 +702,8 @@ impl RichObject {
             width_px: 0.0,
             height_px: 0.0,
             descent_px: 0.0,
+            flow: RichObjectFlow::Inline,
+            fit_width: false,
             content: RichObjectContent::Chip {
                 label: label.into(),
                 kind,
@@ -693,6 +719,8 @@ impl RichObject {
             width_px: 0.0,
             height_px: 0.0,
             descent_px: 0.0,
+            flow: RichObjectFlow::Inline,
+            fit_width: false,
             content: RichObjectContent::Tag {
                 label: label.into(),
                 kind,
@@ -708,6 +736,8 @@ impl RichObject {
             width_px: 0.0,
             height_px: 0.0,
             descent_px: 0.0,
+            flow: RichObjectFlow::Inline,
+            fit_width: false,
             content: RichObjectContent::Label {
                 label: label.into(),
                 style: Arc::new(style),
@@ -736,6 +766,18 @@ impl RichObject {
     /// How far the object reaches below the baseline.
     pub fn descent(mut self, descent_px: f32) -> Self {
         self.descent_px = descent_px;
+        self
+    }
+
+    /// On a line of its own, or inline.
+    pub fn flow(mut self, flow: RichObjectFlow) -> Self {
+        self.flow = flow;
+        self
+    }
+
+    /// Whether it scales down to the width its line has.
+    pub fn fit_width(mut self, fit: bool) -> Self {
+        self.fit_width = fit;
         self
     }
 

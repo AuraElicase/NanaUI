@@ -159,6 +159,8 @@ pub(super) struct LineInput<'a> {
     /// The envelope of each inline object that declared one, by source
     /// offset, in logical px.
     pub envelopes: Vec<(usize, crate::InlineEnvelope)>,
+    /// Source offsets of the objects that take a line of their own, sorted.
+    pub blocks: Vec<usize>,
 }
 
 /// Work the line builder did, for the counters.
@@ -331,22 +333,27 @@ impl<'a> Builder<'a> {
     pub fn paragraphs(mut self) -> LaidOut {
         let segments = self.segments();
         let last = segments.len() - 1;
-        for (index, content) in segments.into_iter().enumerate() {
+        for index in 0..segments.len() {
             if self.truncated {
                 break;
             }
+            // A segment that ends where the next one starts was cut at a
+            // block object's edge, not at a separator: no character ends the
+            // line, so its end byte has a caret on both lines, as at a wrap.
             let cause = if index == last {
                 LineBreakCause::EndOfText
+            } else if segments[index].end == segments[index + 1].start {
+                LineBreakCause::Wrap
             } else {
                 LineBreakCause::Explicit
             };
-            self.segment(content, cause);
+            self.segment(segments[index].clone(), cause);
         }
         self.finish()
     }
 
     fn segments(&self) -> Vec<Range<usize>> {
-        segments(self.input.text, self.input.paragraphs)
+        segments(self.input.text, self.input.paragraphs, &self.input.blocks)
     }
 
     /// One run of text with no forced break inside it: as many lines as the
@@ -1465,7 +1472,17 @@ impl<'a> Builder<'a> {
 /// boundaries, `intrinsic_widths` measures between them (so `max-content` is
 /// the widest line, not two lines joined end to end), and the Label fast path
 /// asks whether there is exactly one of them.
-pub(super) fn segments(text: &str, paragraphs: &[ShapedParagraph]) -> Vec<Range<usize>> {
+///
+/// A block object (`blocks`, sorted source offsets) is a segment of its own,
+/// cut from the one around it with no character between: the text before it
+/// ends at its offset and the text after it starts past its U+FFFC. Neither
+/// side adds an empty segment, so a block between two separators, or at the
+/// start or end of the text, takes one line and no more.
+pub(super) fn segments(
+    text: &str,
+    paragraphs: &[ShapedParagraph],
+    blocks: &[usize],
+) -> Vec<Range<usize>> {
     let mut segments: Vec<Range<usize>> = Vec::with_capacity(paragraphs.len());
     for paragraph in paragraphs {
         let content = content_range(text, &paragraph.range);
@@ -1494,7 +1511,25 @@ pub(super) fn segments(text: &str, paragraphs: &[ShapedParagraph]) -> Vec<Range<
         Some(last) if last.end < text.len() => segments.push(text.len()..text.len()),
         Some(_) => {}
     }
-    segments
+    if blocks.is_empty() {
+        return segments;
+    }
+    let mut cut = Vec::with_capacity(segments.len() + blocks.len() * 2);
+    for content in segments {
+        let mut start = content.start;
+        let first = blocks.partition_point(|at| *at < content.start);
+        for &at in blocks[first..].iter().take_while(|at| **at < content.end) {
+            if start < at {
+                cut.push(start..at);
+            }
+            start = at + crate::OBJECT_REPLACEMENT.len_utf8();
+            cut.push(at..start);
+        }
+        if start < content.end || content.is_empty() {
+            cut.push(start..content.end);
+        }
+    }
+    cut
 }
 
 /// A maximal run of consecutive cells belonging to one shaped run.
