@@ -869,6 +869,8 @@ CSS `url()` 的帧仍走 4× MSAA。它和 HostTexture、backdrop 的 interleave
 
 父级是 `none` 时，没写该属性的子孙，used 值也是 `none`，不可点。只有显式 `auto` 的子节点重新成为目标。点在父盒上、但没落在那个 `auto` 子上，会穿透。
 
+退出命中在提交时就生效。设成 `none`、关掉 `InteractionState::pointer_events`、挪到 `none` 的父级下或已停放的分支里，提交之后、下一帧重建命中索引之前的命中都会穿透到下层。重新变得可点要等下一帧解析样式。
+
 未知关键字 fail closed。它不改已经指定的值。`inherit` 和 `unset` 清掉指定值。
 
 平面 3D 命中，和 Quad、Text、Icon、HostTexture 的绘制，共用同一份单应逆变换。不按仿射盒命中。也不按梯形 AABB 的空角命中。

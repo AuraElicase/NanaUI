@@ -1650,6 +1650,7 @@ impl UiWorld {
             }
             let (
                 visible,
+                specified_pointer,
                 computed_pointer,
                 retained_layout,
                 resolved_layout,
@@ -1676,6 +1677,7 @@ impl UiWorld {
                     && !record.resolved_layout.has_logical_box_edges();
                 (
                     computed.visible,
+                    record.style.layout.pointer_events,
                     computed.pointer_events,
                     record.layout,
                     plain_style.then(|| Arc::clone(&record.resolved_layout)),
@@ -1705,9 +1707,10 @@ impl UiWorld {
                 && !painted
                 && self.confirm_modals == 0
             {
+                let used_pe = PointerEventsSpec::inherit_from(specified_pointer, parent_used_pe);
                 let hittable = visible
                     && interaction.pointer_events
-                    && parent_used_pe.hittable()
+                    && used_pe.hittable()
                     && computed_pointer.hittable();
                 let index = built.len();
                 built.push(BuiltHit {
@@ -1730,14 +1733,7 @@ impl UiWorld {
                     parent,
                 });
                 stack.extend(children.iter().enumerate().rev().map(|(position, child)| {
-                    (
-                        *child,
-                        parent_hit,
-                        Some(index),
-                        position,
-                        parent_used_pe,
-                        false,
-                    )
+                    (*child, parent_hit, Some(index), position, used_pe, false)
                 }));
                 continue;
             }
@@ -1769,8 +1765,9 @@ impl UiWorld {
                 ([1.0, 0.0, 0.0, 1.0, -scroll.x, -scroll.y], [0.0, 0.0]),
             );
             let child_blocks_3d = parent_blocks_3d || node_style.fails_closed_3d_context();
-            let used_pe =
-                PointerEventsSpec::inherit_from(node_style.pointer_events, parent_used_pe);
+            // The committed value, as pointer dispatch validates it: a commit
+            // that turns it `none` withdraws entries before styles resolve.
+            let used_pe = PointerEventsSpec::inherit_from(specified_pointer, parent_used_pe);
             let mut self_clips = Vec::new();
             let mut child_clips = Vec::new();
             let path_clips = path_clips_for(node_style, layout);
@@ -2129,7 +2126,137 @@ impl UiWorld {
                 return false;
             }
         }
+        #[cfg(debug_assertions)]
+        self.audit_hit_eligibility("scoped rebuild");
         true
+    }
+}
+
+impl UiWorld {
+    /// Take `id`'s retained hit entry out of pointer dispatch now, ahead of
+    /// the frame that rebuilds it. Only the flags change: the bounds it leaves
+    /// behind still cover the entry, and a cover too large only visits a node
+    /// that then emits nothing.
+    fn withdraw_hit_entry(&mut self, document: DocumentId, id: StableNodeId) {
+        if let Some(indexed) = self
+            .hit_test_index
+            .get_mut(&document)
+            .and_then(|index| index.entries.get_mut(&id))
+        {
+            indexed.entry.hittable = false;
+            indexed.entry.menu = None;
+        }
+    }
+
+    /// A commit changed `root`'s `pointer-events`; the index keeps the value
+    /// it was built with until the frame. When the used value is now `none`,
+    /// withdraw `root` and every descendant that inherits it, so a hit before
+    /// that frame falls through to what is below. A descendant that specifies
+    /// its own value keeps it, and so does its subtree.
+    ///
+    /// Only withdraws: a subtree made hittable again waits for the frame,
+    /// which resolves the computed style it also needs.
+    ///
+    /// Entries only hang under entries, so a root without one has nothing
+    /// under it to withdraw either.
+    pub(super) fn withdraw_pointer_events_none(&mut self, root: StableNodeId) {
+        let document = self.record(root).document;
+        if self
+            .hit_test_index
+            .get(&document)
+            .is_none_or(|index| !index.entries.contains_key(&root))
+            || self.used_pointer_events(root).hittable()
+        {
+            return;
+        }
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            self.withdraw_hit_entry(document, id);
+            stack.extend(
+                self.record(id)
+                    .hierarchy
+                    .children
+                    .iter()
+                    .copied()
+                    .filter(|child| self.record(*child).style.layout.pointer_events.is_none()),
+            );
+        }
+    }
+
+    /// A commit moved `root` under a parked parent. Parking a subtree takes
+    /// it out of the index; moving one into a parked branch must too.
+    pub(super) fn withdraw_parked_hits(&mut self, root: StableNodeId) {
+        let document = self.record(root).document;
+        if self
+            .hit_test_index
+            .get(&document)
+            .is_none_or(|index| !index.entries.contains_key(&root))
+        {
+            return;
+        }
+        let subtree = self.subtree_ids(root);
+        let index = self
+            .hit_test_index
+            .get_mut(&document)
+            .expect("checked above");
+        for id in subtree {
+            retain_hit_tree(index, id);
+        }
+    }
+
+    /// A commit turned `id`'s own pointer interaction off. Not inherited, so
+    /// only its entry is withdrawn.
+    pub(super) fn withdraw_pointer_interaction(&mut self, id: StableNodeId) {
+        let document = self.record(id).document;
+        self.withdraw_hit_entry(document, id);
+    }
+}
+
+/// World size up to which commits and hit-index builds re-check the index
+/// against the pointer authority under `debug_assertions`. Unit-test worlds
+/// are a handful of nodes; product worlds are thousands, and auditing those
+/// on every commit would slow debug builds without testing anything the small
+/// worlds do not.
+#[cfg(debug_assertions)]
+const HIT_AUDIT_LIMIT: usize = 512;
+
+impl UiWorld {
+    /// Assert that the retained index offers no pointer target the committed
+    /// pointer authority ([`Self::validate_pointer_target`]) rejects.
+    ///
+    /// The index keeps its geometry until the frame rebuilds it, so a commit
+    /// that takes a node out of pointer dispatch must withdraw the entry at
+    /// once, or a hit between that commit and the next frame lands on it.
+    /// Which mutations do that is a judgement no still-frame test checks;
+    /// running this after every commit and every build makes the whole suite
+    /// a test of it, at O(index × depth), so it is bounded to small worlds.
+    #[cfg(debug_assertions)]
+    pub(super) fn audit_hit_eligibility(&self, site: &str) {
+        if self.nodes.len() > HIT_AUDIT_LIMIT {
+            return;
+        }
+        for (&document, index) in &self.hit_test_index {
+            for (&id, indexed) in &index.entries {
+                let entry = &indexed.entry;
+                if !entry.hittable && entry.menu.is_none() {
+                    continue;
+                }
+                if let Err(error) = self.validate_pointer_target(document, id) {
+                    let why = self.nodes.get(id).map(|node| {
+                        (
+                            self.is_mounted(id),
+                            node.interaction.pointer_events,
+                            self.used_pointer_events(id),
+                            node.resolved.0.pointer_events,
+                        )
+                    });
+                    panic!(
+                        "{site}: retained hit index offers {id:?}, which the pointer authority \
+                         rejects: {error:?} (mounted, interaction, used, computed) = {why:?}"
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -2154,6 +2281,8 @@ impl UiWorld {
         let mut index = HitIndex::from_entries(entries);
         index.viewport_roots = viewport_roots;
         self.hit_test_index.insert(document, index);
+        #[cfg(debug_assertions)]
+        self.audit_hit_eligibility("rebuild");
     }
 }
 
