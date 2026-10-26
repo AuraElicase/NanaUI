@@ -31,8 +31,9 @@ ureq = { workspace = true, optional = true }
 tungstenite = { workspace = true, optional = true }
 
 # Desktop OS clipboard only. Android does not compile arboard; the Android
-# host uses JNI ClipboardManager ([`AndroidClipboard`]).
-[target.'cfg(not(target_os = "android"))'.dependencies]
+# host uses JNI ClipboardManager ([`AndroidClipboard`]). OHOS (`target_os` is
+# `linux`) does not either; its host injects the pasteboard (docs/reference/ohos.md).
+[target.'cfg(not(any(target_os = "android", target_env = "ohos")))'.dependencies]
 arboard = { version = "3.6", default-features = false, optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]

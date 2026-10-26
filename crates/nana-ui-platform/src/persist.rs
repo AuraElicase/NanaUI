@@ -347,6 +347,8 @@ pub(crate) fn valid_app_id(app_id: &str) -> bool {
 /// - Linux: `$XDG_DATA_HOME/{app_id}` or `~/.local/share/{app_id}`
 /// - Android: `Context.getFilesDir()` (the `app_id` is ignored; the process is
 ///   already sandboxed)
+/// - OHOS: `None`. The sandbox's files directory is only known to the
+///   ArkTS `Context`; the host resolves it and opens the store itself.
 pub fn app_data_dir(app_id: &str) -> Option<PathBuf> {
     if !valid_app_id(app_id) {
         return None;
@@ -365,7 +367,7 @@ pub fn app_data_dir(app_id: &str) -> Option<PathBuf> {
         let base = std::env::var_os("APPDATA")?;
         Some(PathBuf::from(base).join(app_id))
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(target_env = "ohos")))]
     {
         if let Some(xdg) = std::env::var_os("XDG_DATA_HOME") {
             return Some(PathBuf::from(xdg).join(app_id));
@@ -378,12 +380,15 @@ pub fn app_data_dir(app_id: &str) -> Option<PathBuf> {
         let _ = app_id;
         android_dir("getFilesDir")
     }
-    #[cfg(not(any(
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "linux",
-        target_os = "android"
-    )))]
+    #[cfg(any(
+        target_env = "ohos",
+        not(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux",
+            target_os = "android"
+        ))
+    ))]
     {
         let _ = app_id;
         None

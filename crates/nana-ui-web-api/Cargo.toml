@@ -32,5 +32,7 @@ image.workspace = true
 nana-text.workspace = true
 swash = "0.2.10"
 
-[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+# OHOS reports `target_os = "linux"` but has no ALSA; `native-audio` reports no
+# output there, as on Android.
+[target.'cfg(any(target_os = "windows", target_os = "macos", all(target_os = "linux", not(target_env = "ohos"))))'.dependencies]
 cpal = { workspace = true, optional = true }
