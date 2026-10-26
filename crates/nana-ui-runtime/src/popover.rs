@@ -261,6 +261,7 @@ impl crate::ComponentView for Popover {
             self.compact_trigger,
             &self.accessible_name,
             self.trigger_style.as_ref(),
+            false,
         );
     }
 }
@@ -269,6 +270,7 @@ impl crate::ComponentView for Popover {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActionMenu {
     pub popover: Popover,
+    pub disabled: bool,
 }
 
 impl ActionMenu {
@@ -280,7 +282,16 @@ impl ActionMenu {
             .padding(ACTION_MENU_PADDING);
         popover.gap_theme = Some(nana_ui_core::SpacingStep::Xs);
         popover.padding_theme = Some(nana_ui_core::SpacingStep::Xs);
-        Self { popover }
+        Self {
+            popover,
+            disabled: false,
+        }
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self.popover.open &= !disabled;
+        self
     }
 
     pub fn trigger(mut self, trigger: impl Into<Arc<str>>) -> Self {
@@ -300,7 +311,7 @@ impl ActionMenu {
     }
 
     pub fn open(mut self, open: bool) -> Self {
-        self.popover.open = open;
+        self.popover.open = open && !self.disabled;
         self
     }
 
@@ -387,6 +398,7 @@ impl crate::ComponentView for ActionMenu {
             self.popover.compact_trigger,
             &self.popover.accessible_name,
             self.popover.trigger_style.as_ref(),
+            self.disabled,
         );
     }
 }
@@ -410,8 +422,9 @@ pub(crate) fn project_menu_surface(
     compact_trigger: bool,
     accessible_name: &Arc<str>,
     trigger_style: Option<&NodeStyle>,
+    disabled: bool,
 ) {
-    let open = world.project_menu_presence(id, open, mutations);
+    let open = world.project_menu_presence(id, open && !disabled, mutations);
     // A child that draws the trigger only counts while it is one.
     let trigger_content = trigger_content.filter(|content| world.parent_id(*content) == Some(id));
     let has_trigger = trigger.is_some() || trigger_icon.is_some() || trigger_content.is_some();
@@ -493,11 +506,12 @@ pub(crate) fn project_menu_surface(
         mutations,
         &style,
         InteractionState {
-            pointer_events: open || has_trigger,
-            focusable: has_trigger,
+            pointer_events: !disabled && (open || has_trigger),
+            focusable: !disabled && has_trigger,
         },
         AccessibilityState {
             role: AccessibilityRole::Menu,
+            disabled,
             label: Some(if accessible_name.is_empty() {
                 trigger.unwrap_or_else(|| Arc::from(label))
             } else {

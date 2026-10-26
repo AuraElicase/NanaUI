@@ -26,7 +26,7 @@ let (_, save) = cx.mount_view_root(document_id, || {
 
 **浮层。** `Dialog`、`ConfirmDialog`、`Drawer`、`Popover`、`ActionMenu`、`ContextMenu`、`CommandPalette`。应用内菜单栏 `AppMenuBar` 自己弹出菜单面板，不经 `OverlayHost`，见 [AppMenuBar](../components/app-menu-bar.md)。浮层由框架放在窗口里。靠近边缘时收进视口。不要用 `position: fixed` 自己搭一层。`Popover` / `ActionMenu` 的触发器支持文本（`trigger`）与图标（`trigger_icon`）两种。图标触发器渲染为 28×28 方形按钮。图标在按钮内几何居中。可访问名由 `trigger_icon` 的 label 提供。裸符号（如 `+`）不要用文本触发器。要「图标 + 文字 + 计数」这类触发器（收藏 1800），用视图的 `.trigger(view)` 具名 slot（`Popover::trigger_content(id)`）。那段内容是触发器自己的子节点。它在触发器的外壳里横排。面板关着时照样显示。不算面板的条目。`trigger` 文本仍是可访问名。**触发器仍是 popover 自己。** 按下、焦点、Enter / 空格、面板的锚点都是它的。所以这段内容只做显示。里面不要放可按的控件。面板因按它的触发器、Escape、点外面或应用写 `open = false` 关上时，焦点若还在面板里的条目上，回到触发器。取舍：没有做成「任意元素 `anchor: NodeRef` 打开 popover」。那样面板要跟随另一个节点的盒子。布局里要多一条跨节点依赖（锚点挪了而 popover 没重新布局时面板会留在旧处）。还要额外接线打开、焦点归还和点外判定。slot 让锚点、命中、键盘和关闭沿用 popover 现有的一条路径。代价是触发器的外壳（默认 Subtle 底、控件高度）由 popover 给。`Popover::bare_trigger(true)`（`ActionMenu` 同样转发）去掉静止底色和描边，悬停、按下和打开时仍铺一层洗色。不传则保持浅底加描边。弹出表面是 viewport-fixed。**不进入父级 isolation group。** 卡内菜单会画到后面的兄弟卡之上。重叠处命中同一排序。应用不必给整张卡抬 `z_index`。所在面板的 overflow 裁剪也裁不到它。卡面和面板内容同一层。盖在触发器和页面后面的内容（包括 `z_index` 更高的后出现兄弟）之上。卡面空白处的按下留在面板里。不落到底下。也不开合面板。`Popover` / `ActionMenu` / `HoverCard` 的弹出层挂在触发器**显示的位置**上（经过祖先滚动与变换之后的盒子）。按 `placement` 的一侧放不下而对侧放得下时，翻到对侧。再沿两轴收进视口。两侧都放不下才会压住触发器。打开后滚动页面，弹出层留在原处，直到下一次布局。`DesktopShell` 有两层 `OverlayHost`。`overlay` 放对话框。`status` 放 toast。确认框打开时 toast 仍可显示。`Dialog` / `ConfirmDialog` 的卡片外形可以由应用自己画：`.surface_painter(painter)` 在遮罩之上、卡片文字与插槽之下按卡面坐标录一次，`PaintContext::modal_sections` 给出标题行、标题块、正文、底栏的位置；位置、分段和动效仍归主题配方（见 [Dialog](../components/dialog.md#自己画卡面)）。模态面板（对话框、抽屉）打开时，它的表面拿下落在上面的每一次按下。底下侧栏、分栏、Dock 的拖动手柄靠「几像素容差」抢按下的规则，只对没被模态盖住的手柄生效。光标也不会在面板上变成拖动样式。
 
-`Chip`、`ColorField`、`PathField`、`FileTab` 这类**叶子复合件**在你写 props 的那一刻自己重建子节点。不需要再记一次 `assemble_*`。`Shell` / `Workspace` / `Dock` / `SplitPane` / `PaneSection` 不走这条。它们协调的是应用自己的槽位，而且不便宜。挂到每次写入会破坏「无变更不弄脏」的脏帧合同。这几个仍在装配好槽位后显式调用对应的 `assemble_*`。
+`Chip`、`ColorField`、`SizeField`、`PathField`、`FileTab` 这类**叶子复合件**在你写 props 的那一刻自己重建子节点。不需要再记一次 `assemble_*`。`Shell` / `Workspace` / `Dock` / `SplitPane` / `PaneSection` 不走这条。它们协调的是应用自己的槽位，而且不便宜。挂到每次写入会破坏「无变更不弄脏」的脏帧合同。这几个仍在装配好槽位后显式调用对应的 `assemble_*`。
 
 `ConfirmDialog` 的确认 / 取消按钮由 `AppContext::assemble_confirm_dialog(dialog)` 建好，并接上 `ConfirmIntent`。不需要自己造两个按钮再拼槽位。按钮文案用 `confirm_label` / `cancel_label` 覆盖。`danger(true)` 让确认按钮走危险色，标题用危险口气（`Dialog::danger` 同一个口气）。需要次要动作、关闭钮、自定义正文或动作行左端的内容（`.footer`，如「不再询问」开关）时，用视图上的同名槽或 `set_confirm_slots` 自己装配。这时 `assemble_confirm_dialog` 不会覆盖你已有的槽位。
 
@@ -86,6 +86,8 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 键盘焦点用 `FocusWithinChanged` 报告，规则和悬停相同：焦点进入节点子树时收到 `focused: true`，离开时收到 `false`，在子树内移动不重复发。监听者正在 `update_component` 里时，事件等这次更新结束再送到。`VisibilitySpec::Hidden` 的节点不进 Tab 顺序，所以悬停才露出的工具要用 `opacity: 0` 收起，让 Tab 仍能落到它们上面，再在 `FocusWithinChanged` 里和悬停一起显出来。
 
 选区位置：`UiWorld::text_selection_bounds(id)` 回答 `NativeMarkdown` / `SelectableRichText` 的选区在窗口里的外接矩形，已计入上层滚动和变换，没有选区时为 `None`。用来把浮动工具条锚在选区上：在改变选区的更新返回之后再问，滚动后重新问。配合 `resolve_popover_origin` 决定放在选区上方还是下方。
+
+`SizeField` 是共用一个外框的「宽 × 高 ▾」：两个 `NumberInput` 均分宽度，右端方形 `ActionMenu` 图标打开预设；提交单边或预设统一发 `SizeFieldChanged { value: [f64; 2] }`（`SizeChanged` 已用于布局事件）。`range`／`step` 沿用数字字段规则，`SizePreset` 提供名称、宽高值和禁用状态，以宽高值作为条目身份。`value`、`presets` 和各部分可访问名称支持视图绑定；外部回写相同数值保留编辑草稿、选择和撤销，条目刷新保留菜单身份与焦点。禁用整个字段时关闭菜单并停用内部操作。
 
 `ColorField` 是色块 + hex。`assemble_color_field` 挂 HSV 选择器。提交发 `ColorChanged`。拖动发 `ColorInput`。`PathField` 是路径 + 浏览按钮。浏览只发 `BrowseRequested`。由应用打开系统对话框。
 

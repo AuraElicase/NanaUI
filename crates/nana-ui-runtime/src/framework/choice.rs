@@ -835,6 +835,9 @@ impl AppContext {
         &mut self,
         entity: Entity<ActionMenu>,
     ) -> Result<bool, FrameworkError> {
+        if self.read(entity, |menu| menu.disabled)? {
+            return Ok(false);
+        }
         self.update_component(entity, |menu, cx| {
             menu.popover.open = !menu.popover.open;
             cx.emit(PopoverToggled {
