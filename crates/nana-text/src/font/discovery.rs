@@ -10,6 +10,8 @@
 
 use super::query::FontStyle;
 use super::system::FontBlob;
+#[cfg(any(test, target_env = "ohos"))]
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -87,9 +89,28 @@ pub fn parse_faces(blob: &FontBlob) -> Vec<FaceMeta> {
 /// order (stable for a given machine and font install).
 pub fn system_faces() -> Vec<(DiscoveredSource, FaceMeta)> {
     let mut db = fontdb::Database::new();
+    // OHOS reports `target_os = "linux"`; fontdb's Linux scan (fontconfig XML,
+    // `/usr/share/fonts`, `$HOME`) names nothing on the device.
+    #[cfg(target_env = "ohos")]
+    load_ohos_fonts(&mut db, Path::new("/"));
+    #[cfg(not(target_env = "ohos"))]
     db.load_system_fonts();
     #[cfg(target_os = "android")]
     db.load_fonts_dir("/system/fonts");
+    faces(&db)
+}
+
+/// The directories `root/system/etc/fontconfig.json` names, else
+/// `root/system/fonts` (`super::ohos`).
+#[cfg(any(test, target_env = "ohos"))]
+fn load_ohos_fonts(db: &mut fontdb::Database, root: &Path) {
+    let config = super::ohos::OhosFontConfig::read(root);
+    for dir in super::ohos::font_dirs(root, config.as_ref()) {
+        db.load_fonts_dir(dir);
+    }
+}
+
+fn faces(db: &fontdb::Database) -> Vec<(DiscoveredSource, FaceMeta)> {
     db.faces()
         .map(|info| {
             let source = match &info.source {
@@ -101,4 +122,44 @@ pub fn system_faces() -> Vec<(DiscoveredSource, FaceMeta)> {
             (source, meta(info))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ohos_scan_reads_faces_from_the_configured_dir_under_the_root() {
+        let root = std::env::temp_dir().join(format!("nana-text-ohos-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let fonts = root.join("vendor/fonts");
+        std::fs::create_dir_all(&fonts).unwrap();
+        let config = root.join(super::super::ohos::CONFIG_PATH);
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(&config, r#"{ "fontdir": ["/vendor/fonts/"] }"#).unwrap();
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/noto-sans-kr.ttf");
+        std::fs::copy(fixture, fonts.join("NotoSansKR.ttf")).unwrap();
+        // Not scanned: the config names another directory.
+        let system = root.join(super::super::ohos::FONTS_DIR);
+        std::fs::create_dir_all(&system).unwrap();
+        std::fs::copy(fixture, system.join("Ignored.ttf")).unwrap();
+
+        let mut db = fontdb::Database::new();
+        load_ohos_fonts(&mut db, &root);
+        let found = faces(&db);
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert!(!found.is_empty());
+        for (source, meta) in &found {
+            let DiscoveredSource::File(path) = source else {
+                panic!("a scanned face is file-backed");
+            };
+            assert_eq!(path.file_name().unwrap(), "NotoSansKR.ttf");
+            assert!(
+                meta.families
+                    .iter()
+                    .any(|family| &**family == "Noto Sans KR")
+            );
+        }
+    }
 }
