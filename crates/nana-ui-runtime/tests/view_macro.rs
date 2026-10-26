@@ -2013,6 +2013,38 @@ fn a_template_sizes_a_select_to_its_options() {
     assert!(!fits(plain));
 }
 
+/// `@toggle` hears a select's menu open and close.
+#[test]
+fn a_template_hears_a_select_menu_open_and_close() {
+    use nana_ui_runtime::view::node_ref;
+    use nana_ui_runtime::{Select, SelectOption, SelectToggled};
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let heard = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let field = std::cell::Cell::new(None);
+    let sink = std::sync::Arc::clone(&heard);
+    cx.mount_view_root(document, || {
+        let select = node_ref();
+        field.set(Some(select));
+        let options = vec![SelectOption::new("a", "A")];
+        let record = move |event: &SelectToggled| sink.lock().unwrap().push(event.open);
+        view! {
+            <Column>
+                <Select options={options} @toggle={record} ref={select} />
+            </Column>
+        }
+    })
+    .unwrap();
+    let select = Entity::<Select>::from_stable_id(field.get().unwrap().get_untracked().unwrap());
+    cx.update_component(select, |select, _| {
+        select.toggle_open();
+    })
+    .unwrap();
+    cx.update_component(select, |select, _| select.close())
+        .unwrap();
+    assert_eq!(*heard.lock().unwrap(), [true, false]);
+}
+
 /// `<T id=… name=…/>` is `t(LocalizedText::new(id).arg(name, …))` and
 /// `locale=` is `.locale(..)`: a template and its function calls mount the
 /// same localized tree, and follow the same writes and the same switch.

@@ -136,7 +136,7 @@ macro_rules! for_each_control {
                 loading: bool = set,
                 fit_options: bool = set,
             }
-            with { on_change: SelectChanged }
+            with { on_change: SelectChanged, on_toggle: SelectToggled }
             model value: Option<Arc<str>> => SelectChanged |event| Some(event.value.clone());
             ListItem => list_item(label: text) for ListItem {
                 label: String = set,
