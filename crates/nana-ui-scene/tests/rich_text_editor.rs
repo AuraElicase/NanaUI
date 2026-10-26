@@ -423,6 +423,62 @@ fn the_caret_blinks_in_the_scene_without_text_work() {
     }
 }
 
+/// Typing, moving the caret and a forward delete that leaves the caret where
+/// it was each show a hidden caret and start its blink over, as a text
+/// input's do.
+#[test]
+fn editing_shows_the_hidden_caret_and_restarts_its_blink() {
+    let (mut runtime, _, editor) = document(RichText::new("blink"));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let mut input = HeadlessInput::bind(runtime.context_mut(), document_id());
+    focus(&mut runtime, &mut input, editor);
+    settle(&mut runtime, &mut shaper);
+    let caret = |runtime: &mut RuntimeDocument, shaper: &mut NanaTextEngineShaper| {
+        runtime.flush(viewport(), shaper).unwrap();
+        runtime
+            .scene()
+            .primitives()
+            .filter(|primitive| primitive.node == editor.stable_id())
+            .any(|primitive| matches!(primitive.kind, ScenePrimitiveKind::Quad { .. }))
+    };
+    let ms = std::time::Duration::from_millis;
+    let none = InputModifiers::default();
+    let mut now = 1000;
+    runtime.context_mut().advance_animations(ms(now));
+    for edit in ["typing", "moving", "a forward delete"] {
+        now += 500;
+        runtime.context_mut().advance_animations(ms(now));
+        assert!(!caret(&mut runtime, &mut shaper), "hidden before {edit}");
+        let context = runtime.context_mut();
+        match edit {
+            "typing" => input.text(context, "!").map(|_| ()),
+            "moving" => input
+                .press(context, key("Home", none), None, None)
+                .map(|_| ()),
+            _ => input
+                .press(context, key("Delete", none), None, None)
+                .map(|_| ()),
+        }
+        .unwrap();
+        assert_eq!(
+            runtime.context().next_animation_deadline(),
+            Some(std::time::Duration::ZERO),
+            "{edit} restarts the blink"
+        );
+        assert!(caret(&mut runtime, &mut shaper), "{edit} shows the caret");
+        runtime.context_mut().advance_animations(ms(now));
+        settle(&mut runtime, &mut shaper);
+    }
+    let selection = runtime.context().read(editor, |view| view.selection());
+    assert_eq!(editor_value(&runtime, editor).text(), "blink");
+    assert_eq!(
+        selection.unwrap(),
+        (0, 0),
+        "the delete left the caret in place"
+    );
+}
+
 #[test]
 fn toolbar_attributes_restyle_the_selection_without_reflowing_a_colour() {
     let (mut runtime, _, editor) = document(RichText::new("make it red"));

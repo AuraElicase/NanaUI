@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["clipboard", "fetch"]
-clipboard = ["dep:arboard"]
+clipboard = ["dep:arboard", "dep:objc2-app-kit", "dep:windows-sys"]
 fetch = ["dep:url", "dep:ureq"]
 ws = ["dep:url", "dep:tungstenite"]
 experimental-android = []
@@ -35,6 +35,14 @@ tungstenite = { workspace = true, optional = true }
 # `linux`) does not either; its host injects the pasteboard (docs/reference/ohos.md).
 [target.'cfg(not(any(target_os = "android", target_env = "ohos")))'.dependencies]
 arboard = { version = "3.6", default-features = false, optional = true }
+
+# The clipboard's change count, which arboard does not expose: what tells a
+# paste whether the clipboard still holds this process's own copy.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { workspace = true, features = ["NSPasteboard"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_DataExchange"], optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

@@ -1697,7 +1697,9 @@ entry 的颜色指纹把 span 颜色和 `rich.revision` 合在一起：改描边
 - **区间重映射。** 编辑落到 `RichText::replace_range` / `replace_with`：span 走 `AttributedRanges::splice`（插入的字继承光标前那个字），对象跟着自己的字符平移，删掉字符就删掉对象。复制取 `RichText::slice`。
 - **输入。** 键盘在终端之后、普通编辑器之前路由到聚焦的富文本编辑器（应用的按键策略仍然最先看到按键）；组字走 `dispatch_composition` 的同一位置；指针按下、拖动、松开在终端之后处理。输入法的上下文是 `TextInputPurpose::Normal`，锚点是编辑器光标。
 - **光标与选区。** 组件把字节位置写进 `RichEditorMarks`（`SetRichEditorMarks`，只重绘）。场景在提取时用节点自己的保留排版算矩形：选区在字形下面（和文档选区同一层），光标在上面。只有聚焦的编辑器画光标；焦点移动时标脏重绘。空文本节点本来不保留排版，编辑器例外：空文档保留它那一行空行，光标画在行首，输入法也锚在这里。编辑后、新排版之前旧排版放不下新光标时，输入法暂用编辑器的内容盒，不会丢掉锚点。
-- **剪贴板。** 系统剪贴板只放纯文本；进程内记住最后一段复制的富文本及其纯文本哈希，粘贴的文字与之相同时贴回富文本。跨进程的富格式留给宿主扩展。
+- **剪贴板。** 系统剪贴板只放纯文本，不写 HTML 包装或进程标记；进程内只记住最近复制的一段富文本，以及写入后 `HostServices::clipboard_change_count` 给出的序号。粘贴时先读文字再读序号：序号相同说明复制之后没有任何写入，文字也相同才贴回富文本；同样的文字由别处写入，序号已变，按纯文本贴。宿主回答 `Unsupported` 时退回到只比文字。`RichClipboardCommand::PastePlainText` 总是按纯文本贴。跨进程的富格式留给宿主扩展。
+- **输入样式。** `RichTypingStylePolicy::Inherit`（默认）让打字继承光标前的字，没有再取后一个字；`Plain` 只用节点样式。两者都先用光标自己的输入样式（`SetAttrs` / `ClearAttrs` 设在光标上的），预编辑、纯文本粘贴和选区为空时的 `selection_attrs` 读同一个结果。
+- **光标闪烁。** 编辑状态带一个 `caret_revision`：文档、预编辑或选区端点变化时加一，应用交回不同的文档时也加一。它进 `TextInputKey::RichEditor`，所以和 `TextInput` 的编辑 revision 一样经 `sync_text_input` 复用同一个 `reset_caret_blink`；光标框没变的编辑（向后删除、新排版之前）同样让光标重新显示。没有第二套闪烁状态。
 
 ### 逐字呈现
 

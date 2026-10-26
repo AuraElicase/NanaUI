@@ -29,6 +29,9 @@ enum TextInputKey {
     RichEditor {
         node: Option<StableNodeId>,
         caret: Option<LayoutBox>,
+        /// The editor's caret or document changed, even where the caret
+        /// box did not (a forward delete, a layout not yet redone).
+        caret_revision: u64,
     },
     Editor {
         node: StableNodeId,
@@ -193,6 +196,7 @@ impl AppContext {
             return Some(TextInputKey::RichEditor {
                 node: self.world.focused(document),
                 caret: self.rich_editor_caret_bounds(document),
+                caret_revision: self.rich_editor_caret_revision(document),
             });
         }
         let (node, view) = self.editable_focused_text_input(document)?;

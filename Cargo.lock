@@ -2741,12 +2741,14 @@ dependencies = [
  "nana-ui-core",
  "nana-ui-input",
  "ndk-context",
+ "objc2-app-kit 0.3.2",
  "serde",
  "serde_json",
  "sys-locale",
  "tungstenite",
  "ureq",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
