@@ -35,7 +35,7 @@ nana-window（平台原生边界）
 
 普通 Rust 应用通常实现高层的 `ApplicationState`，并通过 `RuntimeApplication<State>` 调用 `run_runtime`——容器会自动管理文档路由、GPU 注册表与窗口生命周期（完整最小示例见 `crates/nana-ui/examples/application-counter.rs`）。
 
-需要精细控制多窗口、嵌入式事件循环或桥接 Vue 的宿主，则直接实现底层的 `RuntimeProgram`：
+需要精细控制多窗口或嵌入式事件循环的宿主，则直接实现底层的 `RuntimeProgram`：
 
 ```text
 initialize                   创建 RuntimeDocument 并挂载初始视图树
@@ -73,13 +73,13 @@ scene_gpu_renderers / scene_resource_producers
 
 ## 动画与呈现分离（Motion IR）
 
-动画意图统一编译进 `nana-ui-core::motion`（Motion IR）。无论 Rust L3 的 `node.transition()`、`Spring::to`、`Timeline::parallel / sequence`，还是 CSS 的 `transition` 与 `@keyframes`，最终都落到同一套轨道表示上：
+动画意图统一编译进 `nana-ui-core::motion`（Motion IR）。无论 Rust L3 的 `node.transition()`、`Spring::to`、`Timeline::parallel / sequence`，还是 CSS 的 `transition`，最终都落到同一套轨道表示上：
 
 - **逻辑值与呈现值分离**：`UiWorld` 保存的是逻辑目标状态；过渡途中的瞬时值保存在 `PresentationStore` 的 overlay 中，按「节点 + 属性」在给定时间戳下确定性求值（spring 与 decay 均按绝对时间求解析解，不依赖上一帧积分）。L3 transition 结束后会保持终点值，直到该属性下一次被写入不同的逻辑值。
 - **节点自己的轨道**：每个节点的每个属性有一条自己的轨道，`node.transition()` 和视图层的进出场过渡都跑在上面，ID 是 `AnimationId::for_node(node, property)`（动画事件里带的也是它）。`node.transition()` 从当前呈现值出发；要从指定值出发、替换这条轨道上正在跑的动画、首尾都保持（`fill: both`），用 `AnimationSpec::run(node, property, from, to, now, duration)`，再用 `with_curve` / `with_delay` 等调整，交给 `MutationQueue::start_animation`。应用不必自己拼 `AnimationSpec` 或给动画 ID 加盐。
-- **列表重排（FLIP）**：通过显式的呈现变换 `node.flip(first, last)`（或 Vue `TransitionGroup` 的 `setPaintTransform`）完成——逻辑布局盒直接停在终点（Last），视觉从反向偏移（Invert）平滑回到单位变换。
+- **列表重排（FLIP）**：通过显式的呈现变换 `node.flip(first, last)` 完成——逻辑布局盒直接停在终点（Last），视觉从反向偏移（Invert）平滑回到单位变换。
 - **合成器稳态零写回**：`Compositor` 类轨道的 `MotionDescriptor` 只在启动、改目标（retarget）或取消时写入代际表（generational slab）；稳态帧只推进时间 uniform，`SceneWgpuPainter` 在 Quad 着色器的 `evaluate()` 中直接求值（非 Quad 图元仍读取 CPU overlay），产品 `present` 路径绝不回读 GPU。
-- **按需连续刷新**：CPU 与 Layout 动画通过稀疏的 `next_animation_deadline` 调度；`UiScene::compositor_needs_tick` 仅将当前窗口切入轻量的 `FrameDemand::Continuous` 呈现，不触发 Vue patch，也不触发 `UiWorld` 样式或布局重算。窗口最小化或被遮挡时不追赶隐藏的 GPU 帧，恢复可见后按绝对时间直接求值；设备或 Surface 重建后由宿主调用 `UiScene::set_surface_generation`。
+- **按需连续刷新**：CPU 与 Layout 动画通过稀疏的 `next_animation_deadline` 调度；`UiScene::compositor_needs_tick` 仅将当前窗口切入轻量的 `FrameDemand::Continuous` 呈现，不触发 `UiWorld` 样式或布局重算。窗口最小化或被遮挡时不追赶隐藏的 GPU 帧，恢复可见后按绝对时间直接求值；设备或 Surface 重建后由宿主调用 `UiScene::set_surface_generation`。
 
 各属性的默认动画分类由 `AnimatableProperty::animation_class()` 决定，组件不可覆盖：
 
@@ -95,21 +95,20 @@ scene_gpu_renderers / scene_resource_producers
 
 ## 实时画面如何挂入树中
 
-默认产品路径是将实时画面渲染到可采样纹理，在树上挂载 `GpuTextureView`，并使用**同一个字符串槽位名**在 `host_textures()` 中登记。多层画面只需挂载相邻的多张 `GpuTextureView`；`<video data-nana-video>` 同样走 `video:{id}` 宿主纹理槽（有槽位时不叠加 poster）。更换纹理尺寸或对象时递增 `generation` 即可，切勿销毁重建 Runtime 节点。
+默认产品路径是将实时画面渲染到可采样纹理，在树上挂载 `GpuTextureView`，并使用**同一个字符串槽位名**在 `host_textures()` 中登记。多层画面只需挂载相邻的多张 `GpuTextureView`；`Video` 同样走 `video:{id}` 宿主纹理槽（有槽位时不叠加 poster）。更换纹理尺寸或对象时递增 `generation` 即可，切勿销毁重建 Runtime 节点。
 
 只有在完全没有中间纹理、必须直接画进当前 UI 渲染通道时，才使用 `GpuView`（以 `u64` 槽位号匹配已注册的 `SceneGpuRenderer`，不同于 `HostTextureRegistry` 的字符串键）。详细接入规范见 [实时画面](gpu.md)。
 
-## Vue 是输入适配器，不是另一套窗口
+## 一份 Style Model，一棵树
 
 ```text
 Rust 声明式视图 / create_component ──┐
-Vue HTML 1:1 控件 / nana-* 组件     ─┼─► Style Model ─► UiWorld ─► UiScene ─► SceneWgpuPainter
-Vue div + CSS 子集                  ─┘
+.vue 方言（构建期编译成 Rust）      ─┴─► Style Model ─► UiWorld ─► UiScene ─► SceneWgpuPainter
 ```
 
-Rust 控件、Vue 的 HTML 语义标签、`nana-*` 组件以及受支持的 CSS 子集，全部写入同一套 Style Model（Tokens + Semantics + Layout）并汇入同一棵 `UiWorld`。全框架只有一个 CSS 引擎 `nana-ui-css`：Vue 路径在运行时调用它，Rust `view!` 的 `<style>`、`stylesheet!` 与 `css!` 则在构建时调用它并编译为 Style Model 补丁数据。
+Rust 控件、`view!` 与 `.vue` 方言写出的界面，全部写入同一套 Style Model（Tokens + Semantics + Layout）并汇入同一棵 `UiWorld`。全框架只有一个 CSS 引擎 `nana-ui-css`：`.vue` 编译器、Rust `view!` 的 `<style>`、`stylesheet!` 与 `css!` 在构建时调用它并编译为 Style Model 补丁数据。
 
-NanaUI **没有整窗 WebView 壳**：`@nanaui/nanavue-runtime` 的 `createApp()` 将 Vue 3 Custom Renderer 接到宿主的 V8 引擎上，与 Rust L3 共用同一个 Runtime 和组件注册表（详见 [Vue](vue.md)）。若业务确实需要在窗口局部嵌入真实网页，只能使用显式的宿主原生例外 `runtime::BrowserView`（Runtime 节点负责布局、无障碍与生命周期，宿主管理原生 `WKWebView` 子视图，当前仅支持 macOS，且不进入离屏截图）。
+NanaUI **没有整窗 WebView 壳**。若业务确实需要在窗口局部嵌入真实网页，只能使用显式的宿主原生例外 `runtime::BrowserView`（Runtime 节点负责布局、无障碍与生命周期，宿主管理原生 `WKWebView` 子视图，当前仅支持 macOS，且不进入离屏截图）。
 
 ## 非协商红线（不要做的事）
 

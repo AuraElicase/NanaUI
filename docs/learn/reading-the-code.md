@@ -4,7 +4,7 @@ title: 代码阅读指南
 
 # 代码阅读指南
 
-本章回答一个实际问题：**面对包含 28 个工作区 crate 的仓库，应该从哪个文件开始读、按什么顺序读、怎么跑最小验证、读到哪一步算真正掌握了主干**。
+本章回答一个实际问题：**面对包含 24 个工作区 crate 的仓库，应该从哪个文件开始读、按什么顺序读、怎么跑最小验证、读到哪一步算真正掌握了主干**。
 
 ## 第一步：按顺序读完这五份短文档
 
@@ -15,7 +15,7 @@ title: 代码阅读指南
 | 1 | `AGENTS.md`（仓库根目录） | 全仓架构合同的最高浓缩：唯一产品路径、支撑边界与九条非协商红线 |
 | 2 | [`docs/reference/how-it-works.md`](/reference/how-it-works) | 核心运行模型：一棵保留树、宿主拥有 GPU、一帧的 8 步生命周期 |
 | 3 | [`docs/reference/architecture.md`](/reference/architecture) | Crate 边界、Motion IR 分流表与全局对象所有权表 |
-| 4 | [模块与分层](/learn/modules-and-layers) | 28 个 crate 的依赖深度层级与 77 条普通依赖边实读 |
+| 4 | [模块与分层](/learn/modules-and-layers) | 24 个 crate 的依赖深度层级与 55 条普通依赖边实读 |
 | 5 | [合同与不变量](/learn/contracts-and-invariants) | 九条非协商合同的设计因果与只读验证命令 |
 
 `AGENTS.md` 值得在阅读源码时随时对照：仓库里几乎所有「为什么这段代码要分两步、为什么不直接传句柄」的设计，最终都对应其中一条非协商合同。
@@ -24,15 +24,13 @@ title: 代码阅读指南
 
 ```text
 NanaUI/
-├── Cargo.toml                  Workspace 根清单：28 个核心 crate + tools + platform + 8 个示例
+├── Cargo.toml                  Workspace 根清单：24 个核心 crate + tools + platform + 5 个示例
 ├── AGENTS.md                   架构合同与开发守则（最重要的一份根文档）
-├── crates/                     全部 28 个框架 crate（全表见 /learn/coverage-matrix）
-├── examples/                   8 个独立工作区示例包（component-gallery、vue-v8、vue-counter、
-│                               vue-hosted-acceptance、native-rhi-probe、runtime-host-fixture、
-│                               package-fixture、reactive-sfc）
+├── crates/                     全部 24 个框架 crate（全表见 /learn/coverage-matrix）
+├── examples/                   5 个工作区示例包（component-gallery、native-rhi-probe、
+│                               runtime-host-fixture、package-fixture、reactive-sfc）
 ├── crates/nana-ui/examples/    16 个单文件最小专题示例（计数器、GPU 视图、透明窗、Splash、无障碍等）
 ├── docs/                       VitePress 文档站源码（含 :::api 双写法校验脚本）
-├── packages/                   前端 JS 运行时与组件包（nanavue-runtime、nanavue-components）
 ├── platform/android/           Android 实验性 GameActivity 宿主
 ├── tools/css-parity/           CSS 子集布局一致性测试夹具与比对工具
 ├── perf/                       性能基准场景与门禁定义
@@ -96,10 +94,10 @@ cargo run -p nana-ui --example startup-splash --features hosted,bundled-fonts --
 
 1. 为什么在按钮点击回调里不应该调用 `mount_view_root` 重新渲染整页？一次点击从操作系统事件到触发 `on_activate` 依次经过了哪几个 crate？（见 [L3 建树](/reference/l3-authoring) 与 [输入链路](/learn/runtime-input)）
 2. 为什么一块实时 GPU 画面（`GpuTextureView`）既能被父容器的圆角裁切，又能被后方的下拉菜单遮挡，还能响应鼠标点击？（见 [Scene 提取](/learn/scene-extraction) 与 [GPU 与帧生命周期](/learn/gpu-frame)）
-3. 为什么 `nana-ui-runtime` 的依赖表里根本没有 `nana-ui-css`，但无论是 Rust 的 `view!` 还是 Vue 组件都能使用 CSS 样式？（见 [CSS 引擎](/learn/css-engine) 与 [作者工具链](/learn/toolchain)）
+3. 为什么 `nana-ui-runtime` 的依赖表里根本没有 `nana-ui-css`，但无论是 Rust 的 `view!` 还是 `.vue` 组件都能使用 CSS 样式？（见 [CSS 引擎](/learn/css-engine) 与 [作者工具链](/learn/toolchain)）
 
 ## 接着读
 
 - [端到端数据流](/learn/flows)：四条完整链路串起全部子系统
-- [28 crate 覆盖矩阵](/learn/coverage-matrix)：全部 28 个工作区 crate 的四要素速查表
+- [24 crate 覆盖矩阵](/learn/coverage-matrix)：全部 24 个工作区 crate 的四要素速查表
 - [证据清单](/learn/evidence-checklist)：用只读命令亲手核验每一条架构断言

@@ -1,6 +1,6 @@
 # 架构学习
 
-本板块面向**希望读懂 NanaUI 框架内部实现与设计取舍**的读者：它按模块（全部 28 个工作区 crate）和核心子系统（保留树、布局、样式、文本、Scene 提取、GPU 与帧、输入、窗口、工具链）将整个仓库拆开剖析，并一路下钻到源码级的数据结构与行号锚点。
+本板块面向**希望读懂 NanaUI 框架内部实现与设计取舍**的读者：它按模块（全部 24 个工作区 crate）和核心子系统（保留树、布局、样式、文本、Scene 提取、GPU 与帧、输入、窗口、工具链）将整个仓库拆开剖析，并一路下钻到源码级的数据结构与行号锚点。
 
 它与文档站其他板块的分工如下：
 
@@ -9,13 +9,13 @@
 | [指南](/guide/introduction) | 应用开发者入门与进阶：从零搭窗口、响应式、组件组合、热重载、打包与无障碍 |
 | [组件](/components/) | 71 个内置控件的目录、用法示例（支持 `view!` / 函数双切换）、属性表与事件表 |
 | [架构](/architecture/) | 应用作者需要建立的心智模型（一帧、实时画面、文本、窗口） |
-| **架构学习（本板块）** | 面向架构学习者与框架贡献者：全 28 个 crate 覆盖 + 子系统内部下钻 + 端到端数据流 + 核查清单 |
+| **架构学习（本板块）** | 面向架构学习者与框架贡献者：全 24 个 crate 覆盖 + 子系统内部下钻 + 端到端数据流 + 核查清单 |
 | [参考](/reference/how-it-works) | 面向查阅的完整技术合同（应用 API、声明式视图、CSS/Rust 布局、窗口/GPU/无窗口输出、维护者笔记） |
 
 ## 一张图先立住全局主线
 
 ```text
-Rust / Vue / JS 输入
+Rust / `.vue` 方言输入
     -> nana-ui-core        共享合同：Style Model、主题、几何、Workspace、Motion IR
     -> nana-ui-runtime     UiWorld：保留树、控件、布局、输入、焦点、Shell、Dock、AreaLayout
     -> nana-ui-scene       抽取出的保留绘制图（不依赖 WGPU）
@@ -30,7 +30,7 @@ Rust / Vue / JS 输入
 
 | 章节 | 核心内容 |
 | --- | --- |
-| [模块与分层](/learn/modules-and-layers) | 28 个 crate 的层位分组、77 条依赖边清单、分层规则与验证命令 |
+| [模块与分层](/learn/modules-and-layers) | 24 个 crate 的层位分组、55 条依赖边清单、分层规则与验证命令 |
 | [合同与不变量](/learn/contracts-and-invariants) | 九条非协商架构合同：每条配「为什么这样设计」与违反后果 |
 | [端到端数据流](/learn/flows) | 四条核心流：状态变更→像素、点击→回调、文字→像素、GPU 实时画面挂树 |
 | [代码阅读指南](/learn/reading-the-code) | 仓库地形图、推荐阅读路线、最小可运行示例与调试手段 |
@@ -40,7 +40,7 @@ Rust / Vue / JS 输入
 | 章节 | 核心内容 |
 | --- | --- |
 | [核心合同：nana-ui-core](/learn/core-contracts) | Style Model（Tokens + Semantics + Layout）、主题令牌、几何、WorkspaceModel、Motion IR |
-| [CSS 引擎：nana-ui-css](/learn/css-engine) | 手写词法/解析/选择器匹配/级联，以及构建时与运行时两个消费时机 |
+| [CSS 引擎：nana-ui-css](/learn/css-engine) | 手写词法/解析/选择器匹配/级联，以及构建期的唯一消费时机 |
 | [文本引擎：nana-text](/learn/text-engine) | 字体选择 → OpenType 整形 → 保留文本布局三段解耦管线与代际缓存 |
 
 ### Runtime 内部
@@ -64,18 +64,18 @@ Rust / Vue / JS 输入
 
 | 章节 | 核心内容 |
 | --- | --- |
-| [三种作者入口](/learn/authoring-paths) | Rust `view!` 宏链、Vue Custom Renderer、JS 宿主如何汇入同一棵 `UiWorld` |
-| [作者工具链](/learn/toolchain) | `view-macros` / `view-schema` / `view-codegen`、`.vue` SFC 编译器、JS 引擎注入缝 |
+| [作者入口](/learn/authoring-paths) | Rust `view!` 宏链与 `.vue` 方言如何汇入同一棵 `UiWorld` |
+| [作者工具链](/learn/toolchain) | `view-macros` / `view-schema` / `view-codegen`、`.vue` SFC 编译器 |
 | [外围支撑 crate 一览](/learn/supporting-crates) | 图表、诊断、SVG 栅格化、图标、打包读写两侧、热重载、devtools 及周边生态 |
 
 ### 附录
 
 | 章节 | 核心内容 |
 | --- | --- |
-| [28 crate 覆盖矩阵](/learn/coverage-matrix) | 每个 crate 的职责、依赖方向、关键入口类型与归属章节四要素速查 |
+| [24 crate 覆盖矩阵](/learn/coverage-matrix) | 每个 crate 的职责、依赖方向、关键入口类型与归属章节四要素速查 |
 | [证据清单](/learn/evidence-checklist) | 关键架构断言的只读核查命令、当前工作区实跑读数与源码行号锚点 |
 
-## 28 个 Crate 的章节归属
+## 24 个 Crate 的章节归属
 
 | Crate | 归属章节 |
 | --- | --- |
@@ -87,13 +87,9 @@ Rust / Vue / JS 输入
 | `nana-ui-scene` | [Scene 提取](/learn/scene-extraction) |
 | `nana-gpu` | [GPU 与帧生命周期](/learn/gpu-frame) |
 | `nana-frame-exchange` | [GPU 与帧生命周期](/learn/gpu-frame) |
-| `nana-ui` | [GPU 与帧生命周期](/learn/gpu-frame) · [三种作者入口](/learn/authoring-paths) |
+| `nana-ui` | [GPU 与帧生命周期](/learn/gpu-frame) · [作者入口](/learn/authoring-paths) |
 | `nana-ui-platform` | [窗口与平台](/learn/window-platform) |
 | `nana-window` | [窗口与平台](/learn/window-platform) |
-| `nana-ui-vue` | [三种作者入口](/learn/authoring-paths) |
-| `nana-js-engine` | [作者工具链](/learn/toolchain) |
-| `nana-js-v8` | [作者工具链](/learn/toolchain) |
-| `nana-ui-web-api` | [作者工具链](/learn/toolchain) |
 | `nana-ui-sfc` | [作者工具链](/learn/toolchain) |
 | `nana-ui-view-macros` | [作者工具链](/learn/toolchain) |
 | `nana-ui-view-schema` | [作者工具链](/learn/toolchain) |
@@ -112,4 +108,4 @@ Rust / Vue / JS 输入
 
 - **从全局鸟瞰入手**：[模块与分层](/learn/modules-and-layers) → [合同与不变量](/learn/contracts-and-invariants) → 挑感兴趣的子系统章节 → [端到端数据流](/learn/flows)。
 - **从一帧的渲染入手**：[端到端数据流](/learn/flows)（流程一：状态→像素）→ [保留树](/learn/runtime-tree) → [Scene 提取](/learn/scene-extraction) → [GPU 与帧生命周期](/learn/gpu-frame)。
-- **从特定 Crate 入手**：在 [28 crate 覆盖矩阵](/learn/coverage-matrix) 中查到它的职责与关键入口类型，跳到归属主章，再沿数据流查看它的上下游协作。
+- **从特定 Crate 入手**：在 [24 crate 覆盖矩阵](/learn/coverage-matrix) 中查到它的职责与关键入口类型，跳到归属主章，再沿数据流查看它的上下游协作。

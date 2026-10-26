@@ -185,7 +185,7 @@ suspense(
 
 ## 样式表
 
-样式表就是 CSS。用的是 Vue 路径同一个 CSS 子集（[布局](layout.md)）。由同一个引擎 `nana-ui-css` 处理。区别在于什么时候做：Vue 路径在运行时解析和级联。L3 视图在**构建时**解析和匹配。运行时只拿到结果。
+样式表就是 CSS。用的是 [布局](layout.md) 里的 CSS 子集。由引擎 `nana-ui-css` 处理。L3 视图在**构建时**解析和匹配。运行时只拿到结果。
 
 :::api
 
@@ -609,7 +609,7 @@ impl ApplicationState for App {
 - 内置控件只注册**标识**（类型名、标签、TypeId）。节点照常带上组件类型标记。按标签也能解析出类型名。
 - 每个类型的行为写在 `ComponentView::BEHAVIOR`（`TypeBehavior`：激活、组装器、在某一点上激活、关闭弹出的选项、写入后的维护、输入路由钩子 `TypeHooks`）。在该类型第一个节点被创建时安装。所有创建路径都经过这一步（`stamp_component_type`、复合控件的 `install_view`、按标签绑定的 `finish_semantic_binding`）。程序没创建过的类型。这些代码一处都不被引用。输入路由经 `hooked!` 调用子系统。钩子没装时的结果和文档里没有这种节点时一样。
 - 模式必须在编译期确定：`ApplicationState::BUILTINS` 是关联常量。宿主按常量选择。另一个分支在 release 里被删掉。在运行时二选一会把两种模式都链接进来。
-- 精简模式下。按标签构造内置控件（`bind_semantic`。也就是 Vue 路径）返回 `FrameworkError::InvalidComponentType`。Vue 宿主继续用完整模式。
+- 精简模式下。按标签构造内置控件（`bind_semantic`）返回 `FrameworkError::InvalidComponentType`。按标签构造控件的宿主继续用完整模式。
 
 实测（release、strip 之后）：
 
@@ -878,5 +878,4 @@ fn page() -> impl IntoView {
 ## 不做的事
 
 - 不做整树 render。也不做虚拟 DOM diff。
-- 不把 JS 的响应式桥接到 Rust 信号上。
 - `view!` 只是展开为函数调用的语法糖。不引入新的运行时语义。

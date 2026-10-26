@@ -21,7 +21,7 @@
 
 控件的普通点击与输入不要绕道 `RuntimeProgram::update`，请直接使用节点上的 `.on` / `.observe` 或信号绑定。只有当点击需要触发开窗、切换 GPU 资源或写盘等宿主级操作时，才在闭包内调用 `cx.dispatch_program(msg)`——该消息会在下一帧开头的第 1 步进入 `update`。`update` 应保持轻量，新窗口的初始页面内容放在 `present` 之后的 `bind_window` 中挂载。
 
-树结构的修改会先进入当前帧的 `MutationQueue`，整批校验通过后才一次性原子提交（commit），绝不会发布半棵树；已销毁节点的 `StableNodeId` 永不复用。Vue 路径同样不在 JS 调用瞬间直接改树：host op 先排入 `PendingHostOps`，在帧边界由 `flush_host_frame` 统一提交。
+树结构的修改会先进入当前帧的 `MutationQueue`，整批校验通过后才一次性原子提交（commit），绝不会发布半棵树；已销毁节点的 `StableNodeId` 永不复用。
 
 ## 2. 纹理准备（`prepare_window_frame`）
 
@@ -37,7 +37,7 @@
 
 - **无变更即空转**：没有脏节点时 `flush` 直接空转返回，宿主不会为此空刷一帧。动画、实时 GPU 画面与普通界面变更的唤醒通道彼此独立。
 - **视口缩放（Viewport Resize）增量布局**：当窗口视口尺寸变化时，即使应用未提交任何树变更也会触发布局。但只有文档根、消费了变化轴约束的子树、`position: fixed` 以及使用 `vw` / `vh` 单位的盒子会重新测量，不依赖视口变化轴的子树直接复用保留的测量缓存与布局计划。
-- **滚动不改写布局盒**：滚动偏移（`scroll_offset`）不写回 Runtime 的 `LayoutBox`；JS 查询拿到的绘制后几何来自投影表 `LayoutBoxStore`，而非第二份布局权威。
+- **滚动不改写布局盒**：滚动偏移（`scroll_offset`）不写回 Runtime 的 `LayoutBox`。
 - **合成器动画不写回基础样式**：`UiWorld` 保存逻辑目标值，过渡中的 `transform` / `opacity` 留在 `PresentationStore` overlay 上（弹簧与衰减均按绝对时间戳确定性求值，完成事件靠 deadline 触发而非逐帧采样）。稳态动画帧只推进时间，既不标脏 `UiWorld`，也不触发重新抽取。
 
 ## 4. `present`：录制、提交与资源回收

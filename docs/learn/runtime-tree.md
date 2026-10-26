@@ -8,9 +8,9 @@ title: 运行时保留树
 
 ## 职责与边界
 
-- **唯一保留树权威**：`UiWorld`（`crates/nana-ui-runtime/src/world.rs:628`）是所有保留节点的身份、拓扑与逻辑状态权威。内部节点表（`NodeStore`）刻意不暴露进公共 API，因此优化底层存储结构不会破坏 JS 句柄、诊断记录、快照或持久化数据。
+- **唯一保留树权威**：`UiWorld`（`crates/nana-ui-runtime/src/world.rs:628`）是所有保留节点的身份、拓扑与逻辑状态权威。内部节点表（`NodeStore`）刻意不暴露进公共 API，因此优化底层存储结构不会破坏诊断记录、快照或持久化数据。
 - **原子批式变异**：外部代码不能直接篡改节点表，只能将 `UiMutation` 排入 `MutationQueue`，由 `UiWorld::commit` 整批校验通过后一次性应用（`crates/nana-ui-runtime/src/world/mutation.rs:2915`）。
-- **明确区分权威与投影**：布局输出（`LayoutResult`）、Vue 宿主的绘制后几何快照（`LayoutBoxStore`）以及待提交宿主操作队列（`PendingHostOps`）都是投影或暂存缓冲，绝不构成第二套树权威。
+- **明确区分权威与投影**：布局输出（`LayoutResult`）是投影，帧内的 `MutationQueue` 是待提交的暂存缓冲，二者都不构成第二套树权威。
 - **运行时零 CSS 解析**：`nana-ui-runtime` 的依赖表中没有 `nana-ui-css`，样式统一以 Style Model 数据（`LayoutStyle`）形式进入（见下文 [依赖与邻居](#依赖与邻居)）。
 
 ## 依赖与邻居
@@ -22,7 +22,6 @@ title: 运行时保留树
 | `nana-ui-core` | 提供节点样式、主题与几何合同（`NodeStyle` 内含的 `LayoutStyle`、`CompiledTheme` 等） |
 | `nana-text` | 提供文本节点测量与保留文本布局权威，`TextLayoutStore` 挂载在 `NodeStore` 中 |
 | `nana-ui-scene` | `RuntimeDocument` 持有 `AppContext` 与 `UiScene`，驱动单帧有界 `flush` 事务（`crates/nana-ui-scene/src/runtime_document.rs:18`） |
-| `nana-ui-vue` | 通过 `MutationQueue` 向同一棵 `UiWorld` 写入变更，在帧边界提交 `PendingHostOps` |
 
 ## 关键类型与数据
 
@@ -90,7 +89,7 @@ title: 运行时保留树
 ## 协作与数据流
 
 ```text
-应用 / 组件 / Vue Host Ops ──写入──▶ MutationQueue（帧内暂存）
+应用 / 视图函数 / 组件     ──写入──▶ MutationQueue（帧内暂存）
                                          │ UiWorld::commit（整批校验 + 原子应用，world/mutation.rs:2915）
                                          ▼
                                  UiWorld（NodeStore + DirtyMask + LayoutFrontierSeed）

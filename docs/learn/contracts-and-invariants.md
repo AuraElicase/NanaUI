@@ -18,20 +18,20 @@ NanaUI 有一批**非协商架构合同（Non-negotiable Contracts）**：它们
 UiWorld → ExtractedNode → UiScene → SceneWgpuPainter
 ```
 
-- **是什么**：树拓扑、计算样式、未滚动布局、命中测试、焦点、IME 与无障碍的唯一权威是 `UiWorld`（`nana-ui-runtime`）；绘制图的唯一权威是 `UiScene`（`nana-ui-scene`）；上屏绘制器只有 `SceneWgpuPainter`（`nana-ui`）。`LayoutBoxStore` 只是绘制阶段的投影快照，滚动偏移绝不写回 Runtime 布局盒。
+- **是什么**：树拓扑、计算样式、未滚动布局、命中测试、焦点、IME 与无障碍的唯一权威是 `UiWorld`（`nana-ui-runtime`）；绘制图的唯一权威是 `UiScene`（`nana-ui-scene`）；上屏绘制器只有 `SceneWgpuPainter`（`nana-ui`）。布局输出 `LayoutResult` 只是投影，不构成第二套树权威；滚动偏移绝不写回 Runtime 布局盒。
 - **为什么**：一旦引入「第二棵树」，布局、命中、动画、焦点与无障碍就必须跨两棵树双向同步，不仅带来固定开销，而且在异步输入和过渡动画下永远无法完全对齐。
-- **违反后果**：`PendingHostOps` 在帧边界原子提交的保证被打破；JS 查询到的几何盒与真实命中/绘制区域分叉。
-- **核查方式**：`cargo metadata` 普通依赖图严格前向无环（见 [模块与分层](/learn/modules-and-layers)）；Vue / JS 入口核查见 [三种作者入口](/learn/authoring-paths)。
+- **违反后果**：变更经 `MutationQueue` 在帧边界原子提交的保证被打破；查询到的几何盒与真实命中/绘制区域分叉。
+- **核查方式**：`cargo metadata` 普通依赖图严格前向无环（见 [模块与分层](/learn/modules-and-layers)）；两条作者入口如何汇入同一棵树见 [作者入口](/learn/authoring-paths)。
 
 ## 合同二：CSS 只有一个引擎（`nana-ui-css`）
 
 - **是什么**：样式表的词法分析、语法解析、选择器匹配与级联排序只在 `nana-ui-css` 中实现。`nana-ui-core`、`nana-ui-runtime`、`nana-ui-scene`、`nana-ui` 四个核心 crate 不含任何样式表解析代码，只消费级联产物 Style Model（`LayoutStyle`）。
-- **为什么**：CSS 级联语义（来源次序、特异性三元组、`@layer`、`!important`、`@container` 区间分桶）极为精细，两套实现必然导致同一份样式在 Rust 路径与 Vue 路径下算出不同的布局。
-- **违反后果**：构建时样式（`view!` / `.vue`）与运行时样式表现不一致，`tools/css-parity` 基线失守。
+- **为什么**：CSS 级联语义（来源次序、特异性三元组、`@layer`、`!important`、`@container` 区间分桶）极为精细，两套实现必然导致同一份样式在 `view!`、`.vue` 与 `tools/css-parity` 之间算出不同的布局。
+- **违反后果**：`view!` 与 `.vue` 的样式表现不一致，`tools/css-parity` 基线失守。
 - **当前仓库实跑读数**：
   - 在 `nana-ui-runtime` 中搜索 `specificity | Selector | cascade | stylesheet | CssParser | tokenizer`：全部命中均为注释、测试事件名或 `view/style.rs` 对构建期编译产物 `Sheet` / `StylePatch` 的消费（其模块头明确声明："No CSS is parsed and no selector is matched at run time, and this crate has no CSS in it"）。
   - 在 `nana-ui-core` 中搜索：仅有 `SemanticColorRole::from_css_token_name`（`style_model.rs:341`，将 `--nana-*` 变量名映射为语义角色）与单值关键字解析，无样式表解析器。
-  - 依赖图实读：`nana-ui-css` 的直接消费方只有 `nana-ui-view-codegen`（构建期）与 `nana-ui-vue`（运行期）。
+  - 依赖图实读：`nana-ui-css` 在 `crates/` 内的直接消费方只有 `nana-ui-view-codegen`（构建期）。
 
 ## 合同三：输入路由只有一个消费方（`AppContext::route_input`）
 
@@ -40,14 +40,14 @@ UiWorld → ExtractedNode → UiScene → SceneWgpuPainter
 - **违反后果**：两条路由路径对同一串事件给出不同的「按下 / 释放 / 激活」判定。
 - **当前仓库实跑读数**：
   - `pub fn route_input` 全仓仅定义于 `crates/nana-ui-runtime/src/framework/input.rs:397`（无头测试变体 `HeadlessInput::route_shaped` 位于同模块的 `input/headless.rs:119`，内部仍调用 `context.route_input`）。
-  - `nana-ui`（`scene_host/host_services.rs`）、`nana-ui-vue`（`host/input_projection.rs:386`）与 `nana-ui-devtools`（`agent/runtime.rs:120`）全部只是将事件降维或转发给 `AppContext::route_input`，不存在第二套路由。
+  - `nana-ui`（`scene_host/host_services.rs`）与 `nana-ui-devtools`（`agent/runtime.rs:120`）全部只是将事件降维或转发给 `AppContext::route_input`，不存在第二套路由。
 
 ## 合同四：全进程单一 GPU 设备与队列，锁定唯一 WGPU 主版本
 
 - **是什么**：WGPU 是唯一正式图形后端，全工作区依赖图锁定唯一主版本（当前为 `wgpu = "30.0.0"`）。严禁创建第二个 `Device` / `Queue`，严禁在产品呈现路径上执行 CPU 回读（readback）。
 - **为什么**：两套设备意味着两套独立的提交时序与围栏，实时画面与 UI 控件无法在同一帧、同一次 `present` 中严格对齐；而 CPU 回读会直接打断 GPU 异步流水线。
 - **违反后果**：窗口缩放或高刷动画下画面撕裂、延迟一帧或跨设备句柄崩溃。
-- **核查方式**：`python3 scripts/check-engine-boundary.py` 强制检查公开签名——`wgpu::*` 只能在开启 `wgpu-interop` feature 时出现在白名单允许的五个 crate（`nana-gpu`、`nana-frame-exchange`、`nana-ui`、`nana-ui-vue`、`nana-ui-devtools`）中，框架内部源码则通过私有模块 `nana_gpu::__framework` 访问。
+- **核查方式**：`python3 scripts/check-engine-boundary.py` 强制检查公开签名——`wgpu::*` 只能在开启 `wgpu-interop` feature 时出现在白名单允许的四个 crate（`nana-gpu`、`nana-frame-exchange`、`nana-ui`、`nana-ui-devtools`）中，框架内部源码则通过私有模块 `nana_gpu::__framework` 访问。
 
 ## 合同五：原始窗口句柄绝不进入普通控件
 
@@ -69,7 +69,7 @@ UiWorld → ExtractedNode → UiScene → SceneWgpuPainter
 
 ## 合同八：共享单一 `ComponentRegistry`，无第二套实例化 ABI
 
-- **是什么**：所有内置控件与扩展控件共用同一张 `ComponentRegistry` 与同一个 `register_component` 入口。`NativeComponentRegistry` 仅服务于 JS 宿主命令，不是第二套 Runtime 组件 ABI；`PendingHostOps` 镜像、`WidgetKind`、`ComponentSupport` 同样不是实例化 ABI。
+- **是什么**：所有内置控件与扩展控件共用同一张 `ComponentRegistry` 与同一个 `register_component` 入口。`ComponentSupport` 不是实例化 ABI。
 - **为什么**：两套组件 ABI 意味着每个控件的布局、焦点与无障碍投影都要重复实现两遍，能力永远无法对齐。
 - **违反后果**：扩展控件拿不到内置控件的增量布局、焦点导航与无障碍投影支持。
 
@@ -87,6 +87,6 @@ UiWorld → ExtractedNode → UiScene → SceneWgpuPainter
 
 ## 接着读
 
-- [模块与分层](/learn/modules-and-layers)：28 个 crate 依赖图的完整实读
-- [三种作者入口](/learn/authoring-paths)：三条编写路径如何汇入同一棵树
+- [模块与分层](/learn/modules-and-layers)：24 个 crate 依赖图的完整实读
+- [作者入口](/learn/authoring-paths)：两条编写路径如何汇入同一棵树
 - [证据清单](/learn/evidence-checklist)：九条合同的自动化复核命令与源码行号

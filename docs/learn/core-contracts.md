@@ -4,15 +4,15 @@ title: 核心合同：nana-ui-core
 
 # 核心合同：`nana-ui-core`
 
-本章深入整个框架的基石 `nana-ui-core`：它定义了全仓共享的基础合同——Style Model（Tokens / Semantics / Layout 三层）、主题栈、几何原语、Workspace 合同以及 Motion IR——并解释为什么这些定义必须抽到最底层。读完后你能搞懂：一条样式从 CSS 或 Vue 属性变成 `LayoutStyle` 字段时落在哪一层；语义调色板如何同时兼顾深浅主题与 WCAG 对比度；`WorkspaceModel` 如何在不依赖窗口后端的前提下管理区域布局与折叠动画；以及 Motion 为什么只允许一条时间线权威。本章承接 [模块与分层](/learn/modules-and-layers)，是 [CSS 引擎](/learn/css-engine) 与 [文本引擎](/learn/text-engine) 的共同前置。
+本章深入整个框架的基石 `nana-ui-core`：它定义了全仓共享的基础合同——Style Model（Tokens / Semantics / Layout 三层）、主题栈、几何原语、Workspace 合同以及 Motion IR——并解释为什么这些定义必须抽到最底层。读完后你能搞懂：一条样式从 CSS 声明或 Rust 构建器变成 `LayoutStyle` 字段时落在哪一层；语义调色板如何同时兼顾深浅主题与 WCAG 对比度；`WorkspaceModel` 如何在不依赖窗口后端的前提下管理区域布局与折叠动画；以及 Motion 为什么只允许一条时间线权威。本章承接 [模块与分层](/learn/modules-and-layers)，是 [CSS 引擎](/learn/css-engine) 与 [文本引擎](/learn/text-engine) 的共同前置。
 
 ## 职责与边界
 
-`nana-ui-core` 的 `lib.rs` 文件头一句话定调："Backend-neutral NanaUI contracts shared by Runtime and Vue adapters"（`crates/nana-ui-core/src/lib.rs:1`）。它是对图形与窗口后端中立的数据合同层：所有样式路径统一汇入 Style Model（**Tokens + Semantics + Layout**）；L1 CSS 适配器与 L2 Vue 属性映射到该模型，L3 Rust API 则是它的原生入口；实际绘制留在 Runtime 与 UiScene（`crates/nana-ui-core/src/lib.rs:5-7`）。
+`nana-ui-core` 是对图形与窗口后端中立的数据合同层（`crates/nana-ui-core/src/lib.rs:1-9`）：所有样式路径统一汇入 Style Model（**Tokens + Semantics + Layout**）；构建期编译的 CSS 映射到该模型，Rust API 则是它的原生入口；实际绘制留在 Runtime 与 UiScene。
 
 - **共享模型，而非解析实现**：`core` 只定义「样式数据长什么样」「主题如何编译」「区域如何声明」，绝不解析任何样式表或脚本。文件头明确规定："This crate must **not** depend on CSS parsers, JS engines, WebView, or window backends"（`crates/nana-ui-core/src/lib.rs:8-9`）。
 - **零 CSS 引擎边界**：CSS 解析被完整隔离在 `core` 之外，`style_model.rs` 的非目标清单写明 CSS 解析与 CSSOM 不得进入本 crate（`crates/nana-ui-core/src/style_model.rs:43-46`）。`core` 与 CSS 唯一的接触点是 `SemanticColorRole::from_css_token_name`（`crates/nana-ui-core/src/style_model.rs:341`，仅将 `--nana-*` 变量名映射为语义色角色，未知 `#hex` / `rgb()` 直接返回 `None`）及少量单值枚举关键字解析。
-- **双宿主中立**：Rust Runtime 与 Vue 适配器必须产出同一份样式数据，因此合同层必须比任何一方都更底层；文本、CSS、图表、输入、窗口、GPU 六个第 2 层 crate 全部只依赖 `core` 与外部算法库。
+- **入口中立**：Rust 构建器与构建期 CSS 编译必须产出同一份样式数据，因此合同层必须比任何一方都更底层；文本、CSS、图表、输入、窗口、GPU 六个第 2 层 crate 全部只依赖 `core` 与外部算法库。
 - **诊断走静态描述符**：遵循 `nana-diagnostics` 的静态描述符合同，不引入外部日志 crate——这也是它仅有的三个依赖项之一。
 
 ## 依赖与邻居
@@ -21,10 +21,9 @@ title: 核心合同：nana-ui-core
 
 | 邻居 Crate | 协作关系 |
 | --- | --- |
-| `nana-text` / `nana-ui-css` / `nana-ui-charts` / `nana-ui-input` / `nana-window` / `nana-gpu` | 六个第 2 层（L2）crate，仅依赖 `core` 与外部库；排版词汇（`LineBreakSpec`、`WritingModeSpec` 等）从 `core` 借用 |
+| `nana-text` / `nana-ui-css` / `nana-ui-charts` / `nana-ui-input` / `nana-window` / `nana-gpu` | 六个第 2 层 crate，仅依赖 `core` 与外部库；排版词汇（`LineBreakSpec`、`WritingModeSpec` 等）从 `core` 借用 |
 | `nana-ui-runtime` | 在 `core` 之上构建保留树；`NodeStyle` 内含 `LayoutStyle`，主题经 `CompiledTheme` 编译后挂入世界 |
 | `nana-ui-css` | 唯一 CSS 引擎，将样式声明映射到 `core` 的 `LayoutStyle`（见下文 [内部结构](#内部结构)） |
-| `nana-ui-vue` | JS / TS 宿主适配器，将 Vue 属性与运行时 CSS 同样映射进 Style Model |
 | `nana-diagnostics` | 提供 `event!` / `metric!` / `fault!` 静态描述符，`core` 是最底层的消费方之一 |
 
 ## 关键类型与数据
@@ -62,7 +61,7 @@ title: 核心合同：nana-ui-core
 | **Semantics** | `crate::semantics`：`ButtonKind`、`ControlSize`、`CardKind` 等组件语义 | 已知语义类名（如 `nana-btn--primary`）归入此层，不新造 token |
 | **Layout** | `crate::layout`（Workspace 壳层区域）+ `crate::LayoutStyle`（盒级弹性布局，`box_layout.rs`） | Flex / Grid / `gap` / `padding` / 尺寸声明 |
 
-配套的 L1 颜色策略（`crates/nana-ui-core/src/style_model.rs:26-30`）规定：已知 token 名或语义类名映射为 `SemanticColorRole`；未知的 `#hex` / `rgb()` **不得**混入正式 `ThemeTokens`，只能作为受限的节点绘制色留在 `PaintColorSlots` 中或被丢弃。这保证了业务 CSS 中的局部颜色不会反向污染全局主题调色板。
+配套的颜色策略（`crates/nana-ui-core/src/style_model.rs:26-30`）规定：已知 token 名或语义类名映射为 `SemanticColorRole`；未知的 `#hex` / `rgb()` **不得**混入正式 `ThemeTokens`，只能作为受限的节点绘制色留在 `PaintColorSlots` 中或被丢弃。这保证了业务 CSS 中的局部颜色不会反向污染全局主题调色板。
 
 两类 Layout 切片在 `layout.rs` 头部明确区分（`crates/nana-ui-core/src/layout.rs:1-8`）：`layout.rs` 描述应用壳层区域（Workspace region layout），`box_layout.rs` 描述盒级 Flexbox / Grid 意图（`LayoutStyle`）；两者都是绘制管线的输入数据，均不是浏览器 CSSOM。
 
@@ -94,15 +93,15 @@ Workspace 合同分为静态描述与交互模型两部分：
 
 ### 6. Motion / Motion IR：唯一时间线权威
 
-`motion/mod.rs` 头部明确声明（`crates/nana-ui-core/src/motion/mod.rs:1-3`）：**"This module is the only Motion timeline authority"**——Runtime 的 `AnimationSpec` 只是时序与播放控制子集，采样统一走 `evaluate_progress`；Vue / CSS 编译器必须产出 `MotionTrack` / `MotionGraph`，不得自建平行时钟；`PresentationStore` 是建立在这些轨道之上的瞬态覆盖层，而非第二条时间线。
+`motion/mod.rs` 头部明确声明（`crates/nana-ui-core/src/motion/mod.rs:1-3`）：**"This module is the only Motion timeline authority"**——Runtime 的 `AnimationSpec` 只是时序与播放控制子集，采样统一走 `evaluate_progress`；CSS 编译器必须产出 `MotionTrack` / `MotionGraph`，不得自建平行时钟；`PresentationStore` 是建立在这些轨道之上的瞬态覆盖层，而非第二条时间线。
 
 IR 本体位于 `crates/nana-ui-core/src/motion/ir.rs`：`MotionTrackId`（`:18`，同 ID 重启即原子替换）、`MotionTargetId`（`:32`，Runtime 映射为 `StableNodeId`）、`MotionValue`（`:46`，`Scalar` / `Color` / `Transform` / `Discrete`）。`MotionValue::lerp`（`:93`）刻意不将缓动进度钳回 `0..=1`，以保留弹簧与回弹曲线的有意过冲（overshoot），仅颜色通道做范围钳制。子模块分工清晰：`eval` 提供 CPU 求值唯一入口 `evaluate_track`；`descriptor` 将合成器安全轨道编码进带版本号 `MOTION_DESCRIPTOR_VERSION` 的代际化 `MotionDescriptor` 表；`presentation` 的 `PresentationStore` 承载瞬态呈现覆盖；`gpu` 负责上传存储缓冲打包。
 
 ### 7. 为什么这些合同必须抽到最底层
 
-将 Style Model、主题、几何、Workspace 与 Motion 放在第 1 层（L1），源于四条硬工程约束：
+将 Style Model、主题、几何、Workspace 与 Motion 放在第 1 层，源于四条硬工程约束：
 
-1. **双宿主产出同一份数据**：Rust Runtime 与 Vue 适配器需要产出可逐字段比对的样式，构建时 codegen 与运行时级联也必须共享同一个目标结构体 `LayoutStyle`。
+1. **多入口产出同一份数据**：Rust 构建器与构建时 codegen 需要产出可逐字段比对的样式，因此必须共享同一个目标结构体 `LayoutStyle`。
 2. **菱形依赖的公共底座**：`text`、`css`、`charts`、`input`、`window`、`gpu` 六个第 2 层 crate 各自只依赖 `core`；若任何一个合同留在 `runtime` 中，六个子系统就会被迫反向依赖保留树或各自复制定义。
 3. **排版词汇单一来源**：`nana-text` 直接借用 `core` 的 12 个排版枚举（白名单守卫），使 `UiWorld` 到文本引擎的适配退化为零损耗的字段传递。
 4. **保持纯数据与廉价克隆**：`core` 零解析器、零窗口、零 GPU，使 Runtime 得以实现「写入样式或切换主题时解析一次，读取时仅克隆 `Arc<LayoutStyle>`」的常数级读取策略。
@@ -130,7 +129,7 @@ IR 本体位于 `crates/nana-ui-core/src/motion/ir.rs`：`MotionTrackId`（`:18`
 
 ## 延伸阅读
 
-- [模块与分层](/learn/modules-and-layers)：`nana-ui-core` 在依赖图中的 L1 位置与 L2 邻居全景
+- [模块与分层](/learn/modules-and-layers)：`nana-ui-core` 在依赖图中的第 1 层位置与第 2 层邻居全景
 - [CSS 引擎](/learn/css-engine)：`nana-ui-css` 如何将样式声明映射到本章的 `LayoutStyle`
 - [文本引擎](/learn/text-engine)：`nana-text` 从 `core` 借用的 12 个排版词汇清单
 - [合同与不变量](/learn/contracts-and-invariants)：「单一色彩权威」「呈现不写回基础样式」等非协商合同

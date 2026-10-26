@@ -28,10 +28,6 @@ nana-ui                  宿主适配器：run_runtime、控件再导出、Scene
     ├── nana-ui-platform 平台中立窗口合同（WindowId、描述符、事件、命令、显示器）并再导出输入合同
     └── nana-window      原生窗口句柄、系统材质、标题栏拖拽、客户区 chrome、缩放与全屏
 
-Vue + JS L1/L2（可选宿主适配）
-    nana-ui-vue + nana-js-v8 + nanavue-runtime / nanavue-components
-    写入同一棵 UiWorld，不创建第二套窗口或绘制器
-
 文本引擎（产品唯一的排版权威）
     nana-text            文本 IR、稳定代际 ID、字体层（注册/代际/匹配/变体轴/覆盖率回退）、
                          整形（分段/BiDi/HarfRust/ShapeCache）、行布局（单行快路径/UAX #14 断行/
@@ -53,7 +49,7 @@ Vue + JS L1/L2（可选宿主适配）
 
 `scripts/check-engine-boundary.py` 在 CI 中静态守卫以下边界：
 
-1. **后端中立与 `wgpu` 签名隔离**：保持 `nana-ui-runtime` 与 `nana-ui-scene` 对图形后端中立；`nana-gpu`、`nana-frame-exchange`、`nana-ui`、`nana-ui-vue`、`nana-ui-devtools` 的公开签名只有在 `wgpu-interop` feature 下才允许出现 `wgpu::*`；`nana_gpu::__framework` 仅供这些框架 crate 自身源码内部使用（详见 [实时画面](gpu.md#gpu-合同与-wgpu-逃生口)）。
+1. **后端中立与 `wgpu` 签名隔离**：保持 `nana-ui-runtime` 与 `nana-ui-scene` 对图形后端中立；`nana-gpu`、`nana-frame-exchange`、`nana-ui`、`nana-ui-devtools` 的公开签名只有在 `wgpu-interop` feature 下才允许出现 `wgpu::*`；`nana_gpu::__framework` 仅供这些框架 crate 自身源码内部使用（详见 [实时画面](gpu.md#gpu-合同与-wgpu-逃生口)）。
 2. **排版词汇白名单**：`nana-text` 仅从 `nana-ui-core` 导入白名单内的排版与动态布局代价词汇（变体轴、字距、断行、对齐、方向、书写模式、行高、中日文标点挤压与 `dynamic_layout`）。
 3. **单一文本引擎**：`nana-ui-runtime` 的保留文本节点修订号、分级脏图及 `TextLayout` 句柄均以 `nana-text` 为唯一权威；`cosmic-text`、`cryoglyph` 与 `glyphon`（含改名 fork）已从 `Cargo.lock` 彻底移除，严禁任何工作区成员引入通向它们的非 dev 依赖边。
 
@@ -71,8 +67,7 @@ nana_ui::runtime → UiWorld → ExtractedNode → UiScene → SceneWgpuPainter
 
 - **`UiWorld` 是逻辑与基础样式的唯一权威**，过渡期间的瞬时呈现值保存在瞬态的 `PresentationStore` overlay 中，按「节点 + 属性」查询（`applies = false` 时使用 `applied_value()`）。例如 `opacity: 0 → 1` 启动时，节点的逻辑透明度立即是目标值 `1`，过渡过程由 overlay 承载，绝不每帧往 `UiWorld` 写 `0.01`、`0.02`。业务代码读取属性时拿到的是逻辑状态；绘制、命中测试、焦点与无障碍在需要时按同一时间戳求取呈现值。
 - **完成事件与末值保持（Hold）**：动画完成由启动与结束的 **deadline** 驱动，不靠逐帧 CPU 采样判断结束。带 `fill: forwards` 的轨道结束后，末值作为 **hold** 留在 overlay 上：
-  - 在 Rust L3 的 `transition()`、`motion(Spring)`、`Timeline`（`MotionLayer::Runtime`）中，hold 保持到该属性下一次被写入**不同的逻辑值**为止；组件重新投影或 Vue 级联同步写回相同的值不算新写入，不会打断 hold。
-  - 在 CSS `@keyframes` 中，hold 按 CSS 级联规则压过基础样式，直到 `animation-name` 不再引用该名称或指向不存在的规则时结束。
+  - 在 Rust L3 的 `transition()`、`motion(Spring)`、`Timeline`（`MotionLayer::Runtime`）中，hold 保持到该属性下一次被写入**不同的逻辑值**为止；组件重新投影写回相同的值不算新写入，不会打断 hold。
   - 任何 hold 均可通过同 ID 重新启动、`StopAnimation`（对已结束的 hold 同样生效）或移除节点来清除。CSS `transition` 不留 hold，因为级联样式本身就是终点。
 - **取值校验与越界钳制**：轨道的目标值与关键帧按样式规则在提交时严格校验，越界或非有限值直接返回 `InvalidAnimation`（例如 `opacity` 超出 `0..=1` 或 `width` 为负数，框架不会静默替调用方钳制）。起点值只要求有限（因为被打断的弹簧或回弹轨道可能正处于越界区间）。起点与终点之间的采样过程不钳制，以保留回弹曲线与弹簧的有意过冲，最终由消费端钳制到可呈现范围（CPU/GPU 合成器将 `opacity` 钳到 `0..=1`，`width`/`height`/`padding` 下限为 `0`，字体变体轴由 `nana-text` 钳到字体自身轴范围）。
 - **同属性多轨道优先级**：同一属性同时存在多条活动轨道时，依次按 `MotionLayer`（`CSS transition > Runtime > CSS animation`，与 CSS 级联规范一致）→ 启动时刻（`start`）→ 轨道 `id` 决出唯一胜出者，不做多轨道混合。
@@ -112,12 +107,11 @@ nana_ui::runtime → UiWorld → ExtractedNode → UiScene → SceneWgpuPainter
 | Workspace 区域尺寸与折叠过渡 | `WorkspaceModel`（`nana-ui-core`） | `WorkspaceController` 仅做指针与时钟转换 |
 | Dock 停靠树 | Runtime `DockWorkspace` | `nana_ui::dock::*` 仅是宿主适配器 |
 
-## 三种输入入口与宿主内容边界
+## 输入入口与宿主内容边界
 
-Rust 声明式视图、Vue 的 HTML 1:1 控件与 `nana-*` 组件、以及 Vue 的 HTML/CSS 子集，是通向同一份 Style Model（Tokens + Semantics + Layout）和同一棵 `UiWorld` 的**三种输入合同**，而非三个独立运行时：
+Rust 声明式视图（`nana_ui::runtime` 构建器与 `view!`）和 `.vue` 方言（构建期由 `nana-ui-sfc` 编译成 Rust）通向同一份 Style Model（Tokens + Semantics + Layout）和同一棵 `UiWorld`，而非两个独立运行时：
 
-- **Vue 门面不复制树拓扑**：Vue Custom Renderer 产生的 host op 先进入待提交队列 `PendingHostOps`，在帧边界由 `flush_host_frame` 一次性 commit。`event_flags` 的权威在 `UiWorld` 的 `EventListeners`；GPU 槽位的权威在 Runtime 的 `CustomRenderNode`；JS 读取的几何盒子来自绘制阶段的投影 `LayoutBoxStore`，滚动偏移不写回 Runtime 的 `LayoutBox`。
-- **单一组件注册 ABI**：内置控件与扩展控件共用同一份 `ComponentRegistry` 与 `register_component`。`NativeComponentRegistry` 仅服务于 JS 宿主命令，不是第二套 Runtime 实例化 ABI（`PendingHostOps` 镜像、`WidgetKind`、`ComponentSupport` 同样不是实例化 ABI）。
+- **单一组件注册 ABI**：内置控件与扩展控件共用同一份 `ComponentRegistry` 与 `register_component`。`ComponentSupport` 不是实例化 ABI。
 - **`BrowserView` 与 `WebSurface` 边界**：
   - `BrowserView` 是显式的宿主原生子视图例外：Runtime 节点仍拥有布局、无障碍、可见性与生命周期锚点，宿主负责创建并管理原生 `WKWebView` 子视图（当前仅支持 macOS，Windows 与 Linux 返回明确的 `Unsupported`，不创建占位浏览器）。它不等同于 `GpuTextureView`，不进 Runtime/Scene 离屏截图；遇到非矩形裁剪、透明度/滤镜组或被后续 Runtime 内容遮挡时，由宿主自动隐藏。
   - 无头 `WebSurface` 是宿主内容生产者：页面不进入任何窗口视图树，捕获帧经应用的 sink 离开框架（平台实现在 `nana-window`，支持 macOS `WKWebView` 与 Windows WebView2，`nana-ui` 按请求对账实例）。

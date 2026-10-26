@@ -8,5 +8,5 @@
 | 了解 `RuntimeDocument`、`RuntimeProgram` 与整段可运行桌面程序 | [创建应用](../guide/essentials/application.md) |
 | 理解保留树 `UiWorld`、一帧 8 步生命周期与 GPU 所有权模型 | [框架如何运行](how-it-works.md) |
 | 查阅 `nana_ui` 全部宿主接口、Feature 开关与窗口/持久化 API | [应用 API](application-api.md) |
-| 将现有 Vue 3 / TypeScript 界面接入同一棵原生树 | [Vue 宿主接入](vue.md) · [从 Vue 过来](../guide/from-vue.md) |
-| 深入源码学习全部 28 个 crate 的分层、内部结构与数据流 | [架构学习](/learn/) |
+| 把 Vue 的概念对应到 Rust 信号与声明式视图 | [从 Vue 过来](../guide/from-vue.md) |
+| 深入源码学习各个 crate 的分层、内部结构与数据流 | [架构学习](/learn/) |

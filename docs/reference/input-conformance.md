@@ -4,7 +4,7 @@
 
 ## 仓内自动化合同测试
 
-窗口宿主、Vue 宿主与 Android 控制槽均在边界处将平台原生事件降维为 `CanonicalInputEvent`，统一送入 `AppContext::route_input`（无窗口测试环境使用 `HeadlessInput`）。诊断计数登记在 `nana-diagnostics` 的 `runtime.input.*`（ID 20–37，已退役的旧 ID 永不复用）。
+窗口宿主与 Android 控制槽均在边界处将平台原生事件降维为 `CanonicalInputEvent`，统一送入 `AppContext::route_input`（无窗口测试环境使用 `HeadlessInput`）。诊断计数登记在 `nana-diagnostics` 的 `runtime.input.*`（ID 20–37，已退役的旧 ID 永不复用）。
 
 | 验收合同 | 验证命令 |
 | --- | --- |

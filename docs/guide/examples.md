@@ -14,8 +14,6 @@
 | 实时画面 | `cargo run -p nana-ui --example gpu-view-demo --features hosted,bundled-fonts` | `crates/nana-ui/examples/gpu-view-demo.rs` |
 | 多窗口 | `cargo run -p nana-ui --example window-chrome-multi-window --features hosted,bundled-fonts` | `crates/nana-ui/examples/window-chrome-multi-window.rs` |
 
-`examples/vue-counter` 是引擎探针，含无头点击。窗口化的 Vue 对照是 `examples/vue-hosted-acceptance`。两者都不是应用模板。接法见 [Vue](../reference/vue.md)。
-
 ## 接下来
 
 <div class="next-steps">

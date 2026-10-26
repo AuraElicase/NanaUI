@@ -8,13 +8,11 @@ title: 端到端数据流
 
 ## 流程一：一次状态变更如何变成屏幕像素
 
-场景：应用代码修改了保留树（或 Vue 提交了一批 host ops），直到窗口 Surface 上呈现出新像素。
+场景：应用代码修改了保留树，直到窗口 Surface 上呈现出新像素。
 
 ```text
 ① 变更入队    nana-ui-runtime   UiMutation（Create / Insert / Detach / SetStyle / …）
                                  crates/nana-ui-runtime/src/mutation.rs:15
-                                 Vue 路径先暂存在 PendingHostOps
-                                 （crates/nana-ui-vue/src/tree.rs:220），在帧边界原子 commit
 ② 帧调度      nana-ui           FrameDemand（OnDemand / 截止时间 / Continuous）
                                  crates/nana-ui/src/runtime_host.rs:1035
                                  宿主按需求决定本帧是否重绘；无变更时 flush 空转返回
@@ -58,9 +56,7 @@ title: 端到端数据流
                                    crates/nana-ui-runtime/src/framework/input.rs:397
 ⑥ 命中与焦点  nana-ui-runtime     查询增量命中索引（world/hit_test.rs）与焦点链定位目标节点
 ⑦ 触发监听器  nana-ui-runtime     触发 NodeStore 的 event_listeners 侧表（event_flags 权威所在）
-⑧ 应用回调    应用 / nana-ui-vue  Rust：cx.on(button, |_, Activate, cx| …) 或 .on_activate(...)
-                                   Vue：observe_routed_input 将已路由结果翻译为页面事件
-                                   （crates/nana-ui-vue/src/hosted_adapter.rs:446）
+⑧ 应用回调    应用                cx.on(button, |_, Activate, cx| …) 或 .on_activate(...)
 ```
 
 关键要点：
@@ -131,7 +127,7 @@ title: 端到端数据流
 
 | 阶段 | 所在层 | 结构特征 |
 | --- | --- | --- |
-| **1. 外部输入 / 生产** | 最外层（应用、操作系统、V8 JS） | 形态各异：原生窗口事件、字符串、样式文本、GPU 纹理 |
+| **1. 外部输入 / 生产** | 最外层（应用、操作系统） | 形态各异：原生窗口事件、字符串、样式文本、GPU 纹理 |
 | **2. 规范化降维** | 边界 crate（`input` / `text` / `gpu` / `css`） | 在边界处一次性翻译为框架合同：`CanonicalInputEvent`、`TextSource`、`TextureSlot`、`LayoutStyle` |
 | **3. 权威汇合** | `nana-ui-runtime`（`UiWorld`） | 全部汇合为保留树上的节点状态与原子 `UiMutation` |
 | **4. 场景投影** | `nana-ui-scene`（`UiScene`） | 单次有界 `flush` 事务完成布局、命中、无障碍与绘制图增量更新 |

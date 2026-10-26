@@ -12,18 +12,11 @@ let (_, save) = cx.mount_view_root(document_id, || {
 })?;
 ```
 
-迁 Vue 时，同一套控件从 `@nanaui/nanavue-components` 引入。它们进同一棵树：
-
-```js
-import { NanaButton, NanaInput, NanaDialog } from "@nanaui/nanavue-components";
-import "@nanaui/nanavue-components/controls.css";
-```
-
-名称对照和 props 见该包 README（含 `NanaScrollView`、`NanaNumberInput`、`NanaTable`、`NanaDesktopShell` 等与本目录一一对应的包装）。视觉与尺寸见 [视觉](look.md)。
+视觉与尺寸见 [视觉](look.md)。
 
 ## 目录
 
-**操作与输入。** `Button`、`IconButton`、`TextInput`、`TextArea`、`NumberInput`、`ScrubField`、`Checkbox`、`Switch`、`RangeField`、`RangeSpanField`、`Select`、`Dropdown`、`SearchDropdown`、`SegmentedControl`、`Tabs`、`XYPad`、`ColorField`、`PathField`、`DatePicker`。`RangeField` 默认在轨道旁画当前值和单位。`.show_value(false)`（Vue `showValue`）只留轨道。读屏仍能读到数值。`.show_label(false)` 不画标签。轨道占满。标签仍是读屏名称。`.rail(粗细)` 只画一条横贯控件的细轨，圆点只在焦点可见时出现，控件高度就是命中区。`.track_gradient(色标)` 把轨道画成渐变条（色相、不透明度这类颜色刻度），没有填充，圆点换成对比色圆环，读屏语义不变。`XYPad` 的 `.surface(XYPadSurface::Picture)` 让垫子自己的背景色和背景图层当画面，不画十字轴，值用同样的对比色圆环标出；`ColorField` 的 HSV 方块和色相条就是这两样。`RangeSpanField`（`<RangeSpan>`）是两个滑块圈出的区间，可竖向（最小值在下）；两个滑块各是一个焦点停留点和读屏 `Slider`。`indicator` 是轨道上不吸附、不收输入的实时值，只改它是一次绘制更新。轨道两端从节点边缘内缩 `range_span_track_inset(size)`，旁边的自绘按它对齐。
+**操作与输入。** `Button`、`IconButton`、`TextInput`、`TextArea`、`NumberInput`、`ScrubField`、`Checkbox`、`Switch`、`RangeField`、`RangeSpanField`、`Select`、`Dropdown`、`SearchDropdown`、`SegmentedControl`、`Tabs`、`XYPad`、`ColorField`、`PathField`、`DatePicker`。`RangeField` 默认在轨道旁画当前值和单位。`.show_value(false)` 只留轨道。读屏仍能读到数值。`.show_label(false)` 不画标签。轨道占满。标签仍是读屏名称。`.rail(粗细)` 只画一条横贯控件的细轨，圆点只在焦点可见时出现，控件高度就是命中区。`.track_gradient(色标)` 把轨道画成渐变条（色相、不透明度这类颜色刻度），没有填充，圆点换成对比色圆环，读屏语义不变。`XYPad` 的 `.surface(XYPadSurface::Picture)` 让垫子自己的背景色和背景图层当画面，不画十字轴，值用同样的对比色圆环标出；`ColorField` 的 HSV 方块和色相条就是这两样。`RangeSpanField`（`<RangeSpan>`）是两个滑块圈出的区间，可竖向（最小值在下）；两个滑块各是一个焦点停留点和读屏 `Slider`。`indicator` 是轨道上不吸附、不收输入的实时值，只改它是一次绘制更新。轨道两端从节点边缘内缩 `range_span_track_inset(size)`，旁边的自绘按它对齐。
 
 **布局与文本基元。** `Text`、`Stack`（`row` / `column` / `bar` / `spacer` / `overlay_layer` 等预设）、`Divider`、`IconGlyph`、`ScrollView`。`Stack::spacer()` 是零宽 flex-grow。它把其后兄弟推到行尾。`Stack::overlay_layer()` 铺满已定位父级。它脱流。不命中。会裁剪。给舞台 HUD / 弹幕当容器。节点池仍由你的应用挂。`Divider` 默认交叉轴 `Fill` + `align_self: Stretch`。放进 `align_items: Start` 的列里仍能看见。
 
@@ -69,7 +62,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 **壳层。** `AppShell` / `DesktopShell`、`AppTitleBar`、`Toolbar`、`StatusBar`、`MediaTransportBar`、`Workspace`、`SidebarFrame` / `SidebarSection` / `SidebarRow`、设置行和设置页、`Dock`、`SplitPane`、`PaneChrome`。壳是通用桌面结构。每个区域里放什么由应用决定。见 [工作区](workspace.md)。主区域圆不圆角（外观设置里的「工作区圆角」）写在 `DesktopShell::workspace_corners` 上。壳装配时交给它建的 `Workspace`。不要去改框架建的 `Workspace` 节点。下一次装配会用壳上的值盖掉。
 
-`SettingsRow::stack_below(480.0)` 可选开启按**该行实际布局宽度**的响应式排列。小于阈值时标签与控件上下排列。等于或大于时同行。默认未开启。`stacked(true)` 始终上下排列。无效阈值视为未开启。控件节点不重建。容器调整宽度由 Runtime 布局回流处理。应用不需要每帧扫描行。Vue 对应 `NanaSettingsRow` 的 `stackBelow` 属性。
+`SettingsRow::stack_below(480.0)` 可选开启按**该行实际布局宽度**的响应式排列。小于阈值时标签与控件上下排列。等于或大于时同行。默认未开启。`stacked(true)` 始终上下排列。无效阈值视为未开启。控件节点不重建。容器调整宽度由 Runtime 布局回流处理。应用不需要每帧扫描行。
 
 设置行的标签给它放的控件起无障碍名字。`SettingsRow` 装配时（视图里的 `settings_row(..).control(..)`、`mount_settings_leaf_row`、`AppearanceSection` 的各行）用 `MutationQueue::set_labelled_by(控件, 标签节点)` 把两者关联起来。控件自己有非空的名字时用它自己的（`switch("静音")`）。没有时（`switch("")`、分段控件、滑块、下拉选择）用行标签。行标签改了，控件的无障碍节点跟着重新投影。这层关联归组合控件所有。存在 `UiWorld` 里。不是控件 `AccessibilityState` 的一部分。所以控件重新投影自己的状态不会冲掉它。任一端被销毁时关联一起去掉。`Select` 的无障碍名字因此不再取它显示的选项。没人给它起名时仍按显示的文字命名。显示的选项是它的值（`value`）。
 
@@ -78,7 +71,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 `mount_settings_leaf_row` 保留标签、提示和控件槽。初始没有提示也可以随后通过 `update_component(row, |row, _| row.hint = Some(...))` 显示提示。设置 `None` 隐藏。`assemble_appearance_section` 刷新已有行时保留应用设置的 `stack_below` 与 `stacked`。
 
 
-部分族需要 Cargo feature（`calendar`、`charts`、`graph-canvas`、`rich-text` 等）。见 [应用 API](application-api.md)。这些 feature 会转发到 `nana-ui-runtime` 和 `nana-ui-scene`。它们控制对应实现、几何投影和公开导出。`components` 启用全部可选控件族。精简宿主按需选择。Vue 标签也受相同功能开关约束。缺失时会报告组件不可用。
+部分族需要 Cargo feature（`calendar`、`charts`、`graph-canvas`、`rich-text` 等）。见 [应用 API](application-api.md)。这些 feature 会转发到 `nana-ui-runtime` 和 `nana-ui-scene`。它们控制对应实现、几何投影和公开导出。`components` 启用全部可选控件族。精简宿主按需选择。
 
 `DatePicker` 是月历网格。由现有控件组合而成（表头图标按钮 + 日期按钮）。`assemble_date_picker` 建好并复用这 6×7 个按钮。翻月只换标签，不重建。选中发 `DateChanged`。翻月发 `DateCursorMoved`。`range` 之外与非本月的日期不可选。**月份标题由应用给**（`month_label`）。月名是 locale 相关的。框架不带 locale 数据。日期类型是 `nana_ui_core::CivilDate`。只有年月日。不是日期时间库。
 
@@ -114,15 +107,15 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 ### Chip
 
-`Chip` 是紧凑可选 token（pill）。身份是 `nana.chip` / Vue `<nana-chip>`。叶子复合件：写 `dismissible` 时 `update_component` 自己跑 `assemble_chip`。不必再记一次。`selected` 走 Selected 底。否则 Subtle。
+`Chip` 是紧凑可选 token（pill）。身份是 `nana.chip`。叶子复合件：写 `dismissible` 时 `update_component` 自己跑 `assemble_chip`。不必再记一次。`selected` 走 Selected 底。否则 Subtle。
 
-| 操作 | Runtime | Vue `NanaChip` |
-| --- | --- | --- |
-| 点本体 / Enter / 空格 | `Activate` | `@press` / `@click` |
-| 点关闭钮 | `ChipDismissed` | `@dismiss` |
-| `disabled` | 不发事件、不可焦点 | 吞掉 press 与 dismiss |
+| 操作 | Runtime |
+| --- | --- |
+| 点本体 / Enter / 空格 | `Activate` |
+| 点关闭钮 | `ChipDismissed` |
+| `disabled` | 不发事件、不可焦点 |
 
-关闭是请求。移除由应用做。关闭命中不得再给 Chip 发 `Activate` / `press`。默认关闭无障碍名是「移除」（`close_label`）。AccessKit：本体一个可激活 Button（`selected` 映射 selected 状态）。关闭钮另一个独立可焦点的 Button。不是 list item。
+关闭是请求。移除由应用做。关闭命中不得再给 Chip 发 `Activate`。默认关闭无障碍名是「移除」（`close_label`）。AccessKit：本体一个可激活 Button（`selected` 映射 selected 状态）。关闭钮另一个独立可焦点的 Button。不是 list item。
 
 相对 `Button`：Button 是动作。没有 token 的 `selected` / `dismissible`。相对 `StatusBadge`：Badge 只展示。不激活。不关闭。
 
@@ -144,7 +137,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 `ImageViewer` 是整窗的大图浮层（`nana.image-viewer`）。它自己画遮罩、表面、舞台与说明行。图片由应用给（`HostTexture` / `CustomRender` 由查看器画在舞台里并按舞台裁剪。`Child` 是应用自己的子节点）。遮罩是主题的 `EffectTokens::media_scrim`。浅色主题下也是深色。图片总是放在深色上看。表面与说明行仍随主题。内置值是黑 0.99，而不是 CSS 里常写的 0.9。画家在线性光里合成。黑色 α 留下背后 `1 - α` 的线性亮度。0.99 在白底上约 `#1a1a1a`（CSS 的 0.9 那么深）。0.9 则是中灰 `#595959`。自定义主题写这个值时按同样的算法取。查看器的**操作是真控件**。关闭钮是 `assemble_image_viewer` 建的 `IconButton` 子节点。可焦点。有无障碍名（`close_label`，默认「关闭」）。有悬停与按下态。激活时查看器发 `ImageViewerEvent::Close`。这些控件总排在查看器所有其他子节点之后。所以 `Child` 内容铺满整个画面也盖不住它们。命中也先落在它们上面。内容晚于控件放进来时（子节点变化）查看器会重新装配，把控件挪回末尾。它是叶子复合件。视图建好时与每次写入后自动装配。`create_component` 手工建的查看器自己调一次 `assemble_image_viewer`。`ImageViewer::geometry(..).close` 仍给出关闭钮的位置，供应用给自己的内容留边。
 
-图集：`gallery: Option<ImageViewerPosition>`（`.gallery(index, count)`，`index` 从 0 起）告诉查看器当前图在应用图集里的位置。多于一张时，舞台底部居中出现一块表面。上面是「上一张」「下一张」两个图标按钮（`previous_label` / `next_label`）和位置「3 / 9」。查看器的无障碍值也是这个位置。到头的那一侧按钮禁用。按钮激活，以及焦点在查看器或它的控件上时按 ← / →，查看器发 `ImageViewerEvent::Previous` / `Next`。到头时方向键不消费。**换图由应用做。** 收到事件后换内容，并把新位置写回 `gallery`（缩放与平移也由应用决定是否复位）。只有一张或没有 `gallery` 时不显示导航。Vue 的 `nana-image-viewer` 只做投影。不建控件。关闭由宿主负责。
+图集：`gallery: Option<ImageViewerPosition>`（`.gallery(index, count)`，`index` 从 0 起）告诉查看器当前图在应用图集里的位置。多于一张时，舞台底部居中出现一块表面。上面是「上一张」「下一张」两个图标按钮（`previous_label` / `next_label`）和位置「3 / 9」。查看器的无障碍值也是这个位置。到头的那一侧按钮禁用。按钮激活，以及焦点在查看器或它的控件上时按 ← / →，查看器发 `ImageViewerEvent::Previous` / `Next`。到头时方向键不消费。**换图由应用做。** 收到事件后换内容，并把新位置写回 `gallery`（缩放与平移也由应用决定是否复位）。只有一张或没有 `gallery` 时不显示导航。
 
 ### Avatar
 
@@ -154,7 +147,7 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 ### OverlayVisibility
 
-媒体/舞台 HUD 的自动隐藏用 `OverlayVisibility` **策略对象**。`MediaTransportBar::auto_hide(true)` 让运行时自己驱动它（画面区域内的指针活动、按键与指针离开画面或窗口，加上运行时时钟），每次翻转发 `OverlayVisibilityChanged`；只放视频的窗口用这条，见 [MediaTransportBar](../components/media-transport-bar.md#自动收起)。下面是宿主自己驱动的写法。idle 超时隐藏。hover dwell 延迟显现。焦点 / 拖拽 / 菜单锁（`OverlayLocks`）保持可见。`active = false`（加载 / 暂停 / 空）保持可见。它不是叶子控件。不进 `register_component`。没有 Vue 标签。不参与布局或命中。`MediaTransportBar` 内持一份策略。用 `AppContext::sync_overlay_visibility(bar, now, active)` 从 world 收集锁（焦点 / capture 是否在条或其菜单内、任一子 `Popover.open`）、推进策略、返回 wakeup。画面上的指针活动用 `reveal_overlay`。祖先查询走公开的 `AppContext::is_descendant`。**空闲收起不写条的 `hidden`。** 条自己的 `hidden`（视图里 `.visible(..)` / `v-show`）只归应用。用来表达「传输不可用时整条不出现」。两者任一要藏，条就不出现（`MediaTransportBar::shown()` 读合起来的结果，投影出去的节点样式同样是它）。所以绑定重跑（播放进度每次刷新）不会把空闲收起的条又显出来。`reveal_overlay` 也不会显出应用藏起的条。
+媒体/舞台 HUD 的自动隐藏用 `OverlayVisibility` **策略对象**。`MediaTransportBar::auto_hide(true)` 让运行时自己驱动它（画面区域内的指针活动、按键与指针离开画面或窗口，加上运行时时钟），每次翻转发 `OverlayVisibilityChanged`；只放视频的窗口用这条，见 [MediaTransportBar](../components/media-transport-bar.md#自动收起)。下面是宿主自己驱动的写法。idle 超时隐藏。hover dwell 延迟显现。焦点 / 拖拽 / 菜单锁（`OverlayLocks`）保持可见。`active = false`（加载 / 暂停 / 空）保持可见。它不是叶子控件。不进 `register_component`。不参与布局或命中。`MediaTransportBar` 内持一份策略。用 `AppContext::sync_overlay_visibility(bar, now, active)` 从 world 收集锁（焦点 / capture 是否在条或其菜单内、任一子 `Popover.open`）、推进策略、返回 wakeup。画面上的指针活动用 `reveal_overlay`。祖先查询走公开的 `AppContext::is_descendant`。**空闲收起不写条的 `hidden`。** 条自己的 `hidden`（视图里 `.visible(..)` / `v-show`）只归应用。用来表达「传输不可用时整条不出现」。两者任一要藏，条就不出现（`MediaTransportBar::shown()` 读合起来的结果，投影出去的节点样式同样是它）。所以绑定重跑（播放进度每次刷新）不会把空闲收起的条又显出来。`reveal_overlay` 也不会显出应用藏起的条。
 
 跟着指针走的 chrome（主窗的标题、工具条、贴底 Dock）也用这一份策略，不另做一套。`OverlayVisibility::hidden(config)` 起始为已落定的隐藏；指针进来调 `set_pointer_inside(now, true)`，离开调 `conceal(now)`，`OverlayVisibilityConfig::leave_grace` 内回来就不隐藏（吸收窗口边缘的离开紧跟进入，连续离开不推迟已排的时刻）；键盘把 chrome 调出来用 `reveal(now)`，它不改「指针在外」，所以之后占用一结束 chrome 仍会收起；宿主自己判断的占用（它打开的确认框、文本编辑、手势）放进 `OverlayLocks::interaction`；`active` 传 `false`，不按时钟隐藏。`visible()` 是逻辑目标，`phase()` 给出 `PresencePhase`：淡入淡出的 chrome 把每次过渡结束报给 `transition_finished(shown)`（来自 `PresenceLifecycle::animation_events` 或自己的动画），与目标不符的完成事件（淡出途中指针回来）被忽略。占用只保住或召回仍在淡出的 chrome，不把已落定隐藏的重新显示。`MediaTransportBar` 即时显隐，翻转时同步落定；它没有离开宽限。
 
@@ -206,7 +199,7 @@ Compact + Overlay 适合分离窗底栏（单行加边距约 52px）。Compact +
 
 键盘也能要菜单。焦点节点收到 `ContextMenu` 键或 Shift+F10 时，派发同一个 `SecondaryPress`，`keyboard` 为 `true`。`target` 是焦点节点，坐标是它盒子的中心。往上找 handler 的规则和右键一样。焦点控件自己先拿这个键：应用的按键策略（`on_key`）、终端、编辑器消费了它，就不再派发。按住不放的重复按键不派发。宿主有自己的同类手势时，调用 `AppContext::secondary_press_focused(document)`。键盘要来的菜单，应用打开后把焦点移进去；右键打开的不动焦点。`SecondaryPress` 的 `focus` 说键要焦点落在哪一端：`Some(RovingEdge::Start)` 是第一项，`Some(RovingEdge::End)` 是最后一项，`None` 由应用挑（通常第一项）。`ContextMenu` 键、Shift+F10、`secondary_press_focused` 和右键都是 `None`。
 
-**菜单按钮。** 会弹出菜单的控件声明 `has_popup`（`aria-haspopup="menu"`）：`Button`、`IconButton`、`ListItem` 的字段（`list_item("模型").has_popup(true)`，模板 `has_popup={true}`），自定义控件写进自己的 `AccessibilityState::has_popup`。Vue 写 `aria-haspopup="menu"`（`"true"` 同义）。读屏把它报成菜单按钮（AccessKit `HasPopup::Menu`）。焦点在它上面时，没有修饰键的 ArrowUp / ArrowDown 也派发 `keyboard: true` 的 `SecondaryPress`，和 `ContextMenu` 键一样。控件自己用方向键时（滑块、数字框）照旧归控件。按 WAI-ARIA 菜单按钮的约定，ArrowDown 的 `focus` 是 `Some(RovingEdge::Start)`（打开后聚焦第一项），ArrowUp 是 `Some(RovingEdge::End)`（最后一项）。菜单开不开、焦点是否照这一端落，仍由应用决定。
+**菜单按钮。** 会弹出菜单的控件声明 `has_popup`（`aria-haspopup="menu"`）：`Button`、`IconButton`、`ListItem` 的字段（`list_item("模型").has_popup(true)`，模板 `has_popup={true}`），自定义控件写进自己的 `AccessibilityState::has_popup`。读屏把它报成菜单按钮（AccessKit `HasPopup::Menu`）。焦点在它上面时，没有修饰键的 ArrowUp / ArrowDown 也派发 `keyboard: true` 的 `SecondaryPress`，和 `ContextMenu` 键一样。控件自己用方向键时（滑块、数字框）照旧归控件。按 WAI-ARIA 菜单按钮的约定，ArrowDown 的 `focus` 是 `Some(RovingEdge::Start)`（打开后聚焦第一项），ArrowUp 是 `Some(RovingEdge::End)`（最后一项）。菜单开不开、焦点是否照这一端落，仍由应用决定。
 
 **方向键焦点组。** 容器声明 `.roving_focus(RovingFocusGroup::vertical())`（或 `horizontal()`，`.wrap(true)` 首尾相接；`AppContext::set_roving_focus_group` 是同一份声明）后，焦点在组里的项上时，方向键在项之间移动焦点。这是 WAI-ARIA 工具栏和菜单的键盘约定。
 
@@ -219,13 +212,13 @@ Compact + Overlay 适合分离窗底栏（单行加边距约 52px）。Compact +
 
 Dock 那种从入口上方升起的一列胶囊就是两者合用：入口 `has_popup`，`SecondaryPress` 里打开胶囊列，再 `focus_roving_edge(列, press.focus.unwrap_or(RovingEdge::End))` 聚焦（列在入口上方，ArrowUp 和菜单键都落在离入口最近的末项）；胶囊列是不首尾相接的竖向组，`RovingFocusEdge::End`（越过离入口最近的一项）时收起，焦点回入口。
 
-平台文件拖放由宿主降级为 `InputPayload::FileDrag`（`FileDragKind::{Hover, Drop, Cancel}`）。经输入路由交给放置目标。命中目标发 `FileDropEvent::{Hovered, Dropped, Left}`，并画 hover chrome。Vue 用 `<nana-drop-target drop-accepts="files">` / `NanaDropTarget`。未登记节点不接收文件拖放。悬停与放下都带 `modifiers`。拖动期间键盘仍归拖动源。宿主在 Windows（`GetAsyncKeyState`）和 macOS（`NSEvent.modifierFlags`）上每次映射都采样系统状态。Linux 退回最近一次跟踪到的修饰键。Windows 的 OLE 循环在按键变化时也会补发位置。所以只按下 Ctrl 不动鼠标也会收到新的悬停。宿主接受 Copy。macOS 另接受 Link（Copy 优先）。因为 AppKit 会把按住 Control 的 Finder 拖动收窄为 Link。只接受 Copy 时系统会拒绝这次松手。松手后取路径失败时发 `Cancel`。拖动不会悬而不决。窗口失焦或关闭也会结束悬停。
+平台文件拖放由宿主降级为 `InputPayload::FileDrag`（`FileDragKind::{Hover, Drop, Cancel}`）。经输入路由交给放置目标。命中目标发 `FileDropEvent::{Hovered, Dropped, Left}`，并画 hover chrome。未登记节点不接收文件拖放。悬停与放下都带 `modifiers`。拖动期间键盘仍归拖动源。宿主在 Windows（`GetAsyncKeyState`）和 macOS（`NSEvent.modifierFlags`）上每次映射都采样系统状态。Linux 退回最近一次跟踪到的修饰键。Windows 的 OLE 循环在按键变化时也会补发位置。所以只按下 Ctrl 不动鼠标也会收到新的悬停。宿主接受 Copy。macOS 另接受 Link（Copy 优先）。因为 AppKit 会把按住 Control 的 Finder 拖动收窄为 Link。只接受 Copy 时系统会拒绝这次松手。松手后取路径失败时发 `Cancel`。拖动不会悬而不决。窗口失焦或关闭也会结束悬停。
 
-`TextArea` 的行号、诊断沟、minimap、git gutter 是视图属性：`line_numbers` / `diagnostics` / `minimap` / `git_gutter`。buffer revision、LSP、git 状态仍由应用喂入。Vue `NanaTextarea` 对应 `lineNumbers`、`diagnostics`、`minimap`、`gitGutter`。
+`TextArea` 的行号、诊断沟、minimap、git gutter 是视图属性：`line_numbers` / `diagnostics` / `minimap` / `git_gutter`。buffer revision、LSP、git 状态仍由应用喂入。
 
-`TerminalView` 是保留式网格。应用喂 `TerminalScreen` 单元格与样式。框架发 `TerminalEvent::Input` / `Resize` / `SelectionChanged`。PTY、submit、interrupt 归应用（通常把 Enter / Ctrl+C 解释成对 PTY 的写入）。Vue tag 是 `nana-terminal`。`screen` JSON 与 Runtime `TerminalScreen` 同形。`cells` 可以是 grapheme 串（宽字符自动占两列），或字符串/对象数组（省略 `width` 时按第一个 grapheme 的显示宽度 0/1/2）。`foreground` / `background` 是 `[r,g,b]` 或 `[r,g,b,a]`：0–1。任一 RGB 通道 `> 1` 则按 0–255。省略 `screen` 时保留宿主 `sync_terminal_screen` 喂入的画面。高频 PTY 帧仍走那条 Runtime API。
+`TerminalView` 是保留式网格。应用喂 `TerminalScreen` 单元格与样式。框架发 `TerminalEvent::Input` / `Resize` / `SelectionChanged`。PTY、submit、interrupt 归应用（通常把 Enter / Ctrl+C 解释成对 PTY 的写入）。按标签绑定（`bind_semantic`）时，`screen` 属性的 JSON 与 Runtime `TerminalScreen` 同形。`cells` 可以是 grapheme 串（宽字符自动占两列），或字符串/对象数组（省略 `width` 时按第一个 grapheme 的显示宽度 0/1/2）。`foreground` / `background` 是 `[r,g,b]` 或 `[r,g,b,a]`：0–1。任一 RGB 通道 `> 1` 则按 0–255。省略 `screen` 时保留宿主 `sync_terminal_screen` 喂入的画面。高频 PTY 帧仍走那条 Runtime API。
 
-`DiffView` 展示应用喂入的 hunk。`DiffEvent` 的接受/拒绝只是请求。不改 buffer。`assemble_diff_view` 用现有 `ScrollView` + `Button` + `Text` 装配。Vue tag 是 `nana-diff`。只读审阅（提交、工作区改动）用 `.review_actions(false)`：不装配接受/拒绝按钮。增删行以低透明度的成功/危险色铺底。
+`DiffView` 展示应用喂入的 hunk。`DiffEvent` 的接受/拒绝只是请求。不改 buffer。`assemble_diff_view` 用现有 `ScrollView` + `Button` + `Text` 装配。只读审阅（提交、工作区改动）用 `.review_actions(false)`：不装配接受/拒绝按钮。增删行以低透明度的成功/危险色铺底。
 
 需要开窗、换 GPU、写盘时，在闭包里 `cx.dispatch_program(msg)`。下一帧进入 `RuntimeProgram::update`。不要在指针处理里做重活。
 
@@ -282,13 +275,13 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 剪贴板：Ctrl/Cmd + C / X / V / A 由输入路由接到焦点编辑器。位置在应用按键策略与终端之后。Runtime 只回答「选中的是什么」和「这次编辑做什么」（`focused_selected_text`、`cut_focused_text`、`select_all_focused_text`、`replace_focused_text`）。系统剪贴板由宿主持有。经 `HostServices::read_clipboard` / `write_clipboard` 访问。原生宿主整个进程共用一个 `OsClipboard`。headless 会话用 `HeadlessHostServices` 的私有剪贴板。后端忙时回答 `Busy`。不等待。没选中时 Ctrl+C 不清空剪贴板。剪贴板写失败时 Ctrl+X 不删文本。只读字段能复制。不能剪切粘贴。焦点在 `NativeMarkdown` / `SelectableRichText` 上时，Ctrl+C 取的是它的选区快照。普通 `Text` 在 `user-select: text | all | contain` 下可复制（文档级选区，不是第二套 TextInput）。`text` 拖选。`all` 单击即选中该节点全文。`contain` 选区不延伸到邻居。空选区同样不清剪贴板。Cut 不删这段只读文本。`user-select: auto` 默认不可选。`none` 不进选区。作者 `::selection` / `::-moz-selection` 的 `background` / `color` 画到选区高亮。未写时选中底用主题 `accent_soft`。Android 由 slot 的 `HostServices` 接 `AndroidClipboard`。
 
-大列表、表格、树：Rust 用 `AppContext::materialize_virtual_*`。Vue 用 `NanaVirtualList` / `NanaVirtualTable` / `NanaVirtualTree`（host tag 是唯一的 `nana-scroll-view`）。两边同一份窗口几何（`VirtualListLayout::window`）。可见窗口外不建 live 节点。滚动不重排整棵布局。GPU 节点走同一张 `ComponentRegistry`：`nana-gpu` → `nana.gpu`，`nana-gpu-view` → `nana.gpu-view`。每个控件只保留一个 tag。等于 `ComponentTypeId` 去掉 `nana.` 前缀。
+大列表、表格、树用 `AppContext::materialize_virtual_*`。窗口几何是 `VirtualListLayout::window`。可见窗口外不建 live 节点。滚动不重排整棵布局。GPU 节点走同一张 `ComponentRegistry`（`nana.gpu`、`nana.gpu-view`）。每个控件只保留一个 tag。等于 `ComponentTypeId` 去掉 `nana.` 前缀。
 
 ## 滚动与滚动条
 
-`ScrollView` 是滚动容器。位置权威是 Runtime 的 `ScrollOffset`。尺寸权威是 `ScrollMetrics`（任何改动布局盒、子节点或样式的提交结束时由 Runtime 重新测量，偏移随之夹取；起点在右 / 下边的轴偏移为负，见 [布局](layout.md)）。滚动条不另存一份偏移。L1 `overflow: auto|scroll` 共用同一份 `ScrollOffset` 与 overflow clip（滚轮同样更新这份偏移）。但**不**再画一套 thumb。自定义滚动条铬只属于 `ScrollView`。
+`ScrollView` 是滚动容器。位置权威是 Runtime 的 `ScrollOffset`。尺寸权威是 `ScrollMetrics`（任何改动布局盒、子节点或样式的提交结束时由 Runtime 重新测量，偏移随之夹取；起点在右 / 下边的轴偏移为负，见 [布局](layout.md)）。滚动条不另存一份偏移。`overflow: auto|scroll` 共用同一份 `ScrollOffset` 与 overflow clip（滚轮同样更新这份偏移）。但**不**再画一套 thumb。自定义滚动条铬只属于 `ScrollView`。
 
-`ScrollView::scrollbars` 选三种：`AutoHide`（悬停或滚动时淡入，离开后保持主题的 `hide_delay` 再淡出）、`Always`（能滚就常驻，带轨道）、`Hidden`（不画，滚轮与 `scroll_to` 照常）。不写时跟随主题的策略 `ScrollbarRecipe::visibility`（内置 `AutoHide`），应用用 `ThemeDefinition::with_scrollbar_visibility` 一次改全部。Vue 侧 `scrollbars="auto"`（默认）跟随策略，`auto-hide|always|hidden` 固定成这一种。
+`ScrollView::scrollbars` 选三种：`AutoHide`（悬停或滚动时淡入，离开后保持主题的 `hide_delay` 再淡出）、`Always`（能滚就常驻，带轨道）、`Hidden`（不画，滚轮与 `scroll_to` 照常）。不写时跟随主题的策略 `ScrollbarRecipe::visibility`（内置 `AutoHide`），应用用 `ThemeDefinition::with_scrollbar_visibility` 一次改全部。
 
 滚动条是 overlay，不占布局。车道位于 padding box 边缘往内 `track_inset` 处，容器在末端留出不小于 `track_inset + thickness` 的 padding，滚动条就不碰内容。滚动条画在滚动区所有后代之上，但仍在它的裁剪与层叠上下文里。指针落在看得见的车道上时，悬停与按下都归滚动区：车道激活、滑块变粗，下面的行不显示悬停。两轴都能滚时各让出拐角，互不重叠。
 
@@ -300,11 +293,7 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 1. 实现 Runtime 的 `ComponentView` / `RegisterableComponent`。`ComponentView` 要求 `PartialEq`。`project` 读的每个字段都要参与比较。相等的写入会被跳过。`project` 读共享的内部可变状态，或者往别的组件的节点上打补丁时，声明 `const ALWAYS_REPROJECT: bool = true;`。
 2. 用 `UiExtension` + `ExtensionRegistrar::register_component` 登记。稳定身份是 `ComponentTypeId`（如 `nana.button`、`app.preview-card`）。
-3. 若 Vue 也要用，登记的 tag 等于 `ComponentTypeId` 去掉 `nana.` 前缀。和 HTML 同语义就用原生标签（`button`、`table`/`tr`/`td`、`ul`/`li`、`details`）。语义不同就换名（`search-dropdown`，不是 HTML `<search>`）。Vue tag 和 Rust `create_component<C>` 解析同一张 `ComponentRegistry`。未登记、也不是已知 HTML 的 tag 会报错。不会当成布局盒。
-
-只给 JavaScript 一组命令和属性白名单时，走 Vue 的 `NativeComponentRegistry`（`Nana.components.call`）。那张表**不会**让节点自动进入布局和命中。
-
-工厂的 `command` / `unmount` 在 unwind 档下会捕获 panic，转成 `NativeComponentCommandError` 抛回 JS。发布用的 `dist` 档是 `panic = "abort"`（换掉展开表，桌面二进制省约 7 MB）。该隔离不存在。工厂 panic 直接终止进程。工厂不要把 panic 当成可恢复的错误路径。
+3. 登记的 tag 等于 `ComponentTypeId` 去掉 `nana.` 前缀。和 HTML 同语义就用原生标签（`button`、`table`/`tr`/`td`、`ul`/`li`、`details`）。语义不同就换名（`search-dropdown`，不是 HTML `<search>`）。tag 与 Rust `create_component<C>` 解析同一张 `ComponentRegistry`。
 
 实时画面不要做成「自己往窗口上画的控件」。走 [实时画面](gpu.md)。不支持动态加载 dylib 插件。
 
@@ -312,7 +301,7 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 `GpuTextureView`、`Thumbnail` 与 `Avatar` 默认只采样宿主纹理的第 0 层。宿主应按 `HostTextureRegistry::painted_extent` 准备尺寸。纹理带 mip 链时用 `.sampling(ImageSampling::Mipmap)` 切到三线性采样。`url()` 图片的默认重采样与 mip 选项见 [应用 API · 图片采样](application-api.md#图片采样)。
 
-`Thumbnail` 默认维持控件高度 × aspect。显式 style 的宽高、约束与圆角（`style.radius` 档位或 `border_radius` 像素）优先。可用于响应式卡片封面。都没写时才取 `Xs`。`fit(ContentFit::Cover)` 保留封面裁切。默认仍是 Contain。空、加载、就绪与不可用共享布局尺寸。Loading 态的 spinner 居中绘制。边长 28（紧凑 `Spinner` 的两倍）。带标签的独立 `Spinner` 仍贴左，作为文字的前置槽。封面角标挂成 Thumbnail 的子节点。控件是 containing block（`position: relative`）并裁剪圆角。`Thumbnail::badge()` 给出右下角、不命中的实底徽章。Vue 的 `NanaThumbnail` 使用同一 `fit` 属性。
+`Thumbnail` 默认维持控件高度 × aspect。显式 style 的宽高、约束与圆角（`style.radius` 档位或 `border_radius` 像素）优先。可用于响应式卡片封面。都没写时才取 `Xs`。`fit(ContentFit::Cover)` 保留封面裁切。默认仍是 Contain。空、加载、就绪与不可用共享布局尺寸。Loading 态的 spinner 居中绘制。边长 28（紧凑 `Spinner` 的两倍）。带标签的独立 `Spinner` 仍贴左，作为文字的前置槽。封面角标挂成 Thumbnail 的子节点。控件是 containing block（`position: relative`）并裁剪圆角。`Thumbnail::badge()` 给出右下角、不命中的实底徽章。
 
 ### 图表与带图标按钮
 
@@ -326,7 +315,7 @@ Rust 行内标题工具使用 `IconButton::compact(true)`：固定 24×24 logica
 
 `Chart::new(option)` 画一张图。`ChartOption` 的结构对应 ECharts 的 `option`（`grid`、`x_axis`、`y_axis`、`series`、`tooltip`、`legend`、`data_zoom`），值是 Rust 类型，模型在 `nana_ui::runtime::chart`（`nana-ui-charts` crate）。系列有折线/面积、柱状、饼/环/玫瑰、散点、雷达、仪表盘。换一份 option 就是一次更新：元素从屏幕上正在显示的位置过渡到新位置。悬停按类目或按项触发，强调和轴指针由着色器按动效时钟画，提示是图表自己的浮层，带颜色点和右对齐的数值。离开、卸载或 park 后关闭。图例切换、缩放窗口存在 `Chart::view`，事件是 `ChartEvent`。数据、名称和数值格式仍由应用提供。见 [Chart](../components/chart.md)。
 
-`Chart` 只走 Rust：option 是类型化数据，没有 Vue 标签。
+`Chart` 只从 Rust 创建：option 是类型化数据，没有标签。
 
 `Button::icon(icon).icon_size(px).icon_gap(px)` 把图标与文字作为同一内容组量测、居中和裁剪。保持一个按钮的 Activate、焦点与禁用语义。loading 用 spinner 替换图标，而不叠加第二个槽位。仅 spinner 相位变化不触发布局。`trailing_icon(icon)` 在文字之后放第二个图标（选择器、菜单按钮的下拉箭头）。尺寸与间距沿用前置图标。宽度不够时先裁文字。两个图标保持原尺寸。
 

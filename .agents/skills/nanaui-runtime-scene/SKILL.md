@@ -8,7 +8,7 @@ description: Maintain NanaUI's retained UI contract from core models through Run
 NanaUI has one retained product tree:
 
 ```text
-application / Rust or Vue input
+application / Rust input
         -> nana-ui-runtime (UiWorld)
         -> nana-ui-scene (UiScene)
         -> nana-ui (SceneWgpuPainter)
@@ -26,7 +26,7 @@ Read [`docs/reference/architecture.md`](../../../docs/reference/architecture.md)
 - Runtime locale formatting is opt-in through the facades' `icu` feature (included in their defaults and `full`). Internal runtime/scene workspace dependencies disable defaults so hosts can choose PlainFormatter without pulling CLDR data back in.
 - Applications own business state, persistence, routes, and Region content.
 
-Keep Rust controls, Vue input, and L3 component creation on the same `ComponentRegistry`, `Style Model`, `UiWorld`, and `UiScene`. `PendingHostOps` commit only at the host frame boundary; `LayoutBoxStore` is a projection and scrolling must not mutate Runtime layout boxes.
+Keep Rust controls, `.vue`-dialect views, and L3 component creation on the same `ComponentRegistry`, `Style Model`, `UiWorld`, and `UiScene`. `MutationQueue` batches commit atomically at the frame boundary; layout output is a projection and scrolling must not mutate Runtime layout boxes.
 
 ## Invariants
 

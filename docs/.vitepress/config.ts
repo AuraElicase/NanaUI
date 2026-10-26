@@ -268,7 +268,7 @@ export default defineConfig({
         {
           text: "作者与工具",
           items: [
-            { text: "三种作者入口", link: "/learn/authoring-paths" },
+            { text: "作者入口", link: "/learn/authoring-paths" },
             { text: "工具链", link: "/learn/toolchain" },
             { text: "外围 crate", link: "/learn/supporting-crates" },
           ],
@@ -297,9 +297,6 @@ export default defineConfig({
             { text: "应用 API", link: "/reference/application-api" },
             { text: "声明式视图", link: "/reference/reactive-view" },
             { text: "L3 建树", link: "/reference/l3-authoring" },
-            { text: "Vue", link: "/reference/vue" },
-            { text: "Vue 窗口", link: "/reference/vue-windows" },
-            { text: "Vue 宿主边界", link: "/reference/vue-host" },
             { text: "框架文案", link: "/reference/framework-strings" },
             { text: "诊断码", link: "/reference/errors" },
           ],

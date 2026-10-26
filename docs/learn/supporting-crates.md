@@ -4,7 +4,7 @@ title: 外围支撑 crate 一览
 
 # 外围支撑 Crate 一览
 
-在核心渲染主线（`core → runtime → scene → nana-ui`）之外，工作区还包含一组边界清晰的外围支撑 crate：图表模型、零 I/O 诊断底座、SVG 栅格化、应用图标、矢量图标目录、资源打包（运行时读侧与构建期写侧）、开发期热重载以及无头诊断会话（devtools）。它们不持有保留树、也不另起渲染管线，而是各自守住一项正交职责。本章逐一拆解这 9 个支撑 crate 的内部结构与源码锚点，并在文末给出整个仓库周边生态（`examples/`、`platform/android`、`tools/css-parity`、`packages/`、`perf/`）的全景地图。
+在核心渲染主线（`core → runtime → scene → nana-ui`）之外，工作区还包含一组边界清晰的外围支撑 crate：图表模型、零 I/O 诊断底座、SVG 栅格化、应用图标、矢量图标目录、资源打包（运行时读侧与构建期写侧）、开发期热重载以及无头诊断会话（devtools）。它们不持有保留树、也不另起渲染管线，而是各自守住一项正交职责。本章逐一拆解这 9 个支撑 crate 的内部结构与源码锚点，并在文末给出整个仓库周边生态（`examples/`、`platform/android`、`tools/css-parity`、`perf/`）的全景地图。
 
 ## 职责与边界总表
 
@@ -19,7 +19,7 @@ title: 外围支撑 crate 一览
 | `nana-package` | 打包契约的**运行时只读侧**（解析 `package.json` 与 `.nrpack`） | 仅含只读逻辑与纯 Rust 解码器，不含打包或密钥生成代码 |
 | `nana-packager` | 打包契约的**构建期写侧** CLI | 将已编译可执行文件、资源树与 `nana-package.toml` 打成交付物，绝不随应用发布 |
 | `nana-ui-dev` | 开发期热重载公共底座（文件监视、防抖与安全读取） | 顶部带 `#[cfg(not(debug_assertions))] compile_error!`，绝不进入 release/dist 构建 |
-| `nana-ui-devtools` | 开发期有界结构化诊断记录 + 无头 Agent 自动化会话 | 不含任何面向最终用户的产品 UI；CPU 回读仅限于此处的离屏快照 |
+| `nana-ui-devtools` | 开发期无头 Agent 自动化会话与离屏快照 | 不含任何面向最终用户的产品 UI；CPU 回读仅限于此处的离屏快照 |
 
 ## 内部结构与源码锚点
 
@@ -46,7 +46,7 @@ title: 外围支撑 crate 一览
 
 ### 3. `nana-svg-raster`、`nana-app-icon` 与 `nana-icons-tabler`
 
-- **`nana-svg-raster`（`crates/nana-svg-raster/src/lib.rs`，243 行）**：基于 `resvg 0.48.1` 将 SVG 栅格化为 `RasterizedSvg { width, height, rgba: Arc<[u8]> }`（`:7`），按消费场景提供四个入口：`rasterize_stretch`（`:21`，Vue 通用 `<svg>`）、`rasterize_white_mask`（`:42`，图标图集白色遮罩，自动将 `currentColor` 替换为纯白）、`rasterize_document`（`:58`，Canvas `Image`）与 `rasterize_document_capped`（`:71`，带最大边长限制的 URL SVG 解码）。
+- **`nana-svg-raster`（`crates/nana-svg-raster/src/lib.rs`，243 行）**：基于 `resvg 0.48.1` 将 SVG 栅格化为 `RasterizedSvg { width, height, rgba: Arc<[u8]> }`（`:7`），按消费场景提供四个入口：`rasterize_stretch`（`:21`，独立拉伸到目标宽高）、`rasterize_white_mask`（`:42`，图标图集白色遮罩，自动将 `currentColor` 替换为纯白）、`rasterize_document`（`:58`，按文档尺寸输出直通 alpha）与 `rasterize_document_capped`（`:71`，带最大边长限制的 URL SVG 解码）。
 - **`nana-app-icon`（`crates/nana-app-icon/src/lib.rs`，140 行）**：提供 PNG / ICO / ICNS 编码、Windows PE 资源嵌入（`embed` feature）以及运行时默认图标与 macOS Dock `828 / 1024` 网格内缩适配（`runtime` feature，`with_system_grid:32`）。
 - **`nana-icons-tabler`（`crates/nana-icons-tabler/src/lib.rs`）**：由 `scripts/generate_tabler_catalog.py` 从 `@tabler/icons 3.46.0` 生成的静态常量表。每个图标导出为 `pub static *_ICON: IconData { name, shapes, svg }`；由于声明为独立静态常量，链接器会自动剔除所有未被应用引用的图标，不会膨胀最终二进制体积。
 
@@ -59,25 +59,22 @@ title: 外围支撑 crate 一览
 
 ### 5. `nana-ui-dev` 与 `nana-ui-devtools`：开发期热重载与无头验证
 
-- **`nana-ui-dev`（`crates/nana-ui-dev/src/lib.rs`，209 行）**：封装防编辑器截断半写文件的安全读取（`MAX_ARTIFACT_BYTES = 64 MiB`，`:54`）、路径级静默防抖器 `Debouncer`（`watch.rs:25`）以及三档重载请求 `ReloadRequest { Full, Css, Template }`（`lib.rs:58`）。第 `:22` 行的 `#[cfg(not(debug_assertions))] compile_error!(...)` 从编译期杜绝它进入发布包（详见 [开发期热重载合同](/reference/hot-reload)）。
-- **`nana-ui-devtools`（`crates/nana-ui-devtools/src/lib.rs`，402 行）**：
-  - 一方面提供容量为 `DEFAULT_EVENT_CAPACITY = 2048` 的有界诊断记录器 `DevtoolsSession`（对接 `nana-js-engine` 的异常 sink 与 host-call 耗时观察器，仅记录方法名、状态与耗时，不记录业务参数与返回值）；
-  - 另一方面提供按 feature 逐层递进的无头自动化会话（`offscreen` ⊂ `runtime-agent` ⊂ `agent` ⊂ `agent-bin`，见 `agent/mod.rs`）：支持纯 Rust 的 `RuntimeAgentSession` 与带 V8 的 `VueAgentSession` 通过标准输入输出 JSON 协议执行指针点击、键盘输入、无障碍树导出与离屏 PNG 截图比对。`headless-host` 在 `runtime-agent` 之上加 `HeadlessHost<P>`：用 `nana_ui::headless::HeadlessRuntime` 按原生宿主的钩子顺序跑整个 `RuntimeProgram`（含它开的辅助窗口），再画出、回读各窗口。**全仓唯一的 GPU → CPU 像素回读严格限制在 `offscreen` 模块内**，产品 `run_runtime` 呈现路径绝不调用它。
+- **`nana-ui-dev`（`crates/nana-ui-dev/src/lib.rs`，87 行）**：封装路径级静默防抖器 `Debouncer`（`watch.rs:25`）以及两档重载请求 `ReloadRequest { Full, Template }`（`lib.rs:46`）。第 `:22` 行的 `#[cfg(not(debug_assertions))] compile_error!(...)` 从编译期杜绝它进入发布包（详见 [开发期热重载合同](/reference/hot-reload)）。
+- **`nana-ui-devtools`（`crates/nana-ui-devtools/src/lib.rs`）**：提供按 feature 逐层递进的无头自动化会话（`offscreen` ⊂ `runtime-agent`，见 `lib.rs` 头部与 `agent/mod.rs`）：纯 Rust 的 `RuntimeAgentSession` 通过标准输入输出 JSON 协议执行指针点击、键盘输入、无障碍树导出与离屏 PNG 截图比对。`headless-host` 在 `runtime-agent` 之上加 `HeadlessHost<P>`：用 `nana_ui::headless::HeadlessRuntime` 按原生宿主的钩子顺序跑整个 `RuntimeProgram`（含它开的辅助窗口），再画出、回读各窗口。**全仓唯一的 GPU → CPU 像素回读严格限制在 `offscreen` 模块内**，产品 `run_runtime` 呈现路径绝不调用它。
 
 ## 仓库周边生态全景
 
-除 `crates/` 下的 28 个核心 crate 外，工作区还包含以下目录：
+除 `crates/` 下的 24 个核心 crate 外，工作区还包含以下目录：
 
 | 目录路径 | 包含内容与定位说明 |
 | --- | --- |
-| `examples/`（8 个工作区成员） | `component-gallery`（全控件画廊，附带 `ui-benchmark` / `ui-snapshots` / `ui-migration-ab` / `ui-host-ab` 四个二进制）、`vue-v8`、`vue-counter`、`vue-hosted-acceptance`（多窗口 Vue 验收应用）、`reactive-sfc`（`.vue` Rust 脚本示例）、`native-rhi-probe`、`runtime-host-fixture`、`package-fixture`（打包与防篡改校验被试程序） |
+| `examples/`（5 个工作区成员） | `component-gallery`（全控件画廊，附带 `ui-benchmark` / `ui-snapshots` / `ui-migration-ab` / `ui-host-ab` 四个二进制）、`reactive-sfc`（`.vue` Rust 脚本示例）、`native-rhi-probe`、`runtime-host-fixture`、`package-fixture`（打包与防篡改校验被试程序） |
 | `platform/android/` | 实验性 Android ARM64 `GameActivity` 宿主（共享 `UiWorld` → `UiScene` → `SceneWgpuPainter`，详见 [Android 实验宿主](/reference/android)） |
 | `tools/css-parity/` | 149 组 CSS 盒模型一致性夹具与比对工具（另有 workspace 外的 `tools/css-parity-webview` 用于本机 WKWebView 对照） |
-| `packages/` | 前端 NPM 包：`@nanaui/nanavue-runtime`（Vue 3 Custom Renderer 底座）与 `@nanaui/nanavue-components`（60+ 个 `Nana*` 组件封装与 `controls.css`） |
 | `perf/` | 性能回归基准套件（涵盖 `compositor-steady`、`windows-composition-steady`、`nana_text_ids` 与 `nana_gpu_scale_ids`） |
 
 ## 延伸阅读
 
 - [GPU 与帧生命周期](/learn/gpu-frame)：`nana-ui-charts` 生成的 GPU 标记数组如何被 `chart.wgsl` 消费
 - [作者工具链](/learn/toolchain)：`nana-ui-dev` 的 `watch_templates` 如何驱动 `nana-ui-sfc` 的静态文本热替换
-- [28 crate 覆盖矩阵](/learn/coverage-matrix) · [证据清单](/learn/evidence-checklist)
+- [24 crate 覆盖矩阵](/learn/coverage-matrix) · [证据清单](/learn/evidence-checklist)

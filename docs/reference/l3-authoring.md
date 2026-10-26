@@ -61,19 +61,18 @@ let (view, start) = cx.mount_view_root(document_id, || {
 | 声明式视图（`view!` / 函数式视图） | **产品默认作者面**：应用界面与复合视图首选 |
 | `create_component` / `append_child` / `on` | 底层原语：用于单元测试、基准测试或单节点命令式补丁 |
 | `mount`（`AssemblyScope`） | 命令式 keyed 装配：供框架内置复合控件的 `assemble_*` 使用 |
-| `bind_component` | 仅供 Vue 宿主或已有固定 ID 的桥接层使用 |
+| `bind_component` | 仅供已有固定 ID 的桥接层使用 |
 | `RuntimeProgram` / `ApplicationState` | 宿主生命周期与跨窗口/GPU 消息编排，与声明式视图配合使用 |
 
-## 性能特征与同树对比
+## 性能特征
 
 一次 `mount_view_root` 对应一次原子的 `world.commit`（包含全部节点的创建、投影与父子插入），挂载阶段不触发文本整形、布局求解、Scene 抽取或 GPU 上传。相比之下，循环调用命令式的 `create_component` + `append_child` 每次都会单独 commit，因此整页构建务必使用声明式视图或批量队列。
 
-### Rust L3 与 Vue L1/L2 的实测对比
+### 实测数据
 
-由于两条路径写入同一棵 `UiWorld`，布局、文本整形、命中测试、Scene 抽取与 WGPU 绘制完全共享同一份 Rust 实现，**稳态渲染性能没有任何差异**（60 秒、21 万帧纯 Rust 场景下 CPU prepare 的 P95 为 `0.0105 ms`）。两者的差异仅体现在两个边界上：
-
-- **首次挂载与大批量结构变更**：Vue 路径多出 V8 虚拟 DOM patch、每次 DOM host op 的跨界调用以及运行时 CSS 级联。5,000 节点构造的 P95 约为 `25.5 ms`，而同规模 Runtime 布局的 P95 为 `11.6–29.7 ms`（同一数量级；无论哪条路径，超过 5,000 节点都应使用虚拟滚动或分批挂载）。
-- **单次指针移动事件**：两条路径均为 $O(1)$ 常数开销，不随树规模增长——Rust L3 约为 `0.0003 ms`，Vue 约为 `0.062 ms`（详见 [输入成本](input-cost.md)）。
+- **稳态渲染**：60 秒、21 万帧纯 Rust 场景下 CPU prepare 的 P95 为 `0.0105 ms`。
+- **首次挂载与大批量结构变更**：5,000 节点的 Runtime 布局 P95 为 `11.6–29.7 ms`；超过 5,000 节点应使用虚拟滚动或分批挂载。
+- **单次指针移动事件**：$O(1)$ 常数开销，约为 `0.0003 ms`，不随树规模增长（详见 [输入成本](input-cost.md)）。
 
 ### 与 GPUI 类框架的差异
 

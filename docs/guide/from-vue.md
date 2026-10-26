@@ -23,16 +23,16 @@
 | props / emits | 函数参数 / 回调 | 见 [属性](components/props.md) 和 [事件](components/events.md) |
 | `<KeepAlive>`、`<Teleport>`、`<Transition>`、`<Suspense>` | 同名能力 | 见指南里的内置 |
 | Vue Router、Pinia | 应用自己的结构和 `store` | 框架不持有路由、区域内容和持久化 |
-| SFC | `.vue` 方言，或 `@nanaui/nanavue-runtime` | 见 [.vue 方言](scaling/sfc.md) 和 [Vue](../reference/vue.md) |
+| SFC | `.vue` 方言，脚本写 Rust | 见 [.vue 方言](scaling/sfc.md) |
 
 `each` 和 `when` 各自带一个容器。Vue 的 `v-for` / `v-if` 直接生成兄弟节点。组件函数不是惰性的，只在挂载、行、分支这三个作用域边界上划分归属。
 
 ## 这里没有的
 
 - 虚拟 DOM 和按树 diff。绑定只改它写的那个字段。
-- WebView。不能把 `@vue/runtime-dom` 的产物丢进来当桌面应用。
-- 浏览器的 CORS、Cookie、Service Worker、IndexedDB。`fetch` 有白名单，见 [Fetch](scaling/fetch.md)。
-- `v-html` 在 Vue 宿主里会解析成子节点，不是一段 HTML 字符串插进 DOM。见 [宿主边界](../reference/vue-host.md)。
+- WebView 和 JS 运行时。不能把 `@vue/runtime-dom` 的产物丢进来当桌面应用。
+- 浏览器的 CORS、Cookie、Service Worker、IndexedDB。远程资源有白名单，见 [Fetch](scaling/fetch.md)。
+- `v-html`。
 
 ## 接下来
 
@@ -45,8 +45,8 @@
     <p class="next-step-link">响应式</p>
     <p class="next-step-caption">信号怎么读、怎么写。</p>
   </a>
-  <a class="next-step" href="/reference/vue">
-    <p class="next-step-link">Vue 宿主</p>
-    <p class="next-step-caption">把已有的 Vue 界面接到同一棵树上。</p>
+  <a class="next-step" href="/guide/scaling/sfc">
+    <p class="next-step-link">.vue 方言</p>
+    <p class="next-step-caption">模板、脚本、样式分文件写，脚本是 Rust。</p>
   </a>
 </div>

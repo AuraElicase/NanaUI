@@ -4,13 +4,13 @@ title: 输入链路
 
 # 输入链路
 
-输入事件从原生操作系统窗口（或 Vue 宿主、无头测试会话）到达保留树上的某个控件，中间经过两层严格分工的合同：**`nana-ui-input` 定义「规范事件与宿主服务长什么样」**，**`nana-ui-runtime` 的 `framework/input.rs` 决定「事件路由并分发到哪个节点头上」**。本章沿这条完整链路拆解：规范事件与序列号、有界端点与合并、`AppContext::route_input` 的五步校验与指针本地化、指针/滚轮/按键/输入法四条有序分发链、焦点与 roving focus、IME 与 `HostServices` 状态回写，以及无障碍增量投影。
+输入事件从原生操作系统窗口（或无头测试会话）到达保留树上的某个控件，中间经过两层严格分工的合同：**`nana-ui-input` 定义「规范事件与宿主服务长什么样」**，**`nana-ui-runtime` 的 `framework/input.rs` 决定「事件路由并分发到哪个节点头上」**。本章沿这条完整链路拆解：规范事件与序列号、有界端点与合并、`AppContext::route_input` 的五步校验与指针本地化、指针/滚轮/按键/输入法四条有序分发链、焦点与 roving focus、IME 与 `HostServices` 状态回写，以及无障碍增量投影。
 
 ## 职责与边界
 
 - **`nana-ui-input`（规范输入合同）**：定义规范输入事件的形状、身份、单调序列号、有界收件箱端点（`InputEndpoint`）与宿主服务回调（`HostServices`），不含任何平台特定代码（`crates/nana-ui-input/src/lib.rs:5`）；`nana-ui-platform` 原样再导出整套合同。
 - **`nana-ui-runtime`（唯一输入路由器）**：每个 `AppContext` 持有一份独立的路由状态（`crates/nana-ui-runtime/src/framework/input.rs:1`），是宿主输入事件进入保留世界的**唯一路径**；不同窗口绑定各自的输入源，绝不混用指针捕获、IME 焦点或光标状态。
-- **宿主适配层（降维与回写）**：原生窗口在 `crates/nana-ui/src/scene_host/input.rs` 中将 winit 事件盖章推入端点；Vue 宿主在 `crates/nana-ui-vue/src/host/input_projection.rs:386` 中将 JS 采样转为 `CanonicalInputEvent` 后送入同一个 `route_input`。
+- **宿主适配层（降维与回写）**：原生窗口在 `crates/nana-ui/src/scene_host/input.rs` 中将 winit 事件盖章推入端点。
 
 ## 依赖与邻居
 
@@ -19,7 +19,7 @@ title: 输入链路
 | `nana-ui-input` | 定义规范事件、序列器、有界端点与 `HostServices` 合同 |
 | `nana-ui-platform` | 原样再导出输入合同，供窗口层与宿主层使用 |
 | `nana-ui-runtime` | 唯一路由实现（`route_input`）、四条分发链、焦点管理、IME 状态与无障碍增量投影 |
-| `nana-ui` / `nana-ui-vue` | 将平台原生事件降维为规范事件，并在 drain 末尾将 `HostServices` 状态写回原生窗口 |
+| `nana-ui` | 将平台原生事件降维为规范事件，并在 drain 末尾将 `HostServices` 状态写回原生窗口 |
 | `nana-text` | 文本编辑路由时提供 `TextShaper` 度量支持 |
 | `nana-diagnostics` | 记录端点与路由高频指标（`runtime.input.*`，只走原子 `metric!` 而非逐帧事件） |
 

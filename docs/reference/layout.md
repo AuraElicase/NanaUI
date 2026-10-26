@@ -1,8 +1,10 @@
-# 布局（Vue CSS 子集）
+# 布局（CSS 子集）
 
 Rust 的第一路径用控件自己的布局。你不写 CSS。排行、列和边框见 [布局与样式（Rust）](rust-layout.md)。
 
-这篇只描述 Vue 兼容路径能用的那一部分网页 CSS。你用它排界面骨架。
+这篇只描述 `nana-ui-css` 能映射的那一部分网页 CSS。`.vue` 方言的 `<style>`、`view!`、`stylesheet!` 与 `css!` 在构建期用它。你用它排界面骨架。
+
+构建期编译的是 class 选择器（`.card`、`.card.active`）、其中的 `@container` 规则和 `transition`。其他选择器、`:hover` 等交互态、`@media`、`@keyframes` 以及 Style Model 没有字段的声明只给出构建警告，不进视图。下文写到的这些能力属于引擎本身，由 `tools/css-parity` 对照浏览器校验。
 
 它不是浏览器里的 CSS 引擎。没有完整的选择器世界。对不上，就改布局。不靠容差假装一致。
 
@@ -15,7 +17,7 @@ Rust 的第一路径用控件自己的布局。你不写 CSS。排行、列和�
 component-default；默认值允许作者覆盖，required 值保留给组件。最终样式仍由
 Runtime 写入口提交，`LayoutBox` 和滚动投影是输出，不是可写的前端属性。
 
-Vue 的 containing block 传播以 layout mutation footprint 为 seed。静态帧和
+containing block 传播以 layout mutation footprint 为 seed。静态帧和
 paint-only 更新不再扫描整棵投影树；视口变化按约束轴传播（见下文「约束变化（#264）」），
 结构变更仍从根节点重算，以保持百分比、Fill 和 intrinsic sizing 的正确性。
 
@@ -415,14 +417,7 @@ Gate E（可用尺寸仍落在缓存的包络段里时不重排）见下文「Dy
 宿主侧的门禁在 `nana-ui` 的 `scene_paint/natural_size_tests.rs`：data URL 和本地 HTTP 图片各一例。
 没写尺寸的盒子先没有面积；图片就绪、宿主提交后按解码尺寸布局并画出；之后不再上报。
 
-视频和 canvas 的分辨率由 Vue 宿主报上来。`<video data-nana-video>` 的帧和 `<canvas
-data-nana-canvas>` 的位图是生产方自己的像素：`NanaTreeDocument::flush_host_frame` 从 HostTexture
-注册表读到 `video:{id}`、`canvas:{id}` 槽的像素尺寸，以 `ReplacedResource::Render` 上报，同一帧布局
-就能用上。没写尺寸的 `<video>` 按帧的尺寸布局，`<canvas>` 按位图的尺寸（即它的 width、height 属性），
-和浏览器一致；同尺寸的新帧不上报，不进布局。门禁是 `nana-ui-vue` 的
-`producer_texture_sizes_reach_layout_as_natural_sizes`。
-
-`data-nana-gpu` 的 HostTexture 不上报。这种纹理默认按 `painted_extent` 准备，那是布局定下的绘制
+`GpuTextureView` 的 HostTexture 不上报。这种纹理默认按 `painted_extent` 准备，那是布局定下的绘制
 尺寸，把它当成自然尺寸，auto 尺寸的节点和纹理会互相放大。宿主自己生产内容的纹理，需要时自己用
 `set_replaced_metadata` 上报。
 
@@ -524,17 +519,13 @@ ResponsiveRule)`。
 各层都投影到同一种规则：
 - Rust：`MutationQueue::set_responsive`；
 - `.vue` 的 `<style>`、`view!`、`stylesheet!`：构建期把 `@container` 编进样式表，元素挂载时装上规则
-  （见 [响应式视图](reactive-view.md)；`css!` 只写声明，里面的 `@container` 给出警告）；
-- Vue + JS 宿主：运行期层叠时为命中 `@container` 的元素算出各桶的变体，发 `set_responsive`。
+  （见 [响应式视图](reactive-view.md)；`css!` 只写声明，里面的 `@container` 给出警告）。
 
-两条 CSS 路径都只产出数据，不量容器（见下文「`@container`」）。L2 的 NanaVue 组件没有单独的
-写法，组件自己的样式里写 `@container` 即可。
+CSS 路径只产出数据，不量容器（见下文「`@container`」）。
 
 有依赖索引的格式化上下文可以使用 `LayoutDependencyGraph` 表达父约束、包含块、
 写作方向和 flex/grid/inline 的局部耦合。Runtime mutation authority 和产品帧统一发布
-按节点合并的 typed seeds；Vue bridge 维护
-`SnapshotChanges::layout_invalidations`，而普通 semantic `dirty` 仍负责属性和
-投影同步。布局调度直接消费 typed seeds。
+按节点合并的 typed seeds。布局调度直接消费 typed seeds。
 不确定的结构变化保留根级重算边界。
 
 ## Dynamic Layout
@@ -660,7 +651,7 @@ flex 和 IFC 的摆放按流相对坐标算。从主轴起点和交叉轴起点�
 
 grid 的列是 inline 轴上的轨道。行是 block 轴上的轨道。这是 CSS Grid §3。竖排时，列沿竖向排。`vertical-rl` 的行从右往左叠。竖排 rtl 的第 1 列在底端。轨道尺寸按沿行或跨行的长度算。摆放同样是流相对坐标换到页面。
 
-`writing-mode` 和 `direction` 在布局里也继承。没写这两项的容器，沿祖先的方向排。Rust API 或样式树直接构造的节点同样如此。不只是走级联的 Vue 路径。祖先改了方向，后代容器随之重排。没写方向的盒子上的逻辑边（例如 `padding-inline-start`）也按继承来的方向落到物理边。
+`writing-mode` 和 `direction` 在布局里也继承。没写这两项的容器，沿祖先的方向排。Rust API 或样式树直接构造的节点同样如此。祖先改了方向，后代容器随之重排。没写方向的盒子上的逻辑边（例如 `padding-inline-start`）也按继承来的方向落到物理边。
 
 百分比的 margin 和 padding，四条边都按包含块的 **inline 尺寸**兑现。这是 CSS Box Model §5。这个 inline 取自**包含块**的写作方向，不是盒子自己的。竖排父级里的横排子盒，`margin-top: 10%` 按父级的高度算。IFC 折行和 grid 一维轨道的百分比同理。
 
@@ -883,17 +874,17 @@ CSS `url()` 的帧仍走 4× MSAA。它和 HostTexture、backdrop 的 interleave
 
 两轴都裁剪时，后代的绘制按盒子自己的 `border-radius` 裁圆角。裁的是边框盒。四角不等时取最小的那个，不超过短边的一半。这和 CSS 一致。盒子自己的背景和边框仍只按直角边框盒裁。不被同一个圆角再裁一次。命中仍按直角。
 
-L1 `overflow: auto|scroll` 的滚动权威仍是 Runtime 的 `ScrollOffset`。JS 的 `scrollTop`、`scrollLeft`、`scrollIntoView` 和滚轮走这条路径。滚动不写回 `LayoutBox`。
+`overflow: auto|scroll` 的滚动权威是 Runtime 的 `ScrollOffset`。滚轮走这条路径。滚动不写回 `LayoutBox`。
 
 偏移保留小数。画面按设备像素吸附。见 [Runtime 与 Scene](runtime-scene.md)。
 
-滚动起点在 start 边。这是 CSSOM View 的 scrolling area。`direction: rtl` 的行、`vertical-rl` 的块轴、`row-reverse` 和 `column-reverse` 从右或下开始排。初始视图就是右或下边。向左或向上溢出的内容，用负偏移滚到。和 CSSOM 一样，`scrollLeft` 和 `scrollTop` 从 0 往负走。越过 start 边另一侧的内容，滚不到。
+滚动起点在 start 边。这是 CSSOM View 的 scrolling area。`direction: rtl` 的行、`vertical-rl` 的块轴、`row-reverse` 和 `column-reverse` 从右或下开始排。初始视图就是右或下边。向左或向上溢出的内容，用负偏移滚到。和 CSSOM 一样，偏移从 0 往负走。越过 start 边另一侧的内容，滚不到。
 
-滚动范围只算到最近的裁剪盒为止，和 CSS 的 scrollable overflow 一样。里层的滚动容器只把自己的盒子算进外层的范围，它里面内容的溢出不算：滚动区里套一个滚动区，外层不会因为里层的内容变长而能滚。`overflow: hidden` / `clip` 的盒子在它裁剪的那条轴上同样只算自己的盒子，没裁剪的那条轴照常算进它的内容。滚动容器两条轴都算裁剪。哪些轴算裁剪，用 `UiWorld::overflow_contained_axes` 查。JS 的 `scrollWidth`、`scrollHeight` 按同一条规则。
+滚动范围只算到最近的裁剪盒为止，和 CSS 的 scrollable overflow 一样。里层的滚动容器只把自己的盒子算进外层的范围，它里面内容的溢出不算：滚动区里套一个滚动区，外层不会因为里层的内容变长而能滚。`overflow: hidden` / `clip` 的盒子在它裁剪的那条轴上同样只算自己的盒子，没裁剪的那条轴照常算进它的内容。滚动容器两条轴都算裁剪。哪些轴算裁剪，用 `UiWorld::overflow_contained_axes` 查。
 
 每个滚动容器都有度量。写布局盒、增删子节点，或改样式的提交结束时，Runtime 重新测量受影响的滚动容器，并把偏移夹进去。不论盒子是引擎写的，还是宿主写的。多行文本编辑器的度量随塑形结果走。`vertical-rl` 编辑器同样用负偏移滚向左边的列。
 
-自定义滚动条铬是 L2 的 [`ScrollView`](components.md)。L1 不另做一套 thumb 绘制。
+自定义滚动条铬是 [`ScrollView`](components.md)。`overflow` 不另做一套 thumb 绘制。
 
 **选择器。** 你可以用 type、class、id、属性选择器，以及组合符空格、`>`、`+`、`~`。
 
@@ -967,7 +958,7 @@ prop 和 inline 上的 `!important` 会去掉标志，并作为 author-important
 
 **`@import`。** 它解析 `url(...)` 和引号路径。相对路径相对导入方，或相对样式表 jail。canonicalize 之后必须落在 `stylesheet_base` 下。
 
-`stylesheet_base` 由文档或 SFC 的 URL 写入，或由最近一次 `injectStylesheet` 的 href 写入。未设置时，相对 `@import` 跳过。不扫进程 cwd。`nana://res/` 打包样式表照常加载。它内部的相对 `@import` 在包内解析。
+`stylesheet_base` 由文档或 SFC 的 URL 写入。未设置时，相对 `@import` 跳过。不扫进程 cwd。`nana://res/` 打包样式表照常加载。它内部的相对 `@import` 在包内解析。
 
 `http(s)`、`data:`、越狱、超过 1MB、带 `layer` 或 `supports()` 的 prelude，一律 fail closed。记 skip，不加载。
 
@@ -980,8 +971,6 @@ prop 和 inline 上的 `!important` 会去掉标志，并作为 author-important
 **`@media`。** 子集是 `min/max/width`、`min/max/height`（px）、`orientation`、`prefers-color-scheme`，以及 `screen`、`all`、`print` 类型。
 
 条件匹配时，规则进入 cascade。视口或主题变化时，只重新 flatten 已经解析的规则。不重扫 CSS 文本。
-
-JS 的 `matchMedia` 经 host op `evaluateMediaQuery`，和 CSS flatten 共用同一套 Rust 求值。`screen` 和 `all` 为真。`print` 为假。没有 host 时，web-api shim 回退同一子集。
 
 **`@font-face`。** 它解析 `font-family`、`src`、`font-weight`。`font-weight: 200 700` 这种范围，宿主按 100 一档在 fontdb 里登记别名。不是只取起点。
 
@@ -999,7 +988,7 @@ JS 的 `matchMedia` 经 host op `evaluateMediaQuery`，和 CSS flatten 共用同
 
 **`@supports`。** 它在解析期求值。匹配，就把内部规则并进同一份 cascade。
 
-谓词子集是 L1 已有的。`display: flex|grid|block`，以及 L1 已经解析的其它 `display` 关键字。`color` 是 `parse_css_color` 能解析的值。`width` 是 `LengthSpec::parse` 能解析的值。可以加 `not`、`and`、`or`。
+谓词子集是引擎已有的。`display: flex|grid|block`，以及已经解析的其它 `display` 关键字。`color` 是 `parse_css_color` 能解析的值。`width` 是 `LengthSpec::parse` 能解析的值。可以加 `not`、`and`、`or`。
 
 未知谓词整块 fail-closed，计入 `skipped_at_rules`。例如 `selector()`、`lab()`、`display-p3`，以及未列入的属性。
 
@@ -1031,19 +1020,13 @@ prelude 是 `[名字] 条件`：
 
 `@import … layer()` 和 `supports()` 仍不加载。
 
-增量的 `width`、`height`、`min-width` 等 layout prop 走 `patchProp(width, …)`。那不是改 `style`。它们和 class、style 走同一份 `rebuild_layout_style`。先写完普通层和 `nana-*` class hints，再写样式表 important，然后是 prop 和 inline 的 important。
+`width`、`height`、`min-width` 等 layout prop 和 class、style 走同一份 `rebuild_layout_style`。先写完普通层和 `nana-*` class hints，再写样式表 important，然后是 prop 和 inline 的 important。
 
 因此样式表的 `width:80px !important` 不会被后来的普通 `width:200px` prop 盖掉。prop 或 inline 带 `!important` 的，仍覆盖样式表 important。
 
 `nana-*` hints 压过普通声明。但压不过其后的 important 尾。
 
 自定义属性会去掉 `!important`。和普通声明同一套 `split_important_flag`。所以 `--gap: 8px !important` 经 `var(--gap)` 得到 `8px`。不是带着标志，无法解析。
-
-**JS 查询。** `getBoundingClientRect` 和 `layoutBox` 读绘制投影。`offsetWidth` 是边框盒。`clientWidth` 是 padding 盒。`scrollWidth` 是内容尺寸。`offsetLeft` 和 `offsetTop` 相对 `offsetParent`。`clientLeft` 和 `clientTop` 是边框。
-
-滚动不写回 Runtime 的 `LayoutBox`。
-
-`getComputedStyle` 是 Vue Transition 的桩，加上绘制投影上的 used 值。used 值是 `width`、`height`、`color`、`opacity`、`transform`。它不是 CSSOM。也不是完整的 `LayoutStyle`。
 
 ## 不要指望的
 
@@ -1070,15 +1053,14 @@ prelude 是 `[名字] 条件`：
 - 完整 IFC。没有精确的 CSS 基线，也没有行内拆箱。
 - 轨道列表 token 形式的 `subgrid`。
 - 用 `position: fixed` 当 Dialog 或 Drawer。走 Nana 的浮层。
-- 把 `getComputedStyle` 当成已经解析的 `LayoutStyle`。
 - 自定义 `url()` 光标图。
 - 未知的 `user-select` 关键字。
 - 完整的 CSS Highlight API。`::selection` 只兑现 background 和 color。
 - `-webkit-app-region` 和 `app-region`。任意盒不能当标题栏。拖窗只走 `AppTitleBar`，再到 `nana-window`。你写了也不会拖窗。
-- L1 `overflow:auto` 的自定义滚动条铬。走 L2 的 `ScrollView`。
+- `overflow:auto` 的自定义滚动条铬。走 `ScrollView`。
 - `<iframe>` 加载。见 [应用内浏览器](gpu.md#应用内浏览器)。这一条未实现。
 - 浏览器式 `<video>` 的解码和播放。宿主推帧和 poster 规则见 [实时画面](gpu.md)。
-- 把 `<canvas>` 当成 2D 位图，或当成浏览器的 2D / WebGPU 上下文。没有 HostTexture 槽时，`skipped_replaced = canvas`，不写 `content_image`。`data-nana-canvas` 和 `data-nana-gpu` 走 [实时画面](gpu.md) 的 `"nana.host-texture"`。那不是 Chromium 2D。
+- 把 `<canvas>` 当成 2D 位图，或当成浏览器的 2D / WebGPU 上下文。没有 HostTexture 槽时，`skipped_replaced = canvas`，不写 `content_image`。GPU 画面走 [实时画面](gpu.md) 的 `GpuTextureView`（`"nana.host-texture"`）。那不是 Chromium 2D。
 - 父级 CSS `perspective` 属性，以及 `preserve-3d`。元素自身的 `perspective()` 加 `rotateY` 已经会画。
 
 畸形的 `font-variation-settings` 仍 fail-closed。字体没有的轴，在 shaping 时跳过，不改写成 `wght`。
@@ -1095,74 +1077,16 @@ Android **不是**产品布局目标。实验 NativeActivity 宿主仍用同一�
 
 ## 和 Rust 布局的关系
 
-Vue 侧 CSS 解析出来的，是同一份 `LayoutStyle`。
+CSS 解析出来的，是同一份 `LayoutStyle`。
 
-L3 用 [`Stack`](rust-layout.md) 表达这份合同。用 `from_layout`，或用字段 builder。L2 的 `nana-*` 只解析到同一个 `ComponentTypeId`。不按 `display` 或 `flex-direction` 改布局身份。
+L3 用 [`Stack`](rust-layout.md) 表达这份合同。用 `from_layout`，或用字段 builder。
 
 真正算盒子的，是 Runtime 的 `RuntimeLayoutEngine`。产品帧走 `RuntimeDocument::flush`。
 
-JavaScript 查询到的盒子，是绘制阶段的投影。滚动不写回 Runtime 的布局权威。
-
 ## 页面与卡片的留白
 
-NanaUI 的容器边距归属见 [Rust 布局合同](rust-layout.md#边距归属与覆盖)。Vue 和 Rust 共用同一套 Runtime 布局。
+NanaUI 的容器边距归属见 [Rust 布局合同](rust-layout.md#边距归属与覆盖)。
 
-普通 `div` 默认没有 padding。`NanaCard` 默认左右 16、上下 14。CSS 只覆盖你声明的边。`padding: 0` 明确清零。
+CSS 只覆盖你声明的边。`padding: 0` 明确清零。
 
 兄弟的 margin 和父级的 gap 相加。不自动去重，也不自动折叠。
-
-```vue
-<!-- 页面中嵌套卡片：页面外沿和卡片内部是不同边界。 -->
-<NanaSettingsPage :settings="settings">
-  <div style="display:flex;flex-direction:column;gap:16px">
-    <NanaCard>
-      <!-- 卡片内 Stack：gap 排列字段，不额外加 padding。 -->
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <NanaInput /><NanaButton>保存</NanaButton>
-      </div>
-    </NanaCard>
-  </div>
-</NanaSettingsPage>
-
-<!-- 贴边列表：显式关闭负责该边界的容器留白。 -->
-<NanaSettingsPage :settings="settings" :content-padding="0">
-  <NanaCard style="padding:0"><NanaList /></NanaCard>
-</NanaSettingsPage>
-
-<!-- 滚动到底仍保留底部 24px；不要额外添加 Spacer。 -->
-<NanaSettingsPage :settings="settings"
-  :content-padding="{ top:20, right:24, bottom:24, left:24 }"
-  :content-gap="16">
-  <YourLongContent />
-</NanaSettingsPage>
-```
-
-`contentPadding` 接受数值，或完整的 `{top,right,bottom,left}` 对象。单位是逻辑像素。`contentGap` 是数值。
-
-负数按零处理。非法输入回落默认值。移除属性，或设为 `undefined`，就恢复默认。
-
-它们作用于内部的滚动 body。动态更新不重建内容，也不重建滚动节点。full-page Tab 没有这个 body。布局仍由业务负责。
-
-公共 CSS 不再在 SettingsPage 外壳上重复声明 padding 和 gap。
-
-`NanaWorkspaceShell` 的 primary 也不再默认加页面 padding。直接放业务内容的旧页面，应在自己的内容根设置 `padding:20px 24px`。嵌套 SettingsPage 时，不再补这一层。
-
-语义卡片的 class 和 tag 布局提示，不再覆盖 Runtime 的内边距或圆角默认值。
-
-### 边距回归与截图复现
-
-`crates/nana-ui-devtools/examples/spacing-layout.rs` 使用真实的 Runtime 和 UiScene 做离屏绘制。它检查 640×300 和 280×300 下的嵌套卡片、内容区清零和滚动尾部。
-
-默认的 JS fixture 直接提交 host ops：
-
-```bash
-cargo run -p nana-ui-devtools --features agent-bin --example spacing-layout --locked
-```
-
-输出 PNG，以及布局和无障碍证据，到 `target/spacing-layout/`。你也可以把同目录的 `spacing-layout-vue.js` 用消费应用的 bundler 打成 IIFE，再传入产物路径，验证实际的 `NanaSettingsPage` 和 `NanaCard` wrappers：
-
-```bash
-cargo run -p nana-ui-devtools --features agent-bin --example spacing-layout --locked -- path/to/spacing-layout-vue.iife.js
-```
-
-此验收覆盖宿主机器上的离屏 GPU 绘制。它不代替 Windows 或 Linux 的原生窗口验收，也不代替 Surface 验收。

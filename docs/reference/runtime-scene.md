@@ -11,8 +11,8 @@ Escape 先关闭当前活动 Panel／Dialog 内允许关闭的 Popover／ActionM
 
 `UiWorld` 是以下全部状态的唯一权威：节点身份（`StableNodeId`）、文档归属（`DocumentId`）、父子层级、节点种类、计算样式、文本与已提交选区、未滚动的布局盒（`LayoutResult` / `LayoutBox`）、滚动偏移（`scroll_offset`）、指针 hover / press / capture 状态、事件路由表、焦点链与 IME、无障碍投影、文本呈现器（text presenter）以及自定义渲染槽声明。
 
-- **外部身份隔离**：对外只暴露 `StableNodeId` 与类型化的 `Entity<V>`；内部节点表存储结构的演进不得使 JS 句柄、诊断记录或持久化数据失效。
-- **原子批式提交**：结构变更先排入帧内的 `MutationQueue`，整批校验通过后才一次性 commit；校验失败不会留下半成品层级，已销毁节点的 ID 永不复用。Vue 节点的句柄直接映射到 `StableNodeId`，其 DOM 外观层仅保留兼容查询元数据，绝不构成第二棵权威树。
+- **外部身份隔离**：对外只暴露 `StableNodeId` 与类型化的 `Entity<V>`；内部节点表存储结构的演进不得使外部句柄、诊断记录或持久化数据失效。
+- **原子批式提交**：结构变更先排入帧内的 `MutationQueue`，整批校验通过后才一次性 commit；校验失败不会留下半成品层级，已销毁节点的 ID 永不复用。
 
 ## 2. 增量帧调度与动效生命周期
 
@@ -54,7 +54,7 @@ Runtime 按节点的脏标记（`DirtyMask`）确定性地生成各阶段工作�
 - **模态框（Dialog / ConfirmDialog / Drawer）的支点与遮罩分离**：模态框在单个节点内同时生成背景遮罩（scrim）与中心卡片图元。其 motion layer 作用于**卡片**：卡片及插槽内容绕卡片中心（`ComponentGeometry::presentation_pivot`）做位移、缩放与淡入（命中测试、CPU 呈现与 GPU `evaluate()` 共用同一支点）；而遮罩图元不叠加节点自身的 opacity 轨道（仅继承外层祖先不透明度），改按几何中的 `scrim_opacity` 独立淡入，并向外预留卡片位移与缩放的最大外扩边距以始终铺满窗口（查询单图元呈现使用 `UiScene::compositor_primitive_opacity` / `compositor_primitive_encode`）。
 - **触发型菜单（Popover / ActionMenu / HoverCard）的触发器与浮层分离**：菜单节点本身就是留在文档流里的触发器，它的开合轨道（`MENU_OPACITY` 淡入、`MENU_POP` 0.9→1 缩放）只属于挂出去的浮层：浮层面（`TRIGGERED_OVERLAY_SURFACE_SLOT`）与它摆放的 viewport-fixed 菜单项共用节点的透明度分组，并绕同一支点缩放——支点取浮层面上离触发器中心最近的点（`ComponentGeometry::presentation_pivot`）。节点自身的其余图元（触发器底板、文字、图标、头像）和 `trigger_content` 子树不进入这个分组，也不取呈现变换，始终保持逻辑透明度与逻辑变换（菜单逻辑样式本身半透明时，触发器只按逻辑值合成）。浮层的缩放由 CPU 投影承担（`UiScene::hanging_transform`，菜单节点不绑定 GPU transform id）；Runtime 的命中测试、无障碍坐标、`presentation_input_bounds` 和浮层面命中从同一支点套用同一变换，提升前后一致。
 - **ReorderList 活行拖动**：被拖行跟手和其它行让位都是行节点上的合成器 transform 轨道（跟手是随指针替换的保持轨道，让位是带 Retarget 的过渡并在终点保持），不写行的逻辑样式和布局盒，落点仍按布局盒判定。落点变化只给位移目标变了的行重启轨道；指针移动既不重新抽取列表，也不重新抽取行。被拖行的层级 `REORDER_PREVIEW_Z_INDEX` 低于 `MENU_OVERLAY_Z_INDEX`，只在拖动开始和结束时让被拖子树各重新抽取一次。拖动结束（松手、Escape、`Cancel`）时取消全部轨道，不留呈现。
-- **列表重排 FLIP**：在终点（Last）布局已提交后，仅播放一条合成器平移轨道（L3 为 `node().flip(first, last)`，可选配 `animate_size()` 另开一条 Layout 类宽高轨道；Vue `TransitionGroup` 的 `setPaintTransform` 共用同一条 Motion IR）。
+- **列表重排 FLIP**：在终点（Last）布局已提交后，仅播放一条合成器平移轨道（L3 为 `node().flip(first, last)`，可选配 `animate_size()` 另开一条 Layout 类宽高轨道）。
 - **设备像素吸附（Pixel Snapping）**：画笔将图元及其每一级裁剪区的**最终合成纯平移分量**吸附到整数设备像素（`clip::paint_transform`，旋转、缩放与透视分量保持不变）。滚动偏移、CSS `translate` 与冻结行列反向平移会先合成为总平移再一次性吸附，从而保证同一滚动容器下的 Quad、图标、文字、路径网格、HostTexture 与裁剪边永远同步移动相同数量的整像素；同时 `ScrollOffset`、命中测试与无障碍边界仍保留浮点数精度，因此触控板的亚像素横向滚动不会触发文本重新解析（#223）。
 
 ## 4. 图表专用呈现时钟（Chart Presentation Clock）
