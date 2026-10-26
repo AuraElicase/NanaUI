@@ -2748,4 +2748,155 @@ mod tests {
             "an ordinary node lost its GPU transform to the 3D rule"
         );
     }
+
+    /// Final opacity of a primitive: its own paint opacity times the groups
+    /// that composite it.
+    fn effective_paint_opacity(scene: &UiScene, primitive: crate::PrimitiveId) -> f32 {
+        let paint = scene.draw_primitive(primitive).unwrap().paint_opacity;
+        scene
+            .primitive_opacity_groups(scene.primitive(primitive).unwrap())
+            .iter()
+            .fold(paint, |opacity, group| opacity * group.opacity)
+    }
+
+    #[test]
+    fn a_repaint_under_a_scaled_layer_keeps_the_presented_projection() {
+        check_repainted_projection(1.0);
+    }
+
+    #[test]
+    fn a_repaint_under_a_scaled_layer_keeps_the_presented_projection_on_an_opacity_tick() {
+        check_repainted_projection(0.5);
+    }
+
+    #[test]
+    fn a_repaint_without_layers_keeps_the_retained_fast_path() {
+        let mut scene = UiScene::new();
+        let mut painted = node(1, None, &[]);
+        scene.apply_delta([painted.clone()], []);
+        let primitive = crate::PrimitiveId {
+            node: id(1),
+            slot: 0,
+        };
+        let before = scene.draw_primitive(primitive).unwrap().transform;
+        Arc::make_mut(&mut painted.style).background = Some([0.8, 0.2, 0.3, 1.0]);
+        scene.apply_delta([painted], []);
+        assert_eq!(scene.draw_primitive(primitive).unwrap().transform, before);
+        assert!(scene.draw_attributes.lock().unwrap().is_empty());
+    }
+
+    /// A child repainted under its parent's scale layer, then an unrelated
+    /// layout change that bumps the attribute epoch: the drawn transform and
+    /// the visibility answer stay the presented ones throughout.
+    fn check_repainted_projection(opacity_end: f32) {
+        let mut scene = UiScene::new();
+        let parent = node(1, None, &[2]);
+        let mut child = node(2, Some(1), &[]);
+        let mut other = node(3, None, &[]);
+        other.layout.x = 400.0;
+        scene.apply_delta([parent, child.clone(), other.clone()], []);
+        let scaled = PaintTransform {
+            a: 0.94,
+            d: 0.94,
+            ..Default::default()
+        };
+        let mut store = PresentationStore::new();
+        store.insert(
+            transform_track(1, 1, 0, 400, scaled, scaled),
+            MotionValue::Transform(scaled),
+        );
+        // The leaf fades, the parent only scales: an opacity group on the
+        // parent would paint its whole content and hide a clipping error.
+        store.insert(
+            opacity_track(2, 2, 0, 400, 1.0, opacity_end),
+            MotionValue::Scalar(1.0),
+        );
+        scene.apply_presentation(&store, Duration::from_millis(16), None);
+        let primitive = crate::PrimitiveId {
+            node: id(2),
+            slot: 0,
+        };
+        let presented = scene.draw_primitive(primitive).unwrap().transform;
+        // Between the left edges before and after the scale.
+        let viewport = crate::SceneRect {
+            x: 0.0,
+            y: 20.0,
+            width: 1.0,
+            height: 10.0,
+        };
+        let visible = scene.visible_operations(viewport).unwrap();
+        assert!(visible.is_empty());
+        let plan = scene.frame_plan().unwrap();
+        Arc::make_mut(&mut child.style).background = Some([0.8, 0.2, 0.3, 1.0]);
+        scene.apply_delta([child], []);
+        assert_eq!(
+            scene.draw_primitive(primitive).unwrap().transform,
+            presented
+        );
+        assert_eq!(scene.visible_operations(viewport).unwrap(), visible);
+        scene.apply_presentation(&store, Duration::from_millis(32), None);
+        assert_eq!(
+            scene.draw_primitive(primitive).unwrap().transform,
+            presented
+        );
+        other.layout.x += 20.0;
+        scene.apply_delta([other], []);
+        assert_eq!(
+            scene.draw_primitive(primitive).unwrap().transform,
+            presented
+        );
+        assert_eq!(scene.visible_operations(viewport).unwrap(), visible);
+        assert!(Arc::ptr_eq(&plan, &scene.frame_plan().unwrap()));
+        scene.audit_retained_projection();
+    }
+
+    /// Before promotion the CPU presents the subtree; a repaint in that
+    /// window still draws the current opacity and transform.
+    #[test]
+    fn a_repaint_pending_promotion_draws_the_current_opacity_and_transform() {
+        let mut scene = UiScene::new();
+        let parent = node(1, None, &[2]);
+        let mut child = node(2, Some(1), &[]);
+        scene.apply_delta([parent, child.clone()], []);
+        let primitive = crate::PrimitiveId {
+            node: id(2),
+            slot: 0,
+        };
+        let mut store = PresentationStore::new();
+        let scaled = PaintTransform {
+            a: 0.9,
+            d: 0.9,
+            ..Default::default()
+        };
+        store.insert(
+            opacity_track(1, 1, 0, 100, 0.0, 1.0),
+            MotionValue::Scalar(1.0),
+        );
+        store.insert(
+            transform_track(2, 1, 0, 100, scaled, PaintTransform::default()),
+            MotionValue::Transform(PaintTransform::default()),
+        );
+        scene.apply_presentation(&store, Duration::ZERO, None);
+        assert_eq!(scene.compositor_layer_count(), 0);
+        let now = Duration::from_millis(8);
+        scene.apply_presentation(&store, now, None);
+        let MotionValue::Scalar(expected) = store
+            .applied_value(
+                MotionTargetId::new(1).unwrap(),
+                AnimatableProperty::Opacity,
+                now,
+            )
+            .unwrap()
+        else {
+            panic!("an opacity track samples a scalar")
+        };
+        let before = scene.draw_primitive(primitive).unwrap().transform;
+        assert_eq!(effective_paint_opacity(&scene, primitive), expected);
+        assert_eq!(scene.compositor_layer_count(), 0);
+        Arc::make_mut(&mut child.style).background = Some([0.8, 0.2, 0.3, 1.0]);
+        scene.apply_delta([child], []);
+        assert_eq!(scene.draw_primitive(primitive).unwrap().transform, before);
+        assert_eq!(effective_paint_opacity(&scene, primitive), expected);
+        scene.audit_retained_projection();
+    }
 }
