@@ -1311,6 +1311,14 @@ impl UiWorld {
                 let parent_mount = self.record(*parent).mount;
                 if self.record(*child).mount != parent_mount {
                     self.set_subtree_mount_state(*child, parent_mount);
+                    if parent_mount == MountState::Parked {
+                        self.withdraw_parked_hits(*child);
+                    }
+                }
+                if old_parent.is_some() && old_parent != Some(*parent) {
+                    // A moved subtree inherits the new parent's
+                    // `pointer-events` before the frame re-projects it.
+                    self.withdraw_pointer_events_none(*child);
                 }
                 if old_parent == Some(*parent) {
                     // Retained-order moves carry the entire subtree; descendants
@@ -1610,6 +1618,7 @@ impl UiWorld {
                 if !interaction.pointer_events {
                     self.input.pointer_hover.retain(|_, target| target != id);
                     self.input.pointer_press.retain(|_, target| target != id);
+                    self.withdraw_pointer_interaction(*id);
                 }
                 self.mark(
                     *id,
@@ -2785,6 +2794,8 @@ impl UiWorld {
         if layout_inputs_changed {
             self.note_layout_source_change();
         }
+        #[cfg(debug_assertions)]
+        self.audit_hit_eligibility("commit");
         Ok(report)
     }
 
@@ -3350,6 +3361,7 @@ impl UiWorld {
             // value. Not a layout dirty.
             self.mark_subtree(id, DirtyMask::STYLE | DirtyMask::INPUT);
             self.clear_hover_for_pointer_events_none(id);
+            self.withdraw_pointer_events_none(id);
         }
         if cursor_changed {
             self.cursor_style_dirty = true;
