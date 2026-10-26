@@ -153,7 +153,9 @@ each(ids, |id| id.clone(), entry_row).container(
 - `Secondary { source, x, y }` 是行身上的右键。 `x`、`y` 是窗口坐标，用来锚住上下文菜单。行表面不接指针，所以这个事件发在列表上。
 - `Reorder { source, before }` 里 `before` 为 `None` 表示放到末尾。
 - `TreeDrop { source, intent }` 的 `intent` 带目标 id 和 `TreeDropPosition`：`Before`、`Inside` 或 `After`。`source` 带着它的子树一起移动。键盘移动也发这个事件。
-- `Cancelled` 是取消。 Escape、失焦、触摸丢失要交给 `ReorderListPointer::Cancel`。
+- `Cancelled` 是取消。拖动中按 Escape 由框架取消，并释放捕获和按下记录，随后的松开不再落下、也不点击起手的行内控件。自己驱动 `apply_pointer` 时，失焦、触摸丢失要交给 `ReorderListPointer::Cancel`。
+
+指针坐标先按列表的布局坐标反投影再命中行，所以列表放在 `ScrollView` 里或祖先带变换时，按下、拖动、落点和右键找的都是指针下的那一行；`Secondary` 的 `x`、`y` 仍是窗口坐标。
 
 | 事件 | 载荷 | 说明 |
 | --- | --- | --- |
@@ -161,7 +163,7 @@ each(ids, |id| id.clone(), entry_row).container(
 | `Secondary` | `source`、`x`、`y` | 行身上的右键。`x`、`y` 是窗口坐标，用来锚住上下文菜单。行表面不接指针，所以这个事件发在列表上 |
 | `Reorder` | `source`、`before` | `before` 为 `None` 表示放到末尾 |
 | `TreeDrop` | `source`、`intent` | `intent` 带目标 id 和 `TreeDropPosition`：`Before`、`Inside` 或 `After` |
-| `Cancelled` | — | 取消。Escape、失焦、触摸丢失要交给 `ReorderListPointer::Cancel` |
+| `Cancelled` | — | 取消。拖动中的 Escape 由框架处理；自己驱动指针时失焦、触摸丢失交给 `ReorderListPointer::Cancel` |
 
 ## 插槽
 
