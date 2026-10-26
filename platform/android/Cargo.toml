@@ -13,17 +13,11 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# Desktop host smoke links V8. Android ARM64 uses the GitHub Actions
-# rusty_v8 archive (`RUSTY_V8_ARCHIVE`); without it, cross-check is
-# --no-default-features (see android-arm64.md).
-default = ["engine-v8"]
-engine-v8 = ["dep:nana-js-v8", "nana-js-v8/engine"]
+default = []
 # Experimental NanaUI Runtime slot. Not a product UI target.
 experimental-android = []
 
 [dependencies]
-# Demo content is the bundled Vue probe fixture.
-nana-js-engine = { workspace = true, features = ["probe-fixtures"] }
 nana-ui-core.workspace = true
 nana-ui-platform = { workspace = true, features = ["experimental-android"] }
 nana-ui = { path = "../../crates/nana-ui", default-features = false, features = [
@@ -33,8 +27,6 @@ nana-ui = { path = "../../crates/nana-ui", default-features = false, features = 
     "wgpu-interop",
     "wgpu-backends",
 ] }
-nana-ui-vue = { path = "../../crates/nana-ui-vue", default-features = false }
-nana-js-v8 = { workspace = true, optional = true }
 wgpu.workspace = true
 log = "0.4"
 pollster.workspace = true

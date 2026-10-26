@@ -241,7 +241,7 @@ impl SlotRuntime {
     /// Queue a physical pointer sample (Android MotionEvent coords + pointer id).
     ///
     /// Returns `false` when the sample is outside the slot (and not part of
-    /// an in-slot drag) so the host can leave it `Unhandled` for VueHost.
+    /// an in-slot drag) so the host can leave it `Unhandled` for the system.
     pub fn push_touch(
         &mut self,
         slot: Option<PhysicalRect>,

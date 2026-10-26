@@ -1,15 +1,13 @@
 //! Experimental Android ARM64 host — not a current NanaUI product target.
 //!
-//! GameActivity + GameTextInput InputConnection + `ANativeWindow` Surface + V8
-//! (wgpu 30 / Vulkan). Desktop builds expose [`smoke_engine_only`] for host-side
-//! compile/smoke without NDK UI. The control slot is NanaUI Runtime + UiScene +
+//! GameActivity + GameTextInput InputConnection + `ANativeWindow` Surface
+//! (wgpu 30 / Vulkan). The control slot is NanaUI Runtime + UiScene +
 //! `SceneWgpuPainter` — not a second product paint kernel.
 
 #![cfg_attr(target_os = "android", allow(clippy::unnecessary_wraps))]
 
 mod chrome_fill;
 mod control_slot;
-mod engine;
 #[cfg(target_os = "android")]
 mod gpu;
 #[cfg(target_os = "android")]
@@ -30,8 +28,6 @@ pub use chrome_fill::{band_draw_list, clamp_scissor};
 pub use shell::{
     ANDROID_MDPI_DPI, AndroidShellStub, DEFAULT_ANDROID_SCALE_FACTOR, scale_factor_from_density_dpi,
 };
-
-pub use engine::{EngineBootReport, smoke_engine_only};
 
 #[cfg(target_os = "android")]
 use android_activity::AndroidApp;
@@ -70,9 +66,9 @@ mod android_not_product {
     }
 
     /// Same `LayoutStyle` as desktop Runtime/Scene — no Android field fork.
-    /// Extra L1 fields use [`Default`]; do not reconstruct the struct here.
+    /// Extra fields use [`Default`]; do not reconstruct the struct here.
     #[test]
-    fn experimental_host_shares_current_l1_layout_fields() {
+    fn experimental_host_shares_current_layout_fields() {
         let style = nana_ui_core::LayoutStyle::default();
         let _pointer_events: Option<nana_ui_core::PointerEventsSpec> = style.pointer_events;
         let _transform_3d: Option<nana_ui_core::PaintMat4> = style.transform_3d;

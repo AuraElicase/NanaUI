@@ -111,7 +111,7 @@ pub fn pointer_in_slot(slot: PhysicalRect, physical_x: f32, physical_y: f32) -> 
 
 /// Routes GameActivity input to the NanaUI control-slot only.
 ///
-/// Pointer events outside the slot stay `Unhandled` so VueHost can receive them.
+/// Pointer events outside the slot stay `Unhandled` for the system.
 /// Keyboard events are accepted only while the slot holds keyboard focus (last
 /// Down was inside the slot); a Down outside clears that focus **when no
 /// pointer gesture is captured**.
