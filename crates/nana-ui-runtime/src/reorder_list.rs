@@ -1108,6 +1108,11 @@ impl crate::AppContext {
         let Some(bounds) = self.world().component_layout_box(list_id) else {
             return Ok(false);
         };
+        // Row boxes are layout coordinates; an ancestor's scroll or
+        // transform moves the window point away from them.
+        let Some((x, y)) = self.world().pointer_layout_position(list_id, x, y) else {
+            return Ok(false);
+        };
         let rows = self.reorder_row_boxes(list_id, bounds);
         let exclude = self.reorder_tool_boxes(entity);
         if exclude.iter().any(|reserved| reserved.contains(x, y)) {
@@ -1153,6 +1158,9 @@ impl crate::AppContext {
         let Some(bounds) = self.world().component_layout_box(target) else {
             return Ok(false);
         };
+        let Some((x, y)) = self.world().pointer_layout_position(target, x, y) else {
+            return Ok(false);
+        };
         let rows = self.reorder_row_boxes(target, bounds);
         self.update_component(entity, |list, _| {
             list.apply_pointer_with_rows(ReorderListPointer::Move { x, y }, &rows, &[]);
@@ -1177,6 +1185,11 @@ impl crate::AppContext {
         let Some(entity) = self.reorder_list_entity(target) else {
             return Ok(false);
         };
+        // A point that no longer maps into the list cancels; either way the
+        // capture is released.
+        let point = self.world().pointer_layout_position(target, x, y);
+        let cancel = cancel || point.is_none();
+        let (x, y) = point.unwrap_or((x, y));
         let bounds = self.world().component_layout_box(target);
         let rows = bounds
             .map(|bounds| self.reorder_row_boxes(target, bounds))
@@ -1193,6 +1206,25 @@ impl crate::AppContext {
             cx.mutations().release_pointer(pointer_id, target);
             true
         })
+    }
+
+    /// Escape cancels a list drag that holds the pointer in `document`. The
+    /// press record goes too, so the release that follows neither drops the
+    /// row nor clicks the control the drag started on.
+    pub fn cancel_reorder_list_drag(
+        &mut self,
+        document: crate::DocumentId,
+    ) -> Result<bool, crate::FrameworkError> {
+        let mut cancelled = false;
+        for (pointer_id, target) in self.world().pointer_captures(document) {
+            if self.is_reorder_list(target)
+                && self.end_reorder_list_pointer(document, pointer_id, 0.0, 0.0, true)?
+            {
+                self.release_pointer(document, pointer_id);
+                cancelled = true;
+            }
+        }
+        Ok(cancelled)
     }
 
     fn reorder_list_entity(&self, id: StableNodeId) -> Option<crate::Entity<ReorderList>> {
@@ -1237,6 +1269,9 @@ impl crate::AppContext {
             return Ok(false);
         };
         let list_id = entity.stable_id();
+        let Some((x, y)) = self.world().pointer_layout_position(list_id, x, y) else {
+            return Ok(false);
+        };
         let started = self.update_component(entity, |list, cx| {
             let Some(armed) = list.armed.as_mut() else {
                 return false;
@@ -1342,9 +1377,17 @@ impl crate::AppContext {
         let Some(bounds) = self.world().component_layout_box(id) else {
             return Ok(false);
         };
+        // The row is found in layout coordinates; the event keeps the window
+        // point, which is where a context menu opens.
+        let Some((layout_x, layout_y)) = self.world().pointer_layout_position(id, x, y) else {
+            return Ok(false);
+        };
         let rows = self.reorder_row_boxes(id, bounds);
         let exclude = self.reorder_tool_boxes(entity);
-        if exclude.iter().any(|reserved| reserved.contains(x, y)) {
+        if exclude
+            .iter()
+            .any(|reserved| reserved.contains(layout_x, layout_y))
+        {
             return Ok(false);
         }
         let (values, enabled) = self
@@ -1361,7 +1404,7 @@ impl crate::AppContext {
                 )
             })
             .unwrap_or((Vec::new(), Vec::new()));
-        let Some(index) = item_at(&rows, &enabled, x, y) else {
+        let Some(index) = item_at(&rows, &enabled, layout_x, layout_y) else {
             return Ok(false);
         };
         let source = Arc::clone(&values[index]);
@@ -2572,5 +2615,269 @@ mod tests {
                 y: 30.0,
             })
         );
+    }
+
+    #[test]
+    fn scrolled_reorder_inputs_keep_the_source_drop_and_secondary_anchor() {
+        use crate::{Button, LayoutViewport, ScrollAxes, ScrollOffset, ScrollView};
+        use std::sync::Mutex;
+        for live in [false, true] {
+            for control in [false, true] {
+                if control && !live {
+                    continue;
+                }
+                let mut cx = AppContext::new();
+                let document = DocumentId::new(1).unwrap();
+                let scroll = cx
+                    .create_component(
+                        document,
+                        ScrollView::new(ScrollAxes::Vertical).with_layout(|l| {
+                            l.width = Some(LengthSpec::Px(200.0));
+                            l.height = Some(LengthSpec::Px(120.0));
+                        }),
+                    )
+                    .unwrap();
+                let list = cx
+                    .create_detached_component(
+                        document,
+                        ReorderList::new(
+                            (0..8)
+                                .map(|i| ReorderItem::new(format!("row-{i}"), format!("Row {i}"))),
+                        )
+                        .live_rows(live),
+                    )
+                    .unwrap();
+                cx.append_child(scroll, list).unwrap();
+                if live {
+                    for i in 0..8 {
+                        let row = cx
+                            .create_detached_component(
+                                document,
+                                crate::Stack::column(0.0).with_layout(|l| {
+                                    l.height = Some(LengthSpec::Px(40.0));
+                                    l.flex_shrink = Some(0.0);
+                                }),
+                            )
+                            .unwrap();
+                        let button = cx
+                            .create_detached_component(
+                                document,
+                                Button::new(format!("Action {i}")).layout(Arc::new(
+                                    nana_ui_core::LayoutStyle {
+                                        width: Some(LengthSpec::Px(60.0)),
+                                        ..Default::default()
+                                    },
+                                )),
+                            )
+                            .unwrap();
+                        cx.append_child(row, button).unwrap();
+                        cx.append_child(list, row).unwrap();
+                    }
+                }
+                cx.layout_document(document, LayoutViewport::new(200.0, 120.0))
+                    .unwrap();
+                let list_bounds = cx.world().component_layout_box(list.stable_id()).unwrap();
+                let rows = cx.reorder_row_boxes(list.stable_id(), list_bounds);
+                cx.scroll_to(
+                    scroll,
+                    ScrollOffset {
+                        x: 0.0,
+                        y: rows[3].y,
+                    },
+                )
+                .unwrap();
+                let offset = cx.world().scroll_offset(scroll.stable_id()).unwrap().y;
+                cx.rebuild_hit_test(document);
+                let x = rows[4].x + if control { 10.0 } else { 150.0 };
+                let source_y = rows[4].y + rows[4].height * 0.5 - offset;
+                let target_y = rows[3].y + 1.0 - offset;
+                let events = Arc::new(Mutex::new(Vec::new()));
+                let received = Arc::clone(&events);
+                cx.on(list, move |_, event: &ReorderListEvent, _| {
+                    received.lock().unwrap().push(event.clone());
+                })
+                .unwrap();
+                assert!(
+                    cx.emit_reorder_row_secondary(list.stable_id(), x, source_y)
+                        .unwrap()
+                );
+                assert_eq!(
+                    events.lock().unwrap().as_slice(),
+                    &[ReorderListEvent::Secondary {
+                        source: "row-4".into(),
+                        x,
+                        y: source_y
+                    }]
+                );
+                events.lock().unwrap().clear();
+                let mut input = crate::HeadlessInput::bind(&mut cx, document);
+                // A press on a row's button arms the drag and takes over once it
+                // moves; a press on the row surface captures at once.
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Down, x, source_y)
+                    .unwrap();
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Move, x, target_y)
+                    .unwrap();
+                assert_eq!(
+                    cx.read(list, |v| v.drag_visual().map(|v| v.source))
+                        .unwrap(),
+                    Some(4)
+                );
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Up, x, target_y)
+                    .unwrap();
+                assert_eq!(
+                    events.lock().unwrap().as_slice(),
+                    &[ReorderListEvent::Reorder {
+                        source: "row-4".into(),
+                        before: Some("row-3".into())
+                    }]
+                );
+                events.lock().unwrap().clear();
+                // Escape releases the capture too; the release that follows stays
+                // cancelled and the next drag still commits.
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Down, x, source_y)
+                    .unwrap();
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Move, x, target_y)
+                    .unwrap();
+                input
+                    .press(
+                        &mut cx,
+                        nana_ui_input::KeyInput::named(
+                            "Escape",
+                            "Escape",
+                            nana_ui_input::KeyState::Pressed,
+                            Default::default(),
+                        ),
+                        None,
+                        None,
+                    )
+                    .unwrap();
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Up, x, target_y)
+                    .unwrap();
+                assert_eq!(
+                    events.lock().unwrap().as_slice(),
+                    &[ReorderListEvent::Cancelled]
+                );
+                assert!(cx.world().pointer_captures(document).is_empty());
+                events.lock().unwrap().clear();
+                for (phase, y) in [
+                    (nana_ui_input::PointerPhase::Down, source_y),
+                    (nana_ui_input::PointerPhase::Move, target_y),
+                    (nana_ui_input::PointerPhase::Up, target_y),
+                ] {
+                    input.pointer(&mut cx, phase, x, y).unwrap();
+                }
+                assert_eq!(
+                    events.lock().unwrap().as_slice(),
+                    &[ReorderListEvent::Reorder {
+                        source: "row-4".into(),
+                        before: Some("row-3".into()),
+                    }]
+                );
+                events.lock().unwrap().clear();
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Down, x, source_y)
+                    .unwrap();
+                input
+                    .pointer(&mut cx, nana_ui_input::PointerPhase::Move, x, target_y)
+                    .unwrap();
+                // An end point that does not map into the list cancels and still
+                // releases the capture.
+                cx.end_reorder_list_pointer(document, 1, f32::NAN, target_y, false)
+                    .unwrap();
+                assert_eq!(
+                    events.lock().unwrap().as_slice(),
+                    &[ReorderListEvent::Cancelled],
+                    "live={live} control={control}"
+                );
+                assert_eq!(cx.world().pointer_capture(document, 1), None);
+                assert!(!cx.read(list, ReorderList::is_dragging).unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn escape_cancels_real_drag_releases_capture_and_keeps_pointer_up_from_reordering() {
+        use nana_ui_input::{KeyInput, KeyState, PointerPhase};
+        for from_button in [false, true] {
+            let mut fixture = ButtonRows::new(false);
+            let (x, y) = if from_button {
+                fixture.on_button(0)
+            } else {
+                fixture.on_body(0)
+            };
+            let (_, end_y) = fixture.on_body(2);
+            fixture.pointer(PointerPhase::Down, x, y);
+            fixture.pointer(PointerPhase::Move, x, end_y + 20.0);
+            assert!(fixture.dragging());
+            assert!(fixture.captured());
+            let result = fixture
+                .input
+                .press(
+                    &mut fixture.context,
+                    KeyInput::named("Escape", "Escape", KeyState::Pressed, Default::default()),
+                    None,
+                    None,
+                )
+                .unwrap();
+            assert!(result.handled && result.prevent_default);
+            assert!(!fixture.dragging());
+            assert!(!fixture.captured());
+            assert_eq!(fixture.painted_drag(), None);
+            assert_eq!(fixture.take_events(), [ReorderListEvent::Cancelled]);
+            fixture.pointer(PointerPhase::Move, x, end_y + 25.0);
+            fixture.pointer(PointerPhase::Up, x, end_y + 25.0);
+            assert_eq!(fixture.take_events(), Vec::<ReorderListEvent>::new());
+            assert!(fixture.take_clicks().is_empty());
+            // The next press starts an ordinary drag: the cancelled gesture
+            // does not swallow it.
+            fixture.pointer(PointerPhase::Down, x, y);
+            fixture.pointer(PointerPhase::Move, x, end_y + 20.0);
+            fixture.pointer(PointerPhase::Up, x, end_y + 20.0);
+            assert!(matches!(
+                fixture.take_events().as_slice(),
+                [ReorderListEvent::Reorder { .. }]
+            ));
+        }
+    }
+
+    #[test]
+    fn escape_release_and_repeat_leave_the_active_drag_until_the_first_press() {
+        use nana_ui_input::{KeyInput, KeyState, PointerPhase};
+        let mut fixture = ButtonRows::new(false);
+        let (x, y) = fixture.on_body(0);
+        let (_, end_y) = fixture.on_body(2);
+        fixture.pointer(PointerPhase::Down, x, y);
+        fixture.pointer(PointerPhase::Move, x, end_y);
+        let release = KeyInput::named("Escape", "Escape", KeyState::Released, Default::default());
+        fixture
+            .input
+            .press(&mut fixture.context, release, None, None)
+            .unwrap();
+        let mut repeat = KeyInput::named("Escape", "Escape", KeyState::Pressed, Default::default());
+        repeat.repeat = true;
+        fixture
+            .input
+            .press(&mut fixture.context, repeat, None, None)
+            .unwrap();
+        assert!(fixture.dragging() && fixture.captured());
+        assert!(fixture.take_events().is_empty());
+        fixture
+            .input
+            .press(
+                &mut fixture.context,
+                KeyInput::named("Escape", "Escape", KeyState::Pressed, Default::default()),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(fixture.take_events(), [ReorderListEvent::Cancelled]);
+        fixture.pointer(PointerPhase::Up, x, end_y);
+        assert!(fixture.take_events().is_empty());
     }
 }

@@ -900,6 +900,18 @@ impl AppContext {
         if !stroke.is_text() && self.editor_composing(document) {
             return Ok(CONSUMED);
         }
+        // A list drag holding the pointer takes the first Escape press: the
+        // gesture is the innermost thing the key can cancel.
+        if pressed
+            && key == "Escape"
+            && !repeat
+            && !modifiers.alt
+            && !modifiers.control
+            && !modifiers.meta
+            && optional_input!("controls", self.cancel_reorder_list_drag(document))?
+        {
+            return Ok(CONSUMED);
+        }
         let keyboard_barrier = self.has_blocking_runtime_overlay(document);
         // An open menu bar, or one the keyboard holds, takes its keys first.
         if !keyboard_barrier
