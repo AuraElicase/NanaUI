@@ -2593,6 +2593,7 @@ impl UiWorld {
                 menu_scroll,
                 menu_room,
                 checkable,
+                fit_options,
                 ..
             } => Some(crate::select::select_geometry(
                 bounds,
@@ -2613,6 +2614,14 @@ impl UiWorld {
                 *checkable,
                 padding,
                 self.chrome_text_measure(id),
+                // The widest option layout measured for the field: its natural
+                // width, or the label it shows when that is the widest.
+                fit_options
+                    .then(|| {
+                        self.text_natural_width(id)
+                            .or_else(|| self.text_metrics(id).map(|metrics| metrics.width))
+                    })
+                    .flatten(),
             )),
             StandardVisual::MenuSurface {
                 kind: crate::MenuSurfaceKind::ContextMenu,
@@ -2946,9 +2955,10 @@ impl UiWorld {
         }
     }
 
-    /// Where a menu hanging off `id` can be seen, in `id`'s own layout y: the
-    /// window and every clip above `id` that hit testing cuts it by, each
-    /// moved through the scroll offsets between that box and `id`. A
+    /// Where a menu hanging off `id` can be seen, in `id`'s own layout
+    /// coordinates: the window and every clip above `id` that hit testing
+    /// cuts it by, each moved through the scroll offsets between that box and
+    /// `id`. A
     /// `position: fixed` ancestor is window-placed and ends the walk, as it
     /// does for hit testing. Transforms are left out: they bend where the menu
     /// is placed, not whether what it draws matches what it hits.
@@ -2956,18 +2966,26 @@ impl UiWorld {
     /// `None` until the document is laid out, or when nothing is left to see.
     pub(crate) fn select_menu_room(&self, id: StableNodeId) -> Option<crate::SelectMenuRoom> {
         let viewport = self.document_viewport_of(id)?;
-        let mut top = f32::NEG_INFINITY;
-        let mut bottom = f32::INFINITY;
-        let mut clip = |bounds: LayoutBox, shift: f32| {
-            top = top.max(bounds.y + shift);
-            bottom = bottom.min(bounds.y + bounds.height + shift);
+        let mut room = crate::SelectMenuRoom {
+            top: f32::NEG_INFINITY,
+            bottom: f32::INFINITY,
+            left: f32::NEG_INFINITY,
+            right: f32::INFINITY,
+        };
+        let mut clip = |bounds: LayoutBox, shift: crate::ScrollOffset| {
+            room.top = room.top.max(bounds.y + shift.y);
+            room.bottom = room.bottom.min(bounds.y + bounds.height + shift.y);
+            room.left = room.left.max(bounds.x + shift.x);
+            room.right = room.right.min(bounds.x + bounds.width + shift.x);
         };
         // Scroll offsets between the box being looked at and `id`.
-        let mut shift = 0.0;
+        let mut shift = crate::ScrollOffset::default();
         let mut child = id;
         let mut current = self.parent_id(id);
         while let Some(ancestor) = current {
-            shift += self.scroll_offset(ancestor).unwrap_or_default().y;
+            let offset = self.scroll_offset(ancestor).unwrap_or_default();
+            shift.x += offset.x;
+            shift.y += offset.y;
             let style = self.hit_motion_layout(ancestor);
             let layout = self.component_layout_box(ancestor)?;
             if let Some((x, y, width, height)) =
@@ -3009,12 +3027,13 @@ impl UiWorld {
         }
         clip(
             LayoutBox {
+                width: viewport.width,
                 height: viewport.height,
                 ..LayoutBox::default()
             },
             shift,
         );
-        (top < bottom).then_some(crate::SelectMenuRoom { top, bottom })
+        (room.top < room.bottom && room.left < room.right).then_some(room)
     }
 }
 

@@ -493,6 +493,7 @@ pub(crate) fn select_geometry(
     checkable: bool,
     padding: nana_ui_core::PaddingSpec,
     measure: crate::text_width::ChromeTextMeasure<'_>,
+    fitted_options: Option<f32>,
 ) -> ComponentGeometry {
     let palette = &model.palette;
     let border = source.layout.resolved_border_width();
@@ -522,6 +523,7 @@ pub(crate) fn select_geometry(
             menu_room.or_else(|| window_room(viewport)),
             checkable,
             measure,
+            fitted_options,
         )
     });
     let mut label_box = LayoutBox {
@@ -597,6 +599,7 @@ fn select_menu_geometry(
     room: Option<crate::SelectMenuRoom>,
     checkable: bool,
     measure: crate::text_width::ChromeTextMeasure<'_>,
+    fitted_options: Option<f32>,
 ) -> SelectMenuGeometry {
     let palette = &model.palette;
     let metrics = model.metrics;
@@ -606,10 +609,28 @@ fn select_menu_geometry(
         MENU_PAD * 2.0 + count * item_height + (count - 1.0).max(0.0) * MENU_ITEM_GAP;
     let is_light = palette.background.as_rgba_array()[0] > 0.5;
     let (surface_y, height) = resolve_menu_vertical(field, natural_height, room);
+    // Reserved for the whole menu when the menu *can* check, not when one
+    // option currently is: deriving it from `any(checked)` shifted every label
+    // 16px sideways the moment the first option became checked.
+    let check_reserve = if checkable { MENU_CHECK_RESERVE } else { 0.0 };
+    // A menu that fits its options holds the widest row, though its field
+    // was given less, and the lane a scrolling menu's bar takes from its rows.
+    let fitted_width = fitted_options.map(|widest| {
+        let bar = metrics.scrollbar;
+        let lane = if natural_height > height
+            && scrollbars.visibility != nana_ui_core::ScrollbarVisibility::Hidden
+        {
+            (MENU_BORDER + bar.track_inset + bar.thickness - MENU_PAD).max(0.0)
+        } else {
+            0.0
+        };
+        widest + MENU_PAD * 2.0 + size.padding_x_in(metrics) * 2.0 + check_reserve + lane
+    });
+    let (surface_x, width) = resolve_menu_horizontal(field, fitted_width, room);
     let surface = LayoutBox {
-        x: field.x,
+        x: surface_x,
         y: surface_y,
-        width: field.width,
+        width,
         height,
     };
     // A surface capped short of its rows scrolls them inside its border and
@@ -646,10 +667,6 @@ fn select_menu_geometry(
     // hint or a highlight.
     let rows_x = surface.x + MENU_PAD;
     let rows_right = scrollbar.map_or(surface.x + surface.width - MENU_PAD, |bar| bar.lane.x);
-    // Reserved for the whole menu when the menu *can* check, not when one
-    // option currently is: deriving it from `any(checked)` shifted every label
-    // 16px sideways the moment the first option became checked.
-    let check_reserve = if checkable { MENU_CHECK_RESERVE } else { 0.0 };
     let options = options
         .iter()
         .enumerate()
@@ -941,6 +958,28 @@ fn resolve_menu_vertical(
     }
 }
 
+/// The menu's x and width: its field's, or as wide as its widest row when it
+/// fits its options and that is wider. A menu wider than its field starts
+/// where the field does and moves left as far as it must to end inside the
+/// room; one wider than the room is cut to it.
+fn resolve_menu_horizontal(
+    field: LayoutBox,
+    fitted_width: Option<f32>,
+    room: Option<crate::SelectMenuRoom>,
+) -> (f32, f32) {
+    let Some(fitted) = fitted_width.filter(|fitted| *fitted > field.width) else {
+        return (field.x, field.width);
+    };
+    let Some(room) = room else {
+        return (field.x, fitted);
+    };
+    let width = fitted.min(room.right - room.left);
+    if width <= field.width {
+        return (field.x, field.width);
+    }
+    (field.x.min(room.right - width).max(room.left), width)
+}
+
 /// What an open menu projects as its room: taken now, from the boxes the
 /// last layout gave the field and everything above it. A closed menu has
 /// none to keep.
@@ -953,11 +992,13 @@ pub(crate) fn menu_room(
 }
 
 /// The room a menu opened before its field projected with a layout has: the
-/// window, where the field's own layout y meets it.
+/// window, where the field's own layout box meets it.
 fn window_room(viewport: Option<crate::LayoutViewport>) -> Option<crate::SelectMenuRoom> {
     viewport.map(|viewport| crate::SelectMenuRoom {
         top: 0.0,
         bottom: viewport.height,
+        left: 0.0,
+        right: viewport.width,
     })
 }
 
@@ -1104,6 +1145,8 @@ mod tests {
         let room = Some(crate::SelectMenuRoom {
             top: 550.0,
             bottom: 950.0,
+            left: 0.0,
+            right: 600.0,
         });
         let field = menu_field(600.0);
         let (y, height) = resolve_menu_vertical(field, 200.0, room);
@@ -1625,6 +1668,152 @@ mod tests {
     }
 
     /// `count` options, `v{n}` labelled `Option {n}`.
+    /// `select` 128px wide at the right end of a `width` column, which clips
+    /// what it holds when `clip`, opened once laid out.
+    fn at_the_right_end(
+        select: Select,
+        width: f32,
+        clip: bool,
+    ) -> (AppContext, crate::Entity<Select>) {
+        use crate::Stack;
+
+        let mut select = select;
+        Arc::make_mut(&mut select.style.layout).width = Some(LengthSpec::Px(128.0));
+        let mut context = AppContext::new();
+        let page = context
+            .create_component(
+                document(),
+                Stack::column(0.0).with_layout(|layout| {
+                    layout.width = Some(LengthSpec::Px(width));
+                    layout.align_items = nana_ui_core::AlignSpec::End;
+                    if clip {
+                        layout.overflow_x = nana_ui_core::OverflowSpec::Hidden;
+                        layout.overflow_y = nana_ui_core::OverflowSpec::Hidden;
+                    }
+                }),
+            )
+            .unwrap();
+        let select = context.create_component(document(), select).unwrap();
+        context.append_child(page, select).unwrap();
+        frame(&mut context, &mut crate::MeasureTextShaper);
+        assert!(context.toggle_select(select).unwrap());
+        frame(&mut context, &mut crate::MeasureTextShaper);
+        (context, select)
+    }
+
+    fn fitted(label: &str) -> Select {
+        Select::new(Some("a"))
+            .options([
+                SelectOption::new("a", "A"),
+                SelectOption::new("long", label),
+            ])
+            .fit_options(true)
+    }
+
+    #[test]
+    fn a_fitted_menu_holds_its_widest_option_inside_the_window() {
+        let label = "A much longer option than the field";
+        let (context, select) = at_the_right_end(fitted(label), 600.0, false);
+        let field = context.world().layout_box(select.stable_id()).unwrap();
+        assert_eq!((field.x, field.width), (472.0, 128.0));
+        let menu = open_menu(&context, select);
+        assert!(menu.surface.width > field.width, "wider than its field");
+        // It would run past the window's right edge from the field's x, so it
+        // moves left until it ends there.
+        assert_eq!(menu.surface.x + menu.surface.width, 600.0);
+        assert!(menu.surface.x < field.x);
+        let widest = context
+            .world()
+            .text_natural_width(select.stable_id())
+            .unwrap();
+        let row = &menu.options[1];
+        assert_eq!(&*row.label.content, label);
+        assert!(row.label.bounds.width >= widest, "the label is not cut");
+        assert_eq!(row.label.bounds.width, menu.options[0].label.bounds.width);
+        // The pointer meets the rows where they are drawn, left of the field.
+        let (x, y) = centre(row.bounds);
+        assert!(x < field.x);
+        assert_eq!(select_option_at(&menu, x, y), Some(1));
+
+        // An option wider than the window: the menu is the window's width.
+        let (context, select) = at_the_right_end(fitted(&"Long option ".repeat(100)), 600.0, false);
+        let menu = open_menu(&context, select);
+        assert_eq!((menu.surface.x, menu.surface.width), (0.0, 600.0));
+
+        // Without `fit_options` the menu is its field's width.
+        let mut plain = fitted(label);
+        plain.fit_options = false;
+        let (context, select) = at_the_right_end(plain, 600.0, false);
+        let menu = open_menu(&context, select);
+        assert_eq!((menu.surface.x, menu.surface.width), (472.0, 128.0));
+    }
+
+    #[test]
+    fn a_fitted_menu_stays_inside_the_box_that_clips_its_field() {
+        let label = "A much longer option than the field";
+        let (context, select) = at_the_right_end(fitted(label), 300.0, true);
+        let field = context.world().layout_box(select.stable_id()).unwrap();
+        assert_eq!(field.x + field.width, 300.0);
+        let menu = open_menu(&context, select);
+        assert!(menu.surface.width > field.width);
+        assert_eq!(menu.surface.x + menu.surface.width, 300.0);
+
+        let (context, select) = at_the_right_end(fitted(&"Long option ".repeat(100)), 300.0, true);
+        let menu = open_menu(&context, select);
+        assert_eq!((menu.surface.x, menu.surface.width), (0.0, 300.0));
+    }
+
+    #[test]
+    fn a_menu_wider_than_its_field_moves_left_only_as_far_as_its_room_needs() {
+        let room = Some(crate::SelectMenuRoom {
+            top: 0.0,
+            bottom: 400.0,
+            left: 100.0,
+            right: 400.0,
+        });
+        let field = LayoutBox {
+            x: 300.0,
+            y: 0.0,
+            width: 80.0,
+            height: 32.0,
+        };
+        // Its field's own box unless its options ask for more.
+        assert_eq!(resolve_menu_horizontal(field, None, room), (300.0, 80.0));
+        assert_eq!(
+            resolve_menu_horizontal(field, Some(60.0), room),
+            (300.0, 80.0)
+        );
+        // From the field's x while it fits, else ending at the room's right.
+        let left = LayoutBox { x: 120.0, ..field };
+        assert_eq!(
+            resolve_menu_horizontal(left, Some(200.0), room),
+            (120.0, 200.0)
+        );
+        assert_eq!(
+            resolve_menu_horizontal(field, Some(250.0), room),
+            (150.0, 250.0)
+        );
+        // No wider than the room, and never narrower than the field.
+        assert_eq!(
+            resolve_menu_horizontal(field, Some(500.0), room),
+            (100.0, 300.0)
+        );
+        let narrow = Some(crate::SelectMenuRoom {
+            left: 320.0,
+            right: 380.0,
+            ..room.unwrap()
+        });
+        assert_eq!(
+            resolve_menu_horizontal(field, Some(500.0), narrow),
+            (300.0, 80.0)
+        );
+        // Before a layout gives it a room it keeps the field's x.
+        assert_eq!(
+            resolve_menu_horizontal(field, Some(250.0), None),
+            (300.0, 250.0)
+        );
+    }
+
     fn long_options(count: usize) -> Vec<SelectOption> {
         (0..count)
             .map(|n| SelectOption::new(format!("v{n}"), format!("Option {n}")))
