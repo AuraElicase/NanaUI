@@ -609,3 +609,68 @@ fn paragraph_typography_uses_identical_display_editor_and_hit_geometry() {
     assert_eq!(hit.caret.line, 1);
     assert!(edited.caret_geometry(hit.caret).unwrap().x_px >= second.bounds.x);
 }
+
+#[test]
+fn span_backgrounds_paint_under_the_editors_selection_in_both_nodes() {
+    let yellow = PaintColor::srgb([1.0, 0.9, 0.2, 1.0]);
+    let value = RichText::builder()
+        .plain("mark ")
+        .push(
+            "these words across lines",
+            RichSpanStyle::new().background_color(yellow),
+        )
+        .build();
+    let (mut runtime, view, editor) = document(value);
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let mut input = HeadlessInput::bind(runtime.context_mut(), document_id());
+    focus(&mut runtime, &mut input, editor);
+    runtime
+        .context_mut()
+        .rich_edit(editor, RichEditCommand::Select(0..10))
+        .unwrap();
+    settle(&mut runtime, &mut shaper);
+    assert_eq!(
+        lines(&runtime, view),
+        lines(&runtime, editor.stable_id()),
+        "a background moves no line"
+    );
+    for node in [view, editor.stable_id()] {
+        let order: Vec<_> = runtime
+            .scene()
+            .primitives()
+            .filter(|primitive| primitive.node == node)
+            .map(|primitive| &primitive.kind)
+            .collect();
+        let background = order
+            .iter()
+            .position(|kind| {
+                matches!(kind, ScenePrimitiveKind::QuadBatch { background, bounds, .. }
+                    if *background == Some(yellow) && bounds.len() >= 2)
+            })
+            .expect("the span fills each line it reaches");
+        let glyphs = order
+            .iter()
+            .position(|kind| matches!(kind, ScenePrimitiveKind::Text { .. }))
+            .unwrap();
+        assert!(background < glyphs);
+        if node == editor.stable_id() {
+            let selection = order
+                .iter()
+                .position(|kind| {
+                    matches!(
+                        kind,
+                        ScenePrimitiveKind::Quad {
+                            background: Some(_),
+                            ..
+                        }
+                    )
+                })
+                .expect("the editor's selection");
+            assert!(
+                background < selection && selection < glyphs,
+                "{background} < {selection} < {glyphs}"
+            );
+        }
+    }
+}

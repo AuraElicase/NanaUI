@@ -1,7 +1,7 @@
 //! What a shape result depends on, and nothing else.
 //!
 //! In: text content, span ranges and their shaping-relevant style (family,
-//! size, weight, slant, letter spacing, features, variations, kerning),
+//! size, weight, stretch, slant, letter spacing, features, variations, kerning),
 //! direction, vertical shaping, language, device scale, font generation.
 //!
 //! Out, deliberately: widget identity, [`TextRevision`](crate::TextRevision)
@@ -29,6 +29,7 @@ pub(crate) struct StyleKey {
     family: Option<Arc<str>>,
     size_bits: u32,
     weight: u16,
+    stretch_bits: u32,
     italic: bool,
     letter_spacing_bits: u32,
     features: FontFeatures,
@@ -42,6 +43,7 @@ impl StyleKey {
             family: style.font_family.clone(),
             size_bits: canonical_f32_bits(style.font_size_px * scale),
             weight: style.font_weight,
+            stretch_bits: canonical_f32_bits(style.font_stretch),
             italic: style.italic,
             letter_spacing_bits: canonical_f32_bits(style.letter_spacing_px * scale),
             features: FontFeatures::from_settings(&style.features),

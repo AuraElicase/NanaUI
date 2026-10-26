@@ -352,6 +352,9 @@ pub struct RichShapeStyle {
     /// Opaque authored font alias retained for consumer round trips.
     pub family_alias: Option<Arc<str>>,
     pub weight: Option<u16>,
+    /// CSS `font-stretch` as a percentage of normal width: picks a condensed
+    /// or expanded face, or sets a variable face's `wdth` axis.
+    pub stretch_percent: Option<f32>,
     pub italic: Option<bool>,
     pub letter_spacing_px: Option<f32>,
     /// OpenType features, replacing the node's list.
@@ -370,6 +373,9 @@ pub struct RichPaintStyle {
     pub material: Option<crate::MaterialRef>,
     /// Glyph fill.
     pub color: Option<PaintColor>,
+    /// Filled behind the span's glyphs, over each line's run of them (CSS
+    /// `background-color` on an inline box), under a selection.
+    pub background_color: Option<PaintColor>,
     pub decoration: Option<TextDecorationLine>,
     /// Underline and line-through colour; the fill colour when unset.
     pub decoration_color: Option<PaintColor>,
@@ -433,6 +439,12 @@ impl RichSpanStyle {
         self
     }
 
+    /// CSS `font-stretch`, a percentage of normal width (50..=200).
+    pub fn stretch(mut self, percent: f32) -> Self {
+        self.shape.stretch_percent = Some(percent);
+        self
+    }
+
     pub fn bold(self) -> Self {
         self.weight(700)
     }
@@ -454,6 +466,11 @@ impl RichSpanStyle {
 
     pub fn color(mut self, color: PaintColor) -> Self {
         self.paint.color = Some(color);
+        self
+    }
+
+    pub fn background_color(mut self, color: PaintColor) -> Self {
+        self.paint.background_color = Some(color);
         self
     }
 
@@ -522,6 +539,7 @@ impl RichSpanStyle {
                     pick(&self.shape.size_em, &over.shape.size_em)
                 },
                 weight: pick(&self.shape.weight, &over.shape.weight),
+                stretch_percent: pick(&self.shape.stretch_percent, &over.shape.stretch_percent),
                 italic: pick(&self.shape.italic, &over.shape.italic),
                 letter_spacing_px: pick(
                     &self.shape.letter_spacing_px,
@@ -532,6 +550,7 @@ impl RichSpanStyle {
             paint: RichPaintStyle {
                 material: pick(&self.paint.material, &over.paint.material),
                 color: pick(&self.paint.color, &over.paint.color),
+                background_color: pick(&self.paint.background_color, &over.paint.background_color),
                 decoration: pick(&self.paint.decoration, &over.paint.decoration),
                 decoration_color: pick(&self.paint.decoration_color, &over.paint.decoration_color),
                 stroke: pick(&self.paint.stroke, &over.paint.stroke),

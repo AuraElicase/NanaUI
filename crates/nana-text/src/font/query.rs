@@ -321,7 +321,7 @@ impl FontQuery {
     ///
     /// **Weight / stretch precedence.** An explicit `"wght"` in
     /// `font-variation-settings` wins over `font-weight`, and an explicit
-    /// `"wdth"` wins over stretch, for face *selection* as well as for the
+    /// `"wdth"` wins over `font_stretch`, for face *selection* as well as for the
     /// axis coordinate, the same rule the CSS mapping applies (`wght` merges
     /// into weight). Any other axis, including custom ones such as `BEVL`,
     /// never influences selection and never becomes `wght`.
@@ -345,7 +345,7 @@ impl FontQuery {
             .unwrap_or(f32::from(style.font_weight));
         let stretch = FontVariationSetting::wdth_value(&style.variations)
             .filter(|value| value.is_finite())
-            .unwrap_or(FontStretch::NORMAL.0);
+            .unwrap_or(style.font_stretch);
         Self {
             families,
             weight: FontWeight::new(weight),

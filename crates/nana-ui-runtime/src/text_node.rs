@@ -550,6 +550,9 @@ fn shape_over(base: &NanaTextStyle, base_size: f32, shape: &RichShapeStyle) -> N
     if let Some(weight) = shape.weight {
         style.font_weight = weight;
     }
+    if let Some(stretch) = shape.stretch_percent.filter(|stretch| stretch.is_finite()) {
+        style.font_stretch = stretch;
+    }
     if let Some(italic) = shape.italic {
         style.italic = italic;
     }
@@ -699,6 +702,8 @@ pub(crate) fn nana_text_style(style: &ComputedStyle) -> NanaTextStyle {
         font_family: style.font_family.as_deref().map(nana_font_family),
         font_size_px: style.font_size.max(f32::MIN_POSITIVE),
         font_weight: style.font_weight.unwrap_or(400),
+        // The Style Model has no `font-stretch`: a rich span sets its own.
+        font_stretch: 100.0,
         italic: style.italic,
         line_height: Some(style.line_height.unwrap_or(DEFAULT_LINE_HEIGHT)),
         letter_spacing_px: if style.letter_spacing.is_finite() {
@@ -1060,6 +1065,32 @@ mod tests {
     }
 
     #[test]
+    fn rich_stretch_reaches_the_engine_style_and_leaves_axes_alone() {
+        let base = NanaTextStyle {
+            variations: vec![nana_ui_core::FontVariationSetting {
+                tag: *b"wght",
+                value: 500.0,
+            }],
+            ..NanaTextStyle::default()
+        };
+        let rich = RichText::new("abc").with_span(0..3, RichSpanStyle::new().stretch(75.0));
+        let spans = rich_text_spans(&rich, &base, 16.0);
+        assert_eq!(spans[0].style.font_stretch, 75.0);
+        assert_eq!(
+            spans[0].style.variations, base.variations,
+            "nana-text decides between a condensed face and the wdth axis"
+        );
+        let painted = RichText::new("abc").with_span(
+            0..3,
+            RichSpanStyle::new().background_color(nana_ui_core::PaintColor::srgb([1.0; 4])),
+        );
+        assert!(
+            rich_text_spans(&painted, &base, 16.0).is_empty(),
+            "a background never reaches the shaper"
+        );
+    }
+
+    #[test]
     fn rich_changes_are_classified_by_the_tier_they_touch() {
         let red = nana_ui_core::PaintColor::srgb([1.0, 0.0, 0.0, 1.0]);
         let blue = nana_ui_core::PaintColor::srgb([0.0, 0.0, 1.0, 1.0]);
@@ -1074,6 +1105,28 @@ mod tests {
             .with_span(0..2, RichSpanStyle::new().color(red).size(30.0));
         assert_eq!(
             classify_rich_change(Some(&base), Some(&resized)),
+            TextDirty::SHAPE_STYLE
+        );
+        // A background fills around glyphs already placed.
+        let highlighted = base
+            .clone()
+            .with_span(0..5, RichSpanStyle::new().color(red).background_color(blue));
+        assert_eq!(
+            classify_rich_change(Some(&base), Some(&highlighted)),
+            TextDirty::PAINT
+        );
+        let rehighlighted = base
+            .clone()
+            .with_span(0..5, RichSpanStyle::new().color(red).background_color(red));
+        assert_eq!(
+            classify_rich_change(Some(&highlighted), Some(&rehighlighted)),
+            TextDirty::PAINT
+        );
+        let condensed = base
+            .clone()
+            .with_span(0..5, RichSpanStyle::new().color(red).stretch(75.0));
+        assert_eq!(
+            classify_rich_change(Some(&base), Some(&condensed)),
             TextDirty::SHAPE_STYLE
         );
         let effected = base

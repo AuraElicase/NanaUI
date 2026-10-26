@@ -185,6 +185,10 @@ const SELECT_MENU_SCROLLBAR: u32 = 13;
 /// field's arrow and 7 its hint: the surface used to take slot 4 and hid an
 /// arrow stroke for as long as the menu was open.
 const SELECT_MENU_SURFACE_SLOT: u64 = 8;
+/// Rich text span backgrounds share the document selection's paint layer
+/// below every selection: one batch per span, indices up to the document
+/// selection's.
+const DOCUMENT_SELECTION_INDEX: usize = 1 << 15;
 /// A rich text editor's selection rectangles share the document selection's
 /// paint layer (under the glyphs) from this index on.
 const RICH_EDITOR_SELECTION_BASE: usize = 1 << 16;
@@ -1004,6 +1008,52 @@ fn text_frame(
         }
     };
     (box_width.max(bounds.width), top)
+}
+
+/// A rich text's span backgrounds, from the very layout its text is drawn
+/// from: each span fills its run on every line it reaches, as CSS paints an
+/// inline box's `background-color`. Under any selection and the glyphs.
+fn rich_span_background_primitives(
+    context: &VisualPrimitiveContext<'_>,
+    bounds: SceneRect,
+    vertical: TextVerticalAlignment,
+    retained: &nana_ui_runtime::RetainedTextLayout,
+    rich: &nana_ui_core::RichText,
+) -> Vec<ScenePrimitive> {
+    let layout = &retained.layout;
+    let (page_width, top) = text_frame(bounds, vertical, retained);
+    rich.spans()
+        .iter()
+        .filter_map(|(range, style)| Some((range, style.paint.background_color?)))
+        .take(DOCUMENT_SELECTION_INDEX)
+        .enumerate()
+        .filter_map(|(index, (range, color))| {
+            let rects = layout.selection_rects(range);
+            if rects.is_empty() {
+                return None;
+            }
+            let mut fill = visual_quad_batch(
+                context,
+                collection_slot(DOCUMENT_TEXT_SELECTION, index),
+                rects.into_iter().map(|rect| {
+                    let rect = layout.page_rect(rect, page_width);
+                    SceneRect {
+                        x: bounds.x + rect.x,
+                        y: top + rect.y,
+                        width: rect.width,
+                        height: rect.height,
+                    }
+                }),
+                VisualQuadStyle::solid(color.to_srgb()),
+            );
+            // The authored colour, so the painter resolves it as it does a
+            // glyph fill.
+            if let ScenePrimitiveKind::QuadBatch { background, .. } = &mut fill.kind {
+                *background = Some(color);
+            }
+            Some(fill)
+        })
+        .collect()
 }
 
 /// A rich text editor's selection (under the glyphs) and caret (over them),

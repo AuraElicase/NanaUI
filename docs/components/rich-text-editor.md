@@ -77,7 +77,7 @@ widget(RichTextEditor::new(RichText::new("")))
 | `Select(range)` / `SelectAll` | 改选区（按字符边界对齐） |
 | `Undo` / `Redo` | 撤销、重做 |
 
-工具栏的按下态读 `SelectionChanged { selection, attrs }`。`attrs` 是三态的：`attrs.style` 里有值、`attrs.mixed` 里没有对应位，表示整个选区都是这个值；没值也不 mixed，表示整个选区都没设；`mixed` 有这一位，表示选区里不一致。
+工具栏的按下态读 `SelectionChanged { selection, attrs }`。`attrs` 是三态的：`attrs.style` 里有值、`attrs.mixed` 里没有对应位，表示整个选区都是这个值；没值也不 mixed，表示整个选区都没设；`mixed` 有这一位，表示选区里不一致。`RichAttrMask` 每个字段一位，字宽是 `STRETCH`，背景色是 `BACKGROUND_COLOR`；`ClearAttrs(mask)` 只去掉这些字段。
 
 ## 输入
 

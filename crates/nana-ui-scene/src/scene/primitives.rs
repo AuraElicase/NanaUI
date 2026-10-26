@@ -449,6 +449,27 @@ impl UiScene {
                     text_bounds.x -= node.scroll_offset.x;
                     text_bounds.y -= node.scroll_offset.y;
                 }
+                if let (Some(rich), Some(layout)) = (&node.rich_text, &node.text_layout)
+                    && rich.text() == text.value.as_str()
+                {
+                    let backgrounds = crate::scene::rich_span_background_primitives(
+                        &VisualPrimitiveContext {
+                            node: id,
+                            transform,
+                            clips: &clips,
+                            opacity,
+                            z_index: node.z_index,
+                            document_order: node_order,
+                        },
+                        text_bounds,
+                        node.source_style.text_vertical_alignment,
+                        layout,
+                        rich,
+                    );
+                    for primitive in backgrounds {
+                        self.insert_primitive(primitive);
+                    }
+                }
                 if !node.document_text_selection.is_empty() {
                     // Slot 1 sits under the glyph run at slot 2 (same as
                     // TextInput selection): CSS `::selection` background is
@@ -465,7 +486,7 @@ impl UiScene {
                         // Not slot 1: that is the custom-render primitive's,
                         // and `insert_primitive` would have one silently
                         // replace the other on any node that has both.
-                        collection_slot(DOCUMENT_TEXT_SELECTION, 0),
+                        collection_slot(DOCUMENT_TEXT_SELECTION, DOCUMENT_SELECTION_INDEX),
                         node.document_text_selection.iter().map(|line| SceneRect {
                             x: text_bounds.x + line.x,
                             y: text_bounds.y + line.y,

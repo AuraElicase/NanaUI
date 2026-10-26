@@ -87,6 +87,8 @@ impl RichAttrMask {
     pub const STROKE: Self = Self(1 << 9);
     pub const SHADOWS: Self = Self(1 << 10);
     pub const EFFECT: Self = Self(1 << 11);
+    pub const STRETCH: Self = Self(1 << 12);
+    pub const BACKGROUND_COLOR: Self = Self(1 << 13);
 
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -108,6 +110,9 @@ impl RichAttrMask {
         if self.contains(Self::WEIGHT) {
             style.shape.weight = None;
         }
+        if self.contains(Self::STRETCH) {
+            style.shape.stretch_percent = None;
+        }
         if self.contains(Self::ITALIC) {
             style.shape.italic = None;
         }
@@ -119,6 +124,9 @@ impl RichAttrMask {
         }
         if self.contains(Self::COLOR) {
             style.paint.color = None;
+        }
+        if self.contains(Self::BACKGROUND_COLOR) {
+            style.paint.background_color = None;
         }
         if self.contains(Self::DECORATION) {
             style.paint.decoration = None;
@@ -699,6 +707,10 @@ fn summarize(value: &RichText, range: Range<usize>) -> RichSelectionAttrs {
                 RichAttrMask::WEIGHT,
             ),
             (
+                piece.shape.stretch_percent != first.shape.stretch_percent,
+                RichAttrMask::STRETCH,
+            ),
+            (
                 piece.shape.italic != first.shape.italic,
                 RichAttrMask::ITALIC,
             ),
@@ -711,6 +723,10 @@ fn summarize(value: &RichText, range: Range<usize>) -> RichSelectionAttrs {
                 RichAttrMask::FEATURES,
             ),
             (piece.paint.color != first.paint.color, RichAttrMask::COLOR),
+            (
+                piece.paint.background_color != first.paint.background_color,
+                RichAttrMask::BACKGROUND_COLOR,
+            ),
             (
                 piece.paint.decoration != first.paint.decoration,
                 RichAttrMask::DECORATION,
@@ -1591,6 +1607,22 @@ mod tests {
             view.selection_attrs().mixed.is_empty(),
             "bold over all of it"
         );
+    }
+
+    #[test]
+    fn stretch_and_background_are_their_own_toolbar_attributes() {
+        let yellow = PaintColor::srgb([1.0, 0.9, 0.2, 1.0]);
+        let marked = RichSpanStyle::new().stretch(75.0).background_color(yellow);
+        let mut view = RichTextEditor::new(RichText::new("abcd").with_span(0..2, marked));
+        view.apply_command(RichEditCommand::Select(0..4));
+        let mixed = view.selection_attrs().mixed;
+        assert!(mixed.contains(RichAttrMask::STRETCH));
+        assert!(mixed.contains(RichAttrMask::BACKGROUND_COLOR));
+        assert!(!mixed.contains(RichAttrMask::COLOR));
+        view.apply_command(RichEditCommand::ClearAttrs(RichAttrMask::BACKGROUND_COLOR));
+        let style = view.value.style_at(0).expect("the stretch stays");
+        assert_eq!(style.shape.stretch_percent, Some(75.0));
+        assert_eq!(style.paint.background_color, None);
     }
 
     #[test]

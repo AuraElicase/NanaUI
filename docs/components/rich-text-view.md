@@ -48,11 +48,15 @@ widget(RichTextView::new(line).font_size(20.0))
 
 | 层 | 字段 | 改了之后 |
 | --- | --- | --- |
-| 塑形 `shape` | `family`、`size_px`、`weight`、`italic`、`letter_spacing_px`、`features` | 重新塑形、排版；行盒跟着变高 |
-| 绘制 `paint` | `color`、`decoration`、`decoration_color`、`stroke`、`shadows` | 只重绘：不塑形、不排版 |
+| 塑形 `shape` | `family`、`size_px`、`weight`、`stretch_percent`、`italic`、`letter_spacing_px`、`features` | 重新塑形、排版；行盒跟着变高 |
+| 绘制 `paint` | `color`、`background_color`、`decoration`、`decoration_color`、`stroke`、`shadows` | 只重绘：不塑形、不排版 |
 | 呈现 | `effect` | 不碰文本，交给合成器 |
 
 `size` 比节点字号大的那段，按节点自己的行高比例撑高它所在的行。节点用绝对行高时，比例是行高除以节点字号。
+
+`stretch(percent)` 是 CSS `font-stretch`，正常宽度的百分比（50–200）。字族里有 condensed / expanded 的静态字面时选它；字面有 `wdth` 轴时把轴设到这个值。怎么选由 `nana-text` 决定，规则见[文本引擎](../reference/text-engine.md#匹配)。
+
+`background_color(color)` 在这段字后面填色，和 CSS 给行内元素设 `background-color` 一样：跨行时每行填它在那一行的那一截。矩形来自排版本身（和选区同一种算法），所以双向文本、竖排、注音都对得上。背景在文档选区、编辑器选区和字形下面。只改背景色是绘制层变化，不重新塑形、不重新排版。
 
 ## 描边、阴影与装饰线
 
