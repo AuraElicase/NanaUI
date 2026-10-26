@@ -1,6 +1,199 @@
 //! Fixture-only bounded sample storage. No diagnostics, scheduling or QoS changes.
 use std::time::Instant;
 
+/// The CPU executing this query. It is not an interval residency observation.
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct CpuEndpoint {
+    cpu_number: Option<usize>,
+    error: Option<i32>,
+}
+
+pub fn current_cpu() -> CpuEndpoint {
+    #[cfg(target_os = "macos")]
+    {
+        type Query = unsafe extern "C" fn(*mut usize) -> i32;
+        static QUERY: std::sync::OnceLock<Option<Query>> = std::sync::OnceLock::new();
+        let query = QUERY.get_or_init(|| {
+            unsafe extern "C" {
+                fn dlsym(
+                    handle: *mut std::ffi::c_void,
+                    symbol: *const std::ffi::c_char,
+                ) -> *mut std::ffi::c_void;
+            }
+            // Public pthread.h API, macOS 11+. Resolve once before measurement
+            // so the optional fixture still loads on older macOS versions.
+            let address = unsafe { dlsym((-2_isize) as *mut _, c"pthread_cpu_number_np".as_ptr()) };
+            (!address.is_null())
+                .then(|| unsafe { std::mem::transmute::<*mut std::ffi::c_void, Query>(address) })
+        });
+        if let Some(query) = query {
+            let mut cpu_number = 0;
+            let error = unsafe { query(&mut cpu_number) };
+            return CpuEndpoint {
+                cpu_number: (error == 0).then_some(cpu_number),
+                error: Some(error),
+            };
+        }
+    }
+    CpuEndpoint {
+        cpu_number: None,
+        error: None,
+    }
+}
+
+/// Process-wide counters from the public sys/resource.h RUSAGE_INFO_V6 ABI.
+/// CPU times are raw Mach absolute ticks, not nanoseconds. They include every
+/// process thread, so instruction deltas are never labeled main-thread counts.
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct ProcessCounterValues {
+    user_cpu_ticks: u64,
+    system_cpu_ticks: u64,
+    performance_user_cpu_ticks: u64,
+    performance_system_cpu_ticks: u64,
+    instructions: u64,
+    cycles: u64,
+    performance_instructions: u64,
+    performance_cycles: u64,
+    process_start_abstime: u64,
+}
+
+#[derive(Clone, Copy, serde::Serialize)]
+pub struct ProcessCounterSnapshot {
+    values: Option<ProcessCounterValues>,
+    error: Option<i32>,
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Default)]
+struct RusageInfoV6 {
+    _ri_uuid: [u8; 16],
+    ri_user_time: u64,
+    ri_system_time: u64,
+    _ri_pkg_idle_wkups: u64,
+    _ri_interrupt_wkups: u64,
+    _ri_pageins: u64,
+    _ri_wired_size: u64,
+    _ri_resident_size: u64,
+    _ri_phys_footprint: u64,
+    ri_proc_start_abstime: u64,
+    _ri_proc_exit_abstime: u64,
+    _ri_child_user_time: u64,
+    _ri_child_system_time: u64,
+    _ri_child_pkg_idle_wkups: u64,
+    _ri_child_interrupt_wkups: u64,
+    _ri_child_pageins: u64,
+    _ri_child_elapsed_abstime: u64,
+    _ri_diskio_bytesread: u64,
+    _ri_diskio_byteswritten: u64,
+    _ri_cpu_time_qos_default: u64,
+    _ri_cpu_time_qos_maintenance: u64,
+    _ri_cpu_time_qos_background: u64,
+    _ri_cpu_time_qos_utility: u64,
+    _ri_cpu_time_qos_legacy: u64,
+    _ri_cpu_time_qos_user_initiated: u64,
+    _ri_cpu_time_qos_user_interactive: u64,
+    _ri_billed_system_time: u64,
+    _ri_serviced_system_time: u64,
+    _ri_logical_writes: u64,
+    _ri_lifetime_max_phys_footprint: u64,
+    ri_instructions: u64,
+    ri_cycles: u64,
+    _ri_billed_energy: u64,
+    _ri_serviced_energy: u64,
+    _ri_interval_max_phys_footprint: u64,
+    _ri_runnable_time: u64,
+    _ri_flags: u64,
+    ri_user_ptime: u64,
+    ri_system_ptime: u64,
+    ri_pinstructions: u64,
+    ri_pcycles: u64,
+    _ri_energy_nj: u64,
+    _ri_penergy_nj: u64,
+    _ri_secure_time_in_system: u64,
+    _ri_secure_ptime_in_system: u64,
+    _ri_neural_footprint: u64,
+    _ri_lifetime_max_neural_footprint: u64,
+    _ri_interval_max_neural_footprint: u64,
+    _ri_conclave_footprint: u64,
+    _ri_page_wait_time_mach: u64,
+    _ri_page_cache_hits: u64,
+    _ri_reserved: [u64; 6],
+}
+
+#[cfg(target_os = "macos")]
+const _: () = {
+    // Independently checked against sizeof/offsetof compiled from this SDK's
+    // public C header; V6 flavor fixes this ABI. Unknown older kernels fail
+    // proc_pid_rusage instead of silently changing the buffer spelling.
+    assert!(std::mem::size_of::<RusageInfoV6>() == 464);
+    assert!(std::mem::offset_of!(RusageInfoV6, ri_instructions) == 248);
+    assert!(std::mem::offset_of!(RusageInfoV6, ri_cycles) == 256);
+    assert!(std::mem::offset_of!(RusageInfoV6, ri_user_ptime) == 304);
+    assert!(std::mem::offset_of!(RusageInfoV6, ri_pinstructions) == 320);
+};
+
+pub fn process_counters() -> ProcessCounterSnapshot {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut *mut std::ffi::c_void) -> i32;
+            fn __error() -> *mut i32;
+        }
+        let mut raw = RusageInfoV6::default();
+        let status = unsafe {
+            proc_pid_rusage(
+                std::process::id() as i32,
+                6,
+                (&mut raw as *mut RusageInfoV6).cast(),
+            )
+        };
+        ProcessCounterSnapshot {
+            error: Some(if status == 0 {
+                0
+            } else {
+                unsafe { *__error() }
+            }),
+            values: (status == 0).then_some(ProcessCounterValues {
+                user_cpu_ticks: raw.ri_user_time,
+                system_cpu_ticks: raw.ri_system_time,
+                performance_user_cpu_ticks: raw.ri_user_ptime,
+                performance_system_cpu_ticks: raw.ri_system_ptime,
+                instructions: raw.ri_instructions,
+                cycles: raw.ri_cycles,
+                performance_instructions: raw.ri_pinstructions,
+                performance_cycles: raw.ri_pcycles,
+                process_start_abstime: raw.ri_proc_start_abstime,
+            }),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    ProcessCounterSnapshot {
+        values: None,
+        error: None,
+    }
+}
+
+pub fn mach_timebase() -> Option<[u32; 2]> {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            fn mach_timebase_info(info: *mut u32) -> i32;
+        }
+        let mut info = [0, 0];
+        (unsafe { mach_timebase_info(info.as_mut_ptr()) } == 0 && info[1] != 0).then_some(info)
+    }
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
+#[derive(Clone, Copy, Default, serde::Serialize)]
+pub struct FrameObservations {
+    pub thread_cpu_ns: Option<u64>,
+    pub cpu_endpoints: Option<[CpuEndpoint; 2]>,
+    pub process_counter_endpoints: Option<[ProcessCounterSnapshot; 2]>,
+}
+
 /// Cold endpoint observations only. A task role is not a thread-group id,
 /// coalition membership, CPU residency or a frequency observation.
 #[derive(serde::Serialize)]
@@ -112,6 +305,8 @@ mod mac_thread_clock {
 #[derive(Clone, Copy)]
 pub struct Options {
     pub enabled: bool,
+    pub cpu_endpoints: bool,
+    pub process_counters: bool,
     pub direct_only: bool,
     pub warmup: usize,
     pub measured: usize,
@@ -121,6 +316,8 @@ impl Options {
     pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Self, &'static str> {
         let mut options = Self {
             enabled: false,
+            cpu_endpoints: false,
+            process_counters: false,
             direct_only: false,
             warmup: 30,
             measured: 240,
@@ -130,6 +327,8 @@ impl Options {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--timing-samples" => options.enabled = true,
+                "--cpu-endpoints" => options.cpu_endpoints = true,
+                "--process-counters" => options.process_counters = true,
                 "--direct-only" => options.direct_only = true,
                 "--execution-samples"
                 | "--focus-schedule"
@@ -161,6 +360,9 @@ impl Options {
                 _ => {}
             }
         }
+        if (options.cpu_endpoints || options.process_counters) && !options.enabled {
+            return Err("Execution observations require --timing-samples");
+        }
         if override_count && !options.direct_only {
             return Err("timing frame count overrides require --direct-only");
         }
@@ -178,6 +380,8 @@ pub struct Sample {
     pub prepare_interval_ms: Option<f64>,
     pub wall_ms: f64,
     pub thread_cpu_ms: Option<f64>,
+    #[serde(flatten)]
+    pub observations: FrameObservations,
     pub wall_minus_thread_cpu_ms: Option<f64>,
 }
 
@@ -227,6 +431,7 @@ impl Phase {
         included: bool,
         wall_ms: f64,
         thread_cpu_ms: Option<f64>,
+        observations: FrameObservations,
     ) {
         if self.samples.len() == self.samples.capacity() {
             self.dropped_samples += 1;
@@ -241,6 +446,7 @@ impl Phase {
             prepare_interval_ms: self.interval_ms,
             wall_ms,
             thread_cpu_ms,
+            observations,
             wall_minus_thread_cpu_ms: thread_cpu_ms.map(|cpu| wall_ms - cpu),
         });
     }
@@ -253,6 +459,27 @@ pub struct Series {
 }
 
 impl Series {
+    pub fn observations_complete(&self, options: Options) -> bool {
+        self.phases
+            .iter()
+            .flat_map(|phase| &phase.samples)
+            .all(|sample| {
+                let observations = sample.observations;
+                (!options.cpu_endpoints
+                    || observations.cpu_endpoints.is_some_and(|ends| {
+                        ends.iter()
+                            .all(|point| point.error == Some(0) && point.cpu_number.is_some())
+                    }))
+                    && (!options.process_counters
+                        || observations.process_counter_endpoints.is_some_and(|ends| {
+                            ends.iter()
+                                .all(|point| point.error == Some(0) && point.values.is_some())
+                        }))
+                    && (!(options.cpu_endpoints || options.process_counters)
+                        || observations.thread_cpu_ns.is_some())
+            })
+    }
+
     pub fn new(options: Options) -> Self {
         Self {
             phases: std::array::from_fn(|phase| {
@@ -327,7 +554,14 @@ mod tests {
     #[test]
     fn timing_overrides_require_explicit_direct_scope_and_bounded_counts() {
         let defaults = options(&[]).unwrap();
-        assert!(!defaults.enabled && !defaults.direct_only);
+        assert!(!defaults.enabled && !defaults.direct_only && !defaults.cpu_endpoints);
+        assert!(options(&["--cpu-endpoints"]).is_err());
+        assert!(options(&["--process-counters"]).is_err());
+        assert!(
+            options(&["--cpu-endpoints", "--timing-samples"])
+                .unwrap()
+                .cpu_endpoints
+        );
         assert_eq!((defaults.warmup, defaults.measured), (30, 240));
         assert!(options(&["--warmup-frames", "60"]).is_err());
         assert!(options(&["--direct-only", "--measured-frames", "239"]).is_err());
@@ -350,18 +584,52 @@ mod tests {
         let mut phase = Phase::new(2);
         let at = Instant::now();
         phase.prepare(at);
-        phase.record(1, true, false, 1.0, None);
+        phase.record(1, true, false, 1.0, None, FrameObservations::default());
         phase.prepare(at + Duration::from_millis(8)); // Unpresented attempt.
         phase.prepare(at + Duration::from_millis(24));
-        phase.record(2, false, true, 2.0, Some(1.0));
+        phase.record(2, false, true, 2.0, Some(1.0), FrameObservations::default());
         assert_eq!(phase.samples[0].prepare_interval_ms, None);
         assert_eq!(phase.samples[1].prepare_interval_ms, Some(16.0));
         assert_eq!(phase.samples[1].prepare_since_start_ms, 24.0);
         assert_eq!(phase.samples[1].prepare_ordinal, 3);
-        phase.record(3, false, true, 2.0, None);
+        phase.record(3, false, true, 2.0, None, FrameObservations::default());
         assert_eq!(phase.dropped_samples, 1);
         assert_eq!(phase.samples.capacity(), 2);
         assert_eq!(phase.samples.len(), 2);
+    }
+
+    #[test]
+    fn requested_execution_observations_reject_missing_or_failed_getters() {
+        let options = options(&["--timing-samples", "--cpu-endpoints"]).unwrap();
+        let mut series = Series::new(options);
+        series.phases[0].record(1, false, true, 1.0, Some(1.0), FrameObservations::default());
+        assert!(!series.observations_complete(options));
+        let cpu = CpuEndpoint {
+            cpu_number: Some(0),
+            error: Some(0),
+        };
+        series.phases[0].samples[0].observations = FrameObservations {
+            thread_cpu_ns: Some(1_000_000),
+            cpu_endpoints: Some([cpu; 2]),
+            ..Default::default()
+        };
+        assert!(
+            series.observations_complete(options),
+            "CPU zero is a real CPU number"
+        );
+        series.phases[0].samples[0]
+            .observations
+            .cpu_endpoints
+            .as_mut()
+            .unwrap()[1]
+            .error = Some(5);
+        assert!(!series.observations_complete(options));
+        let process = Options {
+            cpu_endpoints: false,
+            process_counters: true,
+            ..options
+        };
+        assert!(!series.observations_complete(process));
     }
 
     #[test]
