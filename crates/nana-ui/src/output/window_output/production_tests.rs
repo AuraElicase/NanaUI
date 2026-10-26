@@ -406,3 +406,78 @@ fn straight_consumer_shares_premultiplied_window_render_then_converts_only_its_p
     assert!(!canonical.ptr_eq(output.texture()));
     assert_eq!(crate::output::driver_tests::read_pixels(canonical), premul);
 }
+
+#[test]
+fn every_other_host_frame_in_flight_still_leaves_the_output_a_slot() {
+    // A slow GPU (WARP) leaves every host frame but the one being recorded
+    // incomplete. Unsubmitted plans hold their output slots the same way.
+    let gpu = test_gpu::context();
+    let config = WindowOutputConfig::default().with_extent(WindowOutputExtent::MatchWindow);
+    let mut state = WindowOutputState::new(WindowId(242));
+    let mut painters = HashMap::new();
+    let content = scene(false);
+    state.set_config(Some(config));
+    drop(initial(&mut state, &mut painters, &content));
+    let mut in_flight = Vec::new();
+    for revision in 1..=gpu.policy().frame_slot_count() as u64 {
+        let step = state.begin(
+            &gpu,
+            &geometry(),
+            &content,
+            revision,
+            false,
+            None,
+            [0.0; 4],
+            Instant::now(),
+        );
+        assert!(
+            matches!(step, OutputStep::Record { .. }),
+            "host frame {revision} deferred its output"
+        );
+        assert_eq!(state.last_work().deferred, 0);
+        in_flight.push(step);
+    }
+}
+
+#[test]
+fn a_resend_records_an_unchanged_scene_again() {
+    let gpu = test_gpu::context();
+    let config = WindowOutputConfig::default().with_extent(WindowOutputExtent::MatchWindow);
+    let mut state = WindowOutputState::new(WindowId(244));
+    let mut painters = HashMap::new();
+    let content = scene(false);
+    state.set_config(Some(config));
+    drop(initial(&mut state, &mut painters, &content));
+    let begin = |state: &mut WindowOutputState| {
+        state.begin(
+            &gpu,
+            &geometry(),
+            &content,
+            0,
+            false,
+            None,
+            [0.0; 4],
+            Instant::now(),
+        )
+    };
+    // Once that frame completed, nothing changed: nothing is recorded or due.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        gpu.poll();
+        if matches!(begin(&mut state), OutputStep::Idle) && state.throttled_until.is_none() {
+            break;
+        }
+        state.throttled_until = None;
+        assert!(Instant::now() < deadline, "the output never settled");
+        std::thread::yield_now();
+    }
+    assert_eq!(state.frame_demand(true), crate::FrameDemand::OnDemand);
+    // Its consumer missed that frame: one is due shortly, and recorded.
+    let now = Instant::now();
+    state.resend(now);
+    assert!(matches!(
+        state.frame_demand(true),
+        crate::FrameDemand::At(at) if at > now && at <= now + NATIVE_RETRY
+    ));
+    assert!(matches!(begin(&mut state), OutputStep::Record { .. }));
+}

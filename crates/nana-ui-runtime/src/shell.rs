@@ -247,7 +247,9 @@ impl AppTitleBar {
         layout.flex_grow = Some(0.0);
         layout.flex_shrink = Some(0.0);
         layout.font_size = Some(TITLE_FONT_SIZE);
+        crate::theme_intent::font(layout, nana_ui_core::TypeRole::Body);
         layout.font_weight = Some(TITLE_FONT_WEIGHT);
+        crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Semibold);
         if columns {
             layout.padding_left = Some(LengthSpec::Px(0.0));
             layout.padding_right = Some(LengthSpec::Px(0.0));
@@ -291,6 +293,8 @@ impl AppTitleBar {
                             },
                         ));
                         layout.padding_right = Some(LengthSpec::Px(SLOT_PADDING));
+                        layout.theme.padding_right =
+                            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
                         layout.padding_top = Some(LengthSpec::Px(0.0));
                         layout.padding_bottom = Some(LengthSpec::Px(0.0));
                     });
@@ -312,6 +316,8 @@ impl AppTitleBar {
                             apply_fill_column(layout, JustifySpec::End, true);
                         }
                         layout.padding_left = Some(LengthSpec::Px(SLOT_PADDING));
+                        layout.theme.padding_left =
+                            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
                         // Custom controls hug the window edge; native or
                         // absent controls keep the shared slot padding.
                         layout.padding_right = Some(LengthSpec::Px(
@@ -339,7 +345,11 @@ impl AppTitleBar {
                 patch_layout(world, mutations, leading, |layout| {
                     apply_hug_slot(layout, AlignSpec::Center, JustifySpec::Start);
                     layout.padding_left = Some(LengthSpec::Px(SLOT_PADDING));
+                    layout.theme.padding_left =
+                        Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
                     layout.padding_right = Some(LengthSpec::Px(SLOT_PADDING));
+                    layout.theme.padding_right =
+                        Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
                     layout.padding_top = Some(LengthSpec::Px(0.0));
                     layout.padding_bottom = Some(LengthSpec::Px(0.0));
                 });
@@ -353,7 +363,11 @@ impl AppTitleBar {
                 patch_layout(world, mutations, trailing, |layout| {
                     apply_hug_slot(layout, AlignSpec::Center, JustifySpec::End);
                     layout.padding_left = Some(LengthSpec::Px(SLOT_PADDING));
+                    layout.theme.padding_left =
+                        Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
                     layout.padding_right = Some(LengthSpec::Px(SLOT_PADDING));
+                    layout.theme.padding_right =
+                        Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
                     layout.padding_top = Some(LengthSpec::Px(0.0));
                     layout.padding_bottom = Some(LengthSpec::Px(0.0));
                 });
@@ -1610,7 +1624,9 @@ fn title_label_style() -> NodeStyle {
     layout.width = Some(LengthSpec::Fill);
     layout.height = Some(LengthSpec::Fill);
     layout.font_size = Some(TITLE_FONT_SIZE);
+    crate::theme_intent::font(layout, nana_ui_core::TypeRole::Body);
     layout.font_weight = Some(TITLE_FONT_WEIGHT);
+    crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Semibold);
     layout.overflow_x = OverflowSpec::Hidden;
     layout.overflow_y = OverflowSpec::Hidden;
     layout.white_space_nowrap = true;
@@ -2319,7 +2335,9 @@ fn apply_center_column(layout: &mut nana_ui_core::LayoutStyle, width: f32) {
     layout.flex_shrink = Some(1.0);
     layout.min_width = Some(LengthSpec::Px(0.0));
     layout.padding_left = Some(LengthSpec::Px(CENTER_PADDING_X));
+    layout.theme.padding_left = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxl));
     layout.padding_right = Some(LengthSpec::Px(CENTER_PADDING_X));
+    layout.theme.padding_right = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxl));
     layout.padding_top = Some(LengthSpec::Px(0.0));
     layout.padding_bottom = Some(LengthSpec::Px(0.0));
     layout.overflow_x = OverflowSpec::Hidden;

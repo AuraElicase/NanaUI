@@ -54,11 +54,41 @@ widget(
 
 `.draggable(false)` 同时把 `drop_target` 写成 false；只要落点、不要起点时，再接 `.drop_target(true)`。
 
-`.selected`、`.disabled` 写在行上。树拖放时落在行中间算放进这一行；`.nest(false)` 的行不接受放进去，只按上下两半算放在它前面或后面。`.tools(id)` 标出一行里绝不开始拖动的子节点：按在这块区域里，移动多远都不拖。行里的按钮不必登记成 `.tools` 也能收到点击，见[手势](#手势)。
+`.selected`、`.disabled` 写在行上。`.tools(id)` 标出一行里绝不开始拖动的子节点：按在这块区域里，移动多远都不拖。行里的按钮不必登记成 `.tools` 也能收到点击，见[手势](#手势)。
 
 ## 列表
 
 `.spacing` 是行距，`.size` 默认小号，`.label` 是列表的可访问名。`.tree_drop(true)` 允许拖到树上。
+
+## 树
+
+一棵树按深度优先展开成行，每行用 `.depth(n)` 写它的深度（顶层是 0）：一行拥有它下面紧挨着的、更深的那些行。收起的子行不要放进 `items`。
+
+- 拖动一行就带着它拥有的整棵子树：被拖的描边框住整块，子树里的位置不能落下。
+- `.kind("…")` 写这一行是什么。`.accepts_inside(..)` 写哪些类型能放进这一行，`.accepts_sibling(..)` 写哪些类型能放在它前后（成为它的兄弟），都用 `ReorderAccepts`：`All`（默认）、`Nothing`，或 `ReorderAccepts::kinds([..])`。没写 `kind` 的行只被 `All` 接受。
+- 放在一行前后，还要它的父行（顶层看列表的 `.accepts_root(..)`）接受这种类型。
+- 不接受的地方不画插入线，松手也不发事件，所以列表报出的落点都是你声明过能接受的。
+
+树拖放的落点：
+
+- 行的上四分之一在它前面，中间放进它，下四分之一在它后面；这一行不接受被拖的类型时，按上下两半算前后。
+- 子行展开着的行，下面那一段是它第一个子行的前面。
+- 在一串嵌套的最后一行下面，指针的横向位置选深度：每往左一个 `.indent`，就退出一层，落在那一层的祖先后面。
+- 插入线按落点的深度缩进 `depth × indent`，默认缩进 `space::LG`，和你自己画的行缩进对齐时用 `.indent(px)` 改。
+- 放下后位置不变的地方（紧挨着的前后兄弟）不画线、不发事件。`Inside` 由应用决定放在子行里的哪一头。
+
+## 键盘
+
+列表或行里的控件有焦点时，Alt 加方向键移动这一行（焦点在行里就是那一行，否则是选中行），连同子树：
+
+| 按键 | 移动 | 事件 |
+| --- | --- | --- |
+| Alt+↑ | 到前一个兄弟前面 | `TreeDrop` `Before`；非树列表是 `Reorder` |
+| Alt+↓ | 到后一个兄弟后面 | `TreeDrop` `After`；非树列表是 `Reorder` |
+| Alt+→ | 放进前一个兄弟，做它最后一个子行 | `TreeDrop`：它有可见子行时是最后一个子行的 `After`，否则 `Inside` |
+| Alt+← | 移出父行，放在父行后面 | `TreeDrop` `After` |
+
+键盘移动和拖动守同样的规则：不接受、没有兄弟或不改变位置时什么也不发。`ReorderList::key_move(value, ReorderKeyMove)` 直接算出这个事件。
 
 ## 自绘行
 
@@ -107,6 +137,12 @@ each(ids, |id| id.clone(), entry_row).container(
 | `.size` | — | 默认小号 |
 | `.label` | — | 列表的可访问名 |
 | `.tree_drop` | — | `true` 允许拖到树上 |
+| `.depth` | `u16` | 写在行上。树里的深度，顶层 0，默认 0 |
+| `.kind` | — | 写在行上。行的类型，供 `ReorderAccepts` 判断 |
+| `.accepts_inside` | `ReorderAccepts` | 写在行上。哪些类型能放进这一行，默认 `All`；`Nothing` 时这一行按上下两半算前后 |
+| `.accepts_sibling` | `ReorderAccepts` | 写在行上。哪些类型能放在它前后，默认 `All`；还要父行接受 |
+| `.accepts_root` | `ReorderAccepts` | 哪些类型能放在顶层，默认 `All` |
+| `.indent` | — | 每层深度的缩进，插入线按它缩进，指针按它选深度。默认 `space::LG` |
 | `.live_rows` | — | `true` 时行由你挂的子节点来画。列表仍用 `items` 做命中和拖动，不再按标签自绘。构造时声明，不在投影时从树上推断 |
 
 ## 事件
@@ -116,7 +152,7 @@ each(ids, |id| id.clone(), entry_row).container(
 - `Select(value)` 是点中一行。
 - `Secondary { source, x, y }` 是行身上的右键。 `x`、`y` 是窗口坐标，用来锚住上下文菜单。行表面不接指针，所以这个事件发在列表上。
 - `Reorder { source, before }` 里 `before` 为 `None` 表示放到末尾。
-- `TreeDrop { source, intent }` 的 `intent` 带目标 id 和 `TreeDropPosition`：`Before`、`Inside` 或 `After`。
+- `TreeDrop { source, intent }` 的 `intent` 带目标 id 和 `TreeDropPosition`：`Before`、`Inside` 或 `After`。`source` 带着它的子树一起移动。键盘移动也发这个事件。
 - `Cancelled` 是取消。 Escape、失焦、触摸丢失要交给 `ReorderListPointer::Cancel`。
 
 | 事件 | 载荷 | 说明 |

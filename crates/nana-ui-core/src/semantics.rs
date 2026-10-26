@@ -5,7 +5,9 @@
 
 use crate::theme::{ThemeMetrics, UI_METRICS, space, type_scale};
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum ControlSize {
     Small,
     #[default]
@@ -93,6 +95,23 @@ impl ControlSize {
         }
     }
 
+    /// Resolve standard control text from the installed typography scale.
+    pub const fn text_size_in(self, typography: crate::TypographyTokens) -> f32 {
+        match self {
+            Self::Small => typography.meta,
+            Self::Medium => typography.body,
+            Self::Large => typography.section,
+        }
+    }
+
+    pub const fn caption_size_in(self, typography: crate::TypographyTokens) -> f32 {
+        match self {
+            Self::Small => typography.hint,
+            Self::Medium => typography.meta,
+            Self::Large => typography.body,
+        }
+    }
+
     /// One type-scale step below [`Self::text_size`].
     pub const fn caption_size(self) -> f32 {
         match self {
@@ -120,6 +139,27 @@ impl ControlSize {
         match self {
             Self::Small => crate::space::SM,
             Self::Medium | Self::Large => crate::space::MD,
+        }
+    }
+
+    /// Indicator extent resolved from the installed spacing and typography.
+    pub const fn indicator_size_in(
+        self,
+        typography: crate::TypographyTokens,
+        spacing: crate::SpacingTokens,
+    ) -> f32 {
+        match self {
+            Self::Small => spacing.xxl,
+            Self::Medium => typography.line,
+            Self::Large => typography.line_tall,
+        }
+    }
+
+    /// Label clearance resolved from the installed spacing scale.
+    pub const fn indicator_gap_in(self, spacing: crate::SpacingTokens) -> f32 {
+        match self {
+            Self::Small => spacing.sm,
+            Self::Medium | Self::Large => spacing.md,
         }
     }
 

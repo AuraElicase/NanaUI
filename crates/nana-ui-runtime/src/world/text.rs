@@ -458,6 +458,7 @@ pub(super) fn shape_empty_state_text(
     inherited: &ComputedStyle,
     max_width: Option<f32>,
     shaper: &mut impl TextShaper,
+    typography: nana_ui_core::TypographyTokens,
 ) -> EmptyStateTextPresentation {
     let StandardVisual::EmptyState {
         title,
@@ -470,17 +471,17 @@ pub(super) fn shape_empty_state_text(
     };
     let mut title_style = inherited.clone();
     title_style.font_size = if *compact {
-        nana_ui_core::type_scale::META
+        typography.meta
     } else {
-        nana_ui_core::type_scale::BODY
+        typography.body
     };
-    title_style.font_weight = Some(nana_ui_core::type_scale::SEMIBOLD);
+    title_style.font_weight = Some(typography.semibold);
     title_style.line_height = None;
     let mut message_style = inherited.clone();
     message_style.font_size = if *compact {
-        nana_ui_core::type_scale::HINT
+        typography.hint
     } else {
-        nana_ui_core::type_scale::META
+        typography.meta
     };
     message_style.font_weight = None;
     message_style.line_height = None;
@@ -523,6 +524,7 @@ pub(super) fn shape_modal_text(
     max_width: Option<f32>,
     body_width: Option<f32>,
     shaper: &mut impl TextShaper,
+    typography: nana_ui_core::TypographyTokens,
 ) -> ModalTextPresentation {
     let StandardVisual::ModalFrame {
         title,
@@ -545,7 +547,7 @@ pub(super) fn shape_modal_text(
         wrap: body_width.is_some(),
         ..constraints
     };
-    let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe);
+    let title_type = crate::overlay_surfaces::modal_title_type(*kind, recipe, typography);
     let mut title_style = inherited.clone();
     title_style.font_size = title_type.size;
     if let Some(weight) = title_type.weight {
@@ -553,11 +555,11 @@ pub(super) fn shape_modal_text(
     }
     title_style.line_height = None;
     let mut description_style = inherited.clone();
-    description_style.font_size = nana_ui_core::type_scale::META;
+    description_style.font_size = typography.meta;
     description_style.font_weight = None;
     description_style.line_height = None;
     let mut body_style = inherited.clone();
-    body_style.font_size = crate::overlay_surfaces::MODAL_BODY_TEXT_SIZE;
+    body_style.font_size = typography.body;
     body_style.font_weight = None;
     body_style.line_height = None;
     ModalTextPresentation {
@@ -605,12 +607,13 @@ pub(super) fn progress_geometry(
     label: Option<&Arc<str>>,
     cancellable: bool,
     default_label_color: [f32; 4],
+    fallback_girth: f32,
 ) -> Option<crate::ComponentGeometry> {
     let ratio = value_ratio.clamp(0.0, 1.0);
     let girth = if girth.is_finite() && girth > 0.0 {
         girth
     } else {
-        6.0
+        fallback_girth
     };
     let cancel_size = 24.0_f32.min(bounds.height).min(bounds.width);
     let heading = if label.is_some() || cancellable {
@@ -3462,7 +3465,20 @@ impl UiWorld {
         }
         let padding = self.used_layout_padding(id);
         let border = source.layout.resolved_border_edges();
-        let leading_visual = text_leading_inset(self.nodes.visual(id));
+        let leading_visual = match self.nodes.visual(id) {
+            Some(StandardVisual::Checkbox { size, .. }) => {
+                size.indicator_size_in(self.theme.typography(), self.theme.spacing())
+                    + if self.text(id).is_some_and(|label| !label.is_empty()) {
+                        size.indicator_gap_in(self.theme.spacing())
+                    } else {
+                        0.0
+                    }
+            }
+            Some(StandardVisual::Switch { .. }) => {
+                self.theme.metrics().switch.track_width + self.theme.metrics().switch.label_gap
+            }
+            _ => 0.0,
+        };
         let counter_reserved = self
             .text_input_character_counter(id)
             .map(|counter| {
@@ -3513,15 +3529,13 @@ impl UiWorld {
     }
 }
 
-/// A single line that ellipsizes against its measured box: what it paints is
-/// cut to that box, but the width it asks of layout is its whole line. Were it
-/// to report the cut width, a shrink-to-fit parent would keep the old box
-/// forever — a label changed to something longer could only ever shrink.
+/// Ellipsized text paints within its measured box, but asks layout for its
+/// unclipped natural width. This includes line-clamp: it enables wrapping,
+/// then substitutes an ellipsis on the last visible line. Exporting that
+/// shortened line's width would pin a shrink-to-fit parent to its old size.
 fn cut_to_its_box(constraints: &crate::TextShapeConstraints) -> bool {
     constraints.ellipsis
-        && !constraints.wrap
-        && constraints.max_lines.is_none()
-        && !constraints.preserve_lines
+        && (constraints.max_lines.is_some() || (!constraints.wrap && !constraints.preserve_lines))
         && constraints.max_width.is_some()
 }
 
@@ -3581,18 +3595,9 @@ pub(super) fn same_text_constraint_inputs(previous: &NodeStyle, next: &NodeStyle
         && a.font_size.map(f32::to_bits) == b.font_size.map(f32::to_bits)
 }
 
-/// Width a leading indicator takes from the text box of a checkbox or switch.
-fn text_leading_inset(visual: Option<&StandardVisual>) -> f32 {
-    match visual {
-        Some(StandardVisual::Checkbox { size, .. }) => size.indicator_size() + size.indicator_gap(),
-        Some(StandardVisual::Switch { .. }) => 38.0,
-        _ => 0.0,
-    }
-}
-
 /// What plain text resolution reads from a node's visual: which text path the
-/// node takes, and the inset a leading indicator takes from its box. Two
-/// visuals with the same key cannot change a plain text node's constraints.
+/// node takes and which indicator step it reserves. Pixel values are resolved
+/// from the installed theme when text constraints are built.
 pub(crate) fn text_visual_key(visual: Option<&StandardVisual>) -> (u8, u32) {
     let path = match visual {
         Some(StandardVisual::TextInput { .. }) => 1,
@@ -3601,7 +3606,16 @@ pub(crate) fn text_visual_key(visual: Option<&StandardVisual>) -> (u8, u32) {
         // Every other visual leaves plain text on the plain path.
         None | Some(_) => 0,
     };
-    (path, text_leading_inset(visual).to_bits())
+    let indicator = match visual {
+        Some(StandardVisual::Checkbox { size, .. }) => match size {
+            nana_ui_core::ControlSize::Small => 1,
+            nana_ui_core::ControlSize::Medium => 2,
+            nana_ui_core::ControlSize::Large => 3,
+        },
+        Some(StandardVisual::Switch { .. }) => 4,
+        _ => 0,
+    };
+    (path, indicator)
 }
 
 impl UiWorld {
@@ -3833,17 +3847,25 @@ impl UiWorld {
         else {
             return changed;
         };
-        let spacing = if *compact { 2.0 } else { 6.0 };
-        let vertical = if *compact { 8.0 } else { 24.0 };
+        let spacing = if *compact {
+            self.theme.spacing().xxs
+        } else {
+            self.theme.spacing().sm
+        };
+        let vertical = if *compact {
+            self.theme.spacing().md
+        } else {
+            self.theme.spacing().page
+        };
         let mut height = presentation.title.height;
         if icon.is_some() {
-            height += 22.0 + spacing;
+            height += self.theme.spacing().page_tight + self.theme.spacing().xxs + spacing;
         }
         if let Some(message) = presentation.message {
             height += spacing + message.height;
         }
         if action.is_some() {
-            height += spacing + 4.0;
+            height += spacing + self.theme.spacing().xs;
         }
         let padding_top = nana_ui_core::LengthSpec::Px(vertical + height);
         let mut style = self.record(id).style.clone();
@@ -3920,11 +3942,21 @@ impl UiWorld {
                         let Some(layout) = self.component_layout_box(id) else {
                             continue;
                         };
-                        let horizontal = if *compact { 6.0 } else { 16.0 };
+                        let horizontal = if *compact {
+                            self.theme.spacing().sm
+                        } else {
+                            self.theme.spacing().xxxl
+                        };
                         let width = (layout.width - horizontal * 2.0).max(0.0);
                         let runs = shaper.runs;
-                        let intrinsic =
-                            shape_empty_state_text(id, visual, computed, Some(width), &mut shaper);
+                        let intrinsic = shape_empty_state_text(
+                            id,
+                            visual,
+                            computed,
+                            Some(width),
+                            &mut shaper,
+                            self.theme.typography(),
+                        );
                         work.record_text_pass(1, usize::from(shaper.runs > runs));
                         validate_text_metrics(id, intrinsic.title)?;
                         if let Some(message) = intrinsic.message {
@@ -3949,13 +3981,14 @@ impl UiWorld {
                             None,
                             self.theme.recipes().dialog(),
                         );
-                        let chrome = crate::overlay_surfaces::ModalChrome::measure(
+                        let chrome = crate::overlay_surfaces::ModalChrome::measure_in(
                             *kind,
                             crate::TextMetrics::default(),
                             None,
                             slots,
                             self.theme.recipes().dialog(),
                             self.theme.border().hairline,
+                            &self.theme,
                         );
                         let wrap_width = chrome.text_width(surface, root);
                         let body_width = chrome.body_box(surface).width;
@@ -3968,6 +4001,7 @@ impl UiWorld {
                             Some(wrap_width),
                             Some(body_width),
                             &mut shaper,
+                            self.theme.typography(),
                         );
                         work.record_text_pass(1, usize::from(shaper.runs > runs));
                         validate_text_metrics(id, intrinsic.title)?;
@@ -3998,7 +4032,9 @@ impl UiWorld {
                     // drawing a layout of what it used to say.
                     self.nodes.release_text_layout(id);
                 }
-                if empty {
+                // An editor is reshaped with nothing in it too: its empty
+                // line, where the caret stands, follows the box like any line.
+                if empty && presentation.is_none() {
                     // A box with no text of its own resolves to nothing, and
                     // stays resolved until text or a text-bearing visual
                     // arrives: a scope of containers costs one read of the text
@@ -4006,15 +4042,15 @@ impl UiWorld {
                     // pass. An empty Text node is not such a box: its line box
                     // is measured by the scheduled pass, which this pass must
                     // not pre-empt with a stamp that carries no metrics.
-                    if presentation.is_none()
-                        && !matches!(self.record(id).kind.as_ref(), NodeKind::Text)
-                    {
+                    if !matches!(self.record(id).kind.as_ref(), NodeKind::Text) {
                         resolved.push(PlainResolution::nothing(id));
                     }
                     continue;
                 }
                 #[cfg(any(test, feature = "benchmark"))]
-                crate::text_shape_stats::note_nonempty();
+                if !empty {
+                    crate::text_shape_stats::note_nonempty();
+                }
                 let constraints =
                     self.text_shape_constraints_for(id, presentation.as_ref().map(|s| s.multiline));
                 let Some(presentation) = presentation else {
@@ -4282,35 +4318,19 @@ impl UiWorld {
                     &mut node_work,
                 );
                 let mut metrics = crate::text_node::text_metrics_of_layout(&layout);
-                if cut_to_its_box(&constraints)
-                    && !layout.is_vertical()
-                    && layout
-                        .overflow
-                        .contains(nana_text::OverflowFlags::ELLIPSIZED)
-                {
-                    let natural = nana_text::lock_text_engine(engine).layout(
-                        kind,
-                        source,
-                        &crate::text_node::nana_text_style(&style),
-                        &crate::text_node::nana_text_constraints(
-                            &style,
-                            &unbounded(constraints),
-                            alignment,
-                        ),
-                        &mut node_work,
-                    );
-                    metrics.width = crate::text_node::text_metrics_of_layout(&natural).width;
-                }
-                // Wrapped lines are as wide as the box they wrapped to; the
-                // text's own width is its lines unwrapped. Layout needs that
-                // to widen a box that shrinks to its content once the box's
-                // limit grows, rather than keep the width it wrapped to.
-                let unwrapped = (wraps_to_its_box(&constraints)
-                    && !layout.is_vertical()
-                    && layout
-                        .lines
-                        .iter()
-                        .any(|line| line.break_cause == nana_text::LineBreakCause::Wrap))
+                // A capped paragraph's last line can be ellipsized instead of
+                // reporting a soft wrap. Keep its natural width separately
+                // from the measured visible lines, just as for ordinary wrap.
+                let unwrapped = (!layout.is_vertical()
+                    && ((cut_to_its_box(&constraints)
+                        && layout
+                            .overflow
+                            .contains(nana_text::OverflowFlags::ELLIPSIZED))
+                        || (wraps_to_its_box(&constraints)
+                            && layout
+                                .lines
+                                .iter()
+                                .any(|line| line.break_cause == nana_text::LineBreakCause::Wrap))))
                 .then(|| {
                     let natural = nana_text::lock_text_engine(engine).layout(
                         kind,
@@ -4325,7 +4345,15 @@ impl UiWorld {
                     );
                     (crate::text_node::text_metrics_of_layout(&natural), natural)
                 })
-                .filter(|(natural, _)| natural.width > metrics.width);
+                .filter(|(natural, _)| !constraints.wrap || natural.width > metrics.width);
+                let unwrapped = if !constraints.wrap {
+                    if let Some((natural, _)) = unwrapped {
+                        metrics.width = natural.width;
+                    }
+                    None
+                } else {
+                    unwrapped
+                };
                 if copied {
                     node_work.text_source_clones += 1;
                     self.record_string_clone(text_bytes);
@@ -4357,25 +4385,28 @@ impl UiWorld {
                     crate::text_node::TextNodeState::constraint_moved_without_reshaping,
                 );
                 let mut metrics = shaper.shape(id, &self.record(id).text, &style, constraints);
-                if cut_to_its_box(&constraints)
-                    && constraints
-                        .max_width
-                        .is_some_and(|max| metrics.width >= max - 0.5)
-                {
-                    let natural =
-                        shaper.shape(id, &self.record(id).text, &style, unbounded(constraints));
-                    metrics.width = metrics.width.max(natural.width);
-                }
-                // The host does not say where it broke its lines, only how
-                // tall they came out. One line that fit is the whole text;
-                // more than one may have wrapped, so ask for them unwrapped
-                // (cached by its constraints, like the first).
                 let lines_tall = crate::components::resolved_text_line_height(&style) * 1.5;
-                let unwrapped = (wraps_to_its_box(&constraints) && metrics.height > lines_tall)
+                // Host-only shapers expose no overflow flags. A clamped run
+                // can end short of its budget because the ellipsis has width.
+                let needs_natural = (cut_to_its_box(&constraints)
+                    && (constraints.max_lines.is_some()
+                        || constraints
+                            .max_width
+                            .is_some_and(|max| metrics.width >= max - 0.5)))
+                    || (wraps_to_its_box(&constraints) && metrics.height > lines_tall);
+                let unwrapped = needs_natural
                     .then(|| {
                         shaper.shape(id, &self.record(id).text, &style, unbounded(constraints))
                     })
-                    .filter(|natural| natural.width > metrics.width);
+                    .filter(|natural| !constraints.wrap || natural.width > metrics.width);
+                let unwrapped = if !constraints.wrap {
+                    if let Some(natural) = unwrapped {
+                        metrics.width = natural.width;
+                    }
+                    None
+                } else {
+                    unwrapped
+                };
                 if constraint_only {
                     // `shape` still runs; a width constraint is not a new shaped run.
                     shaper.runs = runs;
@@ -4984,7 +5015,14 @@ impl UiWorld {
                 if let Some(visual @ StandardVisual::EmptyState { .. }) = visual {
                     stampable = false;
                     let runs = shaper.runs;
-                    let intrinsic = shape_empty_state_text(id, visual, &style, None, &mut shaper);
+                    let intrinsic = shape_empty_state_text(
+                        id,
+                        visual,
+                        &style,
+                        None,
+                        &mut shaper,
+                        self.theme.typography(),
+                    );
                     work.record_text_pass(1, usize::from(shaper.runs > runs));
                     validate_text_metrics(id, intrinsic.title)?;
                     if let Some(message) = intrinsic.message {
@@ -5003,6 +5041,7 @@ impl UiWorld {
                         None,
                         None,
                         &mut shaper,
+                        self.theme.typography(),
                     );
                     work.record_text_pass(1, usize::from(shaper.runs > runs));
                     validate_text_metrics(id, intrinsic.title)?;

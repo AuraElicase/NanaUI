@@ -429,6 +429,11 @@ impl UiScene {
                 {
                     text_bounds = scene_rect(*content);
                 }
+                if let Some(ComponentGeometry::Checkbox { label, .. }) =
+                    node.component_geometry.as_deref()
+                {
+                    text_bounds = scene_rect(label.bounds);
+                }
                 // A rich editor is a text node, so its own scroll translates
                 // glyphs and marks together; the surrounding chrome stays put.
                 if node.rich_editor.is_some() {
@@ -715,6 +720,9 @@ impl UiScene {
             };
             let mut emit = |primitive| self.insert_primitive(primitive);
             match node.component_geometry.as_deref() {
+                // The ordinary label path and the checkbox visual below use
+                // these resolved regions; neither paints a second copy here.
+                Some(ComponentGeometry::Checkbox { .. }) => {}
                 Some(ComponentGeometry::ModalFrame {
                     surface,
                     surface_paint,
@@ -1599,12 +1607,30 @@ impl UiScene {
                     indeterminate,
                     size,
                 }) => {
-                    let extent = size.indicator_size().min(bounds.height);
-                    let indicator = SceneRect {
-                        x: bounds.x,
-                        y: bounds.y + (bounds.height - extent) / 2.0,
-                        width: extent,
-                        height: extent,
+                    let indicator = match node.component_geometry.as_deref() {
+                        Some(ComponentGeometry::Checkbox { indicator, .. }) => {
+                            scene_rect(*indicator)
+                        }
+                        _ => {
+                            // Compatibility snapshots may supply visual-only nodes.
+                            // Runtime supplies resolved geometry for themed controls.
+                            let extent = size.indicator_size().min(bounds.height);
+                            SceneRect {
+                                x: bounds.x,
+                                y: bounds.y + (bounds.height - extent) / 2.0,
+                                width: extent,
+                                height: extent,
+                            }
+                        }
+                    };
+                    let extent = indicator.width;
+                    let (border_width, check_weight) = match node.component_geometry.as_deref() {
+                        Some(ComponentGeometry::Checkbox {
+                            border_width,
+                            check_weight,
+                            ..
+                        }) => (*border_width, *check_weight),
+                        _ => (1.0, 700),
                     };
                     self.insert_primitive(visual_quad_with_paint(
                         &visual_context,
@@ -1613,8 +1639,8 @@ impl UiScene {
                         VisualQuadStyle {
                             background: node.style.background,
                             border_color: node.style.border_color,
-                            border_width: 1.0,
-                            corner_radius: corner_radii(4.0),
+                            border_width,
+                            corner_radius: corner_radii(node.chrome_radii.sm),
                         },
                         node.style.paint_colors.background,
                         node.style.paint_colors.border,
@@ -1663,7 +1689,7 @@ impl UiScene {
                                     node.standard_visual_foreground,
                                 ),
                                 size: extent * 0.75,
-                                weight: Some(700),
+                                weight: Some(check_weight),
                                 family: None,
                                 line_height: None,
                                 letter_spacing: 0.0,
@@ -1730,19 +1756,21 @@ impl UiScene {
                     loading_phase,
                     ..
                 }) => {
-                    let (track, track_background, track_border, thumb_background) =
+                    let (track, track_background, track_border, thumb_background, border_width) =
                         match node.component_geometry.as_deref() {
                             Some(ComponentGeometry::Switch {
                                 control,
                                 track_background,
                                 track_border,
                                 thumb_background,
+                                border_width,
                                 ..
                             }) => (
                                 scene_rect(*control),
                                 Some(*track_background),
                                 Some(*track_border),
                                 Some(*thumb_background),
+                                *border_width,
                             ),
                             _ => (
                                 SceneRect {
@@ -1754,8 +1782,19 @@ impl UiScene {
                                 node.style.background,
                                 node.style.border_color,
                                 node.standard_visual_foreground,
+                                1.0,
                             ),
                         };
+                    let inset = track.height * (3.0 / 16.0);
+                    let thumb_extent =
+                        (track.height * (10.0 / 16.0)).min((track.width - 2.0 * inset).max(0.0));
+                    let travel = (track.width - 2.0 * inset - thumb_extent).max(0.0);
+                    let thumb = SceneRect {
+                        x: track.x + inset + travel * thumb_progress.clamp(0.0, 1.0),
+                        y: track.y + (track.height - thumb_extent) / 2.0,
+                        width: thumb_extent,
+                        height: thumb_extent,
+                    };
                     let track_background_paint =
                         matching_paint_color(node.style.paint_colors.background, track_background);
                     let track_border_paint =
@@ -1769,8 +1808,8 @@ impl UiScene {
                         VisualQuadStyle {
                             background: track_background,
                             border_color: track_border,
-                            border_width: 1.0,
-                            corner_radius: corner_radii(8.0),
+                            border_width,
+                            corner_radius: corner_radii(track.height / 2.0),
                         },
                         track_background_paint,
                         track_border_paint,
@@ -1778,17 +1817,12 @@ impl UiScene {
                     self.insert_primitive(visual_quad_with_paint(
                         &visual_context,
                         5,
-                        SceneRect {
-                            x: track.x + 3.0 + 14.0 * thumb_progress.clamp(0.0, 1.0),
-                            y: track.y + 3.0,
-                            width: 10.0,
-                            height: 10.0,
-                        },
+                        thumb,
                         VisualQuadStyle {
                             background: thumb_background,
                             border_color: None,
                             border_width: 0.0,
-                            corner_radius: corner_radii(5.0),
+                            corner_radius: corner_radii(thumb_extent / 2.0),
                         },
                         thumb_background_paint,
                         None,
@@ -1798,10 +1832,10 @@ impl UiScene {
                             id: PrimitiveId { node: id, slot: 6 },
                             node: id,
                             bounds: SceneRect {
-                                x: track.x + 1.0,
-                                y: track.y + 1.0,
-                                width: 14.0,
-                                height: 14.0,
+                                x: track.x + track.height / 16.0,
+                                y: track.y + track.height / 16.0,
+                                width: track.height * 14.0 / 16.0,
+                                height: track.height * 14.0 / 16.0,
                             },
                             transform,
                             clips: clips.clone(),
@@ -1824,16 +1858,18 @@ impl UiScene {
                             &visual_context,
                             7,
                             SceneRect {
-                                x: track.x - 4.0,
-                                y: track.y - 4.0,
-                                width: track.width + 8.0,
-                                height: track.height + 8.0,
+                                x: track.x - 4.0 * border_width,
+                                y: track.y - 4.0 * border_width,
+                                width: track.width + 8.0 * border_width,
+                                height: track.height + 8.0 * border_width,
                             },
                             VisualQuadStyle {
                                 background: None,
                                 border_color: node.style.border_color,
-                                border_width: 2.0,
-                                corner_radius: corner_radii(12.0),
+                                border_width: 2.0 * border_width,
+                                corner_radius: corner_radii(
+                                    track.height / 2.0 + 4.0 * border_width,
+                                ),
                             },
                             None,
                             matching_paint_color(
@@ -1845,27 +1881,33 @@ impl UiScene {
                 }
                 Some(StandardVisual::Range {
                     ratio,
-                    size,
                     markers,
                     rail: rail_girth,
                     track_gradient,
                     ..
                 }) => {
                     let ratio = ratio.clamp(0.0, 1.0);
-                    let (track_band, thumb_ring) = match node.component_geometry.as_deref() {
-                        Some(ComponentGeometry::Range {
-                            track, thumb_ring, ..
-                        }) => (scene_rect(*track), *thumb_ring),
-                        _ => (
-                            SceneRect {
-                                x: bounds.x + 7.0,
-                                y: bounds.y + (bounds.height - 14.0) / 2.0,
-                                width: (bounds.width - 14.0).max(0.0),
-                                height: 14.0,
-                            },
-                            None,
-                        ),
-                    };
+                    let (track_band, thumb_ring, girth, border_width) =
+                        match node.component_geometry.as_deref() {
+                            Some(ComponentGeometry::Range {
+                                track,
+                                thumb_ring,
+                                track_girth,
+                                border_width,
+                                ..
+                            }) => (scene_rect(*track), *thumb_ring, *track_girth, *border_width),
+                            _ => (
+                                SceneRect {
+                                    x: bounds.x + 7.0,
+                                    y: bounds.y + (bounds.height - 14.0) / 2.0,
+                                    width: (bounds.width - 14.0).max(0.0),
+                                    height: 14.0,
+                                },
+                                None,
+                                rail_girth.unwrap_or(4.0),
+                                1.0,
+                            ),
+                        };
                     // A gradient track is the scale itself: a strip through
                     // the stops, no fill, and a ring thumb that stands proud
                     // of it so it reads on every stop.
@@ -1873,23 +1915,10 @@ impl UiScene {
                         .as_ref()
                         .filter(|_| rail_girth.is_none())
                         .zip(thumb_ring);
-                    let thumb_extent = match gradient {
-                        Some(_) => track_band.height.max(0.0).min(bounds.width),
-                        None => match size {
-                            ControlSize::Small => 12.0_f32,
-                            ControlSize::Medium => 14.0_f32,
-                            ControlSize::Large => 16.0_f32,
-                        }
-                        .min(bounds.width)
-                        .min(track_band.height.max(0.0)),
-                    };
+                    let thumb_extent = track_band.height.max(0.0).min(bounds.width);
                     // A rail-only range draws its own girth and shows the
                     // thumb only while focus is visible on it.
-                    let girth = match (gradient, rail_girth) {
-                        (Some(_), _) => nana_ui_core::space::XL.min(track_band.height),
-                        (None, Some(girth)) => girth.min(track_band.height),
-                        (None, None) => 4.0,
-                    };
+                    let girth = girth.min(track_band.height).max(0.0);
                     let rail = SceneRect {
                         x: track_band.x,
                         y: track_band.y + (track_band.height - girth) / 2.0,
@@ -1961,10 +1990,10 @@ impl UiScene {
                     for (index, marker) in markers.iter().copied().enumerate() {
                         let marker = marker.clamp(0.0, 1.0);
                         let tick = SceneRect {
-                            x: track_band.x + track_band.width * marker - 1.5,
-                            y: rail.y - 2.0,
-                            width: 3.0,
-                            height: rail.height + 4.0,
+                            x: track_band.x + track_band.width * marker - girth * 0.375,
+                            y: rail.y - girth / 2.0,
+                            width: girth * 0.75,
+                            height: rail.height + girth,
                         };
                         self.insert_primitive(visual_quad_with_paint(
                             &visual_context,
@@ -1973,8 +2002,8 @@ impl UiScene {
                             VisualQuadStyle {
                                 background: node.style.background,
                                 border_color: node.style.border_color,
-                                border_width: 1.0,
-                                corner_radius: corner_radii(1.0),
+                                border_width,
+                                corner_radius: corner_radii(border_width),
                             },
                             node.style.paint_colors.background,
                             node.style.paint_colors.border,
@@ -2003,7 +2032,7 @@ impl UiScene {
                                 VisualQuadStyle {
                                     background: node.style.background,
                                     border_color: node.style.border_color,
-                                    border_width: 1.0,
+                                    border_width,
                                     corner_radius: corner_radii(thumb_extent / 2.0),
                                 },
                                 node.style.paint_colors.background,
@@ -2016,10 +2045,10 @@ impl UiScene {
                         // Focus marks the thumb (LiliaUI focus-visible outline),
                         // never the rail: the rail colour stays interaction-free.
                         let ring = SceneRect {
-                            x: thumb_rect.x - 3.0,
-                            y: thumb_rect.y - 3.0,
-                            width: thumb_rect.width + 6.0,
-                            height: thumb_rect.height + 6.0,
+                            x: thumb_rect.x - 3.0 * border_width,
+                            y: thumb_rect.y - 3.0 * border_width,
+                            width: thumb_rect.width + 6.0 * border_width,
+                            height: thumb_rect.height + 6.0 * border_width,
                         };
                         self.insert_primitive(visual_quad_with_paint(
                             &visual_context,
@@ -2028,7 +2057,7 @@ impl UiScene {
                             VisualQuadStyle {
                                 background: None,
                                 border_color: node.standard_visual_foreground,
-                                border_width: 2.0,
+                                border_width: 2.0 * border_width,
                                 corner_radius: corner_radii(ring.width.max(ring.height) / 2.0),
                             },
                             None,

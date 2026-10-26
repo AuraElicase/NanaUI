@@ -538,6 +538,8 @@ impl ChromeLayout {
             .map(|bits| LengthSpec::Px(f32::from_bits(bits)));
         // The mini rail sits right on the controls row.
         layout.gap = Some(LengthSpec::Px(if self.mini() { 0.0 } else { space::MD }));
+        layout.theme.gap =
+            (!self.mini()).then(|| crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
     }
 
     fn row(self, layout: &mut LayoutStyle) {
@@ -569,6 +571,33 @@ impl ChromeLayout {
         layout.padding_right = Some(LengthSpec::Px(inline));
         layout.padding_top = Some(LengthSpec::Px(top));
         layout.padding_bottom = Some(LengthSpec::Px(bottom));
+        use nana_ui_core::SpacingStep;
+        let (gap_step, inline_step, top_step, bottom_step) = match self.density {
+            MediaTransportDensity::Regular => (
+                SpacingStep::Xl,
+                SpacingStep::Xl,
+                SpacingStep::Xl,
+                SpacingStep::Xs,
+            ),
+            MediaTransportDensity::Compact | MediaTransportDensity::Stacked => (
+                SpacingStep::Md,
+                SpacingStep::Md,
+                SpacingStep::Sm,
+                SpacingStep::Sm,
+            ),
+            MediaTransportDensity::Mini => (
+                SpacingStep::Md,
+                SpacingStep::Md,
+                SpacingStep::Xs,
+                SpacingStep::Xs,
+            ),
+        };
+        layout.theme.row_gap = stacked.then(|| crate::theme_intent::space(SpacingStep::Xs));
+        layout.theme.gap = Some(crate::theme_intent::space(gap_step));
+        layout.theme.padding_left = Some(crate::theme_intent::space(inline_step));
+        layout.theme.padding_right = Some(crate::theme_intent::space(inline_step));
+        layout.theme.padding_top = Some(crate::theme_intent::space(top_step));
+        layout.theme.padding_bottom = Some(crate::theme_intent::space(bottom_step));
     }
 
     fn center(self, layout: &mut LayoutStyle) {
@@ -589,6 +618,13 @@ impl ChromeLayout {
         layout.direction = Some(direction);
         layout.gap = Some(LengthSpec::Px(gap));
         layout.align_items = align;
+        layout.theme.gap = Some(crate::theme_intent::space(
+            if self.density == MediaTransportDensity::Regular {
+                nana_ui_core::SpacingStep::Xxs
+            } else {
+                nana_ui_core::SpacingStep::Md
+            },
+        ));
     }
 }
 
@@ -642,6 +678,27 @@ impl ComponentView for MediaTransportBar {
         layout.width = Some(LengthSpec::Fill);
         match self.placement {
             MediaTransportPlacement::Overlay => {
+                for (unset, property) in [
+                    (
+                        layout.offset_bottom.is_none(),
+                        nana_ui_core::ThemeProperty::OffsetBottom,
+                    ),
+                    (
+                        layout.padding_left.is_none(),
+                        nana_ui_core::ThemeProperty::PaddingLeft,
+                    ),
+                    (
+                        layout.padding_right.is_none(),
+                        nana_ui_core::ThemeProperty::PaddingRight,
+                    ),
+                ] {
+                    if unset {
+                        layout.theme.set(
+                            property,
+                            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xl)),
+                        );
+                    }
+                }
                 layout.position = PositionSpec::Absolute;
                 layout.offset_left.get_or_insert(LengthSpec::Px(0.0));
                 layout.offset_right.get_or_insert(LengthSpec::Px(0.0));
@@ -775,6 +832,7 @@ impl AppContext {
             let chrome = self.create_detached_component(
                 document,
                 Stack::column(space::MD)
+                    .gap_theme(nana_ui_core::SpacingStep::Md)
                     .hittable()
                     .radius(nana_ui_core::RadiusTier::Md)
                     .with_layout(|layout| {
@@ -831,10 +889,12 @@ impl AppContext {
             self.append_child(chrome, row)?;
             let left = self.create_detached_component(
                 document,
-                Stack::row(space::XS).with_layout(|layout| {
-                    layout.align_items = AlignSpec::Center;
-                    layout.flex_shrink = Some(0.0);
-                }),
+                Stack::row(space::XS)
+                    .gap_theme(nana_ui_core::SpacingStep::Xs)
+                    .with_layout(|layout| {
+                        layout.align_items = AlignSpec::Center;
+                        layout.flex_shrink = Some(0.0);
+                    }),
             )?;
             self.append_child(row, left)?;
             let play = self.create_detached_component(
@@ -849,10 +909,12 @@ impl AppContext {
             self.append_child(left, mute)?;
             let leading = self.create_detached_component(
                 document,
-                Stack::row(space::XS).with_layout(|layout| {
-                    layout.align_items = AlignSpec::Center;
-                    layout.flex_shrink = Some(0.0);
-                }),
+                Stack::row(space::XS)
+                    .gap_theme(nana_ui_core::SpacingStep::Xs)
+                    .with_layout(|layout| {
+                        layout.align_items = AlignSpec::Center;
+                        layout.flex_shrink = Some(0.0);
+                    }),
             )?;
             self.append_child(left, leading)?;
             let center = self.create_detached_component(
@@ -866,7 +928,7 @@ impl AppContext {
             )?;
             self.append_child(row, center)?;
             let mut time = Text::new("")
-                .font_size(12.0)
+                .typography(nana_ui_core::TypeRole::Meta)
                 .color(SemanticColorRole::Muted);
             Arc::make_mut(&mut time.style.layout).flex_shrink = Some(0.0);
             let time = self.create_detached_component(document, time)?;
@@ -886,7 +948,7 @@ impl AppContext {
             let live_progress = self.create_detached_component(document, live_progress)?;
             self.append_child(center, live_progress)?;
             let mut time_duration = Text::new("")
-                .font_size(12.0)
+                .typography(nana_ui_core::TypeRole::Meta)
                 .color(SemanticColorRole::Muted);
             Arc::make_mut(&mut time_duration.style.layout).flex_shrink = Some(0.0);
             Arc::make_mut(&mut time_duration.style.layout).hidden = true;
@@ -894,18 +956,22 @@ impl AppContext {
             self.append_child(center, time_duration)?;
             let right = self.create_detached_component(
                 document,
-                Stack::row(space::XS).with_layout(|layout| {
-                    layout.align_items = AlignSpec::Center;
-                    layout.flex_shrink = Some(0.0);
-                }),
+                Stack::row(space::XS)
+                    .gap_theme(nana_ui_core::SpacingStep::Xs)
+                    .with_layout(|layout| {
+                        layout.align_items = AlignSpec::Center;
+                        layout.flex_shrink = Some(0.0);
+                    }),
             )?;
             self.append_child(row, right)?;
             let trailing = self.create_detached_component(
                 document,
-                Stack::row(space::XS).with_layout(|layout| {
-                    layout.align_items = AlignSpec::Center;
-                    layout.flex_shrink = Some(0.0);
-                }),
+                Stack::row(space::XS)
+                    .gap_theme(nana_ui_core::SpacingStep::Xs)
+                    .with_layout(|layout| {
+                        layout.align_items = AlignSpec::Center;
+                        layout.flex_shrink = Some(0.0);
+                    }),
             )?;
             self.append_child(right, trailing)?;
             let volume_group = self.create_detached_component(
@@ -954,27 +1020,39 @@ impl AppContext {
             self.append_child(right, fullscreen)?;
             let secondary_row = self.create_detached_component(
                 document,
-                Stack::column(space::XS).with_layout(|layout| {
-                    layout.width = Some(LengthSpec::Fill);
-                    layout.min_width = Some(LengthSpec::Px(0.0));
-                    layout.padding_left = Some(LengthSpec::Px(space::XS));
-                    layout.padding_right = Some(LengthSpec::Px(space::XS));
-                    layout.padding_bottom = Some(LengthSpec::Px(space::XS));
-                    layout.z_index = Some(1);
-                    layout.hidden = true;
-                }),
+                Stack::column(space::XS)
+                    .gap_theme(nana_ui_core::SpacingStep::Xs)
+                    .with_layout(|layout| {
+                        layout.width = Some(LengthSpec::Fill);
+                        layout.min_width = Some(LengthSpec::Px(0.0));
+                        layout.padding_left = Some(LengthSpec::Px(space::XS));
+                        layout.theme.padding_left =
+                            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
+                        layout.padding_right = Some(LengthSpec::Px(space::XS));
+                        layout.theme.padding_right =
+                            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
+                        layout.padding_bottom = Some(LengthSpec::Px(space::XS));
+                        layout.theme.padding_bottom =
+                            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
+                        layout.z_index = Some(1);
+                        layout.hidden = true;
+                    }),
             )?;
             self.append_child(chrome, secondary_row)?;
             let divider = self.create_detached_component(document, Divider::horizontal())?;
             self.append_child(secondary_row, divider)?;
             let secondary = self.create_detached_component(
                 document,
-                Stack::row(space::XL).with_layout(|layout| {
-                    layout.width = Some(LengthSpec::Fill);
-                    layout.min_width = Some(LengthSpec::Px(0.0));
-                    layout.align_items = AlignSpec::Center;
-                    layout.padding = Some(LengthSpec::Px(space::XS));
-                }),
+                Stack::row(space::XL)
+                    .gap_theme(nana_ui_core::SpacingStep::Xl)
+                    .with_layout(|layout| {
+                        layout.width = Some(LengthSpec::Fill);
+                        layout.min_width = Some(LengthSpec::Px(0.0));
+                        layout.align_items = AlignSpec::Center;
+                        layout.padding = Some(LengthSpec::Px(space::XS));
+                        layout.theme.padding =
+                            Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
+                    }),
             )?;
             self.append_child(secondary_row, secondary)?;
 
@@ -1410,6 +1488,11 @@ impl AppContext {
                 if mini {
                     // The meter keeps its own girth, centred on the rail.
                     pin_across(layout, (MINI_PROGRESS_GIRTH - PROGRESS_GIRTH) / 2.0);
+                    layout.theme.offset_top = Some(
+                        crate::theme_intent::space(nana_ui_core::SpacingStep::Sm)
+                            .scaled(-0.5)
+                            .offset(MINI_PROGRESS_GIRTH / 2.0),
+                    );
                 } else {
                     fill_track(layout);
                 }
@@ -1424,10 +1507,24 @@ impl AppContext {
             if mini {
                 layout.width = Some(LengthSpec::Px(control * 2.0));
                 layout.min_width = Some(LengthSpec::Px(control * 1.5));
+                layout.theme.width = Some(
+                    nana_ui_core::ThemeExpr::token(nana_ui_core::ThemeToken::Control(
+                        ControlSize::Medium,
+                    ))
+                    .scaled(2.0),
+                );
+                layout.theme.min_width = Some(
+                    nana_ui_core::ThemeExpr::token(nana_ui_core::ThemeToken::Control(
+                        ControlSize::Medium,
+                    ))
+                    .scaled(1.5),
+                );
                 layout.flex_shrink = Some(1.0);
             } else {
                 layout.width = None;
                 layout.min_width = None;
+                layout.theme.width = None;
+                layout.theme.min_width = None;
                 layout.flex_shrink = None;
             }
         })?;
@@ -1500,6 +1597,7 @@ fn fill_track(layout: &mut LayoutStyle) {
     layout.offset_left = None;
     layout.offset_right = None;
     layout.offset_top = None;
+    layout.theme.offset_top = None;
     layout.height = None;
     layout.width = Some(LengthSpec::Fill);
     layout.min_width = Some(LengthSpec::Px(0.0));
@@ -1509,6 +1607,7 @@ fn fill_track(layout: &mut LayoutStyle) {
 
 /// A track pinned across its positioned parent, `top` below its top edge.
 fn pin_across(layout: &mut LayoutStyle, top: f32) {
+    layout.theme.offset_top = None;
     layout.position = PositionSpec::Absolute;
     layout.offset_left = Some(LengthSpec::Px(0.0));
     layout.offset_right = Some(LengthSpec::Px(0.0));

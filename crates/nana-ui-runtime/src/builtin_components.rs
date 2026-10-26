@@ -339,13 +339,30 @@ impl RegisterableComponent for IconGlyph {
         let Some(icon) = spec.icon else {
             return IconGlyph::new(Icon::Search).size(0.0);
         };
-        let size = match (spec.layout.width, spec.layout.height) {
-            (Some(LengthSpec::Px(w)), Some(LengthSpec::Px(h))) if w > 0.0 && h > 0.0 => w.min(h),
-            (Some(LengthSpec::Px(w)), _) if w > 0.0 => w,
-            (_, Some(LengthSpec::Px(h))) if h > 0.0 => h,
-            _ => spec.size.icon_size(),
+        let glyph = IconGlyph::new(icon);
+        let mut glyph = match (spec.layout.width, spec.layout.height) {
+            (Some(LengthSpec::Px(w)), Some(LengthSpec::Px(h))) if w > 0.0 && h > 0.0 => {
+                glyph.size(w.min(h))
+            }
+            (Some(LengthSpec::Px(w)), _) if w > 0.0 => glyph.size(w),
+            (_, Some(LengthSpec::Px(h))) if h > 0.0 => glyph.size(h),
+            _ => {
+                if let Some(size) = spec.layout.theme.width.as_ref().or(spec
+                    .layout
+                    .theme
+                    .height
+                    .as_ref())
+                {
+                    glyph.size_theme(size.clone())
+                } else {
+                    glyph.size_role(match spec.size {
+                        nana_ui_core::ControlSize::Small => nana_ui_core::TypeRole::Meta,
+                        nana_ui_core::ControlSize::Medium => nana_ui_core::TypeRole::Body,
+                        nana_ui_core::ControlSize::Large => nana_ui_core::TypeRole::Section,
+                    })
+                }
+            }
         };
-        let mut glyph = IconGlyph::new(icon).size(size);
         Arc::make_mut(&mut glyph.style.layout).overlay_css_size_overrides(spec.layout.as_ref());
         glyph
     }

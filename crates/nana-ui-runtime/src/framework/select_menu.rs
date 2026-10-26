@@ -1,6 +1,7 @@
-//! The pointer over an open Select, Dropdown or SearchDropdown menu whose
-//! rows overflow it: the wheel scrolls the rows, the scrollbar's lane heats
-//! up under the pointer, and its thumb drags. A press on a row stays the
+//! The pointer over an open Select, Dropdown or SearchDropdown menu: the row
+//! under it takes the highlight the arrow keys move. Over a menu whose rows
+//! overflow it the wheel scrolls the rows, the scrollbar's lane heats up
+//! under the pointer, and its thumb drags. A press on a row stays the
 //! field's activation ([`AppContext::activate_select_at`] and its siblings).
 use super::*;
 use crate::{
@@ -15,6 +16,10 @@ pub(crate) trait MenuField: ComponentView {
     fn menu_open(&self) -> bool;
     fn menu_scroll(&self) -> SelectMenuScroll;
     fn menu_scroll_mut(&mut self) -> &mut SelectMenuScroll;
+    /// The menu row the highlight is on.
+    fn highlighted_row(&self) -> Option<usize>;
+    /// Put the highlight on menu row `row`, an enabled one.
+    fn highlight_row(&mut self, row: usize);
 }
 
 impl MenuField for Select {
@@ -28,6 +33,14 @@ impl MenuField for Select {
 
     fn menu_scroll_mut(&mut self) -> &mut SelectMenuScroll {
         &mut self.menu_scroll
+    }
+
+    fn highlighted_row(&self) -> Option<usize> {
+        self.highlighted
+    }
+
+    fn highlight_row(&mut self, row: usize) {
+        self.highlighted = Some(row);
     }
 }
 
@@ -43,6 +56,14 @@ impl MenuField for Dropdown {
     fn menu_scroll_mut(&mut self) -> &mut SelectMenuScroll {
         &mut self.menu_scroll
     }
+
+    fn highlighted_row(&self) -> Option<usize> {
+        self.highlighted
+    }
+
+    fn highlight_row(&mut self, row: usize) {
+        self.highlighted = Some(row);
+    }
 }
 
 impl MenuField for SearchDropdown {
@@ -56,6 +77,17 @@ impl MenuField for SearchDropdown {
 
     fn menu_scroll_mut(&mut self) -> &mut SelectMenuScroll {
         &mut self.menu_scroll
+    }
+
+    fn highlighted_row(&self) -> Option<usize> {
+        self.highlighted_visible()
+    }
+
+    /// The menu lists only the options the query matches.
+    fn highlight_row(&mut self, row: usize) {
+        if let Some(index) = self.visible_indices().get(row) {
+            self.highlighted = Some(*index);
+        }
     }
 }
 
@@ -140,6 +172,9 @@ fn update_scroll<C: MenuField>(
     Ok(true)
 }
 
+/// The row under the pointer takes the highlight. Between rows, on the
+/// scrollbar or over the field it stays where it was, and a thumb being
+/// dragged moves only the rows.
 fn menu_moved<C: MenuField>(
     cx: &mut AppContext,
     field: Entity<C>,
@@ -148,10 +183,8 @@ fn menu_moved<C: MenuField>(
     let Some((menu, x, y)) = open_menu(cx, field, pointer.x, pointer.y)? else {
         return Ok(false);
     };
-    let Some(bar) = menu.scrollbar else {
-        return Ok(false);
-    };
-    if pointer.captured
+    if let Some(bar) = menu.scrollbar
+        && pointer.captured
         && let Some(drag) = cx.read(field, |field| field.menu_scroll().drag)?
     {
         let offset = bar
@@ -159,8 +192,22 @@ fn menu_moved<C: MenuField>(
             .offset_for_thumb_origin(y - drag.grab);
         return update_scroll(cx, field, |scroll| scroll.offset = Some(offset));
     }
-    let hot = bar.contains(x, y);
-    update_scroll(cx, field, |scroll| scroll.hot = hot)
+    let hot = menu.scrollbar.is_some_and(|bar| bar.contains(x, y));
+    let highlighted = cx.read(field, C::highlighted_row)?;
+    let Some(row) =
+        crate::select::select_option_at(&menu, x, y).filter(|row| highlighted != Some(*row))
+    else {
+        return update_scroll(cx, field, |scroll| scroll.hot = hot);
+    };
+    cx.update_component(field, |field, _| {
+        let scroll = field.menu_scroll_mut();
+        scroll.hot = hot;
+        // Rows nothing has scrolled sit around the highlight; they stay where
+        // they are drawn while it follows the pointer.
+        scroll.offset.get_or_insert(menu.scroll);
+        field.highlight_row(row);
+    })?;
+    Ok(true)
 }
 
 /// The pointer left the field and its menu, or stopped reaching them. A

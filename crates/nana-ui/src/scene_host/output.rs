@@ -192,6 +192,11 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
         {
             self.program
                 .window_output_frame(id, &frame, &self.context_for(id));
+            if frame.resend_requested()
+                && let Some(state) = self.window_outputs.get_mut(&id)
+            {
+                state.resend(Instant::now());
+            }
         }
         self.flush_window_output(id);
         self.deliver_output_traces(id);

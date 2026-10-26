@@ -428,6 +428,17 @@ impl NativeExportPool {
         Some(unsafe { shared.fence.GetCompletedValue() })
     }
 
+    /// How long the consumer has held the last issued frame, while it still
+    /// does. Until it releases, [`Self::stage`] answers
+    /// [`NativeExportDeferral::ConsumerBusy`]; asking first lets the caller
+    /// hold back a frame instead of rendering one that cannot be exported.
+    pub fn consumer_wait(&self) -> Option<Duration> {
+        let (release, since) = self.outstanding?;
+        let completed = self.completed_value()?;
+        // A removed device reports every fence as complete; `stage` says so.
+        (completed < release).then(|| since.elapsed())
+    }
+
     /// Stops exporting. The textures stay alive for tokens still held; their
     /// handles close when the last one is dropped. The consumer reopens on
     /// the next pool's generation.

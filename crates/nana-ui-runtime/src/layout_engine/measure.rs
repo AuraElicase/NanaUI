@@ -512,13 +512,13 @@ fn visual_content(id: StableNodeId, world: &UiWorld) -> VisualContent {
             }
         }
         Some(crate::StandardVisual::Checkbox { size, .. }) => VisualContent {
-            width: size.indicator_size()
+            width: size.indicator_size_in(world.theme().typography(), world.theme().spacing())
                 + if world.text(id).is_some_and(|label| !label.is_empty()) {
-                    size.indicator_gap()
+                    size.indicator_gap_in(world.theme().spacing())
                 } else {
                     0.0
                 },
-            height: size.indicator_size(),
+            height: size.indicator_size_in(world.theme().typography(), world.theme().spacing()),
         },
         // Its text already asks for the widest option (`text_natural_width`);
         // the arrow stands beside it.

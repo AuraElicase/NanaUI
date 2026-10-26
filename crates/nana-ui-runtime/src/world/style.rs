@@ -138,8 +138,34 @@ impl UiWorld {
             None if parent.is_some() => inherited.text_scale,
             None => self.root_text_scale(self.record(id).document),
         };
-        let font_size_base = layout.font_size.unwrap_or(inherited.font_size_base);
-        let line_height_base = layout.line_height.or(inherited.line_height_base);
+        // Roots inherit typography from the installed theme. Descendants still
+        // inherit their parent, including explicit application font overrides.
+        let typography = self.theme.typography();
+        let font_size_base = layout.font_size.unwrap_or_else(|| {
+            if parent.is_some() {
+                inherited.font_size_base
+            } else {
+                typography.body
+            }
+        });
+        let font_weight = layout.font_weight.or_else(|| {
+            if parent.is_some() {
+                inherited.font_weight
+            } else {
+                Some(typography.regular)
+            }
+        });
+        let line_height_base = layout.line_height.or_else(|| {
+            if parent.is_some() {
+                inherited.line_height_base
+            } else {
+                // A unitless root line follows larger descendant fonts too;
+                // at Body it is exactly the theme's Line box.
+                Some(nana_ui_core::LineHeightSpec::Relative(
+                    typography.line / typography.body,
+                ))
+            }
+        });
         let next = ComputedStyle {
             paint_colors: nana_ui_core::PaintColorSlots {
                 color: layout.paint_colors.color.or_else(|| {
@@ -190,7 +216,7 @@ impl UiWorld {
                 .or(inherited.selection_background),
             selection_color: layout.selection_color.or(inherited.selection_color),
             font_size: font_size_base * text_scale,
-            font_weight: layout.font_weight.or(inherited.font_weight),
+            font_weight,
             italic: layout.font_italic.unwrap_or(inherited.italic),
             font_family: layout
                 .font_family
@@ -298,9 +324,6 @@ impl UiWorld {
 }
 
 impl UiWorld {
-    /// Apply a node's design intent to its layout, against the installed
-    /// metrics. Returns the authored `Arc` untouched when there is nothing to
-    /// resolve, so a node without intent costs nothing.
     /// Resolve a node's design intent into the layout box the pipeline reads.
     ///
     /// Returns the resolved layout and whether producing it had to copy the
@@ -564,6 +587,18 @@ impl UiWorld {
         style: &NodeStyle,
     ) -> (Arc<nana_ui_core::LayoutStyle>, bool) {
         let (mut resolved, mut copied) = Self::resolve_layout_intent(style, self.intent_tokens());
+        if !style.layout.theme.is_empty() {
+            let before = Arc::clone(&resolved);
+            style
+                .layout
+                .theme
+                .apply(Arc::make_mut(&mut resolved), &self.theme);
+            if *before == *resolved {
+                resolved = before;
+            } else {
+                copied = true;
+            }
+        }
         // A locale's direction, where the node names none (Issue #269).
         if resolved.dir.is_none()
             && let Some(direction) = self.locale_direction(id)
@@ -617,6 +652,13 @@ impl UiWorld {
             moved += 1;
             if !self.presence_live(id) {
                 continue;
+            }
+            if changed.intersects(nana_ui_core::LayoutStyleChange::FONT) {
+                // Style resolution changes the font, but the pre-layout text
+                // pass only visits scheduled text. Keep its intrinsic metrics
+                // in the same frame as the new typography, including descendants
+                // that inherit the font from this node.
+                self.mark_subtree(id, DirtyMask::STYLE | DirtyMask::TEXT);
             }
             let classified = self.classify_layout_change(id, changed);
             self.record_layout_invalidation(
@@ -766,7 +808,7 @@ impl UiWorld {
             );
         }
         // `focus_visible`, not `focused`: a control that was clicked is focused
-        // and does not say so.
+        // and does not say so, unless it is a text field taking typing.
         if self.focus_visible(self.record(id).document) == Some(id) {
             paint = paint.overlay(local.interaction.focused);
         }
@@ -924,12 +966,20 @@ impl UiWorld {
             self.cancel_hover_transition(id);
         }
         let previous_metrics = self.style_model.metrics;
+        let body_changed = self.theme.typography().body != next.typography().body;
+        let regular_changed = self.theme.typography().regular != next.typography().regular;
+        let line_ratio_changed = self.theme.typography().line / self.theme.typography().body
+            != next.typography().line / next.typography().body;
+        let token_layout_changed = self.theme.spacing() != next.spacing()
+            || self.theme.typography() != next.typography()
+            || self.theme.border() != next.border()
+            || self.theme.metrics() != next.metrics();
         let previous_scales = (self.theme.typography(), self.theme.spacing());
         // A dialog card is placed from its recipe and the hairline its
         // dividers take, which no layout input names; a change to either
         // reaches only the modal frames.
-        let dialog_changed = self.theme.recipes().dialog() != next.recipes().dialog()
-            || self.theme.border().hairline != next.border().hairline;
+        let dialog_changed =
+            self.theme.recipes().dialog() != next.recipes().dialog() || token_layout_changed;
         self.style_model = next.style_model();
         self.theme = next;
         self.palette_epoch = self.palette_epoch.wrapping_add(1).max(1);
@@ -968,7 +1018,7 @@ impl UiWorld {
                 .filter(|id| {
                     matches!(
                         self.nodes.visual(*id),
-                        Some(StandardVisual::ModalFrame { .. })
+                        Some(StandardVisual::ModalFrame { .. } | StandardVisual::EmptyState { .. })
                     )
                 })
                 .collect::<Vec<_>>()
@@ -981,18 +1031,46 @@ impl UiWorld {
             work.record_allocation(1, ids.len().saturating_mul(size_of::<StableNodeId>()));
         }
         let mut dependents = 0;
-        if metrics_changed {
+        if metrics_changed || token_layout_changed {
             // Design intent resolves against the metrics, so a metrics install
             // is the one event that has to re-run it. Doing it here, once, is
             // what keeps it off every frame's read path.
             dependents = self.reresolve_layout_intent();
+            // An unstyled root has no authored token intent to re-resolve. Its
+            // inherited defaults nevertheless changed and must shape this frame.
+            let default_roots = self
+                .live_document_roots
+                .values()
+                .flat_map(|roots| roots.iter().copied())
+                .filter(|root| {
+                    let layout = &self.record(*root).resolved_layout;
+                    (body_changed && layout.font_size.is_none())
+                        || (regular_changed && layout.font_weight.is_none())
+                        || (line_ratio_changed && layout.line_height.is_none())
+                })
+                .collect::<Vec<_>>();
+            for root in default_roots {
+                self.mark_subtree(root, DirtyMask::STYLE | DirtyMask::TEXT);
+                let classified =
+                    self.classify_layout_change(root, nana_ui_core::LayoutStyleChange::FONT);
+                self.record_layout_invalidation(
+                    root,
+                    nana_ui_core::LayoutInvalidation {
+                        source: nana_ui_core::LayoutInvalidationSource::Resource,
+                        reason: nana_ui_core::InvalidationReason::RESOURCE,
+                        ..classified
+                    },
+                );
+                dependents += 1;
+            }
             work.record_layout_invalidation(dependents);
         }
         work.record_layout_invalidation(modal_frames.len());
         self.record_theme_work(work);
         for id in modal_frames {
-            // The card's width wraps its title, and its slots are placed in
-            // it: the frame measures and places again by its recipe.
+            // These visuals shape several internal typography roles. A
+            // description or message can change while the root's own font
+            // stays equal, so they measure their complete text block again.
             self.nodes
                 .invalidate_text(id, crate::text_node::TextDirty::CONSTRAINT);
             self.mark(id, DirtyMask::TEXT);
@@ -1013,7 +1091,7 @@ impl UiWorld {
         }
         let seeds = (self.layout_seeds_created - seeds_before) as usize;
         let counts = &mut self.pending_drain_counts;
-        if metrics_changed {
+        if metrics_changed || token_layout_changed {
             counts.theme_to_layout_seeds += seeds;
             counts.theme_metric_dependents_invalidated += dependents;
         } else {
@@ -1432,7 +1510,8 @@ impl UiWorld {
 }
 
 fn style_declares_intent(style: &NodeStyle) -> bool {
-    style.type_role.is_some()
+    !style.layout.theme.is_empty()
+        || style.type_role.is_some()
         || style.type_weight.is_some()
         || style.gap_step.is_some()
         || style.padding_step.is_some()

@@ -286,6 +286,15 @@ impl GpuDeviceState {
             .resize_with(count.max(1).max(occupied).max(last_occupied), || None);
     }
 
+    /// How many frames may be in flight at once.
+    pub fn frame_slot_count(&self) -> usize {
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .frame_slots
+            .len()
+    }
+
     /// Take a free slot for the frame `token`, or `None` when all are held.
     pub fn acquire_frame_slot(&self, token: u64) -> Option<FrameSlotId> {
         self.take_frame_slot(token).ok()

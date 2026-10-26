@@ -246,8 +246,10 @@ fn an_unreleased_frame_defers_the_next_and_a_dropped_token_releases_itself() {
     let gpu = dx12_or_skip!();
     let source = source(&gpu, &pattern());
     let mut pool = NativeExportPool::new(&gpu, EXTENT).unwrap();
+    assert_eq!(pool.consumer_wait(), None);
     let token = export(&mut pool, &gpu, &source);
     wait_completed(&pool, token.ready_value());
+    assert!(pool.consumer_wait().is_some());
     let mut frame = gpu.begin_frame("busy");
     match pool.stage(&mut frame, &source).unwrap() {
         NativeExportOutcome::Deferred(NativeExportDeferral::ConsumerBusy { .. }) => {}
@@ -257,6 +259,7 @@ fn an_unreleased_frame_defers_the_next_and_a_dropped_token_releases_itself() {
     // Nobody accepted it: dropping releases the slot on the producer queue.
     drop(token);
     wait_completed(&pool, 2);
+    assert_eq!(pool.consumer_wait(), None);
     let next = export(&mut pool, &gpu, &source);
     assert_eq!(next.ready_value(), 3);
 }

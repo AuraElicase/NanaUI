@@ -247,18 +247,26 @@ fn ime_and_font_changes_remeasure_the_same_compact_capacity() {
         .computed_style(composer.area.stable_id())
         .unwrap()
         .font_size;
+    // A literal size replaces the control's typography binding, as a literal
+    // CSS declaration does; restoring the binding returns to the theme size.
+    let mut binding = None;
     composer
         .cx
         .update_component(composer.area, |area, _| {
-            std::sync::Arc::make_mut(&mut area.style.layout).font_size = Some(size * 1.5)
+            let layout = std::sync::Arc::make_mut(&mut area.style.layout);
+            binding = layout.theme.font_size.take();
+            layout.font_size = Some(size * 1.5);
         })
         .unwrap();
+    assert!(binding.is_some());
     composer.settle(width);
     assert!(composer.frame().height > 32.0);
     composer
         .cx
         .update_component(composer.area, |area, _| {
-            std::sync::Arc::make_mut(&mut area.style.layout).font_size = Some(size)
+            let layout = std::sync::Arc::make_mut(&mut area.style.layout);
+            layout.theme.font_size = binding;
+            layout.font_size = None;
         })
         .unwrap();
     composer.settle(width);

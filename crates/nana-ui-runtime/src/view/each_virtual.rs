@@ -10,7 +10,10 @@
 //! rows size to their content, the given height only an estimate.
 //! [`EachVirtual::within`] lets the rows scroll with an ancestor
 //! `ScrollView` (a page's) instead of one of their own, and
-//! [`EachVirtual::grid`] flows items into as many columns as fit.
+//! [`EachVirtual::grid`] flows items into as many columns as fit. A column
+//! change rebuilds grid rows, so their internal node IDs may change; focus
+//! follows the same item key and relative descendant path. Geometry changes
+//! that keep the grid grouping keep the mounted nodes themselves.
 
 use std::borrow::Cow;
 use std::cell::Cell;
@@ -49,6 +52,27 @@ enum Container {
 struct Grid {
     min_width: f32,
     gap: f32,
+    gap_theme: Option<nana_ui_core::SpacingStep>,
+}
+
+/// Only geometry dependencies: a palette change leaves this computed equal
+/// and does not schedule a virtual measurement pass.
+#[derive(Clone, PartialEq)]
+struct ThemeGeometry {
+    spacing: nana_ui_core::SpacingTokens,
+    typography: nana_ui_core::TypographyTokens,
+    metrics: nana_ui_core::ThemeMetrics,
+    border: nana_ui_core::BorderTokens,
+}
+impl ThemeGeometry {
+    fn read(theme: &nana_ui_core::CompiledTheme) -> Self {
+        Self {
+            spacing: theme.spacing(),
+            typography: theme.typography(),
+            metrics: theme.metrics(),
+            border: theme.border(),
+        }
+    }
 }
 
 /// What the virtual list places: one item, or one grid row of them.
@@ -185,6 +209,17 @@ impl<T, K, S, KF, RF> EachVirtual<T, K, S, KF, RF> {
         self.grid = Some(Grid {
             min_width: min_width.max(1.0),
             gap: gap.max(0.0),
+            gap_theme: None,
+        });
+        self
+    }
+
+    /// Grid whose column and row gaps follow the installed theme.
+    pub fn grid_theme(mut self, min_width: f32, gap: nana_ui_core::SpacingStep) -> Self {
+        self.grid = Some(Grid {
+            min_width: min_width.max(1.0),
+            gap: nana_ui_core::SpacingTokens::DEFAULT.resolve(gap),
+            gap_theme: Some(gap),
         });
         self
     }
@@ -475,6 +510,7 @@ struct EachVirtualBinding<T: 'static, K: 'static, RF> {
     scroll: Option<Entity<ScrollView>>,
     list: Entity<List>,
     grid: Option<Grid>,
+    theme: Option<Computed<ThemeGeometry>>,
     state: VirtualListItems<Unit<K>, Stack>,
     /// The binding's own geometry; published to `shared` after each sync.
     geometry: Geometry<K>,
@@ -487,6 +523,13 @@ struct EachVirtualBinding<T: 'static, K: 'static, RF> {
     /// The units version and measurement count the published geometry is a
     /// copy at.
     published: (u64, u64),
+}
+
+/// A grid regroup replaces row scopes. Preserve interaction by item identity,
+/// not by its old row/column or by another item's similarly named control.
+struct GridFocus<K> {
+    key: K,
+    path: Vec<(usize, Option<String>, crate::NodeKind)>,
 }
 
 /// Every item with its key, first of each key only.
@@ -518,6 +561,9 @@ where
     /// The keyed items; reads what the binding depends on.
     fn read(&self) -> Keyed<K, T> {
         self.moved.get();
+        if let Some(theme) = self.theme {
+            theme.get();
+        }
         if let Some(within) = self.within {
             within.get();
         }
@@ -606,6 +652,21 @@ where
     }
 
     fn sync(&mut self, cx: &mut AppContext, items: Keyed<K, T>) -> Result<(), FrameworkError> {
+        if let (Some(grid), Some(theme)) = (&mut self.grid, self.theme)
+            && let Some(step) = grid.gap_theme
+        {
+            let gap = theme.get().spacing.resolve(step).max(0.0);
+            if gap != grid.gap {
+                let difference = gap - grid.gap;
+                grid.gap = gap;
+                self.geometry.layout = VirtualListLayout::new(
+                    (0..self.geometry.units.units.len())
+                        .map(|at| (self.geometry.layout.extent(at..at + 1) + difference).max(1.0))
+                        .collect::<Vec<_>>(),
+                );
+                self.version += 1;
+            }
+        }
         let Some(scroll) = self.scroll(cx)? else {
             return Ok(());
         };
@@ -619,6 +680,10 @@ where
         // first width regroups even when that fits the one column units
         // start at.
         let units = regroup.then(|| self.units(columns, &items.items)).flatten();
+        let focus = columns
+            .is_some_and(|columns| columns != self.geometry.units.columns)
+            .then(|| self.grid_focus(cx))
+            .flatten();
         let geometry = &mut self.geometry;
         geometry.offset = viewport.offset[1];
         geometry.extent = viewport.extent[1];
@@ -676,6 +741,20 @@ where
             }
             self.synced = Some(items.stamp);
         }
+        if let Some(focus) = &focus
+            && geometry.unit_of(&focus.key).is_some()
+            && matches!(request, None | Some(Request::Keep(..)))
+        {
+            request = Some(Request::Reveal(
+                focus.key.clone(),
+                VirtualAlignment::Nearest,
+            ));
+        }
+        let retained = focus
+            .as_ref()
+            .and_then(|focus| geometry.unit_of(&focus.key))
+            .map(|at| vec![geometry.units.units[at].clone()])
+            .unwrap_or_default();
         let target = request
             .as_ref()
             .and_then(|request| geometry.target(request));
@@ -686,8 +765,13 @@ where
         let index_of = |unit: &Unit<K>| units.index.get(unit).copied();
         let slot = |_: usize, _: &Unit<K>| match grid {
             // The gap below a grid row is part of its extent.
-            Some(grid) => Stack::column(0.0)
-                .with_layout(|layout| layout.padding_bottom = Some(LengthSpec::Px(grid.gap))),
+            Some(grid) => Stack::column(0.0).with_layout(|layout| {
+                layout.padding_bottom = Some(LengthSpec::Px(grid.gap));
+                if let Some(step) = grid.gap_theme {
+                    layout.theme.padding_bottom =
+                        Some(nana_ui_core::ThemeToken::Space(step).into());
+                }
+            }),
             None => Stack::column(0.0),
         };
         let items = &items.items;
@@ -707,7 +791,7 @@ where
                 self.overscan,
                 target,
                 self.version,
-                &[],
+                &retained,
                 key_at,
                 index_of,
                 slot,
@@ -723,7 +807,7 @@ where
                 self.overscan,
                 target,
                 self.version,
-                &[],
+                &retained,
                 key_at,
                 index_of,
                 slot,
@@ -736,6 +820,9 @@ where
             self.geometry.offset = offset;
         }
         self.geometry.rows = self.built_rows(cx);
+        if let Some(focus) = focus {
+            self.restore_grid_focus(cx, focus)?;
+        }
         // Rows revealed at their estimate are measured after the next
         // layout, which moves an item aligned to the end or the center:
         // reveal it again then, until nothing it shows is estimated.
@@ -779,6 +866,73 @@ where
 
     fn with_shared<R>(&self, f: impl FnOnce(&mut Shared<K>) -> R) -> R {
         f(&mut self.shared.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+
+    fn grid_focus(&self, cx: &AppContext) -> Option<GridFocus<K>> {
+        let document = cx.world().node(self.list.stable_id())?.document;
+        let mut node = cx.world().focused(document)?;
+        let mut path = Vec::new();
+        loop {
+            if let Some((key, _)) = self.geometry.rows.iter().find(|(_, cell)| **cell == node) {
+                path.reverse();
+                return Some(GridFocus {
+                    key: key.clone(),
+                    path,
+                });
+            }
+            let child = cx.world().node(node)?;
+            let parent = child.parent?;
+            let siblings = cx.world().node(parent)?.children;
+            let index = siblings.iter().position(|id| *id == node)?;
+            let key = cx.assembly_key(parent, node).map(str::to_owned);
+            path.push((index, key, child.kind));
+            node = parent;
+            if node == self.list.stable_id() {
+                return None;
+            }
+        }
+    }
+
+    fn restore_grid_focus(
+        &self,
+        cx: &mut AppContext,
+        focus: GridFocus<K>,
+    ) -> Result<(), FrameworkError> {
+        let Some(mut node) = self.geometry.rows.get(&focus.key).copied() else {
+            return Ok(());
+        };
+        let document = cx
+            .world()
+            .node(node)
+            .ok_or(FrameworkError::MissingView(node))?
+            .document;
+        // A focus listener may have intentionally moved focus while old rows
+        // were removed. Such a request takes precedence over restoration.
+        if cx.world().focused(document).is_some() {
+            return Ok(());
+        }
+        for (index, key, kind) in focus.path {
+            let Some(parent) = cx.world().node(node) else {
+                return Ok(());
+            };
+            let child = match key {
+                Some(key) => parent
+                    .children
+                    .into_iter()
+                    .find(|child| cx.assembly_key(node, *child) == Some(key.as_str())),
+                None => parent.children.get(index).copied(),
+            };
+            let Some(child) = child.filter(|child| {
+                cx.world()
+                    .node(*child)
+                    .is_some_and(|node| node.kind == kind)
+            }) else {
+                return Ok(());
+            };
+            node = child;
+        }
+        cx.focus_node_in_place(document, node)?;
+        Ok(())
     }
 
     /// Scroll so the viewport's top is `offset` into the list: now, as far
@@ -883,9 +1037,17 @@ fn grid_row<T: Clone, K, V: IntoView>(
         })
         .collect::<Vec<_>>();
     cells.extend((items.len()..columns).map(|_| widget(share()).into_any()));
-    widget(Stack::fill_row(grid.gap).align(AlignSpec::Start))
-        .children(cells)
-        .into_any()
+    widget(
+        Stack::fill_row(grid.gap)
+            .align(AlignSpec::Start)
+            .with_layout(|layout| {
+                if let Some(step) = grid.gap_theme {
+                    layout.theme.gap = Some(nana_ui_core::ThemeToken::Space(step).into());
+                }
+            }),
+    )
+    .children(cells)
+    .into_any()
 }
 
 /// Build one row's view into its placement slot, in a scope the row's roots
@@ -974,6 +1136,12 @@ where
             scroll,
             list,
             grid: self.grid,
+            theme: (self.measured || self.grid.is_some_and(|grid| grid.gap_theme.is_some())).then(
+                || {
+                    let theme = super::theme_signal();
+                    reactive::computed(move || theme.with(|theme| ThemeGeometry::read(theme)))
+                },
+            ),
             state: if self.measured {
                 VirtualListItems::measured()
             } else {

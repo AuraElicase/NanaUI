@@ -9408,6 +9408,7 @@ fn a_gradient_range_is_a_bare_strip_with_a_ring_thumb_and_keeps_its_slider_seman
         unit,
         track,
         thumb_ring,
+        ..
     } = context
         .world()
         .component_geometry(range.stable_id())

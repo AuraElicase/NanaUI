@@ -30,6 +30,7 @@ mod custom_paint;
 mod paint_script;
 mod property_grid;
 mod scrub_field;
+mod theme_intent;
 /// The BCP 47 tag [`MutationQueue::set_language`] and
 /// [`UiWorld::set_default_language`] take.
 pub use nana_text::font::LanguageTag;
@@ -100,8 +101,8 @@ mod responsive;
 pub use i18n::IcuFormatter;
 pub use i18n::{
     DateStyle, FormatterCounts, Locale, LocaleFormatter, LocalizedText, MessageArg, MessageArgs,
-    MessageCatalog, MessageDateTime, MessageId, MessageTable, MissingMessage, NumberStyle,
-    PlainFormatter, PluralCategory,
+    MessageCatalog, MessageDateTime, MessageId, MessagePattern, MessagePatternError, MessageTable,
+    MissingMessage, NumberStyle, PlainFormatter, PluralCategory,
 };
 pub use responsive::{
     MAX_RESPONSIVE_BREAKPOINTS, ResponsiveAxis, ResponsiveContainer, ResponsiveRule, StyleVariant,
@@ -390,8 +391,8 @@ pub use range_span::{
 };
 #[cfg(feature = "controls")]
 pub use reorder_list::{
-    ReorderDragVisual, ReorderDropMark, ReorderItem, ReorderList, ReorderListEvent,
-    ReorderListPointer, ReorderRowPaint,
+    ReorderAccepts, ReorderDragVisual, ReorderDropMark, ReorderItem, ReorderKeyMove, ReorderList,
+    ReorderListEvent, ReorderListPointer, ReorderRowPaint,
 };
 #[cfg(feature = "rich-text")]
 pub use rich_text::{

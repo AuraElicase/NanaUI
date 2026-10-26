@@ -1,0 +1,16 @@
+{
+  "provider": "dev.nanaui.trace-load-sink.v1",
+  "version": "v1",
+  "source": "nana-trace-load-sink.instrpkg",
+  "source_sha256": "4fadf310cdb838f183ab5d18f59cf724c6d8b110df545ccae233c622b6cd1ed1",
+  "built_with": "Xcode 27.0 (27A266a) instrumentbuilder",
+  "build_output_pinned": false,
+  "role": "control-only: records loss_control.py --mode kdebug events so recordings without System Trace can be driven into real loss",
+  "supersedes": null,
+  "selection": {
+    "kdebug_class": 33,
+    "kdebug_subclass": 10,
+    "code": 857,
+    "function": 0
+  }
+}
