@@ -112,7 +112,7 @@ fn window_output(&self, id: WindowId) -> Option<WindowOutputConfig> {
 | Headless | `PresentationDriver::render_document`，没有 Window 或 event loop。 |
 | Native host | `PresentationDriver::present_to` 实现同设备目标 transfer；Windows `window-output-probe` / `native_export` 包含真实 D3D11 shared-handle import、GPU wait/copy/release 参考代码。后者需 Windows 实测。 |
 | OpenVR / SteamVR | `openvr-output-probe` 通过 DX12 ready/release fence、同适配器 D3D11 共享纹理与 `IVROverlay_028` 提交到 SteamVR。默认采用官方 `DXGISharedHandle` 的持久纹理原子 `CopyResource` 更新；本机仅编译与协议检查，未执行 Windows/SteamVR。 |
-| Web bridge | [Electron 44.7.2 参考宿主](../../examples/web-output-bridge/README.md) + `web-output-producer`：跨进程 NT handle → managed `sharedTexture` → `VideoFrame` → WebGPU 绘制。本机覆盖真实 main 使用的协议模块；未执行 Windows/Electron GPU 路径。普通 Web API 无法导入任意 native GPU handle，必须由具体宿主安装并检测专用 bridge；通用 GPU transport 不代表 Electron bridge 已安装。 |
+| Web bridge | [Electron 44.9.1 参考宿主](../../examples/web-output-bridge/README.md) + `web-output-producer`：跨进程 NT handle → managed `sharedTexture` → `VideoFrame` → WebGPU 绘制。本机覆盖真实 main 使用的协议模块；未执行 Windows/Electron GPU 路径。普通 Web API 无法导入任意 native GPU handle，必须由具体宿主安装并检测专用 bridge；通用 GPU transport 不代表 Electron bridge 已安装。 |
 
 通用 `OverlayHostAdapter` 只负责同设备 transfer 与宿主提供的异步消费凭据，不提供或检测浏览器 native import。使用该 transport 的宿主对自己的 `FrameContext` 先 `record`，提交后以同一 submission 调用 `bind_submission`，再非阻塞 `poll`。NanaUI 的 copy 完成后才调用 transport。每个 transport 使用独立目标池，未释放的目标返回 `Deferred`；不得将一个原生单消费方 token 复制给多个独立消费者。
 

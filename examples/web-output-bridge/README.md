@@ -1,7 +1,7 @@
 # NanaUI → Electron / WebGPU reference
 
 This is a foreign host fixture. It does not introduce a WebView into NanaUI's
-product shell. Windows x64, DX12, and Electron **44.7.2** are required. Metal,
+product shell. Windows x64, DX12, and Electron **44.9.1** are required. Metal,
 Vulkan, ordinary browser pages, missing managed texture APIs, and unavailable
 WebGPU capabilities return `unsupported`; there is no bitmap or CPU readback fallback.
 Shader validation, lost devices, queue failures and unexpected exceptions are
@@ -95,15 +95,15 @@ No historical Release timing baseline is inferred.
 
 ## Official API evidence
 
-- [Pinned managed API](https://github.com/electron/electron/blob/v44.7.2/docs/api/shared-texture.md):
+- [Pinned managed API](https://github.com/electron/electron/blob/v44.9.1/docs/api/shared-texture.md):
   import is main-process only; the final callback covers all process references;
   transfer completion alone is not consumption completion.
-- [Pinned implementation](https://github.com/electron/electron/blob/v44.7.2/shell/common/api/electron_api_shared_texture.cc):
+- [Pinned implementation](https://github.com/electron/electron/blob/v44.9.1/shell/common/api/electron_api_shared_texture.cc):
   Windows imports duplicate the NT handle before putting it in a scoped DXGI
   handle; `CreateSharedImage` includes WebGPU usage; `getVideoFrame` wraps that
   SharedImage and records GPU release sync tokens.
-- [Pinned imported texture contract](https://github.com/electron/electron/blob/v44.7.2/docs/api/structures/shared-texture-imported.md):
+- [Pinned imported texture contract](https://github.com/electron/electron/blob/v44.9.1/docs/api/structures/shared-texture-imported.md):
   closing a VideoFrame leaves underlying resources alive through GPU completion.
-- [Shared-handle transport and ownership design](https://github.com/electron/electron/blob/v44.7.2/shell/common/api/shared_texture/README.md).
+- [Shared-handle transport and ownership design](https://github.com/electron/electron/blob/v44.9.1/shell/common/api/shared_texture/README.md).
 - [WebGPU queue completion](https://gpuweb.github.io/types/interfaces/GPUQueue.html#onSubmittedWorkDone).
 - [Electron stable releases](https://releases.electronjs.org/release?channel=stable).
