@@ -170,6 +170,22 @@ impl FallbackPolicy {
         platform::fill(&mut policy);
         policy
     }
+
+    /// What [`FontSystem::with_system_fonts`](super::FontSystem::with_system_fonts)
+    /// starts from: [`Self::platform_default`] plus what the running system
+    /// says about its own fonts. On OHOS that reads
+    /// `/system/etc/fontconfig.json`; elsewhere there is nothing to read.
+    pub(crate) fn system_default() -> Self {
+        #[cfg(target_env = "ohos")]
+        {
+            let root = std::path::Path::new("/");
+            super::ohos::policy(super::ohos::OhosFontConfig::read(root).as_ref())
+        }
+        #[cfg(not(target_env = "ohos"))]
+        {
+            Self::platform_default()
+        }
+    }
 }
 
 const HANI: ScriptTag = ScriptTag(*b"Hani");
@@ -181,7 +197,7 @@ const HEBR: ScriptTag = ScriptTag(*b"Hebr");
 const THAI: ScriptTag = ScriptTag(*b"Thai");
 const DEVA: ScriptTag = ScriptTag(*b"Deva");
 
-struct PlatformFamilies {
+pub(super) struct PlatformFamilies {
     sans: &'static [&'static str],
     serif: &'static [&'static str],
     mono: &'static [&'static str],
@@ -202,7 +218,7 @@ struct PlatformFamilies {
 }
 
 impl PlatformFamilies {
-    fn apply(&self, policy: &mut FallbackPolicy) {
+    pub(super) fn apply(&self, policy: &mut FallbackPolicy) {
         policy
             .set_generic(GenericFamily::SansSerif, self.sans.iter().copied())
             .set_generic(GenericFamily::Serif, self.serif.iter().copied())
@@ -296,7 +312,46 @@ mod platform {
     }
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))]
+/// HarmonyOS / OpenHarmony: the families the system's own
+/// `/system/etc/fontconfig.json` names, in its order. A device's file, when
+/// it parses, goes ahead of this list (`super::ohos`).
+#[cfg(any(test, target_env = "ohos"))]
+pub(super) const OHOS_FAMILIES: PlatformFamilies = PlatformFamilies {
+    sans: &["HarmonyOS Sans", "HarmonyOS Sans SC", "Noto Sans"],
+    serif: &["Noto Serif"],
+    mono: &["Noto Sans Mono", "HarmonyOS Sans"],
+    cursive: &["HarmonyOS Sans"],
+    fantasy: &["HarmonyOS Sans"],
+    math: &["Noto Sans Math"],
+    han_sc: &["HarmonyOS Sans SC"],
+    han_tc: &["HarmonyOS Sans TC"],
+    han_hk: &["HarmonyOS Sans TC"],
+    japanese: &["Noto Sans CJK JP"],
+    korean: &["Noto Sans CJK KR", "Noto Sans CJK JP"],
+    arabic: &[
+        "HarmonyOS Sans Naskh Arabic UI",
+        "HarmonyOS Sans Naskh Arabic",
+    ],
+    hebrew: &["Noto Sans Hebrew"],
+    thai: &["Noto Sans Thai"],
+    devanagari: &["Noto Sans Devanagari"],
+    emoji: &["HMOS Color Emoji", "HMOS Color Emoji Flags"],
+    symbol: &["Noto Sans Symbols", "Noto Sans Symbols 2", "HM Symbol"],
+};
+
+#[cfg(target_env = "ohos")]
+mod platform {
+    pub(super) fn fill(policy: &mut super::FallbackPolicy) {
+        super::OHOS_FAMILIES.apply(policy);
+    }
+}
+
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "ios",
+    target_env = "ohos"
+)))]
 mod platform {
     pub(super) fn fill(policy: &mut super::FallbackPolicy) {
         super::PlatformFamilies {

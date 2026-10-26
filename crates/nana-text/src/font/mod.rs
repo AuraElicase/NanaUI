@@ -15,6 +15,8 @@ mod discovery;
 mod face;
 mod fallback;
 mod matching;
+#[cfg(any(test, target_env = "ohos"))]
+mod ohos;
 mod query;
 mod system;
 pub(crate) mod unicode;

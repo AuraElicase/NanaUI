@@ -507,7 +507,7 @@ impl FontSystem {
 
     /// Platform fonts plus the platform fallback policy.
     pub fn with_system_fonts() -> Self {
-        let mut system = Self::with_policy(FallbackPolicy::platform_default());
+        let mut system = Self::with_policy(FallbackPolicy::system_default());
         system.load_system_fonts();
         system
     }
