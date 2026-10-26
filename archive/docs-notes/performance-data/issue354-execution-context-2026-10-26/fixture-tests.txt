@@ -1,0 +1,11 @@
+   Compiling nana-ui v0.1.0 (<repo>/target/issue354-2026-10-26/source/crates/nana-ui)
+    Finished `release` profile [optimized] target(s) in 2.72s
+     Running unittests examples/presentation-output-probe.rs (target/issue354-isolated-build/release/examples/presentation_output_probe-bd6b7f8534cecb05)
+
+running 4 tests
+test presentation_timing::tests::requested_execution_observations_reject_missing_or_failed_getters ... ok
+test presentation_timing::tests::research_switches_fail_with_explicit_archive_migration ... ok
+test presentation_timing::tests::successful_frames_preserve_prepare_gaps_and_missing_prepare_attempts_without_growth ... ok
+test presentation_timing::tests::timing_overrides_require_explicit_direct_scope_and_bounded_counts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

@@ -1,0 +1,404 @@
+[
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 2617849441,
+        "denominator": 3460911828
+      },
+      "upper": {
+        "numerator": 3050895685,
+        "denominator": 3456111828
+      }
+    },
+    "name": "g1-1-A",
+    "frames": 2400,
+    "groups": {
+      "ambiguous": 1157,
+      "P95-bound": 1241,
+      "E95-bound": 2
+    },
+    "class_sequence_sha256": "4654023bdb4aa43b0d4c8b7a62116c4478c4876948824422fe18612235c23a90",
+    "raw_sha256": "293a87e8db22cf61af306695bcf1c116cd5677c968d2f8f5841f49a8434d48d4"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "upper": {
+        "numerator": 160000,
+        "denominator": 371697069
+      }
+    },
+    "name": "g1-2-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2400
+    },
+    "class_sequence_sha256": "ff43d0b4017de50dc351e516056544be25a4a38d1f9e3e35754b3c7384f6373f",
+    "raw_sha256": "26023347c21f830910a5aa2ea787931529a3ca2b6002e6da61f292e159caf349"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 1456124,
+        "denominator": 5398270317
+      },
+      "upper": {
+        "numerator": 1293083,
+        "denominator": 1797823439
+      }
+    },
+    "name": "g1-3-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2399,
+      "P95-bound": 1
+    },
+    "class_sequence_sha256": "6dc6b245b8512a81d9bb19927d53be2b48e457ab58ff7bf300502faf91ab79e9",
+    "raw_sha256": "ff82f3a5ff1a380b37cfc27a3978909e81e907b3b066ac1e21859cb9e95754fa"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 948151879,
+        "denominator": 1009850169
+      },
+      "upper": {
+        "numerator": 994168588,
+        "denominator": 1008250169
+      }
+    },
+    "name": "g1-4-A",
+    "frames": 2400,
+    "groups": {
+      "ambiguous": 606,
+      "P95-bound": 1794
+    },
+    "class_sequence_sha256": "5e67239db8d4d13ed54953382127f5bfe9e215c28a32a36afd239225b7e3df99",
+    "raw_sha256": "3270541895f12857104bd28dd6660f4f5b76bf09ec568b13f7b71cdb38ea396d"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 14782441,
+        "denominator": 2770551006
+      },
+      "upper": {
+        "numerator": 41758883,
+        "denominator": 5536302012
+      }
+    },
+    "name": "g2-1-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2369,
+      "ambiguous": 20,
+      "P95-bound": 11
+    },
+    "class_sequence_sha256": "f6b823441e2de1568e0a33aa8d0167239434011b1fc5650d7dd3bc8f20752cd3",
+    "raw_sha256": "f550c1190273b72408f3118358f97e54a282793f10ee54a068326e96f1224039"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 927333248,
+        "denominator": 4334554653
+      },
+      "upper": {
+        "numerator": 317966666,
+        "denominator": 1443251551
+      }
+    },
+    "name": "g2-2-A",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 1555,
+      "P95-bound": 711,
+      "ambiguous": 134
+    },
+    "class_sequence_sha256": "93820ad1252f95056fee8c06cc5918fc7e503ef965601ba03b1ef69fd60ea57f",
+    "raw_sha256": "74db323f9bc3dd5ae764ea17c82365b6f65a1c65b7c56be8aa466a836eccbc7f"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 2742092695,
+        "denominator": 2828172696
+      },
+      "upper": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    },
+    "name": "g2-3-A",
+    "frames": 2400,
+    "groups": {
+      "P95-bound": 1992,
+      "ambiguous": 408
+    },
+    "class_sequence_sha256": "09209c5b1a26ca67dbea9b945e087aa1cbe8533b7de8c9055fca81cd1756ca13",
+    "raw_sha256": "bd97b6dee1d652d0315967589ae58dcf4c700d07a27e70ce217e03c4c5071efe"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 76456619,
+        "denominator": 5421315201
+      },
+      "upper": {
+        "numerator": 27393124,
+        "denominator": 1805505067
+      }
+    },
+    "name": "g2-4-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2333,
+      "P95-bound": 55,
+      "ambiguous": 12
+    },
+    "class_sequence_sha256": "ee62bc6b2662648b4132f6c2674885da20917532d11a9ee4383dd89a52d26b5a",
+    "raw_sha256": "6e28f96a7ba6c999c164ff74d939326107050e58578d282bf1f4b65d8da41428"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 1132960054,
+        "denominator": 1756719675
+      },
+      "upper": {
+        "numerator": 1213317932,
+        "denominator": 1754319675
+      }
+    },
+    "name": "g3-1-A",
+    "frames": 2400,
+    "groups": {
+      "P95-bound": 1274,
+      "ambiguous": 649,
+      "E95-bound": 477
+    },
+    "class_sequence_sha256": "f587b68941dc0258a7a35017cbb3bd8d68a1cf81e52a78900547dd211276e66a",
+    "raw_sha256": "e56971354a5545e413bd2bd670a739dfe99e12cc9c5a0a5dd0acf80d223a2701"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "upper": {
+        "numerator": 80000,
+        "denominator": 177009543
+      }
+    },
+    "name": "g3-2-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2400
+    },
+    "class_sequence_sha256": "ff43d0b4017de50dc351e516056544be25a4a38d1f9e3e35754b3c7384f6373f",
+    "raw_sha256": "2af081005b8e6580fe55b26bb23d4cc981ffaf9308a7bc9eb159d0ac91312447"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "upper": {
+        "numerator": 40000,
+        "denominator": 89447827
+      }
+    },
+    "name": "g3-3-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2400
+    },
+    "class_sequence_sha256": "ff43d0b4017de50dc351e516056544be25a4a38d1f9e3e35754b3c7384f6373f",
+    "raw_sha256": "ca66f338115ce47679e1f3f9fa1f06cd1d7d7a09fb7c7f9d5cd36773f79d8c33"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 3008550814,
+        "denominator": 3376130193
+      },
+      "upper": {
+        "numerator": 462523900,
+        "denominator": 481618599
+      }
+    },
+    "name": "g3-4-A",
+    "frames": 2400,
+    "groups": {
+      "ambiguous": 840,
+      "P95-bound": 1560
+    },
+    "class_sequence_sha256": "e087675860ceec8c62762f9a0a0262c4b9d5e3c27d72708ce1adc2934a0db2ca",
+    "raw_sha256": "6f83ef1876fd30820257e2e3dbc69eefbdee096382df89c24d419d4880d8eda1"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "upper": {
+        "numerator": 800000,
+        "denominator": 1854497637
+      }
+    },
+    "name": "g4-1-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2400
+    },
+    "class_sequence_sha256": "ff43d0b4017de50dc351e516056544be25a4a38d1f9e3e35754b3c7384f6373f",
+    "raw_sha256": "4ef76c639f609a2f749d1fec7db2a7ab21746c5c08010da0b86d1ab35a4b31ab"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 948562744,
+        "denominator": 1258843417
+      },
+      "upper": {
+        "numerator": 3301119242,
+        "denominator": 3771730251
+      }
+    },
+    "name": "g4-2-A",
+    "frames": 2400,
+    "groups": {
+      "P95-bound": 1290,
+      "ambiguous": 1107,
+      "E95-bound": 3
+    },
+    "class_sequence_sha256": "3b0b8cda5b7509e173e37ccf487909308945cf042dab02171073bbd9440d89cd",
+    "raw_sha256": "9cef6c58a8e23d6f504e8edb327674c979df2387c5935f0e1baab14f2a69c34f"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 1424631385,
+        "denominator": 1629391761
+      },
+      "upper": {
+        "numerator": 1550992508,
+        "denominator": 1626991761
+      }
+    },
+    "name": "g4-3-A",
+    "frames": 2400,
+    "groups": {
+      "ambiguous": 991,
+      "P95-bound": 1383,
+      "E95-bound": 26
+    },
+    "class_sequence_sha256": "c8a58c4bfa9230ddb4a1af0a13c3192480c5cfc34b07259aafb59b5f802b8b51",
+    "raw_sha256": "279a6a0100d64ebb5526bb67e0f7f183ef70ea7acf259614afd0922d475fae5f"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "upper": {
+        "numerator": 800000,
+        "denominator": 2040596983
+      }
+    },
+    "name": "g4-4-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2400
+    },
+    "class_sequence_sha256": "ff43d0b4017de50dc351e516056544be25a4a38d1f9e3e35754b3c7384f6373f",
+    "raw_sha256": "d6980775af70487f94958cdc154345f9c3b0a4380434d5af8b82889b9ed02f25"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 663492332,
+        "denominator": 734970675
+      },
+      "upper": {
+        "numerator": 28847699,
+        "denominator": 29647300
+      }
+    },
+    "name": "g5-1-A",
+    "frames": 2400,
+    "groups": {
+      "ambiguous": 846,
+      "P95-bound": 1554
+    },
+    "class_sequence_sha256": "e4b0b78922c9a565107e81c04ac4f9638edb614ff2aca391754f3bc7a603aab9",
+    "raw_sha256": "4dc653f41f4087554b2ca23bcb1bf0e5bb9fb7e3e9a8e05268826faced014896"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "upper": {
+        "numerator": 800000,
+        "denominator": 1839056617
+      }
+    },
+    "name": "g5-2-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2400
+    },
+    "class_sequence_sha256": "ff43d0b4017de50dc351e516056544be25a4a38d1f9e3e35754b3c7384f6373f",
+    "raw_sha256": "c5194b549db50ef5584836ad1567a10b7fa3518316d8b6708760de58e7e79ac4"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 826063,
+        "denominator": 534071568
+      },
+      "upper": {
+        "numerator": 2500451,
+        "denominator": 1067183136
+      }
+    },
+    "name": "g5-3-B",
+    "frames": 2400,
+    "groups": {
+      "E95-bound": 2392,
+      "ambiguous": 6,
+      "P95-bound": 2
+    },
+    "class_sequence_sha256": "41627a1467488e12b57a575f1cce80a9f80ce3e073ec076bd6414e035aa53284",
+    "raw_sha256": "e69825299fd876ccfc6630742b7775b06aff7266ec23c15cdf49b5ecde05457c"
+  },
+  {
+    "p_time_fraction_bounds": {
+      "lower": {
+        "numerator": 1477411109,
+        "denominator": 1544685798
+      },
+      "upper": {
+        "numerator": 256508039,
+        "denominator": 257047633
+      }
+    },
+    "name": "g5-4-A",
+    "frames": 2400,
+    "groups": {
+      "P95-bound": 1837,
+      "ambiguous": 563
+    },
+    "class_sequence_sha256": "257302ca46cb088bbe169cc1867330260f4ea6d54d2f3eff32abefc816f5d3ef",
+    "raw_sha256": "bfa79204d62c1317011b9854b6c7327e450946d42f5d5fe1ec63c635ad8bccb3"
+  }
+]

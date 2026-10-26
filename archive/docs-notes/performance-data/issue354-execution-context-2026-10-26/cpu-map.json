@@ -1,0 +1,52 @@
+{
+  "0": {
+    "cluster_type": "E",
+    "name": "cpu0",
+    "compatible": "apple,sawtooth,ARM,v8"
+  },
+  "1": {
+    "cluster_type": "E",
+    "name": "cpu1",
+    "compatible": "apple,sawtooth,ARM,v8"
+  },
+  "2": {
+    "cluster_type": "E",
+    "name": "cpu2",
+    "compatible": "apple,sawtooth,ARM,v8"
+  },
+  "3": {
+    "cluster_type": "E",
+    "name": "cpu3",
+    "compatible": "apple,sawtooth,ARM,v8"
+  },
+  "4": {
+    "cluster_type": "E",
+    "name": "cpu4",
+    "compatible": "apple,sawtooth,ARM,v8"
+  },
+  "5": {
+    "cluster_type": "E",
+    "name": "cpu5",
+    "compatible": "apple,sawtooth,ARM,v8"
+  },
+  "6": {
+    "cluster_type": "P",
+    "name": "cpu6",
+    "compatible": "apple,everest,ARM,v8"
+  },
+  "7": {
+    "cluster_type": "P",
+    "name": "cpu7",
+    "compatible": "apple,everest,ARM,v8"
+  },
+  "8": {
+    "cluster_type": "P",
+    "name": "cpu8",
+    "compatible": "apple,everest,ARM,v8"
+  },
+  "9": {
+    "cluster_type": "P",
+    "name": "cpu9",
+    "compatible": "apple,everest,ARM,v8"
+  }
+}

@@ -257,6 +257,8 @@ struct Probe {
     frame_rate: NonZeroU32,
     watchdog: Duration,
     thread_cpu_started: Option<Duration>,
+    cpu_started: Option<presentation_timing::CpuEndpoint>,
+    process_started: Option<presentation_timing::ProcessCounterSnapshot>,
     timing_options: presentation_timing::Options,
     timing_samples: Option<presentation_timing::Series>,
     trace_samples: Option<Vec<(usize, nana_ui::output::OutputTraceSnapshot)>>,
@@ -364,7 +366,14 @@ impl Probe {
         } else {
             checks
         };
-        let passed = failure.is_none()
+        let execution_observations_complete = self
+            .timing_samples
+            .as_ref()
+            .is_none_or(|samples| samples.observations_complete(self.timing_options))
+            && (!self.timing_options.process_counters
+                || presentation_timing::mach_timebase().is_some());
+        let passed = execution_observations_complete
+            && failure.is_none()
             && timing_sampling_complete
             && (!self.observe_surface
                 || (self.surface_info.is_some()
@@ -454,6 +463,12 @@ impl Probe {
             })).collect::<Vec<_>>()),
         });
         let observations = serde_json::json!({
+            "execution_observations_complete": execution_observations_complete,
+            "process_counter_observation": self.timing_options.process_counters,
+            "process_counter_scope": "opt-in process-wide public RUSAGE_INFO_V6; CPU raw Mach ticks; all threads, not thread-only instructions/residency; queries outside CPU16 interval, diagnostic overhead remains",
+            "mach_timebase": presentation_timing::mach_timebase(),
+            "cpu_endpoint_observation": self.timing_options.cpu_endpoints,
+            "cpu_endpoint_scope": "opt-in public pthread_cpu_number_np at frame boundaries; instantaneous CPU numbers, not interval residency or TG tenure; queries add diagnostic overhead",
             "surface_configuration": self.surface_report(),
             "surface_observation_requested": self.observe_surface,
             "surface_observation_error": self.surface_error,
@@ -638,6 +653,8 @@ impl RuntimeProgram for Probe {
                             .collect()
                     }),
                 thread_cpu_started: None,
+                cpu_started: None,
+                process_started: None,
                 timing_options,
                 timing_samples,
                 trace_abort_expected,
@@ -743,6 +760,14 @@ impl RuntimeProgram for Probe {
                 Err(error) => self.surface_error = Some(error.to_string()),
             }
         }
+        self.process_started = self
+            .timing_options
+            .process_counters
+            .then(presentation_timing::process_counters);
+        self.cpu_started = self
+            .timing_options
+            .cpu_endpoints
+            .then(presentation_timing::current_cpu);
         self.frame_heap_started = HeapCounts::snapshot();
         self.frame_started = Instant::now();
         if self.stage_samples.is_some() || self.timing_samples.is_some() {
@@ -783,13 +808,34 @@ impl RuntimeProgram for Probe {
             return RuntimeProgramUpdate::default();
         }
         let heap_after = HeapCounts::snapshot();
-        let thread_cpu_ms = if self.stage_samples.is_some() || self.timing_samples.is_some() {
+        let thread_cpu_elapsed = if self.stage_samples.is_some() || self.timing_samples.is_some() {
             self.thread_cpu_started
                 .zip(thread_cpu_time())
                 .and_then(|(start, end)| end.checked_sub(start))
-                .map(|elapsed| elapsed.as_secs_f64() * 1000.0)
         } else {
             None
+        };
+        let thread_cpu_ms = thread_cpu_elapsed.map(|elapsed| elapsed.as_secs_f64() * 1000.0);
+        let cpu_ended = self
+            .timing_options
+            .cpu_endpoints
+            .then(presentation_timing::current_cpu);
+        let cpu_endpoints = self
+            .cpu_started
+            .zip(cpu_ended)
+            .map(|(start, end)| [start, end]);
+        let process_ended = self
+            .timing_options
+            .process_counters
+            .then(presentation_timing::process_counters);
+        let observations = presentation_timing::FrameObservations {
+            thread_cpu_ns: thread_cpu_elapsed
+                .and_then(|elapsed| elapsed.as_nanos().try_into().ok()),
+            cpu_endpoints,
+            process_counter_endpoints: self
+                .process_started
+                .zip(process_ended)
+                .map(|(start, end)| [start, end]),
         };
         if self.presented_counter {
             self.tick += 1;
@@ -822,6 +868,7 @@ impl RuntimeProgram for Probe {
                 false,
                 self.frame_started.elapsed().as_secs_f64() * 1000.0,
                 thread_cpu_ms,
+                observations,
             );
         }
         if self.phase_frames > warmup {
@@ -836,6 +883,7 @@ impl RuntimeProgram for Probe {
                             false,
                             self.frame_started.elapsed().as_secs_f64() * 1000.0,
                             thread_cpu_ms,
+                            observations,
                         );
                     }
                     return RuntimeProgramUpdate::redraw(WindowId::PRIMARY);
@@ -856,6 +904,7 @@ impl RuntimeProgram for Probe {
                     true,
                     *self.observations[self.phase].times.last().unwrap(),
                     thread_cpu_ms,
+                    observations,
                 );
             }
             if let Some(samples) = &mut self.stage_samples {

@@ -1,0 +1,102 @@
+[
+  {
+    "file": "g1-1-A.json.gz",
+    "sha256": "ecb287c0ad240ef7fa81aef71d4bed2b084049405537ec93f4c0170c10c4744a",
+    "original_report_sha256": "293a87e8db22cf61af306695bcf1c116cd5677c968d2f8f5841f49a8434d48d4"
+  },
+  {
+    "file": "g1-2-B.json.gz",
+    "sha256": "f68231f8585a002987dfaba790262cc8d38176554a37db132096e0f7e810bfee",
+    "original_report_sha256": "26023347c21f830910a5aa2ea787931529a3ca2b6002e6da61f292e159caf349"
+  },
+  {
+    "file": "g1-3-B.json.gz",
+    "sha256": "5b1986518def1e234d68384b41b62b70ac8d23c0d124498c899046ef04bc543d",
+    "original_report_sha256": "ff82f3a5ff1a380b37cfc27a3978909e81e907b3b066ac1e21859cb9e95754fa"
+  },
+  {
+    "file": "g1-4-A.json.gz",
+    "sha256": "7a7114d5930f61690c41df1876e835ed36fa9181efa7235870edffae8b9e6849",
+    "original_report_sha256": "3270541895f12857104bd28dd6660f4f5b76bf09ec568b13f7b71cdb38ea396d"
+  },
+  {
+    "file": "g2-1-B.json.gz",
+    "sha256": "aa2fc31c0fb2ce13ef72f0f3c95761353c1f907e94564417d4a46edbdb04b3ec",
+    "original_report_sha256": "f550c1190273b72408f3118358f97e54a282793f10ee54a068326e96f1224039"
+  },
+  {
+    "file": "g2-2-A.json.gz",
+    "sha256": "a8bf2dba1c4d0a9ac3d3f81f41ee755242e2438b12beb6e91867b0b77c570fa0",
+    "original_report_sha256": "74db323f9bc3dd5ae764ea17c82365b6f65a1c65b7c56be8aa466a836eccbc7f"
+  },
+  {
+    "file": "g2-3-A.json.gz",
+    "sha256": "0300d6b25a6e6c9bd09730fb64f6527cd91142fdd8e0d15f527130b181c449ba",
+    "original_report_sha256": "bd97b6dee1d652d0315967589ae58dcf4c700d07a27e70ce217e03c4c5071efe"
+  },
+  {
+    "file": "g2-4-B.json.gz",
+    "sha256": "6fff09430336ff63a3f04e3655c302cd1c442b020503af66bc97219810179752",
+    "original_report_sha256": "6e28f96a7ba6c999c164ff74d939326107050e58578d282bf1f4b65d8da41428"
+  },
+  {
+    "file": "g3-1-A.json.gz",
+    "sha256": "e1e93f847a32b8dbb403cf7f0a6e29e171b1fdf3fa78fd7d937157c84b81ed29",
+    "original_report_sha256": "e56971354a5545e413bd2bd670a739dfe99e12cc9c5a0a5dd0acf80d223a2701"
+  },
+  {
+    "file": "g3-2-B.json.gz",
+    "sha256": "e317eedd65d53d11f54d8e59c2e6b5495183c7fa9d79b90a68dc5fba7ac3ab1b",
+    "original_report_sha256": "2af081005b8e6580fe55b26bb23d4cc981ffaf9308a7bc9eb159d0ac91312447"
+  },
+  {
+    "file": "g3-3-B.json.gz",
+    "sha256": "2887fa3157bbd1408931f61e0db8fbdf8436a6a91b62b940e234685937476fc7",
+    "original_report_sha256": "ca66f338115ce47679e1f3f9fa1f06cd1d7d7a09fb7c7f9d5cd36773f79d8c33"
+  },
+  {
+    "file": "g3-4-A.json.gz",
+    "sha256": "ec284b6157fc2b20d3458d063a2680ad28c5f75df5705dbd67b8861ab65f37c6",
+    "original_report_sha256": "6f83ef1876fd30820257e2e3dbc69eefbdee096382df89c24d419d4880d8eda1"
+  },
+  {
+    "file": "g4-1-B.json.gz",
+    "sha256": "cfd797e205beaac546ae04fc8291e0f757402b79d12db947434a8281b1ec44b7",
+    "original_report_sha256": "4ef76c639f609a2f749d1fec7db2a7ab21746c5c08010da0b86d1ab35a4b31ab"
+  },
+  {
+    "file": "g4-2-A.json.gz",
+    "sha256": "49e98e795ff7c9d8825341be99cd8af19e17c79aab9612f97f23b6f37b4c0b3e",
+    "original_report_sha256": "9cef6c58a8e23d6f504e8edb327674c979df2387c5935f0e1baab14f2a69c34f"
+  },
+  {
+    "file": "g4-3-A.json.gz",
+    "sha256": "09ed05a6f872056e0129e569ce654120bc58fa02cc14653ca35354f0a595ed91",
+    "original_report_sha256": "279a6a0100d64ebb5526bb67e0f7f183ef70ea7acf259614afd0922d475fae5f"
+  },
+  {
+    "file": "g4-4-B.json.gz",
+    "sha256": "68f060f496eaf731364d7a54f0f13f9a2f9982f7cb126d7c414a76b9fd1e1118",
+    "original_report_sha256": "d6980775af70487f94958cdc154345f9c3b0a4380434d5af8b82889b9ed02f25"
+  },
+  {
+    "file": "g5-1-A.json.gz",
+    "sha256": "51d7e7895a46059fbc28d6e73abe1c824fc905f04379499d7a31d4b25b1e24d4",
+    "original_report_sha256": "4dc653f41f4087554b2ca23bcb1bf0e5bb9fb7e3e9a8e05268826faced014896"
+  },
+  {
+    "file": "g5-2-B.json.gz",
+    "sha256": "cfccdbfacee2e38b6a9626fd19246f77bc39789ab9e8bcb54259b940a45ab8b3",
+    "original_report_sha256": "c5194b549db50ef5584836ad1567a10b7fa3518316d8b6708760de58e7e79ac4"
+  },
+  {
+    "file": "g5-3-B.json.gz",
+    "sha256": "30eeeb13a9532f283e89fa5f5a344dc08c20b71b544294c0ff212d47d2a590ca",
+    "original_report_sha256": "e69825299fd876ccfc6630742b7775b06aff7266ec23c15cdf49b5ecde05457c"
+  },
+  {
+    "file": "g5-4-A.json.gz",
+    "sha256": "8d9a883f52284791d5ac59a2fcffaf7e6ab8a4a893cf9dd566be0058ab3fed5a",
+    "original_report_sha256": "bfa79204d62c1317011b9854b6c7327e450946d42f5d5fe1ec63c635ad8bccb3"
+  }
+]
