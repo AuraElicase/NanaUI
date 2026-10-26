@@ -226,7 +226,7 @@ fn a_live_drag_moves_rows_only_on_the_presentation_layer() {
     assert_eq!(rows.z_index(rows.rows[0]), REORDER_PREVIEW_Z_INDEX);
     assert_eq!(rows.z_index(rows.inner[0]), REORDER_PREVIEW_Z_INDEX);
     assert_eq!(rows.z_index(rows.rows[1]), 0);
-    assert!(REORDER_PREVIEW_Z_INDEX < crate::MENU_OVERLAY_Z_INDEX);
+    const { assert!(REORDER_PREVIEW_Z_INDEX < crate::MENU_OVERLAY_Z_INDEX) };
 }
 
 #[test]

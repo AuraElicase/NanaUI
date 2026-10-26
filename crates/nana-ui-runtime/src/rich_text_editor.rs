@@ -187,6 +187,10 @@ pub struct RichSelectionAttrs {
 
 /// What a [`RichTextEditor`] reports.
 #[derive(Debug, Clone, PartialEq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one event per selection change; boxing `attrs` breaks every consumer's match"
+)]
 pub enum RichTextEditorEvent {
     /// The document changed. The application keeps this value.
     Changed(RichText),

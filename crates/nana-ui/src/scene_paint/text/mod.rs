@@ -5389,11 +5389,14 @@ mod tests {
         assert!(small[1] < large[1], "and is smaller");
     }
 
+    /// A placed glyph's origin and size.
+    type GlyphBox = ([i32; 2], [u32; 2]);
+
     /// Placed glyph boxes, base and marks, of "漢字" with emphasis marks at
     /// `position`, painted from the layout Runtime retained.
     fn emphasis_glyphs(
         position: nana_ui_core::TextEmphasisPosition,
-    ) -> (usize, usize, Vec<([i32; 2], [u32; 2])>) {
+    ) -> (usize, usize, Vec<GlyphBox>) {
         let (device, queue) = test_device();
         let mut pipeline = TextPipeline::new(&device, &queue, wgpu::TextureFormat::Rgba8Unorm);
         let content = "漢字";

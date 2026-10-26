@@ -749,6 +749,10 @@ pub(super) fn emphasis_cells(request: &LayoutRequest<'_>) -> Vec<EmphasisCell> {
     cells
 }
 
+/// A cell's line, its left and right edge on that line, and the tallest
+/// ascent and descent among the runs it touches.
+type CellExtent = (u32, f32, f32, f32, f32);
+
 /// Each emphasis mark centred on its character's advance: over it, standing
 /// on the character's ascent (or on its ruby, when the character has one),
 /// or under it, hanging from its descent. Returns the marks and the runs of
@@ -767,7 +771,7 @@ fn placed_emphasis(
         return (Vec::new(), Vec::new());
     }
     // Each cell's extent on its line, and the tallest run it touches.
-    let mut found: Vec<Option<(u32, f32, f32, f32, f32)>> = vec![None; cells.len()];
+    let mut found: Vec<Option<CellExtent>> = vec![None; cells.len()];
     for line in lines {
         for run in &runs[line.runs.start as usize..line.runs.end as usize] {
             let mut pen = run.origin_x_px;

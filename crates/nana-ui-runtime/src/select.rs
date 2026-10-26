@@ -1786,12 +1786,13 @@ mod tests {
 
     #[test]
     fn a_menu_wider_than_its_field_moves_left_only_as_far_as_its_room_needs() {
-        let room = Some(crate::SelectMenuRoom {
+        let bounds = crate::SelectMenuRoom {
             top: 0.0,
             bottom: 400.0,
             left: 100.0,
             right: 400.0,
-        });
+        };
+        let room = Some(bounds);
         let field = LayoutBox {
             x: 300.0,
             y: 0.0,
@@ -1822,7 +1823,7 @@ mod tests {
         let narrow = Some(crate::SelectMenuRoom {
             left: 320.0,
             right: 380.0,
-            ..room.unwrap()
+            ..bounds
         });
         assert_eq!(
             resolve_menu_horizontal(field, Some(500.0), narrow),

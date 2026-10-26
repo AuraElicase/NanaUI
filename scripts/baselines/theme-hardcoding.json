@@ -4,23 +4,23 @@
   "root": "crates/nana-ui-runtime/src",
   "components_scanned": 148,
   "totals": {
-    "color_role": 188,
+    "color_role": 190,
     "color_literal": 0,
     "design_number": 25,
     "motion": 3,
     "elevation": 0
   },
   "shared_totals": {
-    "color_role": 407,
+    "color_role": 410,
     "color_literal": 0,
-    "design_number": 65,
+    "design_number": 62,
     "motion": 28,
     "elevation": 0
   },
-  "token_reads": 867,
+  "token_reads": 1039,
   "local_values": 28,
-  "shared_local_values": 93,
-  "module_constants": 111,
+  "shared_local_values": 90,
+  "module_constants": 113,
   "components": [
     {
       "component": "AboutSection",
@@ -79,7 +79,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 8,
       "roles": [
         "OnMedia",
         "Text",
@@ -272,7 +272,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 9,
+      "token_reads": 11,
       "roles": [
         "Active",
         "Border",
@@ -388,7 +388,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 6,
+      "token_reads": 12,
       "roles": [
         "Active",
         "BorderSoft",
@@ -411,7 +411,7 @@
       "component": "ColorField",
       "file": "crates/nana-ui-runtime/src/color_field.rs",
       "counts": {
-        "color_role": 1,
+        "color_role": 3,
         "color_literal": 0,
         "design_number": 0,
         "motion": 0,
@@ -419,7 +419,9 @@
       },
       "token_reads": 3,
       "roles": [
-        "Danger"
+        "Danger",
+        "FocusBorder",
+        "Subtle"
       ],
       "states": [],
       "local_values": 0
@@ -743,7 +745,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 2,
+      "token_reads": 11,
       "roles": [],
       "states": [],
       "local_values": 1
@@ -987,7 +989,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 1,
+      "token_reads": 2,
       "roles": [
         "Muted"
       ],
@@ -1147,7 +1149,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 11,
+      "token_reads": 13,
       "roles": [
         "Accent",
         "Active",
@@ -1195,7 +1197,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1447,7 +1449,7 @@
         "motion": 1,
         "elevation": 0
       },
-      "token_reads": 2,
+      "token_reads": 6,
       "roles": [
         "Subtle",
         "Text"
@@ -1666,7 +1668,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 7,
+      "token_reads": 4,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1711,7 +1713,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [
         "Active",
         "Faint",
@@ -1735,7 +1737,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [
         "BorderSoft"
       ],
@@ -1752,7 +1754,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1814,7 +1816,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 5,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1829,7 +1831,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 3,
+      "token_reads": 16,
       "roles": [
         "BorderSoft",
         "Text"
@@ -1847,7 +1849,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1877,7 +1879,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [
         "Muted",
         "Text"
@@ -1895,7 +1897,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1925,7 +1927,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 5,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1940,7 +1942,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 4,
+      "token_reads": 12,
       "roles": [
         "Active",
         "Danger",
@@ -1973,7 +1975,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -1988,7 +1990,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 4,
+      "token_reads": 10,
       "roles": [
         "Active",
         "Faint",
@@ -2027,7 +2029,7 @@
         "motion": 1,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 3,
       "roles": [
         "Muted"
       ],
@@ -2122,7 +2124,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 11,
+      "token_reads": 20,
       "roles": [],
       "states": [],
       "local_values": 2
@@ -2264,7 +2266,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 1,
+      "token_reads": 6,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -2279,7 +2281,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 2,
+      "token_reads": 3,
       "roles": [
         "Danger"
       ],
@@ -2319,7 +2321,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 11,
+      "token_reads": 17,
       "roles": [
         "Background",
         "Muted",
@@ -2372,7 +2374,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": [],
       "states": [],
       "local_values": 0
@@ -2447,7 +2449,7 @@
         "motion": 0,
         "elevation": 0
       },
-      "token_reads": 6,
+      "token_reads": 12,
       "roles": [
         "Danger",
         "Warning"
@@ -2542,38 +2544,6 @@
       "roles": []
     },
     {
-      "file": "crates/nana-ui-runtime/src/world/geometry.rs",
-      "counts": {
-        "color_role": 64,
-        "color_literal": 0,
-        "design_number": 7,
-        "motion": 0,
-        "elevation": 0
-      },
-      "local_values": 7,
-      "token_reads": 166,
-      "roles": [
-        "Accent",
-        "AccentSoft",
-        "AccentSoftHover",
-        "AccentStrong",
-        "AccentText",
-        "Background",
-        "Border",
-        "BorderStrong",
-        "Danger",
-        "Faint",
-        "FocusBorder",
-        "Hover",
-        "Muted",
-        "Subtle",
-        "Success",
-        "Surface",
-        "Text",
-        "Warning"
-      ]
-    },
-    {
       "file": "crates/nana-ui-runtime/src/world/geometry/graph_canvas.rs",
       "counts": {
         "color_role": 1,
@@ -2598,7 +2568,7 @@
         "elevation": 0
       },
       "local_values": 6,
-      "token_reads": 42,
+      "token_reads": 39,
       "roles": [
         "Danger",
         "Muted"
@@ -2614,31 +2584,42 @@
         "elevation": 0
       },
       "local_values": 6,
-      "token_reads": 5,
+      "token_reads": 13,
       "roles": [
         "BorderSoft",
         "Surface"
       ]
     },
     {
-      "file": "crates/nana-ui-runtime/src/menus.rs",
+      "file": "crates/nana-ui-runtime/src/world/geometry.rs",
       "counts": {
-        "color_role": 14,
+        "color_role": 64,
         "color_literal": 0,
         "design_number": 5,
         "motion": 0,
         "elevation": 0
       },
       "local_values": 5,
-      "token_reads": 14,
+      "token_reads": 128,
       "roles": [
+        "Accent",
         "AccentSoft",
-        "AccentSoftPressed",
-        "Active",
+        "AccentSoftHover",
+        "AccentStrong",
+        "AccentText",
+        "Background",
+        "Border",
+        "BorderStrong",
         "Danger",
         "Faint",
+        "FocusBorder",
         "Hover",
-        "Text"
+        "Muted",
+        "Subtle",
+        "Success",
+        "Surface",
+        "Text",
+        "Warning"
       ]
     },
     {
@@ -2651,7 +2632,7 @@
         "elevation": 0
       },
       "local_values": 4,
-      "token_reads": 2,
+      "token_reads": 4,
       "roles": []
     },
     {
@@ -2664,7 +2645,7 @@
         "elevation": 0
       },
       "local_values": 4,
-      "token_reads": 0,
+      "token_reads": 1,
       "roles": []
     },
     {
@@ -2681,6 +2662,27 @@
       "roles": []
     },
     {
+      "file": "crates/nana-ui-runtime/src/menus.rs",
+      "counts": {
+        "color_role": 14,
+        "color_literal": 0,
+        "design_number": 3,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 3,
+      "token_reads": 15,
+      "roles": [
+        "AccentSoft",
+        "AccentSoftPressed",
+        "Active",
+        "Danger",
+        "Faint",
+        "Hover",
+        "Text"
+      ]
+    },
+    {
       "file": "crates/nana-ui-runtime/src/popover.rs",
       "counts": {
         "color_role": 11,
@@ -2690,7 +2692,7 @@
         "elevation": 0
       },
       "local_values": 3,
-      "token_reads": 21,
+      "token_reads": 27,
       "roles": [
         "Active",
         "BorderSoft",
@@ -2764,7 +2766,7 @@
         "elevation": 0
       },
       "local_values": 2,
-      "token_reads": 13,
+      "token_reads": 14,
       "roles": [
         "Background",
         "Border",
@@ -2817,6 +2819,25 @@
       ]
     },
     {
+      "file": "crates/nana-ui-runtime/src/components.rs",
+      "counts": {
+        "color_role": 7,
+        "color_literal": 0,
+        "design_number": 2,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 2,
+      "token_reads": 7,
+      "roles": [
+        "Background",
+        "FocusBorder",
+        "FocusSurface",
+        "FocusText",
+        "Text"
+      ]
+    },
+    {
       "file": "crates/nana-ui-runtime/src/terminal.rs",
       "counts": {
         "color_role": 7,
@@ -2831,24 +2852,6 @@
         "Muted",
         "Selected",
         "Surface",
-        "Text"
-      ]
-    },
-    {
-      "file": "crates/nana-ui-runtime/src/components.rs",
-      "counts": {
-        "color_role": 5,
-        "color_literal": 0,
-        "design_number": 2,
-        "motion": 0,
-        "elevation": 0
-      },
-      "local_values": 2,
-      "token_reads": 7,
-      "roles": [
-        "FocusBorder",
-        "FocusSurface",
-        "FocusText",
         "Text"
       ]
     },
@@ -2901,7 +2904,7 @@
         "elevation": 0
       },
       "local_values": 1,
-      "token_reads": 8,
+      "token_reads": 12,
       "roles": [
         "Danger",
         "DangerSoftHover",
@@ -2927,6 +2930,23 @@
         "Hover",
         "Subtle",
         "Surface"
+      ]
+    },
+    {
+      "file": "crates/nana-ui-runtime/src/color_field.rs",
+      "counts": {
+        "color_role": 4,
+        "color_literal": 0,
+        "design_number": 1,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 1,
+      "token_reads": 5,
+      "roles": [
+        "Background",
+        "Border",
+        "Faint"
       ]
     },
     {
@@ -2974,7 +2994,7 @@
         "elevation": 0
       },
       "local_values": 1,
-      "token_reads": 2,
+      "token_reads": 5,
       "roles": []
     },
     {
@@ -3052,7 +3072,7 @@
         "elevation": 0
       },
       "local_values": 0,
-      "token_reads": 24,
+      "token_reads": 39,
       "roles": [
         "Accent",
         "AccentOnSoft",
@@ -3136,7 +3156,7 @@
         "elevation": 0
       },
       "local_values": 0,
-      "token_reads": 29,
+      "token_reads": 41,
       "roles": [
         "Active",
         "Faint",
@@ -3155,7 +3175,7 @@
         "elevation": 0
       },
       "local_values": 0,
-      "token_reads": 7,
+      "token_reads": 13,
       "roles": [
         "Active",
         "Background",
@@ -3200,7 +3220,7 @@
         "elevation": 0
       },
       "local_values": 0,
-      "token_reads": 35,
+      "token_reads": 54,
       "roles": [
         "Background",
         "Muted",
@@ -3374,22 +3394,6 @@
       ]
     },
     {
-      "file": "crates/nana-ui-runtime/src/color_field.rs",
-      "counts": {
-        "color_role": 3,
-        "color_literal": 0,
-        "design_number": 0,
-        "motion": 0,
-        "elevation": 0
-      },
-      "local_values": 0,
-      "token_reads": 7,
-      "roles": [
-        "Border",
-        "Subtle"
-      ]
-    },
-    {
       "file": "crates/nana-ui-runtime/src/file_tab.rs",
       "counts": {
         "color_role": 3,
@@ -3449,7 +3453,7 @@
         "elevation": 0
       },
       "local_values": 0,
-      "token_reads": 28,
+      "token_reads": 60,
       "roles": [
         "Muted",
         "Surface"
@@ -3813,9 +3817,19 @@
           "name": "PROGRESS",
           "type": "u64",
           "value": 16.0
+        },
+        {
+          "name": "REORDER_PREVIEW",
+          "type": "u64",
+          "value": 17.0
+        },
+        {
+          "name": "REORDER_SHIFT",
+          "type": "u64",
+          "value": 18.0
         }
       ],
-      "count": 16
+      "count": 18
     },
     {
       "file": "crates/nana-ui-runtime/src/dock.rs",
