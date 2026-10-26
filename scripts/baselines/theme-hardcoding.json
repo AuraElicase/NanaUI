@@ -2,24 +2,24 @@
   "schema_version": 1,
   "issue": 101,
   "root": "crates/nana-ui-runtime/src",
-  "components_scanned": 148,
+  "components_scanned": 149,
   "totals": {
-    "color_role": 190,
+    "color_role": 193,
     "color_literal": 0,
     "design_number": 25,
     "motion": 3,
     "elevation": 0
   },
   "shared_totals": {
-    "color_role": 410,
+    "color_role": 413,
     "color_literal": 0,
-    "design_number": 62,
+    "design_number": 63,
     "motion": 28,
     "elevation": 0
   },
-  "token_reads": 1039,
+  "token_reads": 1043,
   "local_values": 28,
-  "shared_local_values": 90,
+  "shared_local_values": 91,
   "module_constants": 113,
   "components": [
     {
@@ -2003,6 +2003,25 @@
       "local_values": 0
     },
     {
+      "component": "SizeField",
+      "file": "crates/nana-ui-runtime/src/size_field.rs",
+      "counts": {
+        "color_role": 3,
+        "color_literal": 0,
+        "design_number": 0,
+        "motion": 0,
+        "elevation": 0
+      },
+      "token_reads": 2,
+      "roles": [
+        "Danger",
+        "FocusBorder",
+        "Subtle"
+      ],
+      "states": [],
+      "local_values": 0
+    },
+    {
       "component": "Skeleton",
       "file": "crates/nana-ui-runtime/src/placeholders.rs",
       "counts": {
@@ -2982,6 +3001,23 @@
         "Active",
         "Danger",
         "Hover"
+      ]
+    },
+    {
+      "file": "crates/nana-ui-runtime/src/size_field.rs",
+      "counts": {
+        "color_role": 3,
+        "color_literal": 0,
+        "design_number": 1,
+        "motion": 0,
+        "elevation": 0
+      },
+      "local_values": 1,
+      "token_reads": 2,
+      "roles": [
+        "Background",
+        "Border",
+        "Faint"
       ]
     },
     {
