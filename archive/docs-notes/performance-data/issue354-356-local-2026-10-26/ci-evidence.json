@@ -140,5 +140,67 @@
       "electron-1.json": "5fd734689384b3e3a7747d4a5b2acde3425b5e9626be234b1438e2aa1c15707c"
     }
   },
-  "remaining": "SteamVR live, actual hardware reset/performance and historical Mac source/TG causality remain unverified"
+  "remaining": "SteamVR live, actual hardware reset/performance and historical Mac source/TG causality remain unverified",
+  "capability_dispatch": {
+    "id": 40320406836,
+    "url": "https://github.com/sena-nana/NanaUI/actions/runs/40320406836",
+    "head_sha": "4103345c00faed93aaf9ce12e383a9a27e799f22",
+    "conclusion": "failure",
+    "report": {
+      "schema_version": 1,
+      "fixture": "electron-webgpu-capability",
+      "electron_version": "44.9.1",
+      "status": "unsupported",
+      "evidence": "actual-electron-webgpu-capability",
+      "capability": {
+        "secure_context": true,
+        "webgpu_api": true,
+        "cases": [
+          {
+            "options": {
+              "powerPreference": "high-performance"
+            },
+            "adapter": null,
+            "device_created": false
+          },
+          {
+            "options": {
+              "forceFallbackAdapter": true
+            },
+            "adapter": null,
+            "device_created": false
+          }
+        ]
+      },
+      "gpu_feature_status": {
+        "2d_canvas": "unavailable_software",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "disabled_software",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "unavailable_off",
+        "rasterization": "unavailable_off",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "unavailable_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "unavailable_off",
+        "video_encode": "unavailable_off",
+        "webgl": "unavailable_off",
+        "webgpu": "unavailable_software",
+        "webnn": "disabled_off"
+      },
+      "scope": "Adapter/device creation only; no shared-texture import, draw, release or performance evidence"
+    },
+    "report_sha256": "95411f843f9f135a6055e396e43a84eae0e4e31fad974132a3968b71f8069552"
+  },
+  "ordinary_rust_ci": {
+    "id": 40318029823,
+    "url": "https://github.com/sena-nana/NanaUI/actions/runs/40318029823",
+    "status_at_archive": "in_progress",
+    "scope": "contains the published Rust fixes; no full-green claim yet"
+  },
+  "duplicate_rust_ci": {
+    "id": 40320407528,
+    "conclusion": "cancelled",
+    "reason": "No Rust code changed after 657c0d2; retained its ordinary Rust matrix and ran the new JS diagnostics in dedicated CI plus 24 local Node tests."
+  }
 }

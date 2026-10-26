@@ -110,3 +110,10 @@ Instruments 已在运行，但按应用名称两次、按实际 bundle id 一次
 专项运行 40318042410 已完成，结论为 **failure**。Windows Release 真实 controlled destruction 1 passed / 0 ignored，native-export 10 passed / 0 ignored；第一轮 native-host 240 次实际消费及维护 invariant gate 通过。Electron 44.9.1 实际启动后，`navigator.gpu.requestAdapter({powerPreference: "high-performance"})` 返回空：报告 `status=unsupported`、`reason=No WebGPU adapter`，消费/绘制/提交均为 0。按预先规则中止，没有将 unsupported 写成通过，也没有继续取其余轮次凑满五轮。所有失败产物已保存到该 run 的 `presentation-conformance-windows` artifact。
 
 因此普通 Windows hosted runner 目前只证明了上述 native / callback 子集，尚不能证明 Electron 实际 import / GPU draw / 双凭据释放。新增轻量 `WebGPU capability` 入口：同一版本、本地页与 ANGLE d3d11 配置下分别观察默认请求和标准的显式 fallback 请求，记录 adapter/device 与 feature status，不增加 Chromium 覆盖参数，不导入纹理或声称外部消费通过。分类/实际执行源码的 Node 回归合计 24 passed；WebGPU 选项依据见 fixture README。待轻量运行结果判断该 runner 是否存在可用 fallback device，再决定是否值得重跑完整桥接。
+
+
+轻量 [40320406836](https://github.com/sena-nana/NanaUI/actions/runs/40320406836) 也已实际完成，结论 failure / capability unsupported：secure context 为 true，WebGPU API 存在；默认 high-performance 与显式 forceFallbackAdapter 请求均返回 null，均未创建设备；Chromium feature status 为 `webgpu=unavailable_software`。这确认当前 hosted Windows runner 无法提供本桥接所需的 WebGPU adapter。没有把软件选择变体、环境不支持或 0 帧消费解释成通过。该结果是平台能力缺口证据，不能判断尚未执行的纹理 import / draw / 双凭据路径是否正确。
+
+后续探测器、24 项 Node 验证和方法文档已提交 [`4103345`](https://github.com/sena-nana/NanaUI/commit/4103345c00faed93aaf9ce12e383a9a27e799f22)。Rust 源码与 657c0d2 完全相同，保留其普通 Rust CI [40318029823](https://github.com/sena-nana/NanaUI/actions/runs/40318029823)；取消了 4103345 自动触发的重复全量 Rust run 40320407528，新诊断已由专属轻量 CI 实际执行。归档时 657 的普通矩阵仍在运行，不写成全量绿灯。运行产物与 SHA 摘要见 [CI 证据 JSON](performance-data/issue354-356-local-2026-10-26/ci-evidence.json)。
+
+当前工程判断：本轮 native / callback 修复已有较强功能证据；#354 的可复现时延差异和 #356 的真实 Electron/SteamVR/硬件恢复尚无足够证据关闭。两个 Issue 保持 OPEN，已完成子项明确列出，不要求为补齐清单而重复运行已证实不具备能力的 runner。
