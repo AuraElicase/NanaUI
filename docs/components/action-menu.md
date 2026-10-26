@@ -113,6 +113,7 @@ action_menu("预设").children((
 | 视图上的 `.trigger(view)` | — | 和 popover 一样，只做显示，里面不要放可按的控件 |
 | `.placement` | — | 传给内部的 popover |
 | `.width` | — | 传给内部的 popover |
+| `.trigger_style` | `NodeStyle` | 传给内部的 popover：盖在触发器原有样式上，只替换写了的字段，见 [Popover](popover.md#触发器) |
 | `.open` | — | 直接写出开关。开关跟 popover 一样，由控件自己切换 |
 | `ActionMenuItem::new(label)` | — | 条目 |
 | `.hint` | — | 一行补充，空字符串会被丢掉 |
