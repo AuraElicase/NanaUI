@@ -106,6 +106,9 @@ impl RichAttrMask {
     pub const EFFECT: Self = Self(1 << 11);
     pub const STRETCH: Self = Self(1 << 12);
     pub const BACKGROUND_COLOR: Self = Self(1 << 13);
+    /// The emphasis tier: mark style and position together.
+    pub const EMPHASIS: Self = Self(1 << 14);
+    pub const EMPHASIS_COLOR: Self = Self(1 << 15);
 
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -159,6 +162,12 @@ impl RichAttrMask {
         }
         if self.contains(Self::EFFECT) {
             style.effect = None;
+        }
+        if self.contains(Self::EMPHASIS) {
+            style.emphasis = Default::default();
+        }
+        if self.contains(Self::EMPHASIS_COLOR) {
+            style.paint.emphasis_color = None;
         }
         style
     }
@@ -783,6 +792,11 @@ fn summarize(value: &RichText, range: Range<usize>) -> RichSelectionAttrs {
                 RichAttrMask::SHADOWS,
             ),
             (piece.effect != first.effect, RichAttrMask::EFFECT),
+            (piece.emphasis != first.emphasis, RichAttrMask::EMPHASIS),
+            (
+                piece.paint.emphasis_color != first.paint.emphasis_color,
+                RichAttrMask::EMPHASIS_COLOR,
+            ),
         ];
         for (differs, bit) in checks {
             if differs {

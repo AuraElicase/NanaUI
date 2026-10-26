@@ -613,11 +613,15 @@ pub struct SceneTextEffects {
     /// CSS order: the first is drawn on top. At most
     /// [`nana_ui_core::MAX_TEXT_SHADOWS`].
     pub shadows: Arc<[nana_ui_core::RichTextShadow]>,
+    /// Emphasis mark colour; `None` draws the marks in the glyphs' own fill
+    /// (`currentColor`). The marks themselves are in the paragraph's layout.
+    pub emphasis_color: Option<nana_ui_core::PaintColor>,
 }
 
 impl SceneTextEffects {
     pub fn is_empty(&self) -> bool {
         self.material.is_none()
+            && self.emphasis_color.is_none()
             && !self.decoration.is_active()
             && self.stroke.is_none()
             && self.shadows.is_empty()
@@ -651,6 +655,7 @@ impl SceneTextEffects {
                 .shadows
                 .clone()
                 .unwrap_or_else(|| Arc::clone(&self.shadows)),
+            emphasis_color: over.emphasis_color.or(self.emphasis_color),
         }
     }
 }
@@ -874,7 +879,14 @@ impl SceneRichPaint {
         style: &nana_ui_core::LayoutStyle,
         rich: Option<&nana_ui_core::RichText>,
     ) -> Option<Arc<Self>> {
-        let base = css_text_effects(style);
+        Self::from_base(css_text_effects(style), rich)
+    }
+
+    /// `base` with `rich`'s paint tier over it.
+    pub fn from_base(
+        base: SceneTextEffects,
+        rich: Option<&nana_ui_core::RichText>,
+    ) -> Option<Arc<Self>> {
         let runs = rich
             .map(|rich| {
                 rich.spans()
@@ -886,6 +898,7 @@ impl SceneRichPaint {
                             || paint.decoration_color.is_some()
                             || paint.stroke.is_some()
                             || paint.shadows.is_some()
+                            || paint.emphasis_color.is_some()
                     })
                     .map(|(range, span)| SceneRichRun {
                         range,
@@ -933,6 +946,10 @@ fn hash_effects(effects: &SceneTextEffects, hasher: &mut impl std::hash::Hasher)
         hash_paint(&shadow.color, hasher);
     }
     hasher.write_usize(effects.shadows.len());
+    if let Some(color) = &effects.emphasis_color {
+        hash_paint(color, hasher);
+    }
+    hasher.write_u8(0xfc);
 }
 
 /// A node's text effects as its CSS states them: `text-decoration`, every
@@ -986,6 +1003,9 @@ pub fn css_text_effects(style: &nana_ui_core::LayoutStyle) -> SceneTextEffects {
         decoration_color: None,
         stroke,
         shadows,
+        emphasis_color: style
+            .text_emphasis_color
+            .and_then(nana_ui_core::TextEmphasisColor::paint),
     }
 }
 

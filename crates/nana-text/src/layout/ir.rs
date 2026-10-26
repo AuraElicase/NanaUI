@@ -104,6 +104,23 @@ pub struct PlacedRuby {
     pub runs: Vec<crate::shape::ShapedRun>,
 }
 
+/// One emphasis mark as laid out, beside the character it stands on.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PlacedEmphasis {
+    /// Byte offset of the grapheme the mark stands on.
+    pub offset: usize,
+    pub line: u32,
+    /// Where the mark's runs start, in line space: their `origin_x_px` are
+    /// relative to it.
+    pub x_px: f32,
+    /// The mark's own baseline, in line space.
+    pub baseline_y_px: f32,
+    /// Its box, in line space.
+    pub rect: TextRect,
+    /// Index into [`TextLayout::emphasis_marks`].
+    pub mark: u32,
+}
+
 /// Why a line ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -214,6 +231,17 @@ pub struct TextLayout {
     /// Every object label placed inside its object, in source order.
     #[serde(default)]
     pub labels: Vec<PlacedLabel>,
+    /// Every emphasis mark placed beside its character, in source order.
+    #[serde(default)]
+    pub emphasis: Vec<PlacedEmphasis>,
+    /// The shaped runs of each distinct mark the layout places, with
+    /// `origin_x_px` relative to the start of the mark.
+    #[serde(default)]
+    pub emphasis_marks: Vec<Vec<crate::shape::ShapedRun>>,
+    /// The source asked for emphasis this layout could not place: marks are
+    /// horizontal only, and this layout is vertical.
+    #[serde(default)]
+    pub emphasis_dropped: bool,
 }
 
 impl TextLayout {
@@ -344,6 +372,9 @@ mod tests {
             rubies: Vec::new(),
             rubies_dropped: false,
             labels: Vec::new(),
+            emphasis: Vec::new(),
+            emphasis_marks: Vec::new(),
+            emphasis_dropped: false,
         }
     }
 

@@ -179,6 +179,125 @@ pub enum TextWrapStyleSpec {
     Pretty,
 }
 
+/// A `text-emphasis-style` shape keyword.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TextEmphasisShape {
+    Dot,
+    Circle,
+    DoubleCircle,
+    Triangle,
+    Sesame,
+}
+
+/// CSS `text-emphasis-style`: the mark set beside each emphasised character.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum TextEmphasisStyle {
+    #[default]
+    None,
+    /// `[filled | open] || <shape>`. `shape: None` (only `filled` or `open`
+    /// written) is the writing mode's: a circle across, sesame down.
+    Mark {
+        shape: Option<TextEmphasisShape>,
+        open: bool,
+    },
+    /// `<string>`: its first grapheme cluster is the mark.
+    String(std::sync::Arc<str>),
+}
+
+impl TextEmphasisStyle {
+    pub fn is_none(&self) -> bool {
+        match self {
+            Self::None => true,
+            Self::Mark { .. } => false,
+            Self::String(text) => text.is_empty(),
+        }
+    }
+
+    /// The text the mark is set in, the character CSS Text Decoration 4
+    /// names for the shape; `vertical` picks the default shape. `None` sets
+    /// no mark.
+    pub fn mark_text(&self, vertical: bool) -> Option<std::sync::Arc<str>> {
+        let (shape, open) = match self {
+            Self::None => return None,
+            Self::String(text) => return (!text.is_empty()).then(|| text.clone()),
+            Self::Mark { shape, open } => (
+                shape.unwrap_or(if vertical {
+                    TextEmphasisShape::Sesame
+                } else {
+                    TextEmphasisShape::Circle
+                }),
+                *open,
+            ),
+        };
+        let mark = match (shape, open) {
+            (TextEmphasisShape::Dot, false) => "\u{2022}",
+            (TextEmphasisShape::Dot, true) => "\u{25E6}",
+            (TextEmphasisShape::Circle, false) => "\u{25CF}",
+            (TextEmphasisShape::Circle, true) => "\u{25CB}",
+            (TextEmphasisShape::DoubleCircle, false) => "\u{25C9}",
+            (TextEmphasisShape::DoubleCircle, true) => "\u{25CE}",
+            (TextEmphasisShape::Triangle, false) => "\u{25B2}",
+            (TextEmphasisShape::Triangle, true) => "\u{25B3}",
+            (TextEmphasisShape::Sesame, false) => "\u{FE45}",
+            (TextEmphasisShape::Sesame, true) => "\u{FE46}",
+        };
+        Some(mark.into())
+    }
+}
+
+/// CSS `text-emphasis-position`. Horizontal text reads `under`; vertical
+/// text would read `left`. The initial value is `over right`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct TextEmphasisPosition {
+    /// `under`; `false` is `over`.
+    #[serde(default)]
+    pub under: bool,
+    /// `left`; `false` is `right`.
+    #[serde(default)]
+    pub left: bool,
+}
+
+impl TextEmphasisPosition {
+    pub const OVER: Self = Self {
+        under: false,
+        left: false,
+    };
+    pub const UNDER: Self = Self {
+        under: true,
+        left: false,
+    };
+}
+
+/// CSS `text-emphasis-color`.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub enum TextEmphasisColor {
+    /// The text's own colour, wherever it is used.
+    #[default]
+    CurrentColor,
+    Color(crate::PaintColor),
+}
+
+impl TextEmphasisColor {
+    /// The colour marks are drawn in; `None` is the glyphs' own fill.
+    pub fn paint(self) -> Option<crate::PaintColor> {
+        match self {
+            Self::CurrentColor => None,
+            Self::Color(color) => Some(color),
+        }
+    }
+}
+
+/// The three `text-emphasis-*` properties after inheritance.
+///
+/// Style and position are layout inputs (the marks take room above or below
+/// the line); colour is paint only.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TextEmphasis {
+    pub style: TextEmphasisStyle,
+    pub position: TextEmphasisPosition,
+    pub color: TextEmphasisColor,
+}
+
 impl FontVariationSetting {
     pub const WGHT: [u8; 4] = *b"wght";
     pub const WDTH: [u8; 4] = *b"wdth";

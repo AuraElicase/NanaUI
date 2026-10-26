@@ -151,6 +151,9 @@ pub(super) struct LineInput<'a> {
     pub ellipsis: Option<&'a Ellipsis>,
     /// Ruby annotations: no line breaks inside a base, and room above it.
     pub rubies: Vec<super::engine::RubyBox>,
+    /// Graphemes that take an emphasis mark, in text order: room above or
+    /// below them.
+    pub emphasis: Vec<super::engine::EmphasisCell>,
     /// Lines run top to bottom and stack across (#59). The runs were shaped
     /// for it, so every advance is already a length along the line; what
     /// changes here is which box dimension budgets what, and where the
@@ -206,6 +209,9 @@ struct Prepared {
     /// How far an inline object taller than the line's text pushes the
     /// baseline down from where the text alone would put it.
     lift_px: f32,
+    /// How far the line grows below the text's own box (an object's descent,
+    /// emphasis marks under the text): room that does not move the baseline.
+    sink_px: f32,
     /// What the line decision changed on this line's cells.
     adjust: LineAdjust,
 }
@@ -1031,7 +1037,7 @@ impl<'a> Builder<'a> {
         let pieces = self.pieces(cells.clone());
         let trimmed = self.trim(cells.start, cells.end);
         let width_px = self.width(cells.start, trimmed);
-        let (ascent_px, descent_px, height_px, lift_px) = self.line_box(&pieces);
+        let (ascent_px, descent_px, height_px, lift_px, sink_px) = self.line_box(&pieces);
         Prepared {
             cells,
             pieces,
@@ -1040,6 +1046,7 @@ impl<'a> Builder<'a> {
             descent_px,
             height_px,
             lift_px,
+            sink_px,
             adjust: LineAdjust::default(),
         }
     }
@@ -1096,6 +1103,7 @@ impl<'a> Builder<'a> {
             descent_px,
             height_px,
             lift_px,
+            sink_px,
             adjust,
         } = prepared;
         let source = match cells.end.checked_sub(1) {
@@ -1122,7 +1130,8 @@ impl<'a> Builder<'a> {
         let baseline_y_px = if self.input.vertical {
             top_y_px + height_px * 0.5
         } else {
-            let half_leading = (height_px - lift_px - (strut_ascent + strut_descent)) * 0.5;
+            let half_leading =
+                (height_px - lift_px - sink_px - (strut_ascent + strut_descent)) * 0.5;
             top_y_px + lift_px + half_leading + strut_ascent
         };
 
@@ -1299,14 +1308,16 @@ impl<'a> Builder<'a> {
 
     /// Reported ascent and descent (the tallest run, strut included), the
     /// line box height (the tallest line-height request, strut included,
-    /// grown to hold any inline object), and how far such an object moved
-    /// the baseline down.
+    /// grown to hold any inline object or annotation), how far that moved the
+    /// baseline down, and how much of the growth is below the text.
     ///
     /// An object is an atomic inline: it does not ask for a line height of
     /// its own, it is a box standing on the baseline. The line keeps the
     /// text's half-leading and grows above and below by what the object
-    /// reaches past it.
-    fn line_box(&self, pieces: &[Piece]) -> (f32, f32, f32, f32) {
+    /// reaches past it. Ruby and emphasis marks over the text stand on its
+    /// ascent, marks under it hang from its descent, and grow the line the
+    /// same way.
+    fn line_box(&self, pieces: &[Piece]) -> (f32, f32, f32, f32, f32) {
         let mut ascent_px: f32 = 0.0;
         let mut descent_px: f32 = 0.0;
         let mut height_px = self.input.strut.map_or(0.0, |strut| strut.line_height_px);
@@ -1324,6 +1335,29 @@ impl<'a> Builder<'a> {
             })
             .map(|ruby| ruby.height_px)
             .fold(0.0f32, f32::max);
+        // An emphasis mark over a ruby base stands on the ruby.
+        let mut emphasis_above: f32 = 0.0;
+        let mut emphasis_below: f32 = 0.0;
+        let cells = &self.input.emphasis;
+        for piece in pieces.iter().filter(|_| !cells.is_empty()) {
+            let first = cells.partition_point(|cell| cell.range.end <= piece.source.start);
+            for cell in cells[first..]
+                .iter()
+                .take_while(|cell| cell.range.start < piece.source.end)
+            {
+                if cell.under {
+                    emphasis_below = emphasis_below.max(cell.height_px);
+                } else {
+                    let ruby = self
+                        .input
+                        .rubies
+                        .iter()
+                        .find(|ruby| ruby.range.contains(&cell.range.start))
+                        .map_or(0.0, |ruby| ruby.height_px);
+                    emphasis_above = emphasis_above.max(ruby + cell.height_px);
+                }
+            }
+        }
         for piece in pieces {
             let run = &self.input.runs[piece.run];
             ascent_px = ascent_px.max(run.metrics.ascent_px);
@@ -1343,9 +1377,9 @@ impl<'a> Builder<'a> {
             ascent_px = ascent_px.max(strut.metrics.ascent_px);
             descent_px = descent_px.max(strut.metrics.descent_px);
         }
-        if self.input.vertical || (object_above <= 0.0 && object_below <= 0.0 && ruby_above <= 0.0)
-        {
-            return (ascent_px, descent_px, height_px, 0.0);
+        let annotated = object_above > 0.0 || object_below > 0.0 || ruby_above > 0.0;
+        if self.input.vertical || (!annotated && emphasis_above <= 0.0 && emphasis_below <= 0.0) {
+            return (ascent_px, descent_px, height_px, 0.0, 0.0);
         }
         let (text_ascent, text_descent) = match self.input.strut {
             Some(strut) => (strut.metrics.ascent_px, strut.metrics.descent_px),
@@ -1362,12 +1396,29 @@ impl<'a> Builder<'a> {
         let half_leading = (height_px - (text_ascent + text_descent)) * 0.5;
         let above = half_leading + text_ascent;
         let below = height_px - above;
-        // An annotation stands on the text's ascent.
+        // An annotation stands on the text's ascent; a mark under the text
+        // hangs from its descent.
+        let reach = |grows: bool, needed: f32| if grows { needed } else { 0.0 };
         let lift = (object_above - above)
-            .max(text_ascent + ruby_above - above)
+            .max(reach(annotated, text_ascent + ruby_above - above))
+            .max(reach(
+                emphasis_above > 0.0,
+                text_ascent + emphasis_above - above,
+            ))
             .max(0.0);
-        let grown_below = (object_below - below).max(0.0);
-        (ascent_px, descent_px, height_px + lift + grown_below, lift)
+        let grown_below = (object_below - below)
+            .max(reach(
+                emphasis_below > 0.0,
+                text_descent + emphasis_below - below,
+            ))
+            .max(0.0);
+        (
+            ascent_px,
+            descent_px,
+            height_px + lift + grown_below,
+            lift,
+            grown_below,
+        )
     }
 
     /// Where a line of `width_px` starts inside the container.

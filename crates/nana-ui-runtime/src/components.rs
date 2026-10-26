@@ -2492,6 +2492,8 @@ pub struct ComputedStyle {
     /// inherit; unset ones stay `None` (Issue #211). Read through
     /// [`Self::used_text_typography`].
     pub text_typography: nana_ui_core::TextTypography,
+    /// CSS `text-emphasis-style`, `-position` and `-color` after inherit.
+    pub text_emphasis: nana_ui_core::TextEmphasis,
     /// CSS `direction` after inherit (initial LTR).
     pub direction: nana_ui_core::DirSpec,
     /// CSS `writing-mode` after inherit (initial `horizontal-tb`).
@@ -2563,6 +2565,7 @@ impl Default for ComputedStyle {
             word_break: WordBreakSpec::Normal,
             line_break: LineBreakSpec::Auto,
             text_typography: nana_ui_core::TextTypography::INHERIT,
+            text_emphasis: nana_ui_core::TextEmphasis::default(),
             direction: nana_ui_core::DirSpec::Ltr,
             writing_mode: nana_ui_core::WritingModeSpec::HorizontalTb,
             text_orientation: nana_ui_core::TextOrientationSpec::Mixed,

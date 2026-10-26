@@ -190,6 +190,9 @@ pub(crate) struct LayoutKey {
     /// ([`crate::ObjectLabel::layout_bits`]) and shaped text, held like the
     /// rubies.
     labels: Vec<(usize, [u32; 5], Arc<ShapedText>)>,
+    /// Each emphasis stretch's range, side and shaped mark, held like the
+    /// rubies.
+    emphasis: Vec<(std::ops::Range<usize>, bool, Arc<ShapedText>)>,
 }
 
 impl LayoutKey {
@@ -211,6 +214,7 @@ impl LayoutKey {
         paragraph_alignments: &[(usize, Option<TextAlignSpec>)],
         rubies: Vec<(std::ops::Range<usize>, Arc<ShapedText>)>,
         labels: Vec<(usize, [u32; 5], Arc<ShapedText>)>,
+        emphasis: Vec<(std::ops::Range<usize>, bool, Arc<ShapedText>)>,
     ) -> Self {
         Self {
             shaped: Arc::clone(shaped),
@@ -267,6 +271,7 @@ impl LayoutKey {
                 .collect(),
             rubies,
             labels,
+            emphasis,
         }
     }
 
@@ -284,6 +289,8 @@ impl LayoutKey {
                 * std::mem::size_of::<(usize, Option<TextAlignSpec>)>()
             + self.objects.capacity() * std::mem::size_of::<(usize, [u32; 7])>()
             + self.placements.capacity() * std::mem::size_of::<(usize, u32)>()
+            + self.emphasis.capacity()
+                * std::mem::size_of::<(std::ops::Range<usize>, bool, Arc<ShapedText>)>()
     }
 }
 
@@ -316,6 +323,12 @@ impl PartialEq for LayoutKey {
                 .iter()
                 .zip(&other.labels)
                 .all(|((left, x, a), (right, y, b))| left == right && x == y && Arc::ptr_eq(a, b))
+            && self.emphasis.len() == other.emphasis.len()
+            && self
+                .emphasis
+                .iter()
+                .zip(&other.emphasis)
+                .all(|((left, x, a), (right, y, b))| left == right && x == y && Arc::ptr_eq(a, b))
     }
 }
 
@@ -347,6 +360,11 @@ impl Hash for LayoutKey {
         for (offset, bits, shaped) in &self.labels {
             offset.hash(state);
             bits.hash(state);
+            (Arc::as_ptr(shaped) as *const u8 as usize).hash(state);
+        }
+        for (range, under, shaped) in &self.emphasis {
+            range.hash(state);
+            under.hash(state);
             (Arc::as_ptr(shaped) as *const u8 as usize).hash(state);
         }
     }

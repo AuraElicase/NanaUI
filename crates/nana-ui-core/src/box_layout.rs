@@ -3532,6 +3532,15 @@ pub struct LayoutStyle {
     /// CSS `text-decoration` / `text-decoration-line`. `None` = inherit / none.
     #[serde(default)]
     pub text_decoration: Option<TextDecorationLine>,
+    /// CSS `text-emphasis-style`. `None` = inherit / `none`.
+    #[serde(default)]
+    pub text_emphasis_style: Option<crate::typography::TextEmphasisStyle>,
+    /// CSS `text-emphasis-position`. `None` = inherit / `over right`.
+    #[serde(default)]
+    pub text_emphasis_position: Option<crate::typography::TextEmphasisPosition>,
+    /// CSS `text-emphasis-color`. `None` = inherit / `currentColor`.
+    #[serde(default)]
+    pub text_emphasis_color: Option<crate::typography::TextEmphasisColor>,
     /// CSS `font-feature-settings`. `None` = inherit; `Some([])` = `normal`.
     #[serde(default)]
     pub font_features: Option<Vec<FontFeatureSetting>>,
@@ -3759,6 +3768,9 @@ impl Default for LayoutStyle {
             letter_spacing: None,
             color: None,
             text_decoration: None,
+            text_emphasis_style: None,
+            text_emphasis_position: None,
+            text_emphasis_color: None,
             font_features: None,
             font_variation_settings: None,
             font_kerning: None,
@@ -4504,6 +4516,15 @@ impl LayoutStyle {
         }
         if self.text_decoration.is_none() {
             self.text_decoration = parent.text_decoration;
+        }
+        if self.text_emphasis_style.is_none() {
+            self.text_emphasis_style = parent.text_emphasis_style.clone();
+        }
+        if self.text_emphasis_position.is_none() {
+            self.text_emphasis_position = parent.text_emphasis_position;
+        }
+        if self.text_emphasis_color.is_none() {
+            self.text_emphasis_color = parent.text_emphasis_color;
         }
         if self.font_features.is_none() {
             self.font_features = parent.font_features.clone();

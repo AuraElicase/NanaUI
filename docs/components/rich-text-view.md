@@ -42,14 +42,15 @@ widget(RichTextView::new(line).font_size(20.0))
 
 改值用 `set_component(entity, RichTextView::new(next))`。和节点上已有的值相等时不提交任何东西。不需要组件时，`MutationQueue::set_rich_text(id, rich)` 直接作用在任意文本节点上。
 
-## 样式分三层
+## 样式分四层
 
-`RichSpanStyle` 的字段按「改了要花多少」分成三层。一次变化按它碰到的层定价：
+`RichSpanStyle` 的字段按「改了要花多少」分成四层。一次变化按它碰到的层定价：
 
 | 层 | 字段 | 改了之后 |
 | --- | --- | --- |
 | 塑形 `shape` | `family`、`size_px`、`weight`、`stretch_percent`、`italic`、`letter_spacing_px`、`features` | 重新塑形、排版；行盒跟着变高 |
-| 绘制 `paint` | `color`、`background_color`、`decoration`、`decoration_color`、`stroke`、`shadows` | 只重绘：不塑形、不排版 |
+| 着重号 `emphasis` | `style`、`position`（`emphasis(...)`、`emphasis_position(...)`） | 只重新排版：字不重新塑形，行盒按记号高度变高 |
+| 绘制 `paint` | `color`、`background_color`、`decoration`、`decoration_color`、`emphasis_color`、`stroke`、`shadows` | 只重绘：不塑形、不排版 |
 | 呈现 | `effect` | 不碰文本，交给合成器 |
 
 `size` 比节点字号大的那段，按节点自己的行高比例撑高它所在的行。节点用绝对行高时，比例是行高除以节点字号。

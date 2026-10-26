@@ -2131,6 +2131,56 @@ impl TextPipeline {
                 }
             }
         }
+        // Emphasis marks, beside their characters, in the mark colour or the
+        // character's own fill. Each glyph stands for its character, so it
+        // takes that character's effects and reveal turn.
+        for mark in &layout.emphasis {
+            let Some(runs) = layout.emphasis_marks.get(mark.mark as usize) else {
+                continue;
+            };
+            let baseline = (mark.baseline_y_px * scale).round();
+            let cluster = mark.offset as u32;
+            let color = match effects
+                .rich
+                .and_then(|rich| rich.effects_at(mark.offset).emphasis_color)
+            {
+                Some(paint) => ResolvedSpanColor {
+                    srgb: paint.to_srgb(),
+                    paint_color: Some(paint),
+                },
+                None => colors.color_at(mark.offset),
+            };
+            for run in runs {
+                let Some(instance) = run.instance.as_ref() else {
+                    continue;
+                };
+                let (font, variation, synthesis) = rasterizer.intern_instance(instance);
+                let size = size_bits(run.font_size_px * scale);
+                let mut pen = mark.x_px + run.origin_x_px;
+                for glyph in &run.glyphs {
+                    let x = (pen + glyph.offset_x_px) * scale + origin[0];
+                    let y = (origin[1] - glyph.offset_y_px * scale).floor() + baseline;
+                    pen += glyph.advance_px;
+                    resolved.push(
+                        font,
+                        generation,
+                        variation,
+                        size,
+                        synthesis,
+                        mode,
+                        color.srgb,
+                        color.paint_color,
+                        GlyphRole::Fill,
+                        PlacedGlyph {
+                            glyph: glyph.glyph_id,
+                            x,
+                            y,
+                            cluster,
+                        },
+                    );
+                }
+            }
+        }
         // Object labels (tags), inside their objects, on their own pill: a
         // light ink unless the label names one. Each glyph stands for the
         // object's character, so it takes the object's effects and reveal
@@ -5098,6 +5148,7 @@ mod tests {
                 line_through: true,
             },
             decoration_color: None,
+            emphasis_color: None,
             stroke: Some(nana_ui_core::RichTextStroke::new(
                 2.0,
                 paint([0.0, 0.0, 0.0, 1.0]),
@@ -5336,6 +5387,128 @@ mod tests {
             "the annotation stands above the base"
         );
         assert!(small[1] < large[1], "and is smaller");
+    }
+
+    /// Placed glyph boxes, base and marks, of "漢字" with emphasis marks at
+    /// `position`, painted from the layout Runtime retained.
+    fn emphasis_glyphs(
+        position: nana_ui_core::TextEmphasisPosition,
+    ) -> (usize, usize, Vec<([i32; 2], [u32; 2])>) {
+        let (device, queue) = test_device();
+        let mut pipeline = TextPipeline::new(&device, &queue, wgpu::TextureFormat::Rgba8Unorm);
+        let content = "漢字";
+        let mut source = nana_text::TextSource::new(content);
+        source.set_emphasis(vec![nana_text::EmphasisSpan {
+            range: 0..6,
+            mark: Arc::from("\u{2022}"),
+            position,
+        }]);
+        let base = nana_text::TextStyle {
+            font_size_px: 16.0,
+            line_height: Some(LineHeightSpec::Absolute(20.0)),
+            ..nana_text::TextStyle::default()
+        };
+        let constraints = nana_text::TextConstraints {
+            max_width_px: Some(240.0),
+            preserve_lines: true,
+            ..nana_text::TextConstraints::default()
+        };
+        let layout = {
+            let engine = crate::text_engine::nana_text_engine();
+            let mut engine = crate::text_engine::lock_engine(&engine);
+            let mut counters = nana_text::TextWorkCounters::default();
+            nana_text::TextEngine::layout(
+                &mut *engine,
+                nana_text::TextKind::Label,
+                &source,
+                &base,
+                &constraints,
+                &mut counters,
+            )
+        };
+        assert_eq!(layout.emphasis.len(), 2, "one mark per character");
+        let base_glyphs: usize = layout.runs.iter().map(|run| run.glyphs.len()).sum();
+        let mark_glyphs: usize = layout
+            .emphasis
+            .iter()
+            .map(|mark| {
+                layout.emphasis_marks[mark.mark as usize]
+                    .iter()
+                    .map(|run| run.glyphs.len())
+                    .sum::<usize>()
+            })
+            .sum();
+        let handle = nana_ui_runtime::RetainedTextLayout {
+            id: layout.id,
+            layout,
+        };
+        prepare_with_layout(
+            &device,
+            &queue,
+            &mut pipeline,
+            content,
+            240.0,
+            Some(&handle),
+        );
+        let id = pipeline
+            .target
+            .entries
+            .lookup(EntryKey {
+                node: 1,
+                slot: 0,
+                pass: 0,
+            })
+            .expect("one entry");
+        let entry = pipeline.target.entries.get(id).unwrap();
+        let mut placed: Vec<([i32; 2], [u32; 2])> = pipeline
+            .target
+            .entries
+            .instances(entry)
+            .iter()
+            .take(entry.glyphs as usize)
+            .filter(|instance| !instance.is_solid())
+            .filter_map(|instance| {
+                instance
+                    .placement()
+                    .map(|(_, size)| (instance.screen_origin(), size))
+            })
+            .filter(|(_, size)| size[1] > 0)
+            .collect();
+        placed.sort_by_key(|(_, size)| size[1]);
+        (base_glyphs, mark_glyphs, placed)
+    }
+
+    #[test]
+    fn emphasis_marks_are_drawn_over_or_under_their_base() {
+        for (position, over) in [
+            (nana_ui_core::TextEmphasisPosition::OVER, true),
+            (nana_ui_core::TextEmphasisPosition::UNDER, false),
+        ] {
+            let (base_glyphs, mark_glyphs, placed) = emphasis_glyphs(position);
+            assert_eq!(
+                placed.len(),
+                base_glyphs + mark_glyphs,
+                "the base and every mark glyph"
+            );
+            // The marks are the smaller glyphs.
+            let (marks, bases) = placed.split_at(mark_glyphs);
+            assert!(marks.iter().all(|(_, size)| size[1] < bases[0].1[1]));
+            for (origin, size) in marks {
+                for (base, base_size) in bases {
+                    if over {
+                        assert!(
+                            origin[1] + size[1] as i32 <= base[1] + 1,
+                            "a mark over the text stands above it"
+                        );
+                    } else {
+                        assert!(
+                            origin[1] >= base[1] + base_size[1] as i32 - 1,
+                            "a mark under the text hangs below it"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     fn presentation(

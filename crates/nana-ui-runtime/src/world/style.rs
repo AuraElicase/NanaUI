@@ -250,6 +250,18 @@ impl UiWorld {
             text_typography: layout
                 .text_typography
                 .inherit_from(inherited.text_typography),
+            text_emphasis: nana_ui_core::TextEmphasis {
+                style: layout
+                    .text_emphasis_style
+                    .clone()
+                    .unwrap_or_else(|| inherited.text_emphasis.style.clone()),
+                position: layout
+                    .text_emphasis_position
+                    .unwrap_or(inherited.text_emphasis.position),
+                color: layout
+                    .text_emphasis_color
+                    .unwrap_or(inherited.text_emphasis.color),
+            },
             direction: layout.dir.unwrap_or(inherited.direction),
             writing_mode: layout.writing_mode.unwrap_or(inherited.writing_mode),
             text_orientation: layout

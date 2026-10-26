@@ -11,10 +11,12 @@ use crate::font::{
     FontInstanceKey, FontQuery, FontSystem, FontVariations, LanguageTag, canonical_f32_bits,
 };
 use crate::id::FontGeneration;
-use crate::layout::{IntrinsicWidths, LayoutCounters, LayoutRequest, Layouter, TextLayout};
+use crate::layout::{
+    IntrinsicWidths, LayoutCounters, LayoutRequest, Layouter, ShapedEmphasis, TextLayout,
+};
 use crate::metrics::RunMetrics;
 use crate::shaping::{ShapeCounters, ShapeRequest, ShapedText, Shaper};
-use crate::source::{ObjectLabel, TextSource};
+use crate::source::{ObjectLabel, SnappedSpans, TextSource};
 use crate::style::{TextKind, TextStyle};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -200,6 +202,73 @@ impl NativeTextEngine {
         source.with_folded_newlines().unwrap_or(source)
     }
 
+    /// Each emphasis range's mark, shaped once per style the range crosses:
+    /// a mark is half the size of the character it stands on, so a range
+    /// over a larger word has larger marks there.
+    fn shape_emphasis(
+        &mut self,
+        source: &TextSource,
+        base: &TextStyle,
+        constraints: &TextConstraints,
+    ) -> Vec<ShapedEmphasis> {
+        use unicode_segmentation::UnicodeSegmentation as _;
+        if source.emphasis().is_empty() {
+            return Vec::new();
+        }
+        let text = source.text();
+        let starts;
+        let snapped = if source.spans().is_empty() {
+            None
+        } else {
+            starts = crate::font::unicode::cluster_starts(text);
+            Some(SnappedSpans::new(source.spans(), text.len(), &starts))
+        };
+        let cuts = snapped.as_ref().map(SnappedSpans::cuts).unwrap_or_default();
+        let unconstrained = TextConstraints {
+            max_width_px: None,
+            wrap: None,
+            max_lines: None,
+            ellipsis: false,
+            ..*constraints
+        };
+        let mut shaped: Vec<ShapedEmphasis> = Vec::new();
+        for span in source.emphasis() {
+            let Some(mark) = span.mark.graphemes(true).next() else {
+                continue;
+            };
+            let mark = TextSource::new(mark);
+            let mut start = span.range.start;
+            while start < span.range.end {
+                let end = cuts
+                    .iter()
+                    .copied()
+                    .find(|cut| *cut > start)
+                    .unwrap_or(span.range.end)
+                    .min(span.range.end);
+                let style = snapped
+                    .as_ref()
+                    .map_or(base, |snapped| snapped.style_at(start, base));
+                let marks = self.shape(&mark, &emphasis_style(style), &unconstrained);
+                match shaped.last_mut() {
+                    Some(last)
+                        if last.range.end == start
+                            && last.under == span.position.under
+                            && Arc::ptr_eq(&last.shaped, &marks) =>
+                    {
+                        last.range.end = end;
+                    }
+                    _ => shaped.push(ShapedEmphasis {
+                        range: start..end,
+                        under: span.position.under,
+                        shaped: marks,
+                    }),
+                }
+                start = end;
+            }
+        }
+        shaped
+    }
+
     fn shape_ellipsis(
         &mut self,
         base: &TextStyle,
@@ -248,6 +317,16 @@ fn ruby_style(source: &TextSource, base: &TextStyle, at: usize) -> TextStyle {
         .map_or(base, |span| &span.style);
     TextStyle {
         font_size_px: style.font_size_px * crate::source::RUBY_SCALE,
+        letter_spacing_px: 0.0,
+        ..style.clone()
+    }
+}
+
+/// The style an emphasis mark is shaped in: the style of the character it
+/// stands on, at [`crate::source::EMPHASIS_SCALE`] of the size.
+fn emphasis_style(style: &TextStyle) -> TextStyle {
+    TextStyle {
+        font_size_px: style.font_size_px * crate::source::EMPHASIS_SCALE,
         letter_spacing_px: 0.0,
         ..style.clone()
     }
@@ -322,6 +401,11 @@ impl TextEngine for NativeTextEngine {
                 })
                 .collect()
         };
+        let emphasis = if constraints.wants_vertical_writing() {
+            Vec::new()
+        } else {
+            self.shape_emphasis(source, base, constraints)
+        };
         // Each object label shaped once, small, in the style around it.
         let labels: Vec<Arc<ShapedText>> = source
             .labels()
@@ -344,6 +428,7 @@ impl TextEngine for NativeTextEngine {
             .with_ellipsis(ellipsis.as_ref())
             .with_strut(strut)
             .with_rubies(&rubies)
+            .with_emphasis(&emphasis)
             .with_labels(&labels);
         let layout = self.layouter.layout(&request);
         let layouts = self.layouter.counters();
