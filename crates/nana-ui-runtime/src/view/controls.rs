@@ -10,8 +10,8 @@ use super::node::{El, widget};
 use super::prop::{FieldWrite, IntoProp};
 use super::reactive::Signal;
 use crate::{
-    ActionMenu, ActionMenuItem, ColorChanged, ColorField, ListItemRole, TabsEvent, TextSelection,
-    ThumbnailState, TreeNode, TreeView,
+    ActionMenu, ActionMenuItem, ColorChanged, ColorField, ListItemRole, SizeField,
+    SizeFieldChanged, SizePreset, TabsEvent, TextSelection, ThumbnailState, TreeNode, TreeView,
 };
 use crate::{
     Activate, AppContext, Avatar, Button, Card, Checkbox, Chip, Divider, EmptyState, Entity,
@@ -558,6 +558,12 @@ pub fn tree_view() -> El<TreeView> {
     widget(TreeView::new(Vec::new()))
 }
 
+/// A width × height field with a preset menu; bind `.value(..)`.
+#[track_caller]
+pub fn size_field() -> El<SizeField> {
+    widget(SizeField::new([0.0, 0.0]))
+}
+
 /// A colour well with its picker; bind `.value(..)`.
 #[track_caller]
 pub fn color_field() -> El<ColorField> {
@@ -944,6 +950,8 @@ edited_in_code!(
     ListItemRole,
     RangeSpanOrientation,
     [f32; 4],
+    [f64; 2],
+    Vec<SizePreset>,
     Vec<TreeNode<Arc<str>>>
 );
 

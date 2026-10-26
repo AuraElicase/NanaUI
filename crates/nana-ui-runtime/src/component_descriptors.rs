@@ -81,6 +81,7 @@ descriptors! {
     QR_CODE => { type_id: "nana.qr-code", tags: &["qr-code"] },
     FORM_FIELD => { type_id: "nana.form-field", tags: &["form-field"] },
     DYNAMIC_FORM => { type_id: "nana.dynamic-form", tags: &["dynamic-form", "property-surface"] },
+    SIZE_FIELD => { type_id: "nana.size-field", tags: &["size-field"] },
     COLOR_FIELD => { type_id: "nana.color-field", tags: &["color-field"] },
     PATH_FIELD => { type_id: "nana.path-field", tags: &["path-field"] },
     INTERACTIVE_CARD => { type_id: "nana.interactive-card", tags: &["interactive-card"] },

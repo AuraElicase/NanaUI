@@ -22,6 +22,8 @@ mod calendar;
 mod charts;
 mod chip;
 mod color_field;
+mod size_field;
+pub use size_field::{SizeField, SizeFieldChanged, SizePreset};
 mod command_palette;
 pub mod component_descriptors;
 mod component_registry;

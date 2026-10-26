@@ -85,6 +85,10 @@ framework_strings! {
     /// A diagram's element counts. `{nodes}`, `{edges}`.
     diagram_summary = "diagram.summary" => "{nodes} 个节点，{edges} 条连线";
     file_tab_close = "file_tab.close" => "关闭文件";
+    size_field_label = "size_field.label" => "尺寸";
+    size_field_width = "size_field.width" => "宽度";
+    size_field_height = "size_field.height" => "高度";
+    size_field_presets = "size_field.presets" => "预设尺寸";
     color_field_label = "color_field.label" => "颜色";
     path_field_label = "path_field.label" => "路径";
     path_field_browse = "path_field.browse" => "浏览";

@@ -221,6 +221,17 @@ macro_rules! for_each_control {
                 nodes: Vec<TreeNode<Arc<str>>> = set,
                 label: Option<Arc<str>> = set,
             };
+            SizeField => size_field() for SizeField {
+                value: [f64; 2] = builder,
+                presets: Vec<SizePreset> = set,
+                label: Option<Arc<str>> = set,
+                width_label: Option<Arc<str>> = set,
+                height_label: Option<Arc<str>> = set,
+                presets_label: Option<Arc<str>> = set,
+                disabled: bool = set,
+                invalid: bool = set,
+            }
+            with { on_change: SizeFieldChanged };
             ColorField => color_field() for ColorField {
                 value: [f32; 4] = builder,
                 label: Option<Arc<str>> = set,

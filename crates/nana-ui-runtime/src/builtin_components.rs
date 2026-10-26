@@ -24,11 +24,11 @@ use crate::{
     PaneChrome, PathField, PathText, Popover, Progress, QrCode, RangeField, RichTextView,
     ScrollView, SearchDropdown, SearchDropdownOption, SegmentedControl, Select, SettingsCard,
     SettingsCollapsibleCard, SettingsPage, SettingsRow, SidebarFooter, SidebarFrame, SidebarRow,
-    SidebarRowState, SidebarRowTone, SidebarSection, Skeleton, Spinner, SplitPane, Stack,
-    StatusBadge, Switch, Table, TableCell, TableRow, Tabs, Text, TextArea, TextDiagnosticSeverity,
-    TextDiagnosticSpan, TextGitMark, TextGitMarkKind, TextInput, TextInputState, Thumbnail,
-    ThumbnailState, Toast, ToastTone, Tooltip, TreeView, UiExtension, ValidationMessage,
-    ValueEmphasis, Video, Workspace, WorkspaceRegionSlot, XYPad, XYPadValue,
+    SidebarRowState, SidebarRowTone, SidebarSection, SizeField, Skeleton, Spinner, SplitPane,
+    Stack, StatusBadge, Switch, Table, TableCell, TableRow, Tabs, Text, TextArea,
+    TextDiagnosticSeverity, TextDiagnosticSpan, TextGitMark, TextGitMarkKind, TextInput,
+    TextInputState, Thumbnail, ThumbnailState, Toast, ToastTone, Tooltip, TreeView, UiExtension,
+    ValidationMessage, ValueEmphasis, Video, Workspace, WorkspaceRegionSlot, XYPad, XYPadValue,
     component_registry::{RegisterableComponent, SemanticSpec},
 };
 #[cfg(feature = "calendar")]
@@ -164,6 +164,7 @@ fn install_builtins<const BIND: bool>(
     component::<Tooltip, BIND>(registrar)?;
     component::<XYPad, BIND>(registrar)?;
     component::<ColorField, BIND>(registrar)?;
+    component::<SizeField, BIND>(registrar)?;
     component::<PathField, BIND>(registrar)?;
     component::<QrCode, BIND>(registrar)?;
     component::<FormField, BIND>(registrar)?;
@@ -1111,7 +1112,8 @@ impl RegisterableComponent for ActionMenu {
     fn from_semantic(spec: &SemanticSpec<'_>) -> Self {
         let mut menu = ActionMenu::new()
             .trigger(spec.display_label())
-            .open(spec.active || spec.toggled);
+            .open(spec.active || spec.toggled)
+            .disabled(spec.disabled);
         if let Some(icon) = spec.icon {
             menu = menu.trigger_icon(icon, spec.display_label());
         }
@@ -1255,6 +1257,19 @@ impl RegisterableComponent for DynamicForm {
         entity: crate::Entity<Self>,
     ) -> Result<(), FrameworkError> {
         context.assemble_dynamic_form(entity).map(|_| ())
+    }
+}
+
+impl RegisterableComponent for SizeField {
+    const TYPE_ID: &'static str = crate::component_descriptors::SIZE_FIELD.type_id;
+    const TAGS: &'static [&'static str] = crate::component_descriptors::SIZE_FIELD.tags;
+    fn from_semantic(spec: &SemanticSpec<'_>) -> Self {
+        let value =
+            serde_json::from_str(spec.attr("value").unwrap_or(spec.value)).unwrap_or([0.0, 0.0]);
+        SizeField::new(value)
+            .size(spec.size)
+            .disabled(spec.disabled)
+            .invalid(spec.invalid)
     }
 }
 
