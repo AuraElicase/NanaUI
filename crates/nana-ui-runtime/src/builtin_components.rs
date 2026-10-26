@@ -422,6 +422,7 @@ impl RegisterableComponent for NumberInput {
         let mut input = NumberInput::new(f64::from(spec.number))
             .range(f64::from(spec.min), f64::from(spec.max))
             .step(f64::from(spec.step))
+            .steppers(spec.attr("steppers").is_none_or(truthy_attr))
             .size(spec.size)
             .disabled(spec.disabled)
             .read_only(spec.read_only)
