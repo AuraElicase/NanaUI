@@ -191,11 +191,12 @@ pub use theme::{
     ScrollbarMotion, ScrollbarPaint, ScrollbarPaintState, ScrollbarRecipe, ScrollbarTransition,
     ShadowToken, SpacingStep, SpacingTokens, SquareSize, StateLayer, StatusRecipe, SurfaceMaterial,
     SurfacePadding, SurfaceRole, SurfaceSpec, SurfaceTokens, SwitchMetrics, TREE_METRICS,
-    TextWeight, ThemeAppearance, ThemeChoice, ThemeCompileError, ThemeDefinition, ThemeGeneration,
-    ThemeId, ThemeIdentity, ThemeMetrics, ThemeRegistry, ThemeRegistryError, ThemeResolution,
-    ThemeSchemaVersion, ToastGlyphs, ToastIndicator, ToastMotion, ToastProgressRecipe, ToastRecipe,
-    TreeMetrics, TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme,
-    builtin_theme_arc, linear_scrim_alpha, space, type_scale,
+    TextWeight, ThemeAppearance, ThemeChoice, ThemeCompileError, ThemeDefinition, ThemeExpr,
+    ThemeGeneration, ThemeId, ThemeIdentity, ThemeLayout, ThemeMetrics, ThemeProperty,
+    ThemeRegistry, ThemeRegistryError, ThemeResolution, ThemeSchemaVersion, ThemeToken,
+    ToastGlyphs, ToastIndicator, ToastMotion, ToastProgressRecipe, ToastRecipe, TreeMetrics,
+    TypeRole, TypographyTokens, UI_BASE_TEXT_SIZE, UI_METRICS, builtin_theme, builtin_theme_arc,
+    linear_scrim_alpha, space, type_scale,
 };
 pub use tree::{TreeNavigation, TreeNode, TreeViewEvent, tree_navigation_event};
 pub use typography::{

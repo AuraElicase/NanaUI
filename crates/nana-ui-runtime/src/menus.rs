@@ -8,17 +8,19 @@ use nana_ui_core::{
 use crate::popover::{menu_surface_style, project_anchored_menu};
 use crate::view_components::project_common;
 use crate::{
-    AccessibilityRole, AccessibilityState, ComponentElevation, ComponentGeometry,
-    ComponentTextRegion, ComputedStyle, InteractionState, InteractionStyle, LayoutBox,
-    MenuSurfaceKind, MutationQueue, NodeKind, NodeStyle, SelectOptionData, SemanticPaint,
-    StableNodeId, StandardVisual, TextContent, TextInputState, TextVerticalAlignment, UiWorld,
+    AccessibilityRole, AccessibilityState, AppContext, ComponentElevation, ComponentGeometry,
+    ComponentTextRegion, ComputedStyle, Entity, FrameworkError, InteractionState, InteractionStyle,
+    LayoutBox, MenuSurfaceKind, MutationQueue, NodeKind, NodePointer, NodePointerHooks, NodeStyle,
+    SelectOptionData, SemanticPaint, StableNodeId, StandardVisual, TextContent, TextInputState,
+    TextVerticalAlignment, UiWorld,
 };
 
 const MENU_WIDTH: f32 = crate::popover::ACTION_MENU_WIDTH;
 const MENU_PADDING: f32 = crate::popover::MENU_SURFACE_PADDING;
 use crate::popover::MENU_MIN_WIDTH;
+#[cfg(test)]
+const HINT_TEXT_SIZE: f32 = nana_ui_core::type_scale::HINT;
 const MENU_MIN_HEIGHT: f32 = nana_ui_core::ControlSize::Medium.height_in(nana_ui_core::UI_METRICS);
-const ICON_GAP: f32 = nana_ui_core::space::MD;
 
 /// Selectable row shared by action menus and context menus.
 #[derive(Debug, Clone, PartialEq)]
@@ -627,11 +629,45 @@ impl ContextMenu {
     }
 }
 
+/// The pointer over an open context menu: the row under it takes the
+/// highlight the arrow keys move, which is also the row a screen reader is
+/// on, and leaving the menu clears it, as a menu bar's open menu does.
+/// Presses stay the menu's activation; the wheel goes on to what is under it.
+const CONTEXT_MENU_POINTER: NodePointerHooks<ContextMenu> = NodePointerHooks {
+    moved: context_menu_moved,
+    left: |cx, menu| cx.update_component(menu, |menu, _| menu.highlighted = None),
+    pressed: |_, _, _| Ok(false),
+    released: |_, _, _| Ok(false),
+    wheel: |_, _, _| Ok(false),
+};
+
+fn context_menu_moved(
+    cx: &mut AppContext,
+    menu: Entity<ContextMenu>,
+    pointer: NodePointer,
+) -> Result<bool, FrameworkError> {
+    let world = cx.world();
+    let (Some(geometry), Some(origin)) = (
+        world.component_geometry(menu.stable_id()),
+        world.component_layout_box(menu.stable_id()),
+    ) else {
+        return Ok(false);
+    };
+    // The hook's pointer is in the node's own px, the rows in the document's.
+    match context_menu_option_at(&geometry, origin.x + pointer.x, origin.y + pointer.y) {
+        Some(row) if cx.read(menu, |menu| menu.highlighted)? != Some(row) => {
+            cx.focus_context_menu_index(menu, row)
+        }
+        _ => Ok(false),
+    }
+}
+
 impl crate::ComponentView for ContextMenu {
     const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
         activation: Some(crate::AppContext::dismiss_context_menu),
         activate_at: Some(crate::AppContext::activate_context_menu_at),
         editable: Some(&crate::framework::Editable::<Self>::HOOKS),
+        pointer: Some(&CONTEXT_MENU_POINTER),
         ..crate::TypeBehavior::NONE
     };
 
@@ -701,10 +737,11 @@ impl crate::ComponentView for ContextMenu {
         {
             let layout = Arc::make_mut(&mut style.layout);
             layout.hidden = !open;
-            let height = context_menu_height(
+            let height = context_menu_height_in(
                 self.visible_items().len(),
                 self.searchable,
                 world.theme_metrics(),
+                world.theme(),
             );
             layout.height = Some(LengthSpec::Px(height));
             let (x, y) = match self.viewport {
@@ -743,9 +780,8 @@ impl crate::ComponentView for ContextMenu {
     }
 }
 
-/// Hint text renders at a fixed compact size regardless of control size.
-const HINT_TEXT_SIZE: f32 = nana_ui_core::type_scale::HINT;
-
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn action_menu_item_geometry(
     bounds: LayoutBox,
     label: &Arc<str>,
@@ -759,6 +795,58 @@ pub(crate) fn action_menu_item_geometry(
     metrics: ThemeMetrics,
     measure: crate::text_width::ChromeTextMeasure<'_>,
 ) -> ComponentGeometry {
+    action_menu_item_geometry_in(
+        bounds,
+        label,
+        hint,
+        icon,
+        danger,
+        disabled,
+        size,
+        style,
+        palette,
+        metrics,
+        measure,
+        nana_ui_core::builtin_theme(nana_ui_core::ThemeAppearance::Dark),
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn context_menu_geometry(
+    bounds: LayoutBox,
+    query: Option<&Arc<str>>,
+    rows: &[SelectOptionData],
+    highlighted: Option<usize>,
+    palette: &SemanticPalette,
+    metrics: ThemeMetrics,
+    search_placeholder: &Arc<str>,
+) -> ComponentGeometry {
+    context_menu_geometry_in(
+        bounds,
+        query,
+        rows,
+        highlighted,
+        palette,
+        metrics,
+        search_placeholder,
+        nana_ui_core::builtin_theme(nana_ui_core::ThemeAppearance::Dark),
+    )
+}
+
+pub(crate) fn action_menu_item_geometry_in(
+    bounds: LayoutBox,
+    label: &Arc<str>,
+    hint: Option<&Arc<str>>,
+    icon: Option<Icon>,
+    danger: bool,
+    disabled: bool,
+    size: ControlSize,
+    style: &ComputedStyle,
+    palette: &SemanticPalette,
+    metrics: ThemeMetrics,
+    measure: crate::text_width::ChromeTextMeasure<'_>,
+    theme: &nana_ui_core::CompiledTheme,
+) -> ComponentGeometry {
     let pad = size.padding_x_in(metrics);
     let icon_color = if disabled {
         palette.faint.as_rgba_array()
@@ -767,11 +855,15 @@ pub(crate) fn action_menu_item_geometry(
     } else {
         palette.muted.as_rgba_array()
     };
-    let (cursor, icon) = menu_option_icon(bounds, icon, size, icon_color, metrics);
+    let (cursor, icon) = menu_option_icon(bounds, icon, size, icon_color, metrics, theme);
     let hint_width = hint
-        .map(|hint| measure.width(hint, HINT_TEXT_SIZE, None))
+        .map(|hint| measure.width(hint, theme.typography().hint, None))
         .unwrap_or(0.0);
-    let hint_gap = if hint.is_some() { ICON_GAP } else { 0.0 };
+    let hint_gap = if hint.is_some() {
+        theme.spacing().md
+    } else {
+        0.0
+    };
     let label_right = bounds.x + bounds.width - pad - hint_width - hint_gap;
     let foreground = if disabled {
         palette.faint.as_rgba_array()
@@ -791,8 +883,8 @@ pub(crate) fn action_menu_item_geometry(
             },
             content: Arc::clone(label).into(),
             color: Some(foreground),
-            font_size: size.text_size(),
-            font_weight: Some(500),
+            font_size: size.text_size_in(theme.typography()),
+            font_weight: Some(theme.typography().medium),
         },
         hint: hint.map(|hint| ComponentTextRegion {
             bounds: LayoutBox {
@@ -803,7 +895,7 @@ pub(crate) fn action_menu_item_geometry(
             },
             content: Arc::clone(hint).into(),
             color: Some(palette.muted.as_rgba_array()),
-            font_size: HINT_TEXT_SIZE,
+            font_size: theme.typography().hint,
             font_weight: None,
         }),
         background: style.background,
@@ -853,6 +945,23 @@ fn context_menu_height(
     }
 }
 
+fn context_menu_height_in(
+    item_count: usize,
+    searchable: bool,
+    metrics: nana_ui_core::ThemeMetrics,
+    theme: &nana_ui_core::CompiledTheme,
+) -> f32 {
+    let count = item_count.max(1) as f32;
+    let item = ControlSize::Small.height_in(metrics);
+    let list =
+        theme.spacing().xs * 2.0 + count * item + (count - 1.0).max(0.0) * theme.spacing().xxs;
+    if searchable {
+        list + search_field_height(metrics) + theme.spacing().xs
+    } else {
+        list
+    }
+}
+
 fn menu_spoken_name(label: &Arc<str>, accessible_name: Option<&Arc<str>>) -> Arc<str> {
     accessible_name
         .filter(|name| !name.is_empty())
@@ -861,7 +970,7 @@ fn menu_spoken_name(label: &Arc<str>, accessible_name: Option<&Arc<str>>) -> Arc
 }
 
 /// `search_placeholder`: what an empty search field shows.
-pub(crate) fn context_menu_geometry(
+pub(crate) fn context_menu_geometry_in(
     bounds: LayoutBox,
     query: Option<&Arc<str>>,
     rows: &[SelectOptionData],
@@ -869,14 +978,15 @@ pub(crate) fn context_menu_geometry(
     palette: &SemanticPalette,
     metrics: ThemeMetrics,
     search_placeholder: &Arc<str>,
+    theme: &nana_ui_core::CompiledTheme,
 ) -> ComponentGeometry {
     let is_light = palette.background.as_rgba_array()[0] > 0.5;
     let searchable = query.is_some();
     let search_height = search_field_height(metrics);
     let search_field = searchable.then(|| LayoutBox {
-        x: bounds.x + MENU_PADDING,
-        y: bounds.y + MENU_PADDING,
-        width: (bounds.width - MENU_PADDING * 2.0).max(0.0),
+        x: bounds.x + theme.spacing().xs,
+        y: bounds.y + theme.spacing().xs,
+        width: (bounds.width - theme.spacing().xs * 2.0).max(0.0),
         height: search_height,
     });
     let search = search_field.map(|field| {
@@ -893,19 +1003,19 @@ pub(crate) fn context_menu_geometry(
             } else {
                 palette.text.as_rgba_array()
             }),
-            font_size: ControlSize::Small.text_size(),
+            font_size: ControlSize::Small.text_size_in(theme.typography()),
             font_weight: None,
         }
     });
     let list_top = if searchable {
-        bounds.y + MENU_PADDING + search_height + SEARCH_FIELD_GAP
+        bounds.y + theme.spacing().xs + search_height + theme.spacing().xs
     } else {
-        bounds.y + MENU_PADDING
+        bounds.y + theme.spacing().xs
     };
     let item_height = ControlSize::Small.height_in(metrics);
     let size = ControlSize::Small;
     let check_reserve = if rows.iter().any(|row| row.mark.reserves_lane()) {
-        nana_ui_core::type_scale::LINE
+        theme.typography().line
     } else {
         0.0
     };
@@ -913,12 +1023,12 @@ pub(crate) fn context_menu_geometry(
         .iter()
         .enumerate()
         .map(|(index, option)| {
-            let y = list_top + index as f32 * (item_height + crate::popover::MENU_ITEM_GAP);
+            let y = list_top + index as f32 * (item_height + theme.spacing().xxs);
             let selected = highlighted == Some(index);
             let row = LayoutBox {
-                x: bounds.x + MENU_PADDING,
+                x: bounds.x + theme.spacing().xs,
                 y,
-                width: (bounds.width - MENU_PADDING * 2.0).max(0.0),
+                width: (bounds.width - theme.spacing().xs * 2.0).max(0.0),
                 height: item_height,
             };
             let content = LayoutBox {
@@ -931,7 +1041,8 @@ pub(crate) fn context_menu_geometry(
             } else {
                 palette.muted.as_rgba_array()
             };
-            let (label_x, icon) = menu_option_icon(content, option.icon, size, icon_color, metrics);
+            let (label_x, icon) =
+                menu_option_icon(content, option.icon, size, icon_color, metrics, theme);
             let label_right = row.x + row.width - size.padding_x_in(metrics);
             crate::SelectOptionGeometry {
                 bounds: row,
@@ -948,8 +1059,8 @@ pub(crate) fn context_menu_geometry(
                     } else {
                         palette.text.as_rgba_array()
                     }),
-                    font_size: size.text_size(),
-                    font_weight: Some(500),
+                    font_size: size.text_size_in(theme.typography()),
+                    font_weight: Some(theme.typography().medium),
                 },
                 hint: None,
                 selected,
@@ -1006,8 +1117,9 @@ fn menu_option_icon(
     size: ControlSize,
     color: [f32; 4],
     metrics: ThemeMetrics,
+    theme: &nana_ui_core::CompiledTheme,
 ) -> (f32, Option<(Icon, LayoutBox, [f32; 4])>) {
-    let icon_size = size.icon_size();
+    let icon_size = size.text_size_in(theme.typography());
     let mut cursor = row.x + size.padding_x_in(metrics);
     let icon = icon.map(|icon| {
         let bounds = LayoutBox {
@@ -1015,15 +1127,19 @@ fn menu_option_icon(
             y: icon_y_on_text_glyph_center(
                 row.y,
                 row.height,
-                size.text_size(),
-                Some(LineHeightSpec::Absolute(size.line_height())),
+                size.text_size_in(theme.typography()),
+                Some(LineHeightSpec::Absolute(if size == ControlSize::Large {
+                    theme.typography().line_tall
+                } else {
+                    theme.typography().line
+                })),
                 true,
                 icon_size,
             ),
             width: icon_size,
             height: icon_size,
         };
-        cursor += icon_size + ICON_GAP;
+        cursor += icon_size + theme.spacing().md;
         (icon, bounds, color)
     });
     (cursor, icon)
@@ -1051,8 +1167,13 @@ fn item_matches_query(item: &ContextMenuItem, query: &str) -> bool {
 }
 
 fn item_style(size: ControlSize) -> NodeStyle {
+    let mut theme = nana_ui_core::ThemeLayout::default();
+    theme.control_typography(size);
+    theme.font_weight =
+        Some(nana_ui_core::ThemeToken::Weight(nana_ui_core::TextWeight::Medium).into());
     NodeStyle {
         layout: Arc::new(nana_ui_core::LayoutStyle {
+            theme: theme.into(),
             width: Some(LengthSpec::Fill),
             font_size: Some(size.text_size()),
             line_height: Some(LineHeightSpec::Absolute(size.line_height())),

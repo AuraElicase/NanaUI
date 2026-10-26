@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use nana_ui_core::{
     AlignSpec, ButtonKind, ControlHeight, ControlPadding, ControlSize, FlexDirection, Icon,
-    LengthSpec, SemanticColorRole,
+    LengthSpec, PositionSpec, SemanticColorRole, SpacingStep, ThemeExpr, ThemeToken,
 };
 
 use crate::view_components::{Activate, IconButton, project_common};
@@ -113,10 +113,26 @@ impl Chip {
             layout.direction = Some(FlexDirection::Row);
             layout.align_items = AlignSpec::Center;
             layout.gap = Some(LengthSpec::Px(nana_ui_core::space::XS));
+            layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
+            if self.dismissible {
+                // The label is the button's own measured text, not a flex child.
+                // Reserve the trailing close box in the same content authority
+                // that both intrinsic measurement and button paint consume.
+                layout.position = PositionSpec::Relative;
+                layout.theme.padding_right = Some(
+                    ThemeExpr::token(ThemeToken::ControlPadding(ControlPadding::Compact))
+                        .plus(ThemeToken::Control(ControlSize::Small).into())
+                        .plus(ThemeToken::Space(SpacingStep::Xs).into()),
+                );
+            }
             layout.border_width = Some(nana_ui_core::HAIRLINE);
+            layout.theme.border_width =
+                Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
             layout.border_radius = Some(999.0);
             layout.font_size = Some(self.size.text_size());
+            layout.theme.control_typography(self.size);
             layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
+            crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Medium);
             layout.flex_grow = Some(0.0);
             layout.flex_shrink = Some(0.0);
             // Declared, not solved: only a strip that solves its overflow
@@ -237,7 +253,19 @@ impl AppContext {
         self.update_component(close, |button, _| {
             button.disabled = snapshot.disabled;
             button.label = close_label;
-            Arc::make_mut(&mut button.style.layout).hidden = false;
+            button.style.square = None;
+            let layout = Arc::make_mut(&mut button.style.layout);
+            layout.hidden = false;
+            layout.position = PositionSpec::Absolute;
+            layout.theme.width = Some(ThemeToken::Control(ControlSize::Small).into());
+            layout.height = Some(LengthSpec::Percent(100.0));
+            // Runtime absolute insets use the parent's content box, whose end
+            // is also the end of the label; move through the reserved gutter.
+            layout.theme.offset_right = Some(
+                ThemeExpr::token(ThemeToken::Control(ControlSize::Small))
+                    .plus(ThemeToken::Space(SpacingStep::Xs).into())
+                    .scaled(-1.0),
+            );
         })?;
         self.update_component(chip, |chip, _| {
             chip.close = Some(close.stable_id());

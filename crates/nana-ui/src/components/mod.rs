@@ -49,5 +49,7 @@ pub use nana_ui_runtime::{
     TextSelectionSnapshot,
 };
 #[cfg(feature = "controls")]
-pub use nana_ui_runtime::{ReorderItem, ReorderList, TreeDropIntent, TreeDropPosition};
+pub use nana_ui_runtime::{
+    ReorderAccepts, ReorderItem, ReorderKeyMove, ReorderList, TreeDropIntent, TreeDropPosition,
+};
 pub use nana_ui_runtime::{StatusTone, ToastTone, ValidationIntent};

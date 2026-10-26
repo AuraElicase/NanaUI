@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use nana_ui_core::{SemanticColorRole, SemanticPalette, type_scale};
+use nana_ui_core::{SemanticColorRole, SemanticPalette, TypographyTokens, type_scale};
 
 use crate::option::{ChartColor, ChartOption};
 
@@ -28,6 +28,7 @@ pub struct ChartTheme {
     /// Series colors, in order.
     pub palette: Vec<[f32; 4]>,
     pub font_size: f32,
+    pub font_weight: u16,
     roles: HashMap<SemanticColorRole, [f32; 4]>,
 }
 
@@ -76,6 +77,7 @@ impl ChartTheme {
             on_series: palette.accent_text.as_rgba_array(),
             palette: categorical(palette.accent.as_rgba_array(), surface),
             font_size: type_scale::META,
+            font_weight: type_scale::REGULAR,
             roles,
         };
         // An option's own palette replaces the derived one.
@@ -87,6 +89,13 @@ impl ChartTheme {
                 .collect();
         }
         theme
+    }
+
+    /// Install the host's current label typography instead of the default scale.
+    pub fn with_typography(mut self, typography: TypographyTokens) -> Self {
+        self.font_size = typography.meta;
+        self.font_weight = typography.regular;
+        self
     }
 
     pub fn role(&self, role: SemanticColorRole) -> [f32; 4] {

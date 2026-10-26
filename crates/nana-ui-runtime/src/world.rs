@@ -2355,6 +2355,11 @@ impl UiWorld {
         &self.installed_theme
     }
 
+    /// Shared installed theme for reactive consumers deriving geometry from it.
+    pub fn installed_theme_arc(&self) -> Arc<nana_ui_core::CompiledTheme> {
+        Arc::clone(&self.installed_theme)
+    }
+
     /// Whether the system high-contrast overlay is on.
     pub fn high_contrast(&self) -> bool {
         self.high_contrast
@@ -2436,11 +2441,14 @@ impl UiWorld {
                 work.layout_frontier_seeds
                     .push(crate::LayoutFrontierSeed::new(id, invalidation));
             }
+            // An editor bears text with no value yet: its caret line and an
+            // IME preedit are shaped from its presentation.
             let has_text = matches!(self.record(id).kind.as_ref(), NodeKind::Text)
                 || !self.record(id).text.value.is_empty()
                 || matches!(
                     self.nodes.visual(id),
-                    Some(StandardVisual::EmptyState { .. })
+                    Some(StandardVisual::TextInput { .. })
+                        | Some(StandardVisual::EmptyState { .. })
                         | Some(StandardVisual::ModalFrame { .. })
                 );
             let bits = if has_text {
@@ -2613,7 +2621,8 @@ impl UiWorld {
     ///
     /// Hosts call this from their one input entry point. The modality is read
     /// again each time focus is written, so a click makes exactly the focus it
-    /// causes invisible — not every focus after it.
+    /// causes invisible — not every focus after it, and never a text field's
+    /// (see [`Self::focus_visible`]).
     pub fn note_input_modality(&mut self, document: DocumentId, modality: InputModality) {
         match modality {
             InputModality::Pointer => self.input.pointer_modality.insert(document),
@@ -2624,14 +2633,25 @@ impl UiWorld {
     /// The focused node, when focus should also be *shown*.
     ///
     /// Same answer as [`Self::focused`] except right after a pointer press put
-    /// it there. Paint asks this one; hit-testing, IME and the accessibility
-    /// tree keep asking [`Self::focused`], because focus is still focus — only
-    /// its indicator is conditional.
+    /// it on a control that takes no typing: a clicked button is focused and
+    /// does not say so. A text field that takes typing always says so, as the
+    /// web's `:focus-visible` holds for any element that takes keyboard input:
+    /// the next key goes there, however the caret got in. Paint asks this one;
+    /// hit-testing, IME and the accessibility tree keep asking
+    /// [`Self::focused`], because focus is still focus — only its indicator is
+    /// conditional.
     pub fn focus_visible(&self, document: DocumentId) -> Option<StableNodeId> {
-        if self.input.focus_from_pointer.contains(&document) {
+        let focused = self.focused(document)?;
+        if self.input.focus_from_pointer.contains(&document) && !self.takes_typing(focused) {
             return None;
         }
-        self.focused(document)
+        Some(focused)
+    }
+
+    /// A text field the user can type into now: an editor that is neither
+    /// disabled nor read-only.
+    fn takes_typing(&self, id: StableNodeId) -> bool {
+        self.nodes.text_input(id).is_some() && self.record(id).accessibility.editable
     }
 
     pub fn focused_text_input(

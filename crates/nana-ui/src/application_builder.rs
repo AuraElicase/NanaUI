@@ -198,6 +198,7 @@ impl NanaApplicationBuilder {
     ) -> Result<(), crate::HostedRunError> {
         let startup = crate::StartupOptions {
             splash: self.splash,
+            ..Default::default()
         };
         let session = self.start();
         let result = crate::with_startup(startup, || crate::run_runtime::<Program>(settings));
@@ -215,6 +216,7 @@ impl NanaApplicationBuilder {
     ) -> Result<(), crate::HostedRunError> {
         let startup = crate::StartupOptions {
             splash: self.splash,
+            ..Default::default()
         };
         let session = self.start();
         let result = crate::with_startup(startup, || {

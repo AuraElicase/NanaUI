@@ -1743,6 +1743,11 @@ impl<'a> PaintContext<'a> {
         }
     }
 
+    /// The installed theme for product painters deriving their visual geometry.
+    pub fn theme(&self) -> &nana_ui_core::CompiledTheme {
+        self.theme
+    }
+
     pub fn theme_appearance(&self) -> nana_ui_core::ThemeAppearance {
         self.theme.appearance()
     }

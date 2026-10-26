@@ -138,6 +138,21 @@ impl SemanticPaint {
         background: None,
         border: Some(SemanticColorRole::FocusBorder),
     };
+
+    /// What a focused text field paints: [`Self::FOCUS_BORDER`]'s border over
+    /// its resting `Background` deepened a step toward the text.
+    ///
+    /// The border alone is one pixel of colour. A field the caret is in is
+    /// where the next key goes, clicked into or tabbed into alike
+    /// ([`crate::UiWorld::focus_visible`]), so its whole surface says so.
+    pub const FOCUS_FIELD: Self = Self {
+        background_mix: Some(nana_ui_core::SemanticColorMix::new(
+            SemanticColorRole::Background,
+            SemanticColorRole::Text,
+            0.95,
+        )),
+        ..Self::FOCUS_BORDER
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1497,6 +1512,13 @@ pub struct CalendarHoverGeometry {
 // an allocation per projection and changes the shared Runtime/Scene DTO.
 #[allow(clippy::large_enum_variant)]
 pub enum ComponentGeometry {
+    /// Resolved checkbox chrome and label share Runtime's measurement inputs.
+    Checkbox {
+        indicator: LayoutBox,
+        label: ComponentTextRegion,
+        border_width: f32,
+        check_weight: u16,
+    },
     ModalFrame {
         scrim: LayoutBox,
         surface: LayoutBox,
@@ -1620,6 +1642,7 @@ pub enum ComponentGeometry {
         label: ComponentTextRegion,
         hint: Option<ComponentTextRegion>,
         control: LayoutBox,
+        border_width: f32,
         track_background: [f32; 4],
         track_border: [f32; 4],
         thumb_background: [f32; 4],
@@ -1629,6 +1652,9 @@ pub enum ComponentGeometry {
         value: ComponentTextRegion,
         unit: Option<ComponentTextRegion>,
         track: LayoutBox,
+        /// Theme-resolved thickness of the painted rail inside the thumb band.
+        track_girth: f32,
+        border_width: f32,
         /// The ring a gradient track's thumb is drawn as; `None` for the
         /// regular filled track.
         thumb_ring: Option<ContrastRing>,
@@ -1885,15 +1911,17 @@ pub struct SelectMenuGeometry {
 /// How an open Select, Dropdown or SearchDropdown menu is scrolled and how
 /// its scrollbar is held.
 ///
-/// Interaction state, like the keyboard highlight: it starts over each time
-/// the menu opens, and an application refresh that leaves the value and the
-/// options alone keeps it.
+/// Interaction state, like the highlight: it starts over each time the menu
+/// opens, and an application refresh that leaves the value and the options
+/// alone keeps it.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct SelectMenuScroll {
     /// How far the rows are scrolled up, px. `None` until the wheel, the
-    /// scrollbar or the keyboard moves them: the menu then shows its
-    /// highlighted option, the chosen one as it opens, in the middle where
-    /// the list allows. The menu clamps it to what its rows can scroll.
+    /// scrollbar or the keyboard moves them, or the pointer moves the
+    /// highlight and keeps them where they are drawn. Until then the menu
+    /// shows its highlighted option, the chosen one as it opens, in the
+    /// middle where the list allows. The menu clamps it to what its rows can
+    /// scroll.
     pub offset: Option<f32>,
     /// The pointer is on the scrollbar's lane.
     pub hot: bool,
@@ -2138,6 +2166,18 @@ impl NodeStyle {
     /// 挂上节点自绘。见 [`crate::Painter`]。
     pub fn painter(mut self, painter: impl Into<crate::NodePainter>) -> Self {
         self.painter = Some(painter.into());
+        self
+    }
+
+    /// Bind a layout field to an expression resolved against the installed theme.
+    pub fn theme(
+        mut self,
+        property: nana_ui_core::ThemeProperty,
+        expression: impl Into<nana_ui_core::ThemeExpr>,
+    ) -> Self {
+        Arc::make_mut(&mut self.layout)
+            .theme
+            .set(property, Some(expression.into()));
         self
     }
 

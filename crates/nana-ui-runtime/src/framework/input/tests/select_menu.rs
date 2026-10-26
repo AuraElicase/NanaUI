@@ -1,6 +1,7 @@
-//! An open Select menu whose rows do not fit: the wheel and the scrollbar
-//! move them, the keyboard brings the highlight into view, and a press lands
-//! on the row drawn under it.
+//! An open Select menu: the row under the pointer takes the highlight, and
+//! when the rows do not fit the wheel and the scrollbar move them, the
+//! keyboard brings the highlight into view, and a press lands on the row
+//! drawn under it.
 
 use std::sync::{Arc, Mutex};
 
@@ -50,15 +51,22 @@ fn wheel_at(x: f32, y: f32, delta_y: f32) -> Gesture {
     }
 }
 
-fn arrow_down() -> Gesture {
+fn key(name: &str) -> Gesture {
     key_fixture! {
         pressed: true,
-        key: "ArrowDown".into(),
+        key: name.into(),
         text: None,
-        code: "ArrowDown".into(),
+        code: name.into(),
         repeat: false,
         modifiers: InputModifiers::default(),
     }
+}
+
+/// Move the pointer to `(x, y)`.
+fn hover(context: &mut AppContext, adapter: &mut TestInput, (x, y): (f32, f32)) {
+    adapter
+        .dispatch(context, document(), &pointer_at(PointerPhase::Move, x, y))
+        .unwrap();
 }
 
 fn options(count: usize) -> Vec<SelectOption> {
@@ -253,6 +261,18 @@ fn dragging_the_thumb_scrolls_the_rows_without_choosing_one() {
         .unwrap();
     let expected = track.offset_for_thumb_origin(track.thumb_origin + 40.0);
     assert!((menu_of(&context, id).scroll - expected).abs() < 0.01);
+    // Over the rows the held thumb still moves only them: no row takes the
+    // highlight.
+    hover(
+        &mut context,
+        &mut adapter,
+        (menu.viewport.x + 8.0, y + 40.0),
+    );
+    assert!((menu_of(&context, id).scroll - expected).abs() < 0.01);
+    assert_eq!(
+        context.read(select, |select| select.highlighted).unwrap(),
+        Some(0)
+    );
     // The release ends the drag where it is; nothing is chosen and the menu
     // stays open.
     adapter
@@ -318,7 +338,7 @@ fn arrow_keys_bring_the_highlighted_row_into_view() {
     let mut adapter = TestInput::default();
     for _ in 0..25 {
         adapter
-            .dispatch(&mut context, document(), &arrow_down())
+            .dispatch(&mut context, document(), &key("ArrowDown"))
             .unwrap();
     }
     assert_eq!(
@@ -329,6 +349,72 @@ fn arrow_keys_bring_the_highlighted_row_into_view() {
     let row = menu.options[25].bounds;
     assert!(row.y >= menu.viewport.y);
     assert!(row.y + row.height <= menu.viewport.y + menu.viewport.height);
+}
+
+/// The row under the pointer takes the highlight the arrow keys move, in a
+/// menu that holds its rows too: not a disabled row, and off the rows it
+/// stays where it is. Enter chooses it.
+#[test]
+fn the_row_under_the_pointer_takes_the_highlight() {
+    let mut context = AppContext::new();
+    let mut choices = options(4);
+    choices[2] = choices[2].clone().disabled(true);
+    let (_, select) = page_with(
+        &mut context,
+        0.0,
+        Select::new(Some("v1")).options(choices).opened(true),
+    );
+    let id = select.stable_id();
+    let highlighted =
+        |context: &AppContext| context.read(select, |select| select.highlighted).unwrap();
+    let menu = menu_of(&context, id);
+    assert!(menu.scrollbar.is_none());
+    assert_eq!(highlighted(&context), Some(1));
+    let mut adapter = TestInput::default();
+    hover(&mut context, &mut adapter, centre(menu.options[3].bounds));
+    assert_eq!(highlighted(&context), Some(3));
+    let drawn = menu_of(&context, id);
+    assert!(drawn.options[3].background.is_some() && drawn.options[1].background.is_none());
+    hover(&mut context, &mut adapter, centre(menu.options[2].bounds));
+    assert_eq!(highlighted(&context), Some(3));
+    // The surface's padding above the first row.
+    let padding = (centre(menu.viewport).0, menu.options[0].bounds.y - 1.0);
+    hover(&mut context, &mut adapter, padding);
+    assert_eq!(highlighted(&context), Some(3));
+    assert!(context.focus_node(document(), id).unwrap());
+    adapter
+        .dispatch(&mut context, document(), &key("Enter"))
+        .unwrap();
+    let value = context.read(select, |select| select.value.clone()).unwrap();
+    assert_eq!(value.as_deref(), Some("v3"));
+}
+
+/// Rows nothing has scrolled sit around the highlight; while it follows the
+/// pointer they stay where they are drawn.
+#[test]
+fn the_highlight_follows_the_pointer_without_moving_the_rows() {
+    let mut context = AppContext::new();
+    let (_, select) = page_with(
+        &mut context,
+        0.0,
+        Select::new(Some("v30")).options(options(40)).opened(true),
+    );
+    let id = select.stable_id();
+    let menu = menu_of(&context, id);
+    assert!(menu.scroll > 0.0, "it opens scrolled to the chosen option");
+    let shown = |row: &usize| {
+        let (x, y) = centre(menu.options[*row].bounds);
+        menu.viewport.contains(x, y)
+    };
+    let mut adapter = TestInput::default();
+    for row in [(0..40).find(shown), (0..40).rfind(shown)].map(Option::unwrap) {
+        hover(&mut context, &mut adapter, centre(menu.options[row].bounds));
+        assert_eq!(
+            context.read(select, |select| select.highlighted).unwrap(),
+            Some(row)
+        );
+        assert_eq!(menu_of(&context, id).scroll, menu.scroll);
+    }
 }
 
 /// A press lands on the row drawn under the pointer, wherever the page
@@ -436,6 +522,30 @@ fn dropdowns_scroll_their_menus_too() {
     let menu = menu_of(&context, id);
     assert_eq!(menu.scroll, 0.0);
     assert_eq!(menu.options.len(), 11);
+}
+
+/// A search lists only its matches; the row under the pointer is one of
+/// those.
+#[test]
+fn a_search_highlights_the_match_under_the_pointer() {
+    let mut context = AppContext::new();
+    let search = SearchDropdown::new(Some("v0"))
+        .options((0..40).map(|n| SearchDropdownOption::new(format!("v{n}"), format!("Option {n}"))))
+        .opened(true);
+    let (_, search) = page_with(&mut context, 0.0, search);
+    context
+        .update_component(search, |search, _| {
+            search.set_query("Option 3");
+        })
+        .unwrap();
+    // Option 3, then Option 30 to 39: the third row is Option 31.
+    let menu = menu_of(&context, search.stable_id());
+    let mut adapter = TestInput::default();
+    hover(&mut context, &mut adapter, centre(menu.options[2].bounds));
+    assert_eq!(
+        context.read(search, |search| search.highlighted).unwrap(),
+        Some(31)
+    );
 }
 
 /// Inside a card that clips what it holds, the menu opens into the card:

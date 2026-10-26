@@ -111,13 +111,18 @@ fn bar_style(chrome: bool, below_content: bool) -> NodeStyle {
     layout.align_items = AlignSpec::Center;
     layout.justify_content = JustifySpec::Start;
     layout.gap = Some(LengthSpec::Px(space::SM));
+    layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Sm));
     layout.width = Some(LengthSpec::Fill);
     layout.flex_grow = Some(0.0);
     layout.flex_shrink = Some(0.0);
     layout.padding_left = Some(LengthSpec::Px(space::MD));
+    layout.theme.padding_left = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
     layout.padding_right = Some(LengthSpec::Px(space::MD));
+    layout.theme.padding_right = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
     layout.padding_top = Some(LengthSpec::Px(space::XS));
+    layout.theme.padding_top = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
     layout.padding_bottom = Some(LengthSpec::Px(space::XS));
+    layout.theme.padding_bottom = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
     // A strip of controls: when they do not fit, its gaps and then their
     // declared padding close up before anything clips (Issue #212).
     layout.adaptation = Some(nana_ui_core::dynamic_layout::AdaptationProfile::strip());
@@ -125,9 +130,13 @@ fn bar_style(chrome: bool, below_content: bool) -> NodeStyle {
         style.background = Some(SemanticColorRole::Surface);
         style.border = Some(SemanticColorRole::BorderSoft);
         layout.border_width = Some(nana_ui_core::HAIRLINE);
+        layout.theme.border_width =
+            Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
         // Only the edge that meets the content is drawn.
         if below_content {
             layout.border_top_width = Some(nana_ui_core::HAIRLINE);
+            layout.theme.border_top_width =
+                Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
             layout.border_right_width = Some(0.0);
             layout.border_bottom_width = Some(0.0);
             layout.border_left_width = Some(0.0);
@@ -135,6 +144,8 @@ fn bar_style(chrome: bool, below_content: bool) -> NodeStyle {
             layout.border_top_width = Some(0.0);
             layout.border_right_width = Some(0.0);
             layout.border_bottom_width = Some(nana_ui_core::HAIRLINE);
+            layout.theme.border_bottom_width =
+                Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
             layout.border_left_width = Some(0.0);
         }
     }

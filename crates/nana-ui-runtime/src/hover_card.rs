@@ -41,6 +41,8 @@ pub struct HoverCard {
     /// from the style; an empty slot renders the neutral placeholder.
     pub trigger_image: Option<TextureSlotName>,
     pub trigger_size: f32,
+    /// Optional semantic size for avatar and icon triggers.
+    pub themed_trigger_size: Option<nana_ui_core::theme::ThemeExpr>,
     pub open: bool,
     pub placement: PopoverPlacement,
     pub alignment: PopoverAlignment,
@@ -60,6 +62,7 @@ impl HoverCard {
             trigger_icon: None,
             trigger_image: None,
             trigger_size: crate::avatar::DEFAULT_SIZE,
+            themed_trigger_size: None,
             open: false,
             placement: PopoverPlacement::Right,
             alignment: PopoverAlignment::Center,
@@ -99,6 +102,13 @@ impl HoverCard {
 
     pub fn trigger_size(mut self, size: f32) -> Self {
         self.trigger_size = sanitize_size(size);
+        self.themed_trigger_size = None;
+        self
+    }
+
+    /// Resolve trigger geometry at the same time as the rest of the themed tree.
+    pub fn trigger_size_theme(mut self, size: nana_ui_core::theme::ThemeExpr) -> Self {
+        self.themed_trigger_size = Some(size);
         self
     }
 
@@ -169,6 +179,15 @@ impl HoverCard {
         } else {
             trigger_button_style()
         };
+        if let Some(size) = &self.themed_trigger_size
+            && (self.trigger_image.is_some() || self.trigger_icon.is_some())
+        {
+            crate::avatar::apply_theme_size(
+                Arc::make_mut(&mut style.layout),
+                size,
+                self.trigger_image.is_some(),
+            );
+        }
         if self.open {
             Arc::make_mut(&mut style.layout).z_index = Some(MENU_OVERLAY_Z_INDEX);
         }

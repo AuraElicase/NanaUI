@@ -20,7 +20,8 @@ vouch for captures made without v1.
 
 Usage:
   decode.py build  --out DIR
-  decode.py record --out DIR --time-limit 10s [--window 1s] [-- load command ...]
+  decode.py record --out DIR --time-limit 10s [--window 1s] [--template NAME|Blank]
+                   [--instrument NAME ...] [--load-sink] [-- load command ...]
   decode.py decode CAPTURE_DIR
   decode.py gate   CAPTURE_DIR --control CONTROL_CAPTURE_DIR   (re-exports both .trace files)
 
@@ -47,7 +48,13 @@ PROVIDER_VERSION = "v1"
 PROVIDER_SOURCE = HERE / "provider" / PROVIDER_VERSION / "nana-trace-info.instrpkg"
 PROVIDER_MANIFEST = HERE / "provider" / PROVIDER_VERSION / "manifest.json"
 INSTRUMENT_TITLE = "Nana Trace Info v1"
+# Control-only instrument: records loss_control.py --mode kdebug so recordings
+# without System Trace can be driven into real loss.
+SINK_SOURCE = HERE / "control" / "v1" / "nana-trace-load-sink.instrpkg"
+SINK_MANIFEST = HERE / "control" / "v1" / "manifest.json"
+SINK_TITLE = "Nana Trace Load Sink v1"
 TEMPLATE = "System Trace"
+BLANK = "Blank"  # xctrace's template name when only instruments are given
 
 KDEBUG_CLASS = 7
 KDEBUG_SUBCLASS = 2
@@ -352,18 +359,40 @@ def decode(toc_text: str, tables: dict[str, Optional[str]], logical_cpus: int) -
     return Decoded(toc, kinds)
 
 
-def provider_sha256() -> str:
-    return hashlib.sha256(PROVIDER_SOURCE.read_bytes()).hexdigest()
+def provider_sha256(source: Path = PROVIDER_SOURCE) -> str:
+    return hashlib.sha256(source.read_bytes()).hexdigest()
 
 
-def manifest_sha256() -> str:
-    return json.loads(PROVIDER_MANIFEST.read_text())["source_sha256"]
+def manifest_sha256(manifest: Path = PROVIDER_MANIFEST) -> str:
+    return json.loads(manifest.read_text())["source_sha256"]
+
+
+def _instruments(capture: dict) -> Optional[list[str]]:
+    value = capture.get("instruments")
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(i, str) for i in value):
+        return None
+    return sorted(value)
+
+
+def _time_limit(capture: dict) -> Optional[str]:
+    argv = capture.get("record_argv")
+    if not isinstance(argv, list) or argv.count("--time-limit") != 1:
+        return None
+    i = argv.index("--time-limit")
+    return argv[i + 1] if i + 1 < len(argv) else None
 
 
 def configuration(capture: dict, decoded: Decoded) -> dict:
     return {
         "provider_sha256": capture.get("provider_sha256"),
         "logical_cpus": capture.get("logical_cpus"),
+        # The toc names the template but not instruments added on top of it; the
+        # schemas it lists are tied to the .trace, so they back the self-reported set.
+        "extra_instruments": _instruments(capture),
+        "toc_schemas": sorted(decoded.toc.schemas),
+        "time_limit": _time_limit(capture),
         "instruments_version": decoded.toc.instruments_version,
         "template": decoded.toc.template,
         "recording_mode": decoded.toc.recording_mode,
@@ -376,6 +405,13 @@ def _recording_problems(capture: dict, decoded: Decoded) -> list[str]:
     problems = []
     if capture.get("provider_sha256") != manifest_sha256():
         problems.append(f"provider {capture.get('provider_sha256')!r} is not the frozen v1 source")
+    instruments = _instruments(capture)
+    if instruments is None:
+        problems.append(f"instruments {capture.get('instruments')!r} is not a list of names")
+    elif SINK_TITLE in instruments and capture.get("load_sink_sha256") != manifest_sha256(SINK_MANIFEST):
+        problems.append(f"load sink {capture.get('load_sink_sha256')!r} is not the frozen control v1 source")
+    if _time_limit(capture) is None:
+        problems.append("record_argv does not name exactly one time limit")
     if capture.get("record_exit_code") != 0:
         problems.append(f"recording exit code {capture.get('record_exit_code')!r}")
     if capture.get("load_command"):
@@ -440,13 +476,10 @@ def effect_gate(capture: dict, decoded: Decoded, control: Optional[tuple[dict, D
 # --- native capture helpers (macOS + Xcode) ---------------------------------
 
 
-def build(out: Path) -> Path:
+def build(out: Path, source: Path = PROVIDER_SOURCE) -> Path:
     out.mkdir(parents=True, exist_ok=True)
-    target = out / f"nana-trace-info-{PROVIDER_VERSION}.instrdst"
-    subprocess.run(
-        ["xcrun", "instrumentbuilder", "-i", str(PROVIDER_SOURCE), "-o", str(target)],
-        check=True,
-    )
+    target = out / f"{source.stem}-v1.instrdst"
+    subprocess.run(["xcrun", "instrumentbuilder", "-i", str(source), "-o", str(target)], check=True)
     return target
 
 
@@ -467,22 +500,45 @@ def start_on_notification(waiter, tracer, start, poll_seconds: float = 0.02):
     return None
 
 
-def record(out: Path, time_limit: str, window: Optional[str], command: list[str]) -> int:
-    if provider_sha256() != manifest_sha256():
-        raise DecodeError("v1 source differs from its manifest; add a new version instead of editing v1")
-    out.mkdir(parents=True, exist_ok=False)  # never overwrite an earlier capture
-    package = build(out / "package")
-    trace = out / "capture.trace"
-    notify = f"dev.nanaui.trace-info.started.{os.getpid()}"
-    argv = ["xcrun", "xctrace", "record", "--template", TEMPLATE, "--package", str(package),
-            "--instrument", INSTRUMENT_TITLE, "--all-processes", "--time-limit", time_limit,
-            "--notify-tracing-started", notify, "--no-prompt", "--output", str(trace)]
+def record_argv(package: Path, sink: Optional[Path], trace: Path, notify: str, time_limit: str,
+                window: Optional[str], template: str, instruments: tuple[str, ...]) -> tuple[list[str], tuple[str, ...]]:
+    """The xctrace argv, and the extra instruments it loads besides v1."""
+    if INSTRUMENT_TITLE in instruments or SINK_TITLE in instruments or len(set(instruments)) != len(instruments):
+        raise DecodeError(f"extra instruments must be distinct and exclude v1 and the load sink: {instruments!r}")
+    argv = ["xcrun", "xctrace", "record"]
+    if template != BLANK:
+        argv += ["--template", template]
+    argv += ["--package", str(package), "--instrument", INSTRUMENT_TITLE]
+    if sink is not None:
+        argv += ["--package", str(sink), "--instrument", SINK_TITLE]
+        instruments = (*instruments, SINK_TITLE)
+    for instrument in (i for i in instruments if i != SINK_TITLE):
+        argv += ["--instrument", instrument]
+    argv += ["--all-processes", "--time-limit", time_limit,
+             "--notify-tracing-started", notify, "--no-prompt", "--output", str(trace)]
     if window:
         argv += ["--window", window]
+    return argv, instruments
+
+
+def record(out: Path, time_limit: str, window: Optional[str], command: list[str],
+           template: str = TEMPLATE, instruments: tuple[str, ...] = (), load_sink: bool = False) -> int:
+    if provider_sha256() != manifest_sha256():
+        raise DecodeError("v1 source differs from its manifest; add a new version instead of editing v1")
+    if load_sink and provider_sha256(SINK_SOURCE) != manifest_sha256(SINK_MANIFEST):
+        raise DecodeError("load sink source differs from its manifest; add a new version instead of editing v1")
+    out.mkdir(parents=True, exist_ok=False)  # never overwrite an earlier capture
+    package = build(out / "package")
+    sink = build(out / "package", SINK_SOURCE) if load_sink else None
+    trace = out / "capture.trace"
+    notify = f"dev.nanaui.trace-info.started.{os.getpid()}"
+    argv, instruments = record_argv(package, sink, trace, notify, time_limit, window, template, instruments)
     capture = {
         "provider": PROVIDER_VERSION,
         "provider_sha256": provider_sha256(),
+        "load_sink_sha256": provider_sha256(SINK_SOURCE) if load_sink else None,
         "logical_cpus": os.cpu_count(),
+        "instruments": sorted(instruments),
         "record_argv": argv,
         "record_exit_code": None,
         "load_command": command or None,
@@ -592,6 +648,9 @@ def main(argv: list[str]) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--time-limit", required=True)
     p.add_argument("--window")
+    p.add_argument("--template", default=TEMPLATE, help=f"xctrace template, or {BLANK!r} for instruments only")
+    p.add_argument("--instrument", action="append", default=[], help="extra instrument (repeatable)")
+    p.add_argument("--load-sink", action="store_true", help=f"also record {SINK_TITLE} (for --mode kdebug loads)")
     p.add_argument("load", nargs=argparse.REMAINDER, help="optional load command after --")
     p = sub.add_parser("decode")
     p.add_argument("capture", type=Path)
@@ -605,7 +664,7 @@ def main(argv: list[str]) -> int:
         return 0
     if args.command == "record":
         load = args.load[1:] if args.load[:1] == ["--"] else args.load
-        return record(args.out, args.time_limit, args.window, load)
+        return record(args.out, args.time_limit, args.window, load, args.template, tuple(args.instrument), args.load_sink)
     capture, decoded = load_capture(args.capture)
     if args.command == "decode":
         print(json.dumps(decoded.to_json(), indent=2))

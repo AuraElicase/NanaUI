@@ -1924,6 +1924,9 @@ impl LayoutStyleCss for LayoutStyle {
         // so overflow/length keywords still parse (tokens themselves stay unresolved).
         let val_owned = expand_css_var_fallback(&stripped);
         let val = val_owned.as_str();
+        if crate::css_theme::apply(self, &key, val) {
+            return;
+        }
         match key.as_str() {
             "display" if val.eq_ignore_ascii_case("none") => {
                 self.display = Some(DisplaySpec::None);

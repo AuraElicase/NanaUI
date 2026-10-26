@@ -1084,6 +1084,7 @@ pub enum BuiltinComponents {
 
 /// Owns typed view state while [`UiWorld`] remains the retained UI authority.
 pub struct AppContext {
+    pub(crate) theme_signals: Vec<crate::view::Signal<Arc<nana_ui_core::CompiledTheme>>>,
     world: UiWorld,
     views: HashMap<StableNodeId, Box<dyn Any + Send>, crate::BuildIdHasher>,
     /// Opt-in reproject entry points keyed by node, registered from
@@ -1508,6 +1509,7 @@ impl AppContext {
             world,
             views: HashMap::default(),
             child_reproject_views: HashMap::default(),
+            theme_signals: Vec::new(),
             metrics_reproject_views: HashMap::default(),
             recipe_reproject_views: HashMap::default(),
             reduced_motion_reproject_views: HashMap::default(),
@@ -2340,12 +2342,22 @@ impl AppContext {
         if *self.world.installed_theme() == *theme {
             return Ok(false);
         }
-        let metrics_changed = !self.world.theme_metrics().same_layout(&theme.metrics());
+        let metrics_changed = !self.world.theme_metrics().same_layout(&theme.metrics())
+            || self.world.theme().spacing() != theme.spacing()
+            || self.world.theme().typography() != theme.typography()
+            || self.world.theme().border() != theme.border();
         let recipes_changed = self.world.theme().recipes() != theme.recipes()
             || self.world.theme().border() != theme.border();
         let mut queue = MutationQueue::new();
-        queue.set_theme_tokens(theme);
+        queue.set_theme_tokens(Arc::clone(&theme));
         self.world.commit(queue)?;
+        self.theme_signals.retain(|signal| {
+            if signal.defined_at().is_none() {
+                return false;
+            }
+            signal.set_if_changed(Arc::clone(&theme));
+            true
+        });
         if metrics_changed {
             self.reproject_metrics_views()?;
         }

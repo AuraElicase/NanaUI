@@ -47,6 +47,8 @@ fn button_leading_icon_measures_real_text_and_centers_the_group() {
         cx.update_component(icon, |view, _| {
             let style = Arc::make_mut(&mut view.style.layout);
             style.width = Some(LengthSpec::Px(width));
+            style.theme.font_size = None;
+            style.theme.font_weight = None;
             style.font_size = Some(18.0);
             style.font_weight = Some(700);
         })

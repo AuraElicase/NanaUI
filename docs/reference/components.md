@@ -132,10 +132,10 @@ inactive overlay 与关闭菜单属于结构性隐藏。`ComputedStyle::box_visi
 
 - `kbd(key)`、`kbd_glyph(icon)`、`chord("Ctrl+B")`、`chord_with(keys, draw_key)`：键帽和组合键，键帽由 `KeycapPainter` 画（表面、边框、强边框色的底边，随明暗模式），高度和底边取自已安装主题的 `ThemeMetrics::keycap`。
 - `tag(text)` / `tag_frame()`：不可交互的标签；要能选、能关的用 `Chip`。
-- `callout(icon, tone, text)`：按 `StatusTone` 着色的提示条，图标由调用方给。`text` 可以绑定，为空时整条隐藏；`.quiet()` 不带底色、不自带水平内边距，文字小一号、偏淡，和图标居中对齐，放在已有内边距的块里当一行说明；`.trailing(view)` 在行尾放一个跳转链接或按钮，行尾不收缩，文字先换行。
-- `heading_row(title, tools)` + `heading_tools(tools)`：标题行。标题先让出宽度（可省略），工具保持宽度；工具栏没有外观和竖向内边距，行高取文字和工具中较高的。工具用 `IconButton::tool(icon, label)`（紧凑 24×24，标签同时作提示）或紧凑菜单。
+- `callout(icon, tone, text)`：按 `StatusTone` 着色的提示条，图标由调用方给。`text` 可以绑定，为空时整条隐藏；`.quiet()` 不带底色、不自带水平内边距，文字小一号、偏淡，和图标居中对齐，放在已有内边距的块里当一行说明；`.trailing(view)` 在行尾放一个跳转链接或按钮，行尾不收缩，文字先换行。它的行和元素一样接 `.class` / `.css` / `.visible`：默认顶端对齐，让换行的长文字从上排起；一行提示配较高的按钮时写 `.css(css! { align-items: center; })` 居中。`.visible` 与「文字为空时隐藏」同时生效。
+- `heading_row(title, tools)` + `heading_tools(tools)`：标题行。标题先让出宽度（可省略），工具保持宽度；工具栏没有外观和竖向内边距，行高取文字和工具中较高的。工具用 `IconButton::tool(icon, label)`（紧凑 24×24，标签同时作提示）或紧凑菜单。两者都接 `.class` / `.css` / `.visible`，写在各自的行或工具栏上（例如 `.css(css! { align-items: flex-start; })` 让多行标题从顶端对齐）。
 - `scroll_foot_fade(height, surface)`：放在滚动区底边上的渐隐，从透明过渡到 `surface`，说明列表还没到底；不接收输入，列表末尾留出同样高度的空白，最后一行能滚出渐隐。
-- `settings_group(title, rows)` + `group_row(view).visible(cond)`：标题在上、卡片在下，行间是缩进细线，隐藏的行带走它的分隔线，第一行也一样（行和分隔线放在 `SettingsGroup` 里，分隔线只在两个显示的行之间显示）；卡片由 `RaisedSurfacePainter` 画（细边框，亮色下一道短阴影）。
+- `settings_group(title, rows)` + `group_row(view).visible(cond)`：标题在上、卡片在下，行间是缩进细线，隐藏的行带走它的分隔线，第一行也一样（行和分隔线放在 `SettingsGroup` 里，分隔线只在两个显示的行之间显示）；卡片由 `RaisedSurfacePainter` 画（细边框，亮色下一道短阴影）。`settings_group` 接 `.class` / `.css` / `.visible`，作用在放标题和卡片的那一列上。
 - `tone_role(tone)`：状态色调对应的颜色角色。
 
 `Avatar` 的空槽仍是 Subtle 占位，不画首字母；需要首字母的应用自己叠一层。
@@ -175,7 +175,7 @@ Compact + Overlay 适合分离窗底栏（单行加边距约 52px）。Compact +
 
 进度拖拽只预览读数（宿主暂停、没有 tick 时也会跟随）。抬手才发一次 `Seek`。取消的拖拽不发。一次拖拽前后各有 `SeekStarted` / `SeekEnded`（结束在 `Seek` 之后；取消或原地松手时只有这一对）。宿主据此在拖动期间不回写播放位置。不必去监听条内部进度控件的 `RangeInput`。`RangeField` 自己的拖动起止是 `RangeDragging { dragging }`（键盘与无障碍步进不算拖动）。键盘 / 无障碍每一步都是提交。与原生 range 一致。音量跟随拖拽实时发 `Volume`。条在发 `Seek` / `Volume` 前先把目标写进 `position` / `volume`。宿主下一次写入仍是权威值。宿主若在 seek 完成前继续写旧位置，滑块会短暂回到旧位置。
 
-`ReorderList` 可以挂 live 行子节点。按在行里的控件（按钮等能获得焦点的节点）上，不移动松开是控件的点击，移动超过拖动阈值才拖动这一行。`ReorderItem::tools` 标出绝不开始拖动的子树。没有子节点时仍按标签自绘行。`IconButton::with_tooltip` 用默认 `TooltipConfig`。
+`ReorderList` 可以挂 live 行子节点。按在行里的控件（按钮等能获得焦点的节点）上，不移动松开是控件的点击，移动超过拖动阈值才拖动这一行。`ReorderItem::tools` 标出绝不开始拖动的子树。没有子节点时仍按标签自绘行。行可以是展开的树：`ReorderItem::depth` 写深度，拖动带着整棵子树，`kind` 与 `accepts_inside` / `accepts_sibling`（`ReorderAccepts`）声明谁能放进、放到旁边，插入线按落点深度缩进；Alt 加方向键在兄弟间移动、放进前一个兄弟或移出父行。`IconButton::with_tooltip` 用默认 `TooltipConfig`。
 
 ## 交互
 
@@ -319,7 +319,8 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 Rust 行内标题工具使用 `IconButton::compact(true)`：固定 24×24 logical px，
 保留标准图标、焦点、提示、选中与禁用语义，不随普通控件密度增高。
 `Popover::compact_trigger(true)` 和 `ActionMenu::compact_trigger(true)` 的图标触发器
-使用同一尺寸配方；文字与自定义内容触发器不受影响。菜单打开时锚点保持原尺寸。
+使用同一尺寸配方；自定义内容触发器改为正好等于内容大小（没有内边距和固定高度，
+`ColorField` 的色块就是这样）；文字触发器不受影响。菜单打开时锚点保持原尺寸。
 这些选项默认关闭；关闭后恢复原有 `size`／主题尺寸。静息无底色的菜单入口可另配
 `bare_trigger(true)`，菜单内容区和菜单项仍沿用标准尺寸。
 

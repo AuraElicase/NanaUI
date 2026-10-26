@@ -19,6 +19,7 @@ use nana_ui_core::{
 
 use super::node::{AnyView, IntoView, widget};
 use super::prop::{IntoProp, PropSource};
+use super::style::{ContainerStyle, container_styles};
 use crate::{
     BoxPaint, IconGlyph, PaintContext, PaintPath, PaintShadow, Painter, Stack, Text,
     ThemeAppearance,
@@ -208,7 +209,10 @@ pub fn tag(text: impl Into<String>) -> AnyView {
 
 /// A note marked by `tone`: `icon` in the tone's colour, then `text`,
 /// wrapping within the row. In a box tinted by the tone unless
-/// [`Callout::quiet`]; hidden while `text` is empty.
+/// [`Callout::quiet`]; hidden while `text` is empty. `.class`, `.css` and
+/// `.visible` style its row as they style an element, e.g.
+/// `.css(css! { align-items: center; })` to centre a one-line note on a
+/// taller trailing button (it aligns to the top for notes that wrap).
 pub fn callout(icon: Icon, tone: StatusTone, text: impl IntoProp<String>) -> Callout {
     Callout {
         icon,
@@ -216,6 +220,7 @@ pub fn callout(icon: Icon, tone: StatusTone, text: impl IntoProp<String>) -> Cal
         text: text.into_source(),
         quiet: false,
         trailing: None,
+        container: ContainerStyle::default(),
     }
 }
 
@@ -226,9 +231,16 @@ pub struct Callout {
     text: PropSource<String>,
     quiet: bool,
     trailing: Option<AnyView>,
+    container: ContainerStyle,
 }
 
+container_styles!([] Callout);
+
 impl Callout {
+    fn container_style_mut(&mut self) -> &mut ContainerStyle {
+        &mut self.container
+    }
+
     /// No tint and no inset of its own, its text small and muted, centred on
     /// its glyph: a one-line note inside a block that already owns the inset.
     pub fn quiet(mut self) -> Self {
@@ -252,6 +264,7 @@ impl IntoView for Callout {
             text,
             quiet,
             trailing,
+            mut container,
         } = self;
         let role = tone_role(tone);
         let text = super::reactive::computed(move || text.get());
@@ -282,8 +295,13 @@ impl IntoView for Callout {
         } else {
             Text::new("").role(TypeRole::Body)
         };
-        widget(frame)
-            .visible(move || !text.with(String::is_empty))
+        // A `.visible` given to the callout joins its own rule rather than
+        // racing it for the same field.
+        let shown = container.take_visible();
+        let frame = widget(frame)
+            .visible(move || !text.with(String::is_empty) && shown.iter().all(PropSource::get));
+        container
+            .apply(frame)
             .children((
                 widget(glyph),
                 widget(
@@ -302,46 +320,101 @@ impl IntoView for Callout {
 }
 
 /// A heading line: `title` takes the width that is left and gives it up
-/// first, ellipsing if it must; `tools` keep theirs at the end.
-pub fn heading_row(title: impl IntoView, tools: impl IntoView) -> AnyView {
-    widget(
-        Stack::row(0.0)
-            .width(LengthSpec::Fill)
-            .gap_step(SpacingStep::Sm)
-            .align(AlignSpec::Center),
-    )
-    .children((
-        widget(
-            Stack::row(0.0)
-                .width(LengthSpec::Fill)
-                .gap_step(SpacingStep::Sm)
-                .shrink(1.0)
-                .align(AlignSpec::Center)
-                .with_layout(|l| l.min_width = Some(LengthSpec::Px(0.0))),
-        )
-        .children(title),
-        tools,
-    ))
-    .into_any()
+/// first, ellipsing if it must; `tools` keep theirs at the end. `.class`,
+/// `.css` and `.visible` style the line as they style an element.
+pub fn heading_row(title: impl IntoView, tools: impl IntoView) -> HeadingRow {
+    HeadingRow {
+        title: title.into_any(),
+        tools: tools.into_any(),
+        container: ContainerStyle::default(),
+    }
+}
+
+/// A [`heading_row`] being set up; a view.
+pub struct HeadingRow {
+    title: AnyView,
+    tools: AnyView,
+    container: ContainerStyle,
+}
+
+impl HeadingRow {
+    fn container_style_mut(&mut self) -> &mut ContainerStyle {
+        &mut self.container
+    }
+}
+
+impl IntoView for HeadingRow {
+    fn build(self, vb: &mut super::node::ViewBuilder<'_, '_, '_>) {
+        let HeadingRow {
+            title,
+            tools,
+            container,
+        } = self;
+        container
+            .apply(widget(
+                Stack::row(0.0)
+                    .width(LengthSpec::Fill)
+                    .gap_step(SpacingStep::Sm)
+                    .align(AlignSpec::Center),
+            ))
+            .children((
+                widget(
+                    Stack::row(0.0)
+                        .width(LengthSpec::Fill)
+                        .gap_step(SpacingStep::Sm)
+                        .shrink(1.0)
+                        .align(AlignSpec::Center)
+                        .with_layout(|l| l.min_width = Some(LengthSpec::Px(0.0))),
+                )
+                .children(title),
+                tools,
+            ))
+            .build(vb)
+    }
 }
 
 /// A heading's tools ([`crate::IconButton::tool`], compact menus): a
 /// toolbar without chrome or vertical inset, so the heading line keeps the
 /// height of its text or its tools, whichever is taller; it never shrinks
-/// its targets.
-pub fn heading_tools(tools: impl IntoView) -> AnyView {
-    widget(
-        crate::Toolbar::new().chrome(false).style(
-            Stack::row(0.0)
-                .gap_step(SpacingStep::Xxs)
-                .shrink(0.0)
-                .align(AlignSpec::Center)
-                .node_style(),
-        ),
-    )
-    .children(tools)
-    .into_any()
+/// its targets. `.class`, `.css` and `.visible` style the toolbar.
+pub fn heading_tools(tools: impl IntoView) -> HeadingTools {
+    HeadingTools {
+        tools: tools.into_any(),
+        container: ContainerStyle::default(),
+    }
 }
+
+/// A [`heading_tools`] being set up; a view.
+pub struct HeadingTools {
+    tools: AnyView,
+    container: ContainerStyle,
+}
+
+impl HeadingTools {
+    fn container_style_mut(&mut self) -> &mut ContainerStyle {
+        &mut self.container
+    }
+}
+
+impl IntoView for HeadingTools {
+    fn build(self, vb: &mut super::node::ViewBuilder<'_, '_, '_>) {
+        let HeadingTools { tools, container } = self;
+        container
+            .apply(widget(
+                crate::Toolbar::new().chrome(false).style(
+                    Stack::row(0.0)
+                        .gap_step(SpacingStep::Xxs)
+                        .shrink(0.0)
+                        .align(AlignSpec::Center)
+                        .node_style(),
+                ),
+            ))
+            .children(tools)
+            .build(vb)
+    }
+}
+
+container_styles!([] HeadingRow, [] HeadingTools, [] SettingsGroupView);
 
 /// The foot of a scroll area fading into `surface`, `height` tall: placed
 /// over the area's bottom edge, it shows a list runs on past it instead of
@@ -404,42 +477,72 @@ fn group_divider() -> AnyView {
 
 /// A settings group: `title` (when there is one) above a raised card whose
 /// rows are separated by inset hairlines. A hidden row takes its hairline
-/// with it, whichever row it is.
-pub fn settings_group(title: Option<String>, rows: Vec<GroupRow>) -> AnyView {
-    let mut members: Vec<AnyView> = Vec::new();
-    for (i, GroupRow { view, visible }) in rows.into_iter().enumerate() {
-        if i > 0 {
-            members.push(group_divider());
+/// with it, whichever row it is. `.class`, `.css` and `.visible` style the
+/// group (the column holding the title and the card).
+pub fn settings_group(title: Option<String>, rows: Vec<GroupRow>) -> SettingsGroupView {
+    SettingsGroupView {
+        title,
+        rows,
+        container: ContainerStyle::default(),
+    }
+}
+
+/// A [`settings_group`] being set up; a view.
+pub struct SettingsGroupView {
+    title: Option<String>,
+    rows: Vec<GroupRow>,
+    container: ContainerStyle,
+}
+
+impl SettingsGroupView {
+    fn container_style_mut(&mut self) -> &mut ContainerStyle {
+        &mut self.container
+    }
+}
+
+impl IntoView for SettingsGroupView {
+    fn build(self, vb: &mut super::node::ViewBuilder<'_, '_, '_>) {
+        let SettingsGroupView {
+            title,
+            rows,
+            container,
+        } = self;
+        let mut members: Vec<AnyView> = Vec::new();
+        for (i, GroupRow { view, visible }) in rows.into_iter().enumerate() {
+            if i > 0 {
+                members.push(group_divider());
+            }
+            let row = widget(Stack::column(0.0)).children(view);
+            members.push(match visible {
+                Some(visible) => row.visible(visible).into_any(),
+                None => row.into_any(),
+            });
         }
-        let row = widget(Stack::column(0.0)).children(view);
-        members.push(match visible {
-            Some(visible) => row.visible(visible).into_any(),
-            None => row.into_any(),
-        });
+        let mut group = Stack::column(0.0);
+        if title.is_some() {
+            group = group.gap_step(SpacingStep::Md);
+        }
+        container
+            .apply(widget(group))
+            .children((
+                title.map(|title| {
+                    widget(Stack::row(0.0).with_layout(|l| {
+                        l.padding_left = Some(LengthSpec::Px(nana_ui_core::space::XS));
+                    }))
+                    .children(widget(
+                        Text::new(title)
+                            .role(TypeRole::Meta)
+                            .weight(TextWeight::Semibold)
+                            .color(SemanticColorRole::Muted),
+                    ))
+                }),
+                widget(
+                    Stack::column(0.0)
+                        .radius(RadiusTier::Lg)
+                        .painter(RaisedSurfacePainter(RadiusTier::Lg)),
+                )
+                .children(widget(crate::SettingsGroup::new()).children(members)),
+            ))
+            .build(vb)
     }
-    let mut group = Stack::column(0.0);
-    if title.is_some() {
-        group = group.gap_step(SpacingStep::Md);
-    }
-    widget(group)
-        .children((
-            title.map(|title| {
-                widget(Stack::row(0.0).with_layout(|l| {
-                    l.padding_left = Some(LengthSpec::Px(nana_ui_core::space::XS));
-                }))
-                .children(widget(
-                    Text::new(title)
-                        .role(TypeRole::Meta)
-                        .weight(TextWeight::Semibold)
-                        .color(SemanticColorRole::Muted),
-                ))
-            }),
-            widget(
-                Stack::column(0.0)
-                    .radius(RadiusTier::Lg)
-                    .painter(RaisedSurfacePainter(RadiusTier::Lg)),
-            )
-            .children(widget(crate::SettingsGroup::new()).children(members)),
-        ))
-        .into_any()
 }

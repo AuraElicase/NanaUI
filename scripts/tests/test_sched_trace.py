@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import types
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -132,6 +133,35 @@ class ProviderSelectorTests(unittest.TestCase):
         self.assertEqual(manifest["version"], decode.PROVIDER_VERSION)
         self.assertEqual(manifest["selection"]["codes"], SDK_CODES)
 
+
+class ControlSinkSelectorTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.source = decode.SINK_SOURCE.read_bytes()
+        cls.package = ET.fromstring(cls.source)
+        spec = importlib.util.spec_from_file_location("sched_trace_loss_control", SCHED_TRACE / "loss_control.py")
+        cls.load = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.load)
+
+    def test_sink_selects_exactly_the_loads_own_event(self):
+        self.assertEqual(self.package.findtext("id"), "dev.nanaui.trace-load-sink.v1")
+        self.assertEqual(self.package.findtext("instrument/title"), decode.SINK_TITLE)
+        (schema,) = self.package.findall("ktrace-point-schema")
+        fields = [(child.tag, (child.text or "").strip()) for child in schema.find("event-pattern")]
+        self.assertEqual(fields, [("class", "0x21"), ("subclass", "0xa"), ("code", "0x359"), ("function", "0"), ("arg1", "?arg1")])
+        debugid = (0x21 << 24) | (0xA << 16) | (0x359 << 2)
+        self.assertEqual(self.load.SIGNPOST_DEBUGID, debugid)
+        for tag in ("modeler", "import-schema", "point-schema", "interval-schema", "augmentation"):
+            self.assertEqual(self.package.findall(f".//{tag}"), [], tag)
+
+    def test_sink_never_selects_the_trace_info_class(self):
+        classes = {(p.text or "").strip() for p in self.package.iter("class")}
+        self.assertEqual(classes, {"0x21"})
+
+    def test_manifest_pins_the_sink_source(self):
+        manifest = json.loads(decode.SINK_MANIFEST.read_text())
+        self.assertEqual(manifest["source_sha256"], hashlib.sha256(self.source).hexdigest())
+        self.assertEqual(manifest["selection"], {"kdebug_class": 33, "kdebug_subclass": 10, "code": 857, "function": 0})
 
 class DecoderTests(unittest.TestCase):
     def decode(self, toc_text=None, cpus=CPUS, **overrides):
@@ -275,6 +305,7 @@ class DecoderTests(unittest.TestCase):
 class GateTests(unittest.TestCase):
     def capture(self, **overrides):
         base = {"provider_sha256": decode.manifest_sha256(), "logical_cpus": CPUS, "record_exit_code": 0,
+                "record_argv": ["xctrace", "record", "--time-limit", "10s"],
                 "load_command": None, "load_exit_code": None, "exported": True}
         base.update(overrides)
         return base
@@ -308,6 +339,19 @@ class GateTests(unittest.TestCase):
             "os mismatch": dict(control=self.control(os_version="26.4 (25E1)")),
             "model mismatch": dict(control=self.control(model="MacBook Pro")),
             "cpu count mismatch": dict(control=self.control(self.capture(logical_cpus=8))),
+            "instrument set mismatch": dict(control=self.control(self.capture(instruments=[decode.SINK_TITLE],
+                                                                           load_sink_sha256=decode.manifest_sha256(decode.SINK_MANIFEST)))),
+            "capture edited sink": dict(capture=self.capture(instruments=[decode.SINK_TITLE], load_sink_sha256="b" * 64),
+                                        control=self.control(self.capture(instruments=[decode.SINK_TITLE],
+                                                                          load_sink_sha256=decode.manifest_sha256(decode.SINK_MANIFEST)))),
+            "control sink unpinned": dict(capture=self.sink_capture(), control=self.control(self.capture(instruments=[decode.SINK_TITLE]))),
+            "capture sink unpinned": dict(capture=self.capture(instruments=[decode.SINK_TITLE]), control=self.control(self.sink_capture())),
+            "self-reported instruments disagree with the toc": dict(
+                decoded=decode.decode(toc(schemas=ALL_SCHEMAS + ("nana-trace-load-sink-v1",)), tables(), CPUS)),
+            "time limit mismatch": dict(control=self.control(self.capture(record_argv=["--time-limit", "20s"]))),
+            "no time limit": dict(capture=self.capture(record_argv=None)),
+            "instruments not a list": dict(capture=self.capture(instruments="Nana Trace Load Sink v1")),
+            "instruments with a non-name": dict(capture=self.capture(instruments=[1])),
             "windowed": dict(decoded=decode.decode(toc(mode="Windowed (1 second)"), tables(), CPUS)),
             "stopped early": dict(decoded=decode.decode(toc(end="Stopped by user"), tables(), CPUS)),
             "nonzero exit": dict(capture=self.capture(record_exit_code=1)),
@@ -334,6 +378,13 @@ class GateTests(unittest.TestCase):
         self.assertEqual(self.gate(capture=started, control=self.control(started))["effect_gate"], "open")
         early = self.capture(load_command=["x"], load_exit_code=0, load_started_after_tracing=False)
         self.assertEqual(self.gate(capture=early, control=self.control(started))["effect_gate"], "blocked")
+
+    def sink_capture(self):
+        return self.capture(instruments=[decode.SINK_TITLE], load_sink_sha256=decode.manifest_sha256(decode.SINK_MANIFEST))
+
+    def test_opens_with_a_pinned_sink_on_both_sides(self):
+        sink = self.sink_capture()
+        self.assertEqual(self.gate(capture=sink, control=self.control(sink))["effect_gate"], "open")
 
     def test_missing_capture_fields_block_instead_of_crashing(self):
         self.assertEqual(self.gate(capture={"exported": True})["effect_gate"], "blocked")
@@ -362,6 +413,62 @@ class CaptureFileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(FileExistsError):
                 decode.record(Path(tmp), "1s", None, [])
+
+
+class RecordArgvTests(unittest.TestCase):
+    def argv(self, template="System Trace", instruments=(), sink=None, window=None):
+        return decode.record_argv(Path("v1.instrdst"), sink, Path("t.trace"), "n", "10s", window, template, instruments)
+
+    def instruments(self, argv):
+        return [argv[i + 1] for i, a in enumerate(argv) if a == "--instrument"]
+
+    def test_system_trace_names_its_template(self):
+        argv, extra = self.argv()
+        self.assertEqual(argv[argv.index("--template") + 1], "System Trace")
+        self.assertEqual(self.instruments(argv), [decode.INSTRUMENT_TITLE])
+        self.assertEqual(extra, ())
+        self.assertEqual(argv[argv.index("--time-limit") + 1], "10s")
+        self.assertNotIn("--window", argv)
+
+    def test_blank_passes_no_template(self):
+        argv, _ = self.argv(template=decode.BLANK, instruments=("Time Profiler",), window="1s")
+        self.assertNotIn("--template", argv)
+        self.assertEqual(self.instruments(argv), [decode.INSTRUMENT_TITLE, "Time Profiler"])
+        self.assertEqual(argv[argv.index("--window") + 1], "1s")
+
+    def test_sink_adds_its_package_and_instrument_once(self):
+        argv, extra = self.argv(template=decode.BLANK, instruments=("Time Profiler",), sink=Path("sink.instrdst"))
+        self.assertEqual([argv[i + 1] for i, a in enumerate(argv) if a == "--package"], ["v1.instrdst", "sink.instrdst"])
+        self.assertEqual(self.instruments(argv), [decode.INSTRUMENT_TITLE, decode.SINK_TITLE, "Time Profiler"])
+        self.assertEqual(sorted(extra), sorted(["Time Profiler", decode.SINK_TITLE]))
+
+    def test_rejects_duplicate_or_reserved_instruments(self):
+        for bad in (("Hangs", "Hangs"), (decode.INSTRUMENT_TITLE,), (decode.SINK_TITLE,)):
+            with self.subTest(bad=bad), self.assertRaises(DecodeError):
+                self.argv(instruments=bad)
+
+
+class LoadExitTests(unittest.TestCase):
+    def test_a_worker_killed_by_a_signal_fails_the_load(self):
+        spec = importlib.util.spec_from_file_location("sched_trace_loss_control_exit", SCHED_TRACE / "loss_control.py")
+        load = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(load)
+        for codes, expected in (([0, 0], 0), ([0, -9], 1), ([0, 3], 1)):
+            exits = iter(codes)
+
+            class Worker:
+                def __init__(self, target, args):
+                    self.exitcode = None
+
+                def start(self):
+                    pass
+
+                def join(self):
+                    self.exitcode = next(exits)
+
+            load.multiprocessing = types.SimpleNamespace(Process=Worker)  # this module copy only
+            with self.subTest(codes=codes):
+                self.assertEqual(load.main(["--seconds", "1", "--processes", str(len(codes))]), expected)
 
 
 class FakeProcess:

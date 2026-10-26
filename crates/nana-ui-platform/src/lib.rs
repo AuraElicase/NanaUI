@@ -4,6 +4,7 @@
 mod clipboard;
 #[cfg(feature = "fetch")]
 mod fetch;
+mod locale;
 pub mod path;
 mod paths;
 mod persist;
@@ -30,6 +31,7 @@ pub use fetch::{
     FetchPolicy, FetchRequest, FetchResponse, FetchSink, NativeFetchHost, SharedFetchHost,
     shared_fetch_host,
 };
+pub use locale::{negotiate_language, preferred_languages};
 #[doc(hidden)]
 pub use paths::__identity_marker_bytes;
 pub use paths::{

@@ -193,6 +193,24 @@ impl SettingsRow {
         };
         layout.flex_wrap = FlexWrap::NoWrap;
         layout.gap = Some(LengthSpec::Px(self.gap(stacked)));
+        layout.theme.gap = Some(crate::theme_intent::space(match (stacked, self.loose) {
+            (true, true) => nana_ui_core::SpacingStep::Lg,
+            (true, false) => nana_ui_core::SpacingStep::Sm,
+            (false, true) => nana_ui_core::SpacingStep::Xxl,
+            (false, false) => nana_ui_core::SpacingStep::Md,
+        }));
+        layout.theme.padding_top = Some(crate::theme_intent::space(if self.first_in_group {
+            nana_ui_core::SpacingStep::Xs
+        } else {
+            nana_ui_core::SpacingStep::Lg
+        }));
+        layout.theme.padding_bottom = Some(crate::theme_intent::space(if self.last_in_group {
+            nana_ui_core::SpacingStep::Xs
+        } else {
+            nana_ui_core::SpacingStep::Lg
+        }));
+        layout.theme.border_bottom_width = divider
+            .then(|| nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
         layout.padding_top = Some(LengthSpec::Px(if self.first_in_group {
             ROW_GROUP_PADDING_Y
         } else {
@@ -207,9 +225,15 @@ impl SettingsRow {
         // uniform width, which is none.
         layout.border_width = None;
         layout.border_bottom_width = divider.then_some(nana_ui_core::HAIRLINE);
+        layout.theme.border_bottom_width = divider
+            .then(|| nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
         layout.font_size = Some(nana_ui_core::type_scale::BODY);
+        crate::theme_intent::font(layout, nana_ui_core::TypeRole::Body);
         layout.line_height = Some(LineHeightSpec::Absolute(nana_ui_core::type_scale::BODY));
+        layout.theme.line_height =
+            Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Body).into());
         layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
+        crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Medium);
         style.text_vertical_alignment = crate::TextVerticalAlignment::Center;
         style
     }
@@ -316,8 +340,12 @@ fn label_slot_style(hidden: bool) -> NodeStyle {
     style.text_vertical_alignment = crate::TextVerticalAlignment::Center;
     let layout = Arc::make_mut(&mut style.layout);
     layout.font_size = Some(nana_ui_core::type_scale::BODY);
+    crate::theme_intent::font(layout, nana_ui_core::TypeRole::Body);
     layout.line_height = Some(LineHeightSpec::Absolute(nana_ui_core::type_scale::BODY));
+    layout.theme.line_height =
+        Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Body).into());
     layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
+    crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Medium);
     layout.width = Some(LengthSpec::Fill);
     layout.flex_grow = Some(1.0);
     layout.flex_shrink = Some(1.0);
@@ -333,10 +361,14 @@ fn hint_slot_style(hidden: bool) -> NodeStyle {
     style.foreground = Some(SemanticColorRole::Muted);
     let layout = Arc::make_mut(&mut style.layout);
     layout.font_size = Some(nana_ui_core::type_scale::META);
+    crate::theme_intent::font(layout, nana_ui_core::TypeRole::Meta);
     layout.font_weight = Some(nana_ui_core::type_scale::REGULAR);
+    crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Regular);
     // Its own line box: the row's is the label's, too tight for the lines of
     // a hint that wraps.
     layout.line_height = Some(LineHeightSpec::Absolute(nana_ui_core::type_scale::LINE));
+    layout.theme.line_height =
+        Some(nana_ui_core::ThemeToken::Line(nana_ui_core::LineRole::Line).into());
     layout.width = Some(LengthSpec::Fill);
     layout.flex_shrink = Some(1.0);
     layout.min_width = Some(LengthSpec::Px(0.0));
@@ -359,6 +391,7 @@ impl SettingsRowCopy {
         layout.align_items = AlignSpec::Stretch;
         layout.width = Some(LengthSpec::Fill);
         layout.gap = Some(LengthSpec::Px(ROW_COPY_GAP));
+        layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
         layout.flex_grow = Some(if self.stacked { 0.0 } else { 1.0 });
         layout.flex_shrink = Some(1.0);
         layout.min_width = Some(LengthSpec::Px(0.0));
@@ -678,6 +711,7 @@ fn mark_group_edges(
 
 const COLLAPSIBLE_HEADER_GAP: f32 = nana_ui_core::space::MD;
 const COLLAPSIBLE_BODY_GAP: f32 = nana_ui_core::space::XL;
+#[cfg(test)]
 const DISCLOSURE_ICON_SIZE: f32 = nana_ui_core::type_scale::LINE;
 
 /// Controlled collapse. Header is keyboard-activatable; values stay host-owned.
@@ -747,6 +781,7 @@ impl SettingsCollapsibleCard {
             layout.width = Some(LengthSpec::Fill);
             layout.direction = Some(FlexDirection::Column);
             layout.gap = Some(LengthSpec::Px(COLLAPSIBLE_BODY_GAP));
+            layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xl));
         }
         style.interaction = if self.disabled {
             InteractionStyle {
@@ -907,6 +942,7 @@ impl SettingsCollapsibleHeader {
         layout.align_items = AlignSpec::Center;
         layout.width = Some(LengthSpec::Fill);
         layout.gap = Some(LengthSpec::Px(COLLAPSIBLE_HEADER_GAP));
+        layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
         style
     }
 }
@@ -949,6 +985,9 @@ impl SettingsCollapsibleDivider {
         layout.width = Some(LengthSpec::Fill);
         layout.height = Some(LengthSpec::Px(nana_ui_core::HAIRLINE));
         layout.min_height = Some(LengthSpec::Px(nana_ui_core::HAIRLINE));
+        let extent = nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline);
+        layout.theme.height = Some(extent.into());
+        layout.theme.min_height = Some(extent.into());
         layout.hidden = self.hidden;
         style
     }
@@ -987,6 +1026,10 @@ struct SettingsDisclosure {
 }
 
 impl ComponentView for SettingsDisclosure {
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn node_kind(&self) -> NodeKind {
         NodeKind::Element {
             tag: "settings-disclosure".into(),
@@ -996,7 +1039,7 @@ impl ComponentView for SettingsDisclosure {
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let visual = StandardVisual::Icon {
             icon: disclosure_icon_kind(self.expanded),
-            size: DISCLOSURE_ICON_SIZE,
+            size: world.theme().typography().line,
             tooltip: None,
         };
         if world.standard_visual(id) != Some(visual.clone()) {
@@ -1437,6 +1480,11 @@ impl SettingsSidebarLeading {
         layout.height = Some(LengthSpec::Px(SETTINGS_SIDEBAR_ICON_SIZE));
         layout.min_width = Some(LengthSpec::Px(SETTINGS_SIDEBAR_ICON_SIZE));
         layout.min_height = Some(LengthSpec::Px(SETTINGS_SIDEBAR_ICON_SIZE));
+        let extent = nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Meta);
+        layout.theme.width = Some(extent.into());
+        layout.theme.height = Some(extent.into());
+        layout.theme.min_width = Some(extent.into());
+        layout.theme.min_height = Some(extent.into());
         layout.flex_grow = Some(0.0);
         layout.flex_shrink = Some(0.0);
         style
@@ -1444,6 +1492,10 @@ impl SettingsSidebarLeading {
 }
 
 impl ComponentView for SettingsSidebarLeading {
+    fn wants_metrics_reproject() -> bool {
+        true
+    }
+
     fn node_kind(&self) -> NodeKind {
         NodeKind::Element {
             tag: "settings-sidebar-leading".into(),
@@ -1461,7 +1513,7 @@ impl ComponentView for SettingsSidebarLeading {
         }
         let visual = self.icon.map(|icon| StandardVisual::Icon {
             icon,
-            size: SETTINGS_SIDEBAR_ICON_SIZE,
+            size: world.theme().typography().meta,
             tooltip: None,
         });
         if world.standard_visual(id) != visual {
@@ -1498,6 +1550,20 @@ impl SettingsPageBody {
         layout.align_items = AlignSpec::Stretch;
         layout.width = Some(LengthSpec::Fill);
         layout.gap = Some(LengthSpec::Px(self.gap.unwrap_or(SETTINGS_PAGE_GAP)));
+        if self.gap.is_none() {
+            layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxxl));
+        }
+        if self.padding.is_none() {
+            layout.theme.padding_top = Some(crate::theme_intent::space(
+                nana_ui_core::SpacingStep::PageTight,
+            ));
+            layout.theme.padding_right =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Page));
+            layout.theme.padding_bottom =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Page));
+            layout.theme.padding_left =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Page));
+        }
         let padding = self.padding.unwrap_or(PaddingSpec {
             top: SETTINGS_PAGE_PADDING_TOP,
             right: SETTINGS_PAGE_PADDING_RIGHT,
@@ -1568,16 +1634,24 @@ fn settings_sidebar_body() -> ScrollView {
     let layout = Arc::make_mut(&mut scroll.style.layout);
     layout.direction = Some(FlexDirection::Column);
     layout.gap = Some(LengthSpec::Px(SETTINGS_SIDEBAR_TAB_GAP));
+    layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xxs));
     scroll
 }
 
 fn page_title_text(label: &str, size: Option<f32>, weight: Option<u16>) -> Text {
-    styled_text(
+    let mut text = styled_text(
         label,
         SemanticColorRole::Text,
         size.unwrap_or(SETTINGS_PAGE_TITLE_SIZE),
         weight.unwrap_or(SETTINGS_PAGE_TITLE_WEIGHT),
-    )
+    );
+    if let Some(size) = size {
+        text = text.font_size(size);
+    }
+    if let Some(weight) = weight {
+        text = text.font_weight(weight);
+    }
+    text
 }
 
 fn ensure_settings_leading(
@@ -1733,6 +1807,25 @@ fn styled_text(value: impl Into<String>, color: SemanticColorRole, size: f32, we
     let layout = Arc::make_mut(&mut style.layout);
     layout.font_size = Some(size);
     layout.font_weight = Some(weight);
+    let role = match size {
+        n if n <= 11.0 => nana_ui_core::TypeRole::Hint,
+        n if n <= 12.0 => nana_ui_core::TypeRole::Meta,
+        n if n <= 13.0 => nana_ui_core::TypeRole::Body,
+        n if n <= 14.0 => nana_ui_core::TypeRole::Section,
+        n if n <= 16.0 => nana_ui_core::TypeRole::Heading,
+        n if n <= 18.0 => nana_ui_core::TypeRole::Title,
+        _ => nana_ui_core::TypeRole::Display,
+    };
+    crate::theme_intent::font(layout, role);
+    crate::theme_intent::weight(
+        layout,
+        match weight {
+            0..=400 => nana_ui_core::TextWeight::Regular,
+            401..=500 => nana_ui_core::TextWeight::Medium,
+            501..=600 => nana_ui_core::TextWeight::Semibold,
+            _ => nana_ui_core::TextWeight::Bold,
+        },
+    );
     Text::new(value).style(style)
 }
 
@@ -2759,6 +2852,8 @@ impl AppContext {
             let layout = Arc::make_mut(&mut style.layout);
             layout.width = Some(LengthSpec::Fill);
             layout.padding_top = Some(LengthSpec::Px(nana_ui_core::space::MD));
+            layout.theme.padding_top =
+                Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Md));
             let description = sync_text(
                 self,
                 document,
