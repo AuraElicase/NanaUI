@@ -895,6 +895,32 @@ fn table_controls_bind_their_fields_and_model_both_ways() {
     assert_eq!(activated.get_untracked(), 1);
 }
 
+/// `on_toggle` hears the select's menu open and close, once each.
+#[test]
+fn a_select_element_hears_its_menu_open_and_close() {
+    use crate::{Select, SelectOption, SelectToggled};
+    let (mut cx, _, parent) = setup();
+    let heard = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = std::sync::Arc::clone(&heard);
+    let view = cx
+        .mount_view(parent, move || {
+            let sink = std::sync::Arc::clone(&sink);
+            column().children((select()
+                .options(vec![SelectOption::new("a", "甲")])
+                .on_toggle(move |event: &SelectToggled| sink.lock().unwrap().push(event.open))
+                .key("select"),))
+        })
+        .unwrap();
+    let select = node::<Select>(&cx, view.roots()[0], "select");
+    cx.update_component(select, |select, _| {
+        select.toggle_open();
+    })
+    .unwrap();
+    cx.update_component(select, |select, _| select.close())
+        .unwrap();
+    assert_eq!(*heard.lock().unwrap(), [true, false]);
+}
+
 /// The progress element sets its rail and turns indeterminate like any
 /// other field: a bare literal for the thickness, roles for the track and
 /// the fill, and a signal that makes the bar indeterminate and back.

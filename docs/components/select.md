@@ -143,6 +143,8 @@ layout.min_width = Some(LengthSpec::Px(122.0));
 
 焦点离开时菜单随之收起，和浏览器原生的 `<select>` 一样。
 
+`.on_toggle(|event: &SelectToggled| …)` 自己听开关，模板里是 `@toggle` 或 `on:SelectToggled`。
+
 ## 属性
 
 | 属性 | 类型 | 说明 |
@@ -160,7 +162,7 @@ layout.min_width = Some(LengthSpec::Px(122.0));
 | 事件 | 载荷 | 说明 |
 | --- | --- | --- |
 | `on_change`，模板 `on:SelectChanged` 或 `@change` | `&SelectChanged` | 指针、键盘或无障碍提交。函数必须接收这个引用；其它表达式会忽略事件 |
-| 模板 `on:SelectToggled` | `&SelectToggled` | 菜单打开或收起，`open` 是之后的状态。每次变化发一次，见上文“菜单开关” |
+| `on_toggle`，模板 `on:SelectToggled` 或 `@toggle` | `&SelectToggled` | 菜单打开或收起，`open` 是之后的状态。每次变化发一次，见上文“菜单开关” |
 
 ## 插槽
 
