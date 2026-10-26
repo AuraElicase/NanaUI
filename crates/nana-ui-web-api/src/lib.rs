@@ -40,7 +40,7 @@ use ws::{SocketEvent, SocketRuntime};
 /// spin inside the drain loop.
 const RAF_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 pub use nana_ui_platform::OsClipboard;
 pub use nana_ui_platform::{
     ClipboardHost, FetchCancellation, FetchError, FetchErrorKind, FetchHead, FetchHost,
@@ -504,7 +504,9 @@ pub fn shared_web_api_state_with_local_storage(local_storage: SharedStorage) -> 
 /// Register storage / timer / documentElement / location / clipboard host ops.
 ///
 /// Clipboard defaults to the platform backend ([`default_shared_clipboard`]): OS
-/// pasteboard on desktop, JNI `ClipboardManager` on Android.
+/// pasteboard on desktop, JNI `ClipboardManager` on Android, unsupported on
+/// OHOS until the host passes its own to
+/// [`register_web_api_host_ops_with_resources`].
 pub fn register_web_api_host_ops(api: &mut HostApiRegistry, state: SharedWebApiState) {
     register_web_api_host_ops_with_resources(
         api,

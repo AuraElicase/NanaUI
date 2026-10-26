@@ -137,7 +137,8 @@ windows = { version = "0.62", features = [
     "Win32_System_LibraryLoader",
 ] }
 
-[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+# AT-SPI over D-Bus. Not on OHOS, whose `target_os` is also `linux`.
+[target.'cfg(any(all(target_os = "linux", not(target_env = "ohos")), target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 accesskit_unix = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

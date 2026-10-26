@@ -885,7 +885,11 @@ enum AudioOutput {
 /// every platform (CoreAudio), so it cannot live inside `HostApiRegistry` closures.
 #[cfg(all(
     feature = "native-audio",
-    any(target_os = "windows", target_os = "macos", target_os = "linux")
+    any(
+        target_os = "windows",
+        target_os = "macos",
+        all(target_os = "linux", not(target_env = "ohos"))
+    )
 ))]
 struct DevicePlayback {
     _shutdown: std::sync::mpsc::Sender<()>,
@@ -897,7 +901,11 @@ pub struct AudioRuntime {
     output: AudioOutput,
     #[cfg(all(
         feature = "native-audio",
-        any(target_os = "windows", target_os = "macos", target_os = "linux")
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            all(target_os = "linux", not(target_env = "ohos"))
+        )
     ))]
     device: Option<DevicePlayback>,
 }
@@ -932,7 +940,11 @@ impl AudioRuntime {
             output: AudioOutput::DefaultDevice,
             #[cfg(all(
                 feature = "native-audio",
-                any(target_os = "windows", target_os = "macos", target_os = "linux")
+                any(
+                    target_os = "windows",
+                    target_os = "macos",
+                    all(target_os = "linux", not(target_env = "ohos"))
+                )
             ))]
             device: None,
         }
@@ -948,7 +960,11 @@ impl AudioRuntime {
             output: AudioOutput::Mock,
             #[cfg(all(
                 feature = "native-audio",
-                any(target_os = "windows", target_os = "macos", target_os = "linux")
+                any(
+                    target_os = "windows",
+                    target_os = "macos",
+                    all(target_os = "linux", not(target_env = "ohos"))
+                )
             ))]
             device: None,
         }
@@ -964,7 +980,11 @@ impl AudioRuntime {
             output: AudioOutput::Unsupported,
             #[cfg(all(
                 feature = "native-audio",
-                any(target_os = "windows", target_os = "macos", target_os = "linux")
+                any(
+                    target_os = "windows",
+                    target_os = "macos",
+                    all(target_os = "linux", not(target_env = "ohos"))
+                )
             ))]
             device: None,
         }
@@ -1000,7 +1020,11 @@ impl AudioRuntime {
 
     #[cfg(all(
         feature = "native-audio",
-        any(target_os = "windows", target_os = "macos", target_os = "linux")
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            all(target_os = "linux", not(target_env = "ohos"))
+        )
     ))]
     fn start_device_output(&mut self) -> Result<(), AudioError> {
         if self.device.is_some() {
@@ -1017,7 +1041,11 @@ impl AudioRuntime {
 
     #[cfg(not(all(
         feature = "native-audio",
-        any(target_os = "windows", target_os = "macos", target_os = "linux")
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            all(target_os = "linux", not(target_env = "ohos"))
+        )
     )))]
     fn start_device_output(&mut self) -> Result<(), AudioError> {
         Err(AudioError::no_output())
@@ -1060,7 +1088,11 @@ pub fn shared_audio_runtime_unsupported() -> SharedAudioRuntime {
 
 #[cfg(all(
     feature = "native-audio",
-    any(target_os = "windows", target_os = "macos", target_os = "linux")
+    any(
+        target_os = "windows",
+        target_os = "macos",
+        all(target_os = "linux", not(target_env = "ohos"))
+    )
 ))]
 fn spawn_cpal_playback(mixer: Arc<Mutex<Mixer>>) -> Result<(DevicePlayback, u32, u16), AudioError> {
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
@@ -1092,7 +1124,11 @@ fn spawn_cpal_playback(mixer: Arc<Mutex<Mixer>>) -> Result<(DevicePlayback, u32,
 
 #[cfg(all(
     feature = "native-audio",
-    any(target_os = "windows", target_os = "macos", target_os = "linux")
+    any(
+        target_os = "windows",
+        target_os = "macos",
+        all(target_os = "linux", not(target_env = "ohos"))
+    )
 ))]
 fn start_cpal_stream(mixer: Arc<Mutex<Mixer>>) -> Result<(cpal::Stream, u32, u16), AudioError> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};

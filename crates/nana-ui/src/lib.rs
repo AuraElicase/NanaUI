@@ -14,6 +14,14 @@
 
 #![recursion_limit = "256"]
 
+// OHOS hosts own their XComponent surface and frames and drive the painter
+// themselves (docs/reference/ohos.md); `hosted` is the winit / nana-window
+// desktop host, which has no OHOS backend.
+#[cfg(all(feature = "hosted", target_env = "ohos"))]
+compile_error!(
+    "nana-ui `hosted` is a desktop host; on OHOS embed SceneWgpuPainter in the app's own XComponent host (docs/reference/ohos.md)"
+);
+
 #[cfg(any(feature = "hosted", feature = "accesskit-tree"))]
 mod accessibility;
 #[cfg(feature = "accesskit-tree")]

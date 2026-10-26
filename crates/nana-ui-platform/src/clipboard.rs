@@ -2,7 +2,10 @@
 //!
 //! Desktop uses the OS clipboard via `arboard` ([`OsClipboard`]). Android does
 //! not compile arboard; [`default_shared_clipboard`] installs
-//! [`AndroidClipboard`] (JNI `ClipboardManager`).
+//! [`AndroidClipboard`] (JNI `ClipboardManager`). OHOS does not compile it
+//! either and has no default backend: its host answers the clipboard through
+//! its own `HostServices`, and the default reports it unsupported
+//! (`docs/reference/ohos.md`).
 
 use std::sync::{Arc, Mutex};
 
@@ -26,13 +29,18 @@ pub fn shared_clipboard<C: ClipboardHost + 'static>(clipboard: C) -> SharedClipb
     Arc::new(Mutex::new(Box::new(clipboard)))
 }
 
-/// Platform default: OS clipboard on desktop; JNI ClipboardManager on Android.
+/// Platform default: OS clipboard on desktop; JNI ClipboardManager on Android;
+/// [`UnsupportedClipboard`] on OHOS, whose host injects the system pasteboard.
 pub fn default_shared_clipboard() -> SharedClipboardHost {
     #[cfg(target_os = "android")]
     {
         shared_clipboard(AndroidClipboard)
     }
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_env = "ohos")]
+    {
+        shared_clipboard(UnsupportedClipboard)
+    }
+    #[cfg(not(any(target_os = "android", target_env = "ohos")))]
     {
         shared_clipboard(OsClipboard::new())
     }
@@ -80,13 +88,13 @@ impl ClipboardHost for MemoryClipboard {
 }
 
 /// Desktop OS clipboard (`arboard`). Construction never panics; unavailable
-/// backends report failed reads/writes. Not compiled on Android.
-#[cfg(not(target_os = "android"))]
+/// backends report failed reads/writes. Not compiled on Android or OHOS.
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 pub struct OsClipboard {
     inner: Option<arboard::Clipboard>,
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 impl std::fmt::Debug for OsClipboard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OsClipboard")
@@ -95,7 +103,7 @@ impl std::fmt::Debug for OsClipboard {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 impl OsClipboard {
     pub fn new() -> Self {
         Self {
@@ -108,7 +116,7 @@ impl OsClipboard {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 impl Default for OsClipboard {
     fn default() -> Self {
         Self::new()
@@ -249,7 +257,7 @@ fn android_clipboard_text_inner(write: Option<&str>) -> Option<String> {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 impl ClipboardHost for OsClipboard {
     fn is_available(&self) -> bool {
         self.inner.is_some()
@@ -332,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "android"))]
+    #[cfg(not(any(target_os = "android", target_env = "ohos")))]
     fn os_clipboard_roundtrip_when_available() {
         let mut clip = OsClipboard::new();
         if !clip.is_available() {
@@ -368,6 +376,29 @@ mod tests {
         if let Some(prev) = previous {
             let _ = clip.write_text(&prev);
         }
+    }
+
+    #[test]
+    fn an_uninjected_clipboard_answers_unsupported() {
+        let clipboard = shared_clipboard(UnsupportedClipboard);
+        assert_eq!(
+            read_shared_clipboard(&clipboard),
+            Err(nana_ui_input::HostServiceError::Unsupported)
+        );
+        assert_eq!(
+            write_shared_clipboard(&clipboard, "nana"),
+            Err(nana_ui_input::HostServiceError::Unsupported)
+        );
+    }
+
+    #[test]
+    #[cfg(target_env = "ohos")]
+    fn ohos_default_clipboard_is_unsupported_until_the_host_injects_one() {
+        let clipboard = default_shared_clipboard();
+        assert_eq!(
+            read_shared_clipboard(&clipboard),
+            Err(nana_ui_input::HostServiceError::Unsupported)
+        );
     }
 
     #[test]

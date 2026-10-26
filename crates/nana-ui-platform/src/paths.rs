@@ -265,8 +265,12 @@ pub enum PathPlatform {
 }
 
 impl PathPlatform {
+    /// `None` on OHOS: it reports `target_os = "linux"`, but no XDG layout
+    /// applies inside its sandbox (`docs/reference/ohos.md`).
     pub fn current() -> Option<Self> {
-        if cfg!(target_os = "windows") {
+        if cfg!(target_env = "ohos") {
+            None
+        } else if cfg!(target_os = "windows") {
             Some(Self::Windows)
         } else if cfg!(target_os = "macos") {
             Some(Self::MacOs)
@@ -318,8 +322,13 @@ fn portable_marker_path(executable: &Path) -> Option<PathBuf> {
 impl PathEnvironment {
     /// Read the running process's environment.
     pub fn current() -> Result<Self, PathsError> {
-        let platform =
-            PathPlatform::current().ok_or(PathsError::UnsupportedPlatform(std::env::consts::OS))?;
+        let platform = PathPlatform::current().ok_or(PathsError::UnsupportedPlatform(
+            if cfg!(target_env = "ohos") {
+                "ohos"
+            } else {
+                std::env::consts::OS
+            },
+        ))?;
         let executable =
             std::env::current_exe().map_err(|e| PathsError::NoExecutable(e.to_string()))?;
         // Resolve symlinks so a launcher link does not move the app root.
