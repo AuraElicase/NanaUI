@@ -285,7 +285,9 @@ fn apply_filters(dialog: &IFileDialog, filters: &[FileFilter]) -> Result<(), Fil
         .collect();
     unsafe {
         dialog.SetFileTypes(&list).map_err(platform)?;
-        // The first type starts selected; a type change follows in `events`.
+        // The first type starts selected; a type change follows in `events`. The index reads 0
+        // until it is set or the dialog is shown, so set it here.
+        dialog.SetFileTypeIndex(1).map_err(platform)?;
         if let Some(extension) = default_extension(&filters[0]) {
             let extension = wide(extension);
             dialog

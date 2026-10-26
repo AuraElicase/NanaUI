@@ -163,7 +163,7 @@ fn replacement_preedit_hits_map_before_inside_and_after_to_committed_characters(
         );
         f.input.text(f.runtime.context_mut(), "字").unwrap();
         let mut expected = "前ab后尾".to_owned();
-        expected.insert_str(document_byte, "字");
+        expected.insert(document_byte, '字');
         assert_eq!(
             f.runtime
                 .context()

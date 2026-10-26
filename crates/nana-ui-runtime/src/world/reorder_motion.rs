@@ -117,12 +117,13 @@ impl UiWorld {
                 self.cancel_component_track(row, REORDER_SHIFT);
                 let value = crate::MotionValue::Transform(translated(logical, dx, dy));
                 // Direct manipulation, not motion: it follows the pointer
-                // under reduced motion too.
+                // under reduced motion too. From and to are equal, so the
+                // curve never shows.
                 self.start_component_track(
                     row,
                     REORDER_PREVIEW,
                     Duration::from_nanos(1),
-                    crate::Easing::Linear,
+                    easing,
                     crate::AnimatableProperty::Transform,
                     value,
                     value,
