@@ -2494,6 +2494,8 @@ pub struct NumberInput {
     pub placeholder: Arc<str>,
     pub spec: nana_ui_core::NumberFieldSpec,
     pub size: nana_ui_core::ControlSize,
+    /// Show the trailing increment/decrement buttons. Keyboard stepping remains available.
+    pub steppers: bool,
     pub disabled: bool,
     pub read_only: bool,
     pub invalid: bool,
@@ -2520,6 +2522,7 @@ impl NumberInput {
             placeholder: Arc::from(""),
             spec,
             size: nana_ui_core::ControlSize::Medium,
+            steppers: true,
             disabled: false,
             read_only: false,
             invalid: false,
@@ -2591,6 +2594,12 @@ impl NumberInput {
         layout.font_size = Some(size.text_size());
         layout.theme.control_typography(size);
         layout.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(size.line_height()));
+        self
+    }
+
+    /// Hide the pointer steppers without changing numeric editing or arrow keys.
+    pub fn steppers(mut self, steppers: bool) -> Self {
+        self.steppers = steppers;
         self
     }
 
@@ -2800,7 +2809,7 @@ impl ComponentView for NumberInput {
             size: self.size,
             secure: false,
             invalid: self.invalid,
-            steppers: true,
+            steppers: self.steppers,
             character_counter: None,
             diagnostics: Arc::from([]),
             matches: Arc::from([]),

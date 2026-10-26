@@ -124,6 +124,7 @@ macro_rules! for_each_control {
                 placeholder: Arc<str> = set,
                 disabled: bool = set,
                 read_only: bool = set,
+                steppers: bool = set,
             }
             with { on_change: NumberChanged }
             model value: f64 => NumberChanged |event| event.value;

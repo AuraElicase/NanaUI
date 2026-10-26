@@ -260,6 +260,7 @@ impl AppContext {
                 input.disabled = snapshot.disabled;
                 input.invalid = snapshot.invalid;
                 input.size = snapshot.size;
+                input.steppers = false;
                 input.style = styled.style;
                 input.style_override = true;
             })?;
@@ -386,7 +387,9 @@ fn field_style(size: ControlSize) -> NodeStyle {
 }
 
 fn number(field: &SizeField, axis: usize) -> NumberInput {
-    let mut input = NumberInput::new(field.value[axis]).size(field.size);
+    let mut input = NumberInput::new(field.value[axis])
+        .size(field.size)
+        .steppers(false);
     input.spec = field.spec;
     input.assign(field.value[axis]);
     input.style.background = None;
@@ -466,6 +469,21 @@ mod tests {
             *heard.lock().unwrap(),
             vec![[1280.0, 1080.0], [1280.0, 8192.0], [1280.0, 2.0]]
         );
+        let mut input = crate::HeadlessInput::bind(&mut cx, doc);
+        input
+            .press(
+                &mut cx,
+                nana_ui_input::KeyInput::named(
+                    "ArrowUp",
+                    "ArrowUp",
+                    nana_ui_input::KeyState::Pressed,
+                    Default::default(),
+                ),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(cx.read(field, |f| f.value).unwrap(), [1280.0, 4.0]);
     }
 
     #[test]
@@ -695,6 +713,10 @@ mod tests {
             .unwrap();
             cx.layout_document(doc, LayoutViewport::new(400.0, 400.0))
                 .unwrap();
+            let nodes = cx.world().document_order(doc);
+            cx.resolve_styles(&nodes).unwrap();
+            cx.shape_text(&nodes, &mut crate::MeasureTextShaper)
+                .unwrap();
             let snapshot = cx.read(field, Clone::clone).unwrap();
             let frame = cx.world().layout_box(field.stable_id()).unwrap();
             let a = cx.world().layout_box(snapshot.width.unwrap()).unwrap();
@@ -711,6 +733,13 @@ mod tests {
             for id in [snapshot.width.unwrap(), snapshot.height.unwrap()] {
                 let style = cx.world().node_style(id).unwrap();
                 assert_eq!((style.background, style.border), (None, None));
+                assert!(
+                    matches!(
+                        cx.world().component_geometry(id),
+                        Some(crate::ComponentGeometry::TextInput { steppers: None, .. })
+                    ),
+                    "compound inputs have no spinner paint, hit regions or reserved width"
+                );
             }
             cx.activate_node(snapshot.menu.unwrap()).unwrap();
             cx.layout_document(doc, LayoutViewport::new(400.0, 400.0))
