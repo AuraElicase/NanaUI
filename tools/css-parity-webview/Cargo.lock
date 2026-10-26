@@ -2201,11 +2201,14 @@ dependencies = [
  "nana-ui-core",
  "nana-ui-input",
  "ndk-context",
+ "objc2-app-kit",
  "serde",
  "serde_json",
+ "sys-locale",
  "tungstenite",
  "ureq",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3426,6 +3429,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.7",
+]
+
+[[package]]
+name = "sys-locale"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

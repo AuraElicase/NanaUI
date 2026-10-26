@@ -81,11 +81,12 @@ widget(RichTextEditor::new(RichText::new("")))
 
 ## 输入
 
-- 打字继承光标前那个字的样式；`SetAttrs` 给光标的样式优先。连续打字合成一步撤销。
+- 打字继承光标前那个字的样式；`SetAttrs` 给光标的样式优先。连续打字合成一步撤销。`typing_style_policy(RichTypingStylePolicy::Plain)` 让打字、预编辑和纯文本粘贴不再继承相邻的字，只用节点样式；`SetAttrs` 给光标的样式照样生效，工具栏在光标处显示的也是将要输入的样式。默认 `Inherit`。富文本粘贴在两种策略下都保留复制内容自带的样式。
 - 输入法的预编辑按将要提交的样式画出来，加下划线。它不进文档，提交时才进。候选框锚在编辑器的光标上，空文档也一样。
-- 聚焦时光标闪烁（显示、隐藏各 500 ms）；打字和移动光标时立即显示并重新计时，窗口失焦时常亮。
+- 聚焦时光标闪烁（显示、隐藏各 500 ms）；文档、预编辑或光标位置每次变化都立即显示并重新计时（包括光标没动的向后删除），与 `TextInput` 一致；窗口失焦时常亮。
 - 方向键按字素移动，Ctrl 按词；上下按行；Home / End 到行首行尾，加 Ctrl 到文档首尾；Shift 扩展选区。
-- Ctrl+C / X 把纯文本写进系统剪贴板，同时在进程内记住这段富文本（按纯文本的哈希）。粘贴时剪贴板里的文字就是这段，就带着样式和对象贴回去；否则按纯文本贴。剪贴板里没有文字时发出 `PasteRequested`，应用可以从自己的剪贴板格式插一张图。
+- Ctrl+C / X 把纯文本写进系统剪贴板，同时在进程内记住最近复制的这一段富文本和写入后剪贴板的变更序号。粘贴时剪贴板仍是这次写入（序号相同、文字相同）才带着样式和对象贴回去；别的程序或别的输入框写进同样的文字，按纯文本贴。宿主没有变更序号时（Linux）退回到按文字匹配。剪贴板里没有文字时发出 `PasteRequested`，应用可以从自己的剪贴板格式插一张图。
+- 编辑菜单和右键菜单用 `cx.rich_clipboard(entity, RichClipboardCommand, services)`：`Copy`、`Cut`、`Paste` 与快捷键相同，`PastePlainText` 即使剪贴板里是自己的复制也按纯文本贴。只读编辑器只能 `Copy`；预编辑期间都不执行；没有选区的复制不改剪贴板，写入失败时剪切不删文字。
 - Enter 插入换行。要 Enter 发送，在应用的按键策略里先截住它（它比编辑器先看到按键）。
 
 ## 内联对象
@@ -99,6 +100,7 @@ widget(RichTextEditor::new(RichText::new("")))
 | `value` | `RichText` | 文档。每次改动由 `Changed` 报出 |
 | `read_only` | `bool` | 可以选择、复制，不能改 |
 | `disabled` | `bool` | 不能聚焦 |
+| `typing_style_policy` | `RichTypingStylePolicy` | 打字是否继承相邻文字的样式，默认 `Inherit` |
 | `font_size` / `font_family` / `line_height` / `width` | | 同 [RichTextView](rich-text-view.md) |
 
 ## 事件

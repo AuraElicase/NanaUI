@@ -7,7 +7,9 @@
 //! never sees a queue of stale intents and a full queue can never hold input
 //! back. The clipboard is the one request with an answer; hosts answer it
 //! synchronously on the event-loop thread and report a busy backend rather
-//! than waiting on it.
+//! than waiting on it. Its change count tells a paste whether the clipboard
+//! still holds what this process copied, so styling kept in-process pastes
+//! back only onto that copy.
 
 use nana_ui_core::LogicalRect;
 
@@ -106,6 +108,16 @@ pub trait HostServices {
     fn read_clipboard(&mut self) -> Result<Option<String>, HostServiceError>;
 
     fn write_clipboard(&mut self, text: &str) -> Result<(), HostServiceError>;
+
+    /// A count that advances with every write to the clipboard, by this
+    /// process or any other, and not with reads. Read right after a write,
+    /// an equal count at a later paste means the clipboard still holds that
+    /// write (macOS `NSPasteboard.changeCount`, Windows
+    /// `GetClipboardSequenceNumber`). `Unsupported` where the platform keeps
+    /// none; callers then match on the text alone.
+    fn clipboard_change_count(&mut self) -> Result<u64, HostServiceError> {
+        Err(HostServiceError::Unsupported)
+    }
 }
 
 /// A host with none of these services: the cursor and text input are
@@ -135,6 +147,7 @@ pub struct HeadlessHostServices {
     cursor: CursorIcon,
     text_input: Option<TextInputContext>,
     clipboard: Option<String>,
+    clipboard_changes: u64,
 }
 
 impl HeadlessHostServices {
@@ -154,8 +167,11 @@ impl HeadlessHostServices {
         self.clipboard.as_deref()
     }
 
+    /// Put `text` on the clipboard as another program would: a write the
+    /// change count sees.
     pub fn set_clipboard(&mut self, text: Option<String>) {
         self.clipboard = text;
+        self.clipboard_changes += 1;
     }
 }
 
@@ -174,7 +190,12 @@ impl HostServices for HeadlessHostServices {
 
     fn write_clipboard(&mut self, text: &str) -> Result<(), HostServiceError> {
         self.clipboard = Some(text.to_owned());
+        self.clipboard_changes += 1;
         Ok(())
+    }
+
+    fn clipboard_change_count(&mut self) -> Result<u64, HostServiceError> {
+        Ok(self.clipboard_changes)
     }
 }
 
@@ -216,5 +237,20 @@ mod tests {
             services.write_clipboard("x"),
             Err(HostServiceError::Unsupported)
         );
+        assert_eq!(
+            services.clipboard_change_count(),
+            Err(HostServiceError::Unsupported)
+        );
+    }
+
+    #[test]
+    fn headless_clipboard_writes_advance_the_change_count() {
+        let mut services = HeadlessHostServices::new();
+        services.write_clipboard("same").unwrap();
+        let copied = services.clipboard_change_count().unwrap();
+        services.read_clipboard().unwrap();
+        assert_eq!(services.clipboard_change_count(), Ok(copied));
+        services.set_clipboard(Some("same".into()));
+        assert_ne!(services.clipboard_change_count(), Ok(copied));
     }
 }

@@ -19,7 +19,7 @@
 //! chips) take no room on the line and show only here.
 
 use std::ops::Range;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use nana_text::TextLayout;
 use nana_ui_core::{RichObject, RichSpanStyle, RichText};
@@ -32,6 +32,9 @@ use crate::{
     FrameworkError, InteractionState, MutationQueue, NodeKind, NodeStyle, RichEditorMarks,
     StableNodeId, UiWorld,
 };
+
+mod clipboard;
+pub use clipboard::RichClipboardCommand;
 
 /// Undo steps kept per editor.
 const HISTORY_LIMIT: usize = 200;
@@ -68,6 +71,20 @@ pub enum RichEditCommand {
     SelectAll,
     Undo,
     Redo,
+}
+
+/// Where text typed at a caret takes its attributes from. Attributes the
+/// caret was given (a toolbar's bold with nothing selected) apply under
+/// either; a rich paste keeps the styling it carries under either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RichTypingStylePolicy {
+    /// The character before the caret, else the one after: typing continues
+    /// the text it lands in.
+    #[default]
+    Inherit,
+    /// The node's own style: neighbouring spans do not carry over, for an
+    /// editor mostly typed into as plain text.
+    Plain,
 }
 
 /// One attribute of [`RichSelectionAttrs`], as a bit of [`RichAttrMask`].
@@ -215,6 +232,9 @@ struct EditState {
     drag_range: Option<Range<usize>>,
     drag_unit: u8,
     preferred_x: Option<f32>,
+    /// Counts each move of the caret and each change of the document or
+    /// preedit; input routing restarts the caret blink when it changes.
+    caret_revision: u64,
 }
 
 /// A rich text field: edits a [`RichText`] the application owns.
@@ -225,6 +245,8 @@ pub struct RichTextEditor {
     pub value: RichText,
     pub read_only: bool,
     pub disabled: bool,
+    /// What typing, the IME and a plain-text paste are styled with.
+    pub typing_style_policy: RichTypingStylePolicy,
     pub style: NodeStyle,
     /// Requested viewport offset. User scrolling leaves the selection intact.
     pub scroll_offset: crate::ScrollOffset,
@@ -241,6 +263,7 @@ impl RichTextEditor {
             value: value.into(),
             read_only: false,
             disabled: false,
+            typing_style_policy: RichTypingStylePolicy::default(),
             style,
             scroll_offset: crate::ScrollOffset::default(),
             state: EditState::default(),
@@ -254,6 +277,11 @@ impl RichTextEditor {
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    pub fn typing_style_policy(mut self, policy: RichTypingStylePolicy) -> Self {
+        self.typing_style_policy = policy;
         self
     }
 
@@ -297,6 +325,14 @@ impl RichTextEditor {
     /// The IME preedit, while one is open.
     pub fn preedit(&self) -> Option<&str> {
         self.state.preedit.as_ref().map(|(text, _)| text.as_str())
+    }
+
+    pub(crate) fn caret_revision(&self) -> u64 {
+        self.state.caret_revision
+    }
+
+    fn bump_caret_revision(&mut self) {
+        self.state.caret_revision = self.state.caret_revision.wrapping_add(1);
     }
 
     pub fn can_undo(&self) -> bool {
@@ -366,9 +402,12 @@ impl RichTextEditor {
     }
 
     /// What a character typed at the caret is styled with: the caret's own
-    /// attributes, else the character before it (the one typing continues),
-    /// else the one after.
+    /// attributes, else (under [`RichTypingStylePolicy::Inherit`]) the
+    /// character before it (the one typing continues), else the one after.
     fn typing_style(&self) -> RichSpanStyle {
+        if self.typing_style_policy == RichTypingStylePolicy::Plain {
+            return self.state.typing.clone().unwrap_or_default();
+        }
         if let Some(typing) = &self.state.typing {
             return typing.clone();
         }
@@ -893,19 +932,6 @@ impl Geometry {
     }
 }
 
-/// The in-process rich clipboard: the last piece copied out of a rich
-/// editor, keyed by its plain text. A paste whose clipboard text is that text
-/// pastes the piece with its styling and objects; anything else pastes as
-/// plain text.
-static RICH_CLIPBOARD: Mutex<Option<(u64, RichText)>> = Mutex::new(None);
-
-fn text_key(text: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::hash::DefaultHasher::new();
-    text.hash(&mut hasher);
-    hasher.finish()
-}
-
 impl ComponentView for RichTextEditor {
     fn share_layouts(
         &mut self,
@@ -922,6 +948,7 @@ impl ComponentView for RichTextEditor {
         *self = next;
         self.state = state;
         if !same {
+            self.bump_caret_revision();
             let len = self.value.text().len();
             self.state.anchor = floor_char(self.value.text(), self.state.anchor.min(len));
             self.state.focus = floor_char(self.value.text(), self.state.focus.min(len));
@@ -975,13 +1002,7 @@ impl AppContext {
         entity: Entity<RichTextEditor>,
         command: RichEditCommand,
     ) -> Result<bool, FrameworkError> {
-        self.update_component(entity, |view, cx| {
-            let before = view.snapshot();
-            let attrs = view.selection_attrs();
-            let changed = view.apply_command(command);
-            view.report(&before, &attrs, cx);
-            changed
-        })
+        self.edit_with(entity, |view, _| view.apply_command(command))
     }
 
     /// The focused rich text editor of `document`.
@@ -992,6 +1013,13 @@ impl AppContext {
             .ok()
             .filter(|enabled| *enabled)
             .map(|_| entity)
+    }
+
+    /// The focused rich editor's caret revision: what restarts its blink.
+    pub(crate) fn rich_editor_caret_revision(&self, document: DocumentId) -> u64 {
+        self.focused_rich_editor(document)
+            .and_then(|entity| self.read(entity, RichTextEditor::caret_revision).ok())
+            .unwrap_or(0)
     }
 
     /// Whether `document`'s focused rich editor takes typing (and the IME).
@@ -1060,56 +1088,13 @@ impl AppContext {
                 "z" => return self.rich_edit(entity, RichEditCommand::Undo).map(Some),
                 "y" => return self.rich_edit(entity, RichEditCommand::Redo).map(Some),
                 "a" => return self.rich_edit(entity, RichEditCommand::SelectAll).map(Some),
-                "c" | "x" => {
-                    let piece = self.read(entity, |view| {
-                        let range = view.range();
-                        (!range.is_empty()).then(|| view.value.slice(range))
-                    })?;
-                    let Some(piece) = piece else {
-                        return Ok(Some(false));
+                "c" | "x" | "v" => {
+                    let command = match lower.as_str() {
+                        "c" => RichClipboardCommand::Copy,
+                        "x" => RichClipboardCommand::Cut,
+                        _ => RichClipboardCommand::Paste,
                     };
-                    if services.write_clipboard(piece.text()).is_err() {
-                        return Ok(Some(false));
-                    }
-                    if let Ok(mut clipboard) = RICH_CLIPBOARD.lock() {
-                        *clipboard = Some((text_key(piece.text()), piece));
-                    }
-                    if lower == "x" {
-                        self.edit_with(entity, |view, _| {
-                            let range = view.range();
-                            view.delete(range)
-                        })?;
-                    }
-                    return Ok(Some(true));
-                }
-                "v" => {
-                    let clipboard = services.read_clipboard();
-                    let Ok(Some(text)) = clipboard
-                        .as_ref()
-                        .map(|text| text.as_ref().filter(|text| !text.is_empty()).cloned())
-                    else {
-                        self.update_component(entity, |_, cx| {
-                            cx.emit(RichTextEditorEvent::PasteRequested)
-                        })?;
-                        return Ok(Some(true));
-                    };
-                    let piece = RICH_CLIPBOARD
-                        .lock()
-                        .ok()
-                        .and_then(|clipboard| clipboard.clone())
-                        .filter(|(key, piece)| *key == text_key(&text) && piece.text() == text)
-                        .map(|(_, piece)| piece);
-                    return self
-                        .edit_with(entity, |view, _| match &piece {
-                            Some(piece) => view.replace_selection(piece, false),
-                            None => {
-                                view.state.coalesce = false;
-                                let changed = view.insert_text(&text.replace("\r\n", "\n"));
-                                view.state.coalesce = false;
-                                changed
-                            }
-                        })
-                        .map(Some);
+                    return self.rich_clipboard(entity, command, services).map(Some);
                 }
                 _ => {}
             }
@@ -1495,8 +1480,15 @@ impl AppContext {
     ) -> Result<bool, FrameworkError> {
         self.update_component(entity, |view, cx| {
             let before = view.snapshot();
+            let preedit = view.state.preedit.clone();
             let attrs = view.selection_attrs();
             let changed = edit(view, cx);
+            if view.selection() != (before.anchor, before.focus)
+                || view.state.preedit != preedit
+                || view.value != before.value
+            {
+                view.bump_caret_revision();
+            }
             view.report(&before, &attrs, cx);
             changed
         })
@@ -1588,6 +1580,50 @@ mod tests {
             Some(red)
         );
         assert_eq!(view.value.style_at(0), None);
+    }
+
+    /// Both policies, with and without attributes set on the caret: only the
+    /// neighbour's style depends on the policy, never what the caret was given.
+    #[test]
+    fn the_typing_policy_decides_only_whether_the_neighbour_style_carries() {
+        let bold = RichSpanStyle::new().bold();
+        let red = PaintColor::srgb([1.0, 0.0, 0.0, 1.0]);
+        for policy in [RichTypingStylePolicy::Inherit, RichTypingStylePolicy::Plain] {
+            let bold_ab = || {
+                RichTextEditor::new(RichText::new("ab").with_span(0..2, bold.clone()))
+                    .typing_style_policy(policy)
+            };
+            let mut view = bold_ab();
+            view.apply_command(RichEditCommand::Select(2..2));
+            view.insert_text("c");
+            let weight = view.value.style_at(2).and_then(|style| style.shape.weight);
+            match policy {
+                RichTypingStylePolicy::Inherit => assert_eq!(weight, Some(700), "{policy:?}"),
+                RichTypingStylePolicy::Plain => assert_eq!(weight, None, "{policy:?}"),
+            }
+            view.state.preedit = Some(("k".into(), 1));
+            let preedit_weight = view
+                .display()
+                .0
+                .style_at(3)
+                .and_then(|style| style.shape.weight);
+            assert_eq!(
+                preedit_weight, weight,
+                "{policy:?}: preedit commits as typed"
+            );
+            assert_eq!(view.selection_attrs().style.shape.weight, weight);
+
+            let mut view = bold_ab();
+            view.apply_command(RichEditCommand::Select(2..2));
+            view.apply_command(RichEditCommand::SetAttrs(RichSpanStyle::new().color(red)));
+            view.insert_text("c");
+            let typed = view.value.style_at(2).cloned().unwrap_or_default();
+            assert_eq!(typed.paint.color, Some(red), "{policy:?}: the caret's own");
+            match policy {
+                RichTypingStylePolicy::Inherit => assert_eq!(typed.shape.weight, Some(700)),
+                RichTypingStylePolicy::Plain => assert_eq!(typed.shape.weight, None),
+            }
+        }
     }
 
     #[test]

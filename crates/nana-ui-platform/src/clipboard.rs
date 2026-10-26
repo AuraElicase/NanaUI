@@ -19,6 +19,13 @@ pub trait ClipboardHost: Send {
     }
     fn read_text(&mut self) -> Option<String>;
     fn write_text(&mut self, text: &str) -> bool;
+    /// A count the platform advances with every write to the clipboard, by
+    /// any process. Read right after a write, it later tells whether the
+    /// clipboard still holds that write. `None` where the platform keeps
+    /// none.
+    fn change_count(&mut self) -> Option<u64> {
+        None
+    }
 }
 
 /// Shared clipboard handle installed into host API registries.
@@ -68,6 +75,7 @@ impl ClipboardHost for UnsupportedClipboard {
 #[derive(Debug, Default, Clone)]
 pub struct MemoryClipboard {
     text: Option<String>,
+    changes: u64,
 }
 
 impl MemoryClipboard {
@@ -83,7 +91,12 @@ impl ClipboardHost for MemoryClipboard {
 
     fn write_text(&mut self, text: &str) -> bool {
         self.text = Some(text.to_owned());
+        self.changes += 1;
         true
+    }
+
+    fn change_count(&mut self) -> Option<u64> {
+        Some(self.changes)
     }
 }
 
@@ -273,6 +286,39 @@ impl ClipboardHost for OsClipboard {
             None => false,
         }
     }
+
+    fn change_count(&mut self) -> Option<u64> {
+        self.inner.as_ref()?;
+        os_clipboard_change_count()
+    }
+}
+
+/// `NSPasteboard.changeCount` of the general pasteboard: it advances each
+/// time an owner clears it to write.
+#[cfg(target_os = "macos")]
+fn os_clipboard_change_count() -> Option<u64> {
+    let count = objc2_app_kit::NSPasteboard::generalPasteboard().changeCount();
+    u64::try_from(count).ok()
+}
+
+/// `GetClipboardSequenceNumber`: it advances with every change of the
+/// window station's clipboard. Zero means this process cannot see it.
+#[cfg(windows)]
+fn os_clipboard_change_count() -> Option<u64> {
+    // SAFETY: no arguments and no preconditions; it reads a counter.
+    let count = unsafe { windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber() };
+    (count != 0).then_some(u64::from(count))
+}
+
+/// X11 and Wayland keep no change count the clipboard can be asked for.
+#[cfg(not(any(
+    target_os = "macos",
+    windows,
+    target_os = "android",
+    target_env = "ohos"
+)))]
+fn os_clipboard_change_count() -> Option<u64> {
+    None
 }
 
 /// Clipboard calls against a shared backend. The lock is tried, never
@@ -287,6 +333,22 @@ pub fn read_shared_clipboard(
         return Err(nana_ui_input::HostServiceError::Unsupported);
     }
     Ok(clipboard.read_text())
+}
+
+/// The shared backend's [`ClipboardHost::change_count`]. See
+/// [`read_shared_clipboard`].
+pub fn shared_clipboard_change_count(
+    clipboard: &SharedClipboardHost,
+) -> Result<u64, nana_ui_input::HostServiceError> {
+    let mut clipboard = clipboard
+        .try_lock()
+        .map_err(|_| nana_ui_input::HostServiceError::Busy)?;
+    if !clipboard.is_available() {
+        return Err(nana_ui_input::HostServiceError::Unsupported);
+    }
+    clipboard
+        .change_count()
+        .ok_or(nana_ui_input::HostServiceError::Unsupported)
 }
 
 /// See [`read_shared_clipboard`].
@@ -373,6 +435,26 @@ mod tests {
             "desktop OS clipboard read must return the written text"
         );
 
+        // A write advances the change count and a read leaves it, retried
+        // as a unit for the same reason as the round trip.
+        #[cfg(any(target_os = "macos", windows))]
+        {
+            let mut stamped = false;
+            for _ in 0..8 {
+                let before = clip
+                    .change_count()
+                    .expect("the platform keeps a change count");
+                assert!(clip.write_text(&marker));
+                let written = clip.change_count();
+                let _ = clip.read_text();
+                stamped = written != Some(before) && clip.change_count() == written;
+                if stamped {
+                    break;
+                }
+            }
+            assert!(stamped, "a write advances the count and a read does not");
+        }
+
         if let Some(prev) = previous {
             let _ = clip.write_text(&prev);
         }
@@ -397,6 +479,27 @@ mod tests {
         let clipboard = default_shared_clipboard();
         assert_eq!(
             read_shared_clipboard(&clipboard),
+            Err(nana_ui_input::HostServiceError::Unsupported)
+        );
+    }
+
+    #[test]
+    fn a_write_advances_the_change_count_and_a_read_does_not() {
+        let clipboard = shared_clipboard(MemoryClipboard::new());
+        let before = shared_clipboard_change_count(&clipboard).unwrap();
+        write_shared_clipboard(&clipboard, "same").unwrap();
+        let written = shared_clipboard_change_count(&clipboard).unwrap();
+        assert_ne!(written, before);
+        read_shared_clipboard(&clipboard).unwrap();
+        assert_eq!(shared_clipboard_change_count(&clipboard), Ok(written));
+        write_shared_clipboard(&clipboard, "same").unwrap();
+        assert_ne!(
+            shared_clipboard_change_count(&clipboard),
+            Ok(written),
+            "the same text written again is another write"
+        );
+        assert_eq!(
+            shared_clipboard_change_count(&shared_clipboard(UnsupportedClipboard)),
             Err(nana_ui_input::HostServiceError::Unsupported)
         );
     }

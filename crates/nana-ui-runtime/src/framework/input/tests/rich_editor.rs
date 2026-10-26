@@ -1,9 +1,15 @@
 use super::*;
 use crate::{
-    Entity, LayoutBox, MutationQueue, NanaTextEngineShaper, RichEditCommand, RichTextEditor,
-    TextEditAction,
+    Entity, LayoutBox, MutationQueue, NanaTextEngineShaper, RichClipboardCommand, RichEditCommand,
+    RichTextEditor, TextEditAction,
 };
+use nana_ui_core::{RichSpanStyle, RichText};
+use nana_ui_input::{HostServiceError, HostServices};
 use std::sync::{Arc, Mutex};
+
+/// The rich clipboard is one per process: tests that copy out of a rich
+/// editor take turns.
+static RICH_CLIPBOARD_TESTS: Mutex<()> = Mutex::new(());
 
 fn fixture(
     value: &str,
@@ -287,6 +293,9 @@ fn rich_editor_composition_bypasses_application_shortcuts_and_commits_once() {
 
 #[test]
 fn editor_actions_share_clipboard_and_undo_for_rich_and_source() {
+    let _turn = RICH_CLIPBOARD_TESTS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let (mut cx, doc, rich, _) = fixture("a中文👨‍👩‍👧‍👦b");
     let mut services = HeadlessHostServices::new();
     cx.rich_edit(rich, RichEditCommand::SelectAll).unwrap();
@@ -326,6 +335,138 @@ fn editor_actions_share_clipboard_and_undo_for_rich_and_source() {
     assert_eq!(
         cx.read(source, |e| e.state.value.to_string()).unwrap(),
         "[b]abc[/b]"
+    );
+}
+
+/// A host that keeps no clipboard change count, as X11 and Wayland do.
+struct TextOnlyClipboard(HeadlessHostServices);
+
+impl HostServices for TextOnlyClipboard {
+    fn set_cursor(&mut self, cursor: nana_ui_input::CursorIcon) {
+        self.0.set_cursor(cursor);
+    }
+    fn set_text_input(&mut self, state: Option<&nana_ui_input::TextInputContext>) {
+        self.0.set_text_input(state);
+    }
+    fn read_clipboard(&mut self) -> Result<Option<String>, HostServiceError> {
+        self.0.read_clipboard()
+    }
+    fn write_clipboard(&mut self, text: &str) -> Result<(), HostServiceError> {
+        self.0.write_clipboard(text)
+    }
+}
+
+/// A paste takes the editor's own copy back with its styling only while the
+/// clipboard still holds that copy's write; the same text written by anyone
+/// else pastes as plain text. Without a change count the text decides. The
+/// editor types plain, so a plain paste shows as unstyled next to bold.
+#[test]
+fn a_rich_paste_needs_the_clipboard_to_still_hold_the_copy() {
+    let _turn = RICH_CLIPBOARD_TESTS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let bold = RichSpanStyle::new().bold();
+    let (mut cx, _, rich, _) = fixture("hello world");
+    cx.update_component(rich, |e, _| {
+        e.typing_style_policy = crate::RichTypingStylePolicy::Plain;
+    })
+    .unwrap();
+    cx.rich_edit(rich, RichEditCommand::Select(0..5)).unwrap();
+    cx.rich_edit(rich, RichEditCommand::SetAttrs(bold.clone()))
+        .unwrap();
+    let value = |cx: &AppContext| cx.read(rich, |e| e.value.clone()).unwrap();
+    let paste_at_end =
+        |cx: &mut AppContext, command: RichClipboardCommand, services: &mut dyn HostServices| {
+            let end = value(cx).text().len();
+            cx.rich_edit(rich, RichEditCommand::Select(end..end))
+                .unwrap();
+            assert!(cx.rich_clipboard(rich, command, services).unwrap());
+            let pasted = value(cx);
+            assert_eq!(&pasted.text()[end..], "hello");
+            pasted.style_at(end).cloned()
+        };
+    let copy = |cx: &mut AppContext, services: &mut dyn HostServices| {
+        cx.rich_edit(rich, RichEditCommand::Select(0..5)).unwrap();
+        assert!(
+            cx.rich_clipboard(rich, RichClipboardCommand::Copy, services)
+                .unwrap()
+        );
+    };
+
+    let mut services = HeadlessHostServices::new();
+    copy(&mut cx, &mut services);
+    assert_eq!(services.clipboard(), Some("hello"), "plain text only");
+    assert_eq!(
+        paste_at_end(&mut cx, RichClipboardCommand::Paste, &mut services),
+        Some(bold.clone()),
+        "the editor's own copy keeps its bold"
+    );
+    assert_eq!(
+        paste_at_end(&mut cx, RichClipboardCommand::PastePlainText, &mut services),
+        None,
+        "pasting plain text drops it"
+    );
+    services.set_clipboard(Some("hello".into()));
+    assert_eq!(
+        paste_at_end(&mut cx, RichClipboardCommand::Paste, &mut services),
+        None,
+        "the same text from another program is plain"
+    );
+
+    let mut text_only = TextOnlyClipboard(HeadlessHostServices::new());
+    copy(&mut cx, &mut text_only);
+    text_only.0.set_clipboard(Some("hello".into()));
+    assert_eq!(
+        paste_at_end(&mut cx, RichClipboardCommand::Paste, &mut text_only),
+        Some(bold),
+        "without a change count the matching text stands in"
+    );
+    text_only.0.set_clipboard(Some("other".into()));
+    cx.rich_edit(rich, RichEditCommand::SelectAll).unwrap();
+    assert!(
+        cx.rich_clipboard(rich, RichClipboardCommand::Paste, &mut text_only)
+            .unwrap()
+    );
+    assert_eq!(value(&cx), RichText::new("other"), "other text is plain");
+}
+
+/// Copy reads a read-only editor; cut and paste leave it, and nothing
+/// selected copies nothing.
+#[test]
+fn rich_clipboard_commands_respect_the_editor_state() {
+    let _turn = RICH_CLIPBOARD_TESTS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let (mut cx, _, rich, _) = fixture("keep");
+    let mut services = HeadlessHostServices::new();
+    services.set_clipboard(Some("before".into()));
+    assert!(
+        !cx.rich_clipboard(rich, RichClipboardCommand::Copy, &mut services)
+            .unwrap(),
+        "nothing selected"
+    );
+    assert_eq!(services.clipboard(), Some("before"));
+    cx.update_component(rich, |e, _| e.read_only = true)
+        .unwrap();
+    cx.rich_edit(rich, RichEditCommand::SelectAll).unwrap();
+    for command in [
+        RichClipboardCommand::Cut,
+        RichClipboardCommand::Paste,
+        RichClipboardCommand::PastePlainText,
+    ] {
+        assert!(
+            !cx.rich_clipboard(rich, command, &mut services).unwrap(),
+            "{command:?}"
+        );
+    }
+    assert!(
+        cx.rich_clipboard(rich, RichClipboardCommand::Copy, &mut services)
+            .unwrap()
+    );
+    assert_eq!(services.clipboard(), Some("keep"));
+    assert_eq!(
+        cx.read(rich, |e| e.value.text().to_owned()).unwrap(),
+        "keep"
     );
 }
 

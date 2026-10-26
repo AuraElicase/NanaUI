@@ -72,6 +72,11 @@
 - **剪贴板**是唯一有返回值的调用。在复制/剪切/粘贴快捷键在按键链中原来的位置同步发生：应用
   的按键策略（`on_key`）和终端先看到按键。宿主不等待忙碌的后端。返回 `HostServiceError::Busy`。
   剪贴板拒绝写入时。剪切不删除文本。原生宿主整个进程只打开一次系统剪贴板。
+  `clipboard_change_count()` 回答剪贴板的变更序号：任何进程的每次写入都让它前进，读取不变。
+  macOS 读 `NSPasteboard.changeCount`，Windows 读 `GetClipboardSequenceNumber`（为 0 视为不可见）。
+  默认实现、X11/Wayland、Android 与 OHOS 回答 `Unsupported`；`HeadlessHostServices` 对自己的私有剪贴板计数，
+  `set_clipboard` 也算一次外部写入。富文本编辑器复制后记下它，粘贴时序号相同才贴回进程内的富文本，
+  不支持时按文字匹配。
 - `HeadlessInput` 是没有窗口的输入源（devtools、测试、离屏测试工具）。自带
   `HeadlessHostServices`。保存宿主本应显示的光标与 IME 状态和一个私有剪贴板。
   `UnsupportedHostServices` 给不需要这些能力的宿主。
