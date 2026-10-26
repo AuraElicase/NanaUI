@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use nana_text::font::{FaceDescriptor, FallbackPolicy, FontSystem, GenericFamily, font_blob};
 use nana_text::{NativeTextEngine, SharedTextEngine, TextWorkCounters};
 use nana_ui_core::{
-    FlexDirection, LayoutStyle, LengthSpec, PaintColor, RichSpanStyle, RichText, RichTextShadow,
-    RichTextStroke,
+    FlexDirection, LayoutStyle, LengthSpec, PaintColor, RichObject, RichObjectFlow, RichSpanStyle,
+    RichText, RichTextShadow, RichTextStroke,
 };
 use nana_ui_runtime::{
     DocumentId, LayoutViewport, MutationQueue, NanaTextEngineShaper, NodeKind, NodeStyle,
@@ -45,6 +45,20 @@ fn engine() -> SharedTextEngine {
 }
 
 fn document(label_layout: LayoutStyle, rich: RichText) -> RuntimeDocument {
+    let column = LayoutStyle {
+        width: Some(LengthSpec::Px(400.0)),
+        direction: Some(FlexDirection::Column),
+        ..LayoutStyle::default()
+    };
+    document_in(column, label_layout, rich)
+}
+
+/// The label alone in a container laid out as `container`.
+fn document_in(
+    container: LayoutStyle,
+    label_layout: LayoutStyle,
+    rich: RichText,
+) -> RuntimeDocument {
     let document = DocumentId::new(1).unwrap();
     let mut runtime = RuntimeDocument::new(document);
     let mut queue = MutationQueue::new();
@@ -58,11 +72,7 @@ fn document(label_layout: LayoutStyle, rich: RichText) -> RuntimeDocument {
     queue.set_style(
         id(COLUMN),
         NodeStyle {
-            layout: Arc::new(LayoutStyle {
-                width: Some(LengthSpec::Px(400.0)),
-                direction: Some(FlexDirection::Column),
-                ..LayoutStyle::default()
-            }),
+            layout: Arc::new(container),
             ..NodeStyle::default()
         },
     );
@@ -431,6 +441,105 @@ fn resizing_a_sticker_relays_out_without_reshaping() {
     let large = runtime.context().world().text_metrics(id(LABEL)).unwrap();
     assert!((large.width - small.width - 24.0).abs() < 0.5);
     assert!((object_quads(&runtime)[0].width - 48.0).abs() < 0.01);
+}
+
+/// A 600 × 300 picture between two words, placed as `placed` says.
+fn picture_line(placed: impl Fn(RichObject) -> RichObject) -> RichText {
+    RichText::builder()
+        .plain("look")
+        .object(placed(RichObject::image(
+            9,
+            "file:///photos/beach.png",
+            600.0,
+            300.0,
+        )))
+        .plain("here")
+        .build()
+}
+
+#[test]
+fn a_fitted_block_picture_takes_its_own_line_at_the_column_width() {
+    let rich = picture_line(|picture| picture.flow(RichObjectFlow::Block).fit_width(true));
+    let mut runtime = document(label_layout(), rich);
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let label = runtime
+        .context()
+        .world()
+        .layout_box(id(LABEL))
+        .expect("laid out");
+    let quads = object_quads(&runtime);
+    assert_eq!(quads.len(), 1);
+    let quad = quads[0];
+    assert!(
+        (quad.width - label.width).abs() < 0.5 && label.width <= 400.0 + 0.01,
+        "scaled to the column: {quad:?} in {label:?}"
+    );
+    assert!(
+        (quad.height - quad.width * 0.5).abs() < 0.5,
+        "keeping its aspect: {quad:?}"
+    );
+    assert!(
+        (quad.x - label.x).abs() < 0.5 && quad.y > label.y + 10.0,
+        "at the start of a line below the first word: {quad:?} in {label:?}"
+    );
+    let (_, layout) = runtime
+        .context()
+        .world()
+        .text_layout(id(LABEL))
+        .expect("the label keeps its layout");
+    assert_eq!(layout.lines.len(), 3, "{:?}", layout.lines);
+    assert!(
+        label.height >= quad.height + 2.0 * 16.0,
+        "two text lines and the picture: {label:?}"
+    );
+    assert_eq!(
+        runtime
+            .context()
+            .world()
+            .rich_text(id(LABEL))
+            .unwrap()
+            .objects()[0]
+            .1
+            .width_px,
+        600.0,
+        "the application's value keeps the authored size"
+    );
+}
+
+#[test]
+fn a_fitted_picture_lets_a_flex_item_shrink_below_it() {
+    let row = LayoutStyle {
+        width: Some(LengthSpec::Px(200.0)),
+        direction: Some(FlexDirection::Row),
+        ..LayoutStyle::default()
+    };
+    let label_width = |fit: bool| {
+        let rich = picture_line(|picture| picture.flow(RichObjectFlow::Block).fit_width(fit));
+        let mut runtime = document_in(row.clone(), label_layout(), rich);
+        let mut shaper = NanaTextEngineShaper::new(engine());
+        settle(&mut runtime, &mut shaper);
+        let label = runtime
+            .context()
+            .world()
+            .layout_box(id(LABEL))
+            .expect("laid out");
+        (label.width, object_quads(&runtime)[0])
+    };
+    let (fixed, quad) = label_width(false);
+    assert!(
+        fixed >= 600.0 - 0.5 && quad.width >= 600.0 - 0.5,
+        "a picture that cannot shrink holds its item at its width: {fixed} {quad:?}"
+    );
+    let (fitted, quad) = label_width(true);
+    assert!(
+        fitted <= 200.0 + 0.5,
+        "its min-content is the words', so the item shrinks to the row: {fitted}"
+    );
+    assert!(
+        (quad.width - fitted).abs() < 0.5 && (quad.height - quad.width * 0.5).abs() < 0.5,
+        "and the picture with it: {quad:?}"
+    );
 }
 
 #[test]

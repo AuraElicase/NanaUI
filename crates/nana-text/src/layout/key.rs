@@ -179,6 +179,9 @@ pub(crate) struct LayoutKey {
     /// shaping input — objects shape as placeholders — so it cannot come in
     /// through the shaped identity either.
     objects: Vec<(usize, [u32; 7])>,
+    /// Every object placement's offset, flow and fitting, as bits. A source
+    /// at the same revision may place the same objects differently.
+    placements: Vec<(usize, u32)>,
     paragraph_alignments: Vec<(usize, Option<TextAlignSpec>)>,
     /// Each ruby's base range and its shaped annotation, held so the pointer
     /// it is compared by stays valid.
@@ -204,6 +207,7 @@ impl LayoutKey {
         run_line_heights: &[f32],
         empty_line_height: f32,
         objects: &[crate::source::InlineObject],
+        placements: &[crate::source::ObjectPlacement],
         paragraph_alignments: &[(usize, Option<TextAlignSpec>)],
         rubies: Vec<(std::ops::Range<usize>, Arc<ShapedText>)>,
         labels: Vec<(usize, [u32; 5], Arc<ShapedText>)>,
@@ -251,6 +255,16 @@ impl LayoutKey {
                     )
                 })
                 .collect(),
+            placements: placements
+                .iter()
+                .map(|placement| {
+                    (
+                        placement.offset,
+                        u32::from(placement.flow == crate::source::ObjectFlow::Block)
+                            | (u32::from(placement.fit_width) << 1),
+                    )
+                })
+                .collect(),
             rubies,
             labels,
         }
@@ -269,6 +283,7 @@ impl LayoutKey {
             + self.paragraph_alignments.capacity()
                 * std::mem::size_of::<(usize, Option<TextAlignSpec>)>()
             + self.objects.capacity() * std::mem::size_of::<(usize, [u32; 7])>()
+            + self.placements.capacity() * std::mem::size_of::<(usize, u32)>()
     }
 }
 
@@ -287,6 +302,7 @@ impl PartialEq for LayoutKey {
             && self.run_line_heights == other.run_line_heights
             && self.empty_line_height == other.empty_line_height
             && self.objects == other.objects
+            && self.placements == other.placements
             && self.rubies.len() == other.rubies.len()
             && self
                 .rubies
@@ -319,6 +335,7 @@ impl Hash for LayoutKey {
         self.run_line_heights.hash(state);
         self.empty_line_height.hash(state);
         self.objects.hash(state);
+        self.placements.hash(state);
         for (at, align) in &self.paragraph_alignments {
             at.hash(state);
             align.map(|a| a as u8).hash(state);

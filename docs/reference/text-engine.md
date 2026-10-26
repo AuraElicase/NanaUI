@@ -716,6 +716,7 @@ advance 比较。layout 全程保留浮点。**不**向整数像素取整。那�
 | `TextKind` | |
 | 全部 `TextConstraints` 字段（宽高、wrap、word-break、line-break、max-lines、ellipsis、preserve-lines、direction、align、writing-mode、tab-width、scale、spacing-trim、autospace、justify、wrap-style） | |
 | 内联对象的度量与包络（`InlineEnvelope`） | |
+| 对象的放置（`ObjectPlacement` 的流向与 `fit_width`） | |
 | 每个 run 解析后的行高、空行行高、strut | |
 
 - key **持有** `Arc<ShapedText>` 而不是裸指针：持有才让指针可比。否则同一地址可能被另一段文本复用。
@@ -1647,7 +1648,16 @@ entry 的颜色指纹把 span 颜色和 `rich.revision` 合在一起：改描边
 - **`TextLayout.objects`** 记下每个放上行的对象：`PlacedObject { id, offset, line, rect }`，`rect` 在行空间，底边是基线加 descent。被省略号截掉的对象不在里面。
 - 占位 run 没有 face，画笔不画它，装饰线也跳过它。
 
-应用一侧的值是 `RichObject { id, width_px, height_px, descent_px, content }`，内容五种：
+#### 块对象与按宽度缩放
+
+对象默认是行内的、按自己的尺寸排。`TextSource::set_placements` 给个别对象换一种放法：`ObjectPlacement { offset, flow: ObjectFlow, fit_width }`，和 `ObjectLabel` 一样是对象旁边的一张表（先设对象再设它；默认放法和不在对象上的条目被丢掉；`replace_range` 让它跟着对象平移、删掉对象就删掉它）。`InlineObject` 本身不变，没有放置的源什么也不多付。
+
+- **`ObjectFlow::Block` 独占一行。** `segments` 在块对象的 U+FFFC 前后切段：前面的文字在它的偏移处收行，后面的文字从它之后另起一行，两边都不补空行，所以块对象夹在两个换行之间、在开头或结尾，都只占它自己那一行。文本、偏移和段落都不变，没有字符代表这两处断行，所以切点的 `break_cause` 是 `Wrap`：切点那个字节在上一行末尾（upstream）和下一行开头（downstream）各有一个光标位置，和软换行一样。只有段尾行才是 `Explicit` / `EndOfText`，两端对齐不会拉伸块对象前的那一行。含块对象且还有别的文字的 Label 不走单行快路径（快路径问的就是 `segments` 的段数）。
+- **`fit_width` 按行宽等比缩小。** 对象比它在一行里能得到的空间宽时，`sized_runs` 把宽、ascent、descent 按同一比例缩小，之后行盒、命中、光标、选区、`PlacedObject.rect` 和场景里的图片都读这一个缩小后的盒子。能得到的空间是行预算（`inline_budget_px`）减去包络留在它后面的间距（含行尾可收的那部分，所以无论行决策怎么处理间距，它独占一行都放得下）；本引擎没有 `text-indent`，所以没有哪一行比预算更窄。没有宽度预算时不缩，也从不放大；源里的尺寸保持作者写的。标签对象（`Tag` / `Label`）的尺寸来自标签，不缩放。
+- **min-content 可压缩。** 像 CSS 里 `max-width: 100%` 的图片：`intrinsic_widths` 量 `max-content` 时用对象自己的宽度，量 `min-content` 时把可缩放对象当作 0 宽，所以容器可以收得比它窄，排版再把它缩到剩下的宽度。运行时的 flex 收缩读的是同一件事：缩放后的对象不会让最宽的那一行「断不开」（`widest_line_cannot_break`），节点于是能随容器收窄。
+- 放置进 layout key：同文本、同 revision、放法不同的两份源是两份布局。改放置只重排，不重新塑形。
+
+应用一侧的值是 `RichObject { id, width_px, height_px, descent_px, flow, fit_width, content }`。`flow`（`RichObjectFlow::Inline` / `Block`）和 `fit_width` 由构造器默认成行内、原尺寸，用 `.flow(..)`、`.fit_width(..)` 改；`source_for` 用 `rich_text_placements` 把它们换成 `nana-text` 自己的 `ObjectPlacement`（`nana-text` 不认 `RichObjectFlow`）。内容五种：
 
 | `RichObjectContent` | 场景里 | 占位 |
 | --- | --- | --- |
@@ -1659,7 +1669,7 @@ entry 的颜色指纹把 span 颜色和 `rich.revision` 合在一起：改描边
 
 `Tag` 和 `Label` 的尺寸来自对象标签（`ObjectLabel { offset, text, scale, weight, color, icon }`）：标签按周围文字 `scale` 倍字号（`Tag` 为 `LABEL_SCALE` 0.62）单独塑形，`label_box` 把宽度、内边距和图标方块算成对象的盒子；`PlacedLabel` 记下药丸的 `rect`、摆好的 `runs`、图标方块 `icon` 和墨水 `color`。图标与墨水进 layout key（`ObjectLabel::layout_bits`），只换颜色也是另一份布局。对象的标签文字或样式变了，`classify_rich_change` 记为 `CONSTRAINT`，源会重建。药丸和图标与标签字形一样跟着对象那个字素的揭示与特效走。
 
-`RichTextBuilder::object` / `styled_object`、`RichText::insert_object` / `set_object` 维护它们；`replace_range` 删掉对象的字符就删掉对象。`TextNodeState::source_for` 把 `RichObject::line_box()` 交给 `TextSource::set_objects`。`classify_rich_change` 里，同位置的对象换了盒子是 `CONSTRAINT`（只重排），换了内容是 `PAINT`（只重绘）；插入、删除对象改了文本，是 `CONTENT`。场景按文本顺序给每个对象发一个图元，槽位在 `TEXT_INLINE_OBJECTS` 命名空间里，跟着节点的变换、裁剪、透明度和文档顺序走。
+`RichTextBuilder::object` / `styled_object`、`RichText::insert_object` / `set_object` 维护它们；`replace_range` 删掉对象的字符就删掉对象。`TextNodeState::source_for` 把 `RichObject::line_box()` 交给 `TextSource::set_objects`。`classify_rich_change` 里，同位置的对象换了盒子、流向或 `fit_width` 是 `CONSTRAINT`（只重排），换了内容是 `PAINT`（只重绘）；插入、删除对象改了文本，是 `CONTENT`。场景按文本顺序给每个对象发一个图元，槽位在 `TEXT_INLINE_OBJECTS` 命名空间里，跟着节点的变换、裁剪、透明度和文档顺序走。
 
 标记 chip 宽度为 0，所以编辑器和展示框对同一份 `RichText` 断出同样的行。
 
@@ -1717,8 +1727,9 @@ entry 的颜色指纹把 span 颜色和 `rich.revision` 合在一起：改描边
 - `nana-text` `tests/inline_objects.rs`：对象占自己的宽度并站在基线上；改尺寸只重排不重塑形；高对象撑高行盒且不越出行顶；对象随文字换行；对象随编辑移动。
 - `nana-ui-runtime` `rich_text_editor::tests`：打字继承样式且合成一步撤销；光标处的样式作用于下一个字；三态摘要；预编辑带下划线且不进文档；对象在光标处插入且是一个字符；只读。
 - `nana-ui-scene` `tests/rich_text_editor.rs`：编辑器与展示框逐行一致；打字、输入法、退格、撤销经输入路由到达文档；富文本复制粘贴保留样式；光标与选区从编辑器自己的排版画出；工具栏改色不重排；方向键、Home / End。
+- `nana-text` `tests/block_objects.rs`：块对象独占一行且源字节不变，各种换行组合下不多出空行；块边界是 `Wrap`，边界字节在两行各有光标；`fit_width` 等比缩小并且命中、光标、选区都读缩小后的盒子，不放大、无预算不缩；行内可缩放对象随文字换行；可得空间扣掉包络间距；`min-content` 不计可缩放对象、`max-content` 计它的原宽；改放置只重排不重塑形，同 revision 不同放置不共用布局；放置随编辑平移、随对象删除；折叠换行的源保留放置；旧序列化数据没有放置也能读。
 - `nana-text` `tests/object_labels.rs`：标签对象占标签的宽度并把 run 摆进去；图标标签在文字前留出正方形、对象随之变宽、墨水进 `PlacedLabel`；标签按自己的 `scale` 和字重塑形。
-- `nana-ui-scene` `tests/rich_text_spans.rs`：带头像的 `Label` 占行宽，画出一个药丸和药丸里的方形图片，名字变长重排变宽；贴纸占行宽并画成图片；改贴纸尺寸只重排不重塑形；纹理对象走宿主纹理渲染器；chip 不占宽度、展示框不画它；只改绘制层时 `text_nodes_shaped == 0` 且保留的 layout 句柄不变；只改特效索引时整帧空闲；大字号 span 撑高行盒；描边、阴影、装饰线进场景且不再出整框 `Stroke`；CSS 是 span 的底。
+- `nana-ui-scene` `tests/rich_text_spans.rs`：带头像的 `Label` 占行宽，画出一个药丸和药丸里的方形图片，名字变长重排变宽；贴纸占行宽并画成图片；可缩放的块图片在 400px 列里独占一行、缩到列宽且保持比例；flex 行里可缩放图片让节点收窄到行宽，不可缩放的撑住原宽；改贴纸尺寸只重排不重塑形；纹理对象走宿主纹理渲染器；chip 不占宽度、展示框不画它；只改绘制层时 `text_nodes_shaped == 0` 且保留的 layout 句柄不变；只改特效索引时整帧空闲；大字号 span 撑高行盒；描边、阴影、装饰线进场景且不再出整框 `Stroke`；CSS 是 span 的底。
 - `nana-ui` `scene_paint::text`：改描边重建实例不重排、改色不新栅格化；带模糊阴影的稳态帧不栅格化、不上传；实例按画序排在一个 entry 里；带大字号 span 的段落从 Runtime 句柄画出；描边位图比填充宽且同心；模糊守恒覆盖率。
 
 ### 这一阶段没做的

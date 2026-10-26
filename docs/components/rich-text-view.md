@@ -150,6 +150,54 @@ widget(RichTextView::new(line))
 - `RichObject::texture(id, slot, w, h)`：宿主纹理槽。动图由应用解码后写进这个槽，由宿主纹理渲染器画。
 - `RichObject::chip(id, label, kind)`：编辑器里的标记。不占宽度，展示框不画它，所以编辑器和展示框断行一致。
 
+## 块图片
+
+`.flow(RichObjectFlow::Block)` 让对象独占一行，像两段之间的一张图：前面的字在它前面收行，后面的字从它下一行开始。文本不变，不需要插换行，它仍然是一个字符，光标一步跨过它。`.fit_width(true)` 让比行宽的对象按比例缩到行宽，像 CSS 的 `max-width: 100%`：容器可以比它窄，它跟着容器缩；不会放大，`RichObject` 里记的仍是原尺寸。两者可以分开用：行内的贴纸也可以只开 `fit_width`。
+
+:::api
+
+```rust view
+use nana_ui::runtime::view;
+use nana_ui::runtime::RichTextView;
+use nana_ui::runtime::rich::{RichObject, RichObjectFlow, RichText};
+
+let post = RichText::builder()
+    .plain("今天的海")
+    .object(
+        RichObject::image(1, "file:///photos/beach.png", 1200.0, 800.0)
+            .flow(RichObjectFlow::Block)
+            .fit_width(true),
+    )
+    .plain("风很大")
+    .build();
+
+view! {
+    <Widget of={RichTextView::new(post)} />
+}
+```
+
+```rust rust
+use nana_ui::runtime::view::widget;
+use nana_ui::runtime::RichTextView;
+use nana_ui::runtime::rich::{RichObject, RichObjectFlow, RichText};
+
+let post = RichText::builder()
+    .plain("今天的海")
+    .object(
+        RichObject::image(1, "file:///photos/beach.png", 1200.0, 800.0)
+            .flow(RichObjectFlow::Block)
+            .fit_width(true),
+    )
+    .plain("风很大")
+    .build();
+
+widget(RichTextView::new(post))
+```
+
+:::
+
+改流向或 `fit_width` 只重新排版，不重新塑形。标签对象（`tag`、`label`）的尺寸由标签决定，不缩放。
+
 ## 注音
 
 `RichTextBuilder::ruby(base, annotation)` 在基字上方放一行半字号的注音（假名、拼音）。基字不会拆到两行；注音比基字宽时基字被撑开，行高长出注音那一截。只做横排，竖排时注音不画。

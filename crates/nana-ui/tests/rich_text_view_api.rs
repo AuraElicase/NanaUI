@@ -39,6 +39,30 @@ fn the_documented_rich_text_builds_and_mounts() {
 }
 
 #[test]
+fn the_documented_block_picture_mounts_with_its_placement() {
+    use nana_ui::runtime::rich::{RichObject, RichObjectFlow};
+    let post = RichText::builder()
+        .plain("今天的海")
+        .object(
+            RichObject::image(1, "file:///photos/beach.png", 1200.0, 800.0)
+                .flow(RichObjectFlow::Block)
+                .fit_width(true),
+        )
+        .plain("风很大")
+        .build();
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let view = cx
+        .create_component(document, RichTextView::new(post.clone()))
+        .unwrap();
+    let mounted = cx.world().rich_text(view.stable_id()).unwrap();
+    let (_, picture) = &mounted.objects()[0];
+    assert_eq!(picture.flow, RichObjectFlow::Block);
+    assert!(picture.fit_width);
+    assert_eq!(picture.width_px, 1200.0, "the authored size is kept");
+}
+
+#[test]
 fn the_documented_editor_commands_reach_the_document() {
     use nana_ui::runtime::rich::RichObject;
     use nana_ui::runtime::{RichEditCommand, RichTextEditor, RichTextEditorEvent};

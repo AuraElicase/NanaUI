@@ -35,7 +35,8 @@ use nana_text::{
     TextSource, TextSpan, TextStyle as NanaTextStyle,
 };
 use nana_ui_core::{
-    AttributedRanges, LineHeightSpec, RichShapeStyle, RichSpanStyle, RichText, TextAlignSpec,
+    AttributedRanges, LineHeightSpec, RichObjectFlow, RichShapeStyle, RichSpanStyle, RichText,
+    TextAlignSpec,
 };
 
 use crate::{ComputedStyle, TextHorizontalAlignment, TextMetrics, TextShapeConstraints};
@@ -448,6 +449,7 @@ impl TextNodeState {
                 ));
                 if !rich.objects().is_empty() {
                     source.set_objects(rich_text_objects(rich));
+                    source.set_placements(rich_text_placements(rich));
                     source.set_labels(
                         rich.objects()
                             .iter()
@@ -519,6 +521,22 @@ pub(crate) fn rich_text_objects(rich: &RichText) -> Vec<nana_text::InlineObject>
                     envelope: None,
                 },
             }
+        })
+        .collect()
+}
+
+/// How a rich text's objects sit among the lines, as `nana-text`
+/// placements. One inline at its own size has none.
+pub(crate) fn rich_text_placements(rich: &RichText) -> Vec<nana_text::ObjectPlacement> {
+    rich.objects()
+        .iter()
+        .filter(|(_, object)| object.flow != RichObjectFlow::Inline || object.fit_width)
+        .map(|(offset, object)| {
+            let flow = match object.flow {
+                RichObjectFlow::Inline => nana_text::ObjectFlow::Inline,
+                RichObjectFlow::Block => nana_text::ObjectFlow::Block,
+            };
+            nana_text::ObjectPlacement::new(*offset, flow).fit_width(object.fit_width)
         })
         .collect()
 }
@@ -611,8 +629,8 @@ pub(crate) fn classify_rich_change(
     if before.map(effect) != after.map(effect) {
         dirty |= TextDirty::GLYPH_PRESENTATION;
     }
-    // Objects at the same offsets (the text is the same): a new box relays
-    // the paragraph out; new content only repaints it.
+    // Objects at the same offsets (the text is the same): a new box, flow or
+    // fitting relays the paragraph out; new content only repaints it.
     let before = previous.map_or(&[][..], RichText::objects);
     let after = next.map_or(&[][..], RichText::objects);
     if before.len() != after.len()
@@ -620,6 +638,8 @@ pub(crate) fn classify_rich_change(
             // A label's text and look are shaped into the layout.
             at != to
                 || old.line_box() != new.line_box()
+                || old.flow != new.flow
+                || old.fit_width != new.fit_width
                 || (old.tag_label().is_some() || new.tag_label().is_some())
                     && old.content != new.content
         })
@@ -1087,6 +1107,34 @@ mod tests {
         assert!(
             rich_text_spans(&painted, &base, 16.0).is_empty(),
             "a background never reaches the shaper"
+        );
+    }
+
+    #[test]
+    fn an_object_flow_or_fitting_change_relays_out_and_reaches_the_source() {
+        use nana_ui_core::RichObject;
+        let with = |object: RichObject| RichText::builder().plain("a").object(object).build();
+        let image = || RichObject::image(1, "a.png", 20.0, 20.0);
+        let base = with(image());
+        let block = with(image().flow(RichObjectFlow::Block));
+        let fitted = with(image().fit_width(true));
+        for changed in [&block, &fitted] {
+            assert_eq!(
+                classify_rich_change(Some(&base), Some(changed)),
+                TextDirty::CONSTRAINT
+            );
+        }
+        let style = ComputedStyle::default();
+        let mut node = TextNodeState::default();
+        let (source, _) = node.source_for(base.text(), Some(&base), &style);
+        assert!(source.placements().is_empty(), "inline at its own size");
+        node.invalidate(TextDirty::CONSTRAINT);
+        let both = with(image().flow(RichObjectFlow::Block).fit_width(true));
+        let (source, copied) = node.source_for(both.text(), Some(&both), &style);
+        assert!(copied);
+        assert_eq!(
+            source.placements(),
+            [nana_text::ObjectPlacement::new(1, nana_text::ObjectFlow::Block).fit_width(true)]
         );
     }
 

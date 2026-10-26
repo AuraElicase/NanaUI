@@ -81,6 +81,7 @@ pub use shape::{GlyphFlags, RunDirection, RunOrientation, ScriptTag, ShapedGlyph
 pub use shared::{SharedText, TextStamp};
 pub use source::{
     CompositionSegment, InlineEnvelope, InlineObject, InlineObjectMetrics, LABEL_SCALE,
-    OBJECT_REPLACEMENT, ObjectLabel, RUBY_SCALE, RubySpan, TextSource, TextSpan,
+    OBJECT_REPLACEMENT, ObjectFlow, ObjectLabel, ObjectPlacement, RUBY_SCALE, RubySpan, TextSource,
+    TextSpan,
 };
 pub use style::{TextKind, TextStyle};

@@ -98,6 +98,65 @@ pub struct InlineObject {
     pub metrics: InlineObjectMetrics,
 }
 
+/// Whether an object shares its line with the text around it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ObjectFlow {
+    /// Among the text, broken around like any cluster.
+    #[default]
+    Inline,
+    /// On a line of its own. The text before it ends a line there and the
+    /// text after it starts a new one, without a character standing for
+    /// either break: the U+FFFC stays the object's only byte, and a caret at
+    /// either edge has a place on both lines, as at a soft wrap.
+    Block,
+}
+
+/// How an object of [`TextSource::objects`] sits among the lines, when that
+/// is not the default: inline, at its own size.
+///
+/// Kept beside the objects rather than in [`InlineObject`], as
+/// [`ObjectLabel`] is: a source with none pays nothing, and an object built
+/// without one is inline at its own size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ObjectPlacement {
+    /// Byte offset of the object's U+FFFC in [`TextSource::text`].
+    pub offset: usize,
+    #[serde(default)]
+    pub flow: ObjectFlow,
+    /// Scaled down, keeping its aspect, when wider than the room a line has
+    /// for it: the line budget, less the gap its envelope keeps. Never scaled
+    /// up. Its `min-content` is then nothing — it shrinks with its box, as
+    /// an image with CSS `max-width: 100%` does — while `max-content` stays
+    /// its own width. A labelled object is sized by its label and does not
+    /// scale.
+    #[serde(default)]
+    pub fit_width: bool,
+}
+
+impl ObjectPlacement {
+    /// The object at `offset`, flowing as `flow` at its own size.
+    pub fn new(offset: usize, flow: ObjectFlow) -> Self {
+        Self {
+            offset,
+            flow,
+            fit_width: false,
+        }
+    }
+
+    /// Whether it scales down to fit its line's room.
+    #[must_use]
+    pub fn fit_width(mut self, fit: bool) -> Self {
+        self.fit_width = fit;
+        self
+    }
+
+    /// Inline at its own size: what an object without a placement does.
+    fn is_default(&self) -> bool {
+        self.flow == ObjectFlow::Inline && !self.fit_width
+    }
+}
+
 /// A ruby annotation: small text set above a base range (furigana, pinyin).
 ///
 /// The base is laid out as one unit — no line breaks inside it — and is
@@ -267,6 +326,10 @@ pub struct TextSource {
     /// Sorted by offset; each names an object of `objects`.
     #[serde(default)]
     labels: Vec<ObjectLabel>,
+    /// Sorted by offset; each names an object of `objects`, and none is the
+    /// default placement.
+    #[serde(default)]
+    placements: Vec<ObjectPlacement>,
     revision: TextRevision,
     /// Hash of `text`, filled on first use and reset by every mutation.
     #[serde(skip)]
@@ -291,6 +354,7 @@ impl PartialEq for TextSource {
             && self.objects == other.objects
             && self.rubies == other.rubies
             && self.labels == other.labels
+            && self.placements == other.placements
             && self.revision == other.revision
     }
 }
@@ -310,6 +374,7 @@ impl TextSource {
             objects: Vec::new(),
             rubies: Vec::new(),
             labels: Vec::new(),
+            placements: Vec::new(),
             revision: TextRevision::INITIAL,
             content_hash: OnceLock::new(),
             folded: OnceLock::new(),
@@ -391,6 +456,33 @@ impl TextSource {
         labels.sort_by_key(|label| label.offset);
         labels.dedup_by_key(|label| label.offset);
         self.labels = labels;
+        self.bump();
+    }
+
+    /// The object placements, sorted by offset. An object with none is
+    /// inline at its own size.
+    pub fn placements(&self) -> &[ObjectPlacement] {
+        &self.placements
+    }
+
+    /// The placement of the object at byte `offset`, if it has one.
+    pub fn placement_at(&self, offset: usize) -> Option<&ObjectPlacement> {
+        self.placements
+            .binary_search_by_key(&offset, |placement| placement.offset)
+            .ok()
+            .map(|index| &self.placements[index])
+    }
+
+    /// Replaces the object placements. One not on an object of
+    /// [`Self::objects`], or the default placement, is dropped. Set the
+    /// objects first.
+    pub fn set_placements(&mut self, mut placements: Vec<ObjectPlacement>) {
+        placements.retain(|placement| {
+            !placement.is_default() && self.object_at(placement.offset).is_some()
+        });
+        placements.sort_by_key(|placement| placement.offset);
+        placements.dedup_by_key(|placement| placement.offset);
+        self.placements = placements;
         self.bump();
     }
 
@@ -549,6 +641,13 @@ impl TextSource {
                 label.offset = label.offset + added - removed;
             }
         }
+        self.placements
+            .retain(|placement| placement.offset < range.start || placement.offset >= range.end);
+        for placement in &mut self.placements {
+            if placement.offset >= range.end {
+                placement.offset = placement.offset + added - removed;
+            }
+        }
         self.bump();
     }
 
@@ -559,6 +658,7 @@ impl TextSource {
         self.objects.clear();
         self.rubies.clear();
         self.labels.clear();
+        self.placements.clear();
         self.bump();
     }
 
@@ -612,6 +712,7 @@ impl TextSource {
                         objects: self.objects.clone(),
                         rubies: self.rubies.clone(),
                         labels: self.labels.clone(),
+                        placements: self.placements.clone(),
                         revision: self.revision,
                         content_hash: OnceLock::new(),
                         folded: OnceLock::new(),

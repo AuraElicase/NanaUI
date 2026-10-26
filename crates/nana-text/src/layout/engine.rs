@@ -11,7 +11,7 @@ use crate::id::TextLayoutId;
 use crate::metrics::RunMetrics;
 use crate::shape::{RunDirection, ShapedRun};
 use crate::shaping::ShapedText;
-use crate::source::{SnappedSpans, TextSource};
+use crate::source::{ObjectFlow, SnappedSpans, TextSource};
 use crate::style::{TextKind, TextStyle};
 use nana_ui_core::DirSpec;
 use serde::{Deserialize, Serialize};
@@ -212,6 +212,7 @@ impl Layouter {
             &run_line_heights,
             base_line_height,
             request.source.objects(),
+            request.source.placements(),
             request.source.paragraph_alignments(),
             request
                 .source
@@ -246,20 +247,38 @@ impl Layouter {
     /// `min-content` and `max-content` for this text, independent of the
     /// container width. Not cached: it is a pass over the shaped advances and
     /// has no width to key on.
+    ///
+    /// An object that fits its line's room ([`crate::ObjectPlacement::fit_width`])
+    /// is measured at its own width for `max-content` and at none for
+    /// `min-content`, so a container may shrink below it and the layout then
+    /// scales it to what is left.
     pub fn intrinsic_widths(&mut self, request: &LayoutRequest<'_>) -> IntrinsicWidths {
         let scale = request.constraints.scale.px_per_logical;
         let base_line_height = line_height_px(request.style, scale);
         let run_line_heights = run_line_heights(request, scale);
-        let sized = sized_runs(request, scale);
-        let (widths, candidates) = Builder::new(line_input(
-            request,
-            sized.as_deref(),
-            None,
-            &run_line_heights,
-            base_line_height,
-            None,
-        ))
-        .intrinsic_widths();
+        let measure = |sizing| {
+            let sized = sized_runs(request, scale, sizing);
+            Builder::new(line_input(
+                request,
+                sized.as_deref(),
+                None,
+                &run_line_heights,
+                base_line_height,
+                None,
+            ))
+            .intrinsic_widths()
+        };
+        let (mut widths, mut candidates) = measure(ObjectSizing::Own);
+        if request
+            .source
+            .placements()
+            .iter()
+            .any(|placement| placement.fit_width)
+        {
+            let (compressed, more) = measure(ObjectSizing::Compressed);
+            widths.min_px = compressed.min_px;
+            candidates += more;
+        }
         self.counters.line_break_candidates += candidates;
         widths
     }
@@ -275,7 +294,11 @@ impl Layouter {
             .ellipsis
             .filter(|_| request.constraints.ellipsis)
             .and_then(|shaped| Ellipsis::new(shaped));
-        let sized = sized_runs(request, request.constraints.scale.px_per_logical);
+        let sized = sized_runs(
+            request,
+            request.constraints.scale.px_per_logical,
+            ObjectSizing::Fit,
+        );
         let input = line_input(
             request,
             sized.as_deref(),
@@ -350,13 +373,77 @@ impl Layouter {
     }
 }
 
+/// What size an object that fits its line's room takes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ObjectSizing {
+    /// Its own: `max-content`.
+    Own,
+    /// Scaled down to the room its line has: layout.
+    Fit,
+    /// None at all: `min-content`, as CSS measures a replaced element whose
+    /// width is held to its container's.
+    Compressed,
+}
+
+/// What an object's own width (`width_px`, physical) is scaled by under
+/// `sizing`: 1 unless its placement fits it to its line's room. That room is
+/// the line budget less the gap its envelope keeps after it, the part a line
+/// end may close up included, so the object fits a line on its own whatever
+/// the line decision does with the gap. This engine has no `text-indent`, so
+/// no line has less room than the budget. A labelled object is sized by its
+/// label and never comes here.
+fn fit_ratio(
+    request: &LayoutRequest<'_>,
+    offset: usize,
+    width_px: f32,
+    sizing: ObjectSizing,
+) -> f32 {
+    let fits = request
+        .source
+        .placement_at(offset)
+        .is_some_and(|placement| placement.fit_width);
+    if !fits {
+        return 1.0;
+    }
+    let scale = request.constraints.scale.px_per_logical;
+    let budget = match sizing {
+        ObjectSizing::Own => return 1.0,
+        ObjectSizing::Compressed => return 0.0,
+        ObjectSizing::Fit => match request
+            .constraints
+            .inline_budget_px(request.shaped.vertical)
+        {
+            Some(budget) => budget,
+            None => return 1.0,
+        },
+    };
+    let gap = request
+        .source
+        .object_at(offset)
+        .and_then(|object| object.metrics.envelope)
+        .map_or(0.0, |envelope| envelope.gap_px.max(0.0));
+    let room = ((budget - gap) * scale).max(0.0);
+    if width_px > room && width_px > 0.0 {
+        room / width_px
+    } else {
+        1.0
+    }
+}
+
 /// The shaped runs with every inline object's placeholder given its box,
 /// or `None` when the source has no objects (the runs are read as shaped).
 ///
 /// This is where an object's size enters: after shaping and inside the
 /// layout cache's key (the source revision moves with the objects), so
 /// resizing a sticker relays the paragraph out from the runs already shaped.
-fn sized_runs(request: &LayoutRequest<'_>, scale: f32) -> Option<Vec<ShapedRun>> {
+/// An object that fits its line's room is scaled here, its ascent and descent
+/// with its width, so the line box, hit testing, carets, selection and paint
+/// all read the one scaled box.
+fn sized_runs(
+    request: &LayoutRequest<'_>,
+    scale: f32,
+    sizing: ObjectSizing,
+) -> Option<Vec<ShapedRun>> {
     let rubies = ruby_boxes(request);
     if request.source.objects().is_empty() && rubies.is_empty() {
         return None;
@@ -408,11 +495,15 @@ fn sized_runs(request: &LayoutRequest<'_>, scale: f32) -> Option<Vec<ShapedRun>>
             .unwrap_or_default();
         let [width, ascent, descent] = match label_box(request, run.source.start) {
             Some(label) => [label.width_px, label.ascent_px, label.descent_px],
-            None => [
-                metrics.width_px.max(0.0) * scale,
-                metrics.ascent_px.max(0.0) * scale,
-                metrics.descent_px.max(0.0) * scale,
-            ],
+            None => {
+                let width = metrics.width_px.max(0.0) * scale;
+                let ratio = fit_ratio(request, run.source.start, width, sizing);
+                [
+                    width * ratio,
+                    metrics.ascent_px.max(0.0) * scale * ratio,
+                    metrics.descent_px.max(0.0) * scale * ratio,
+                ]
+            }
         };
         // The envelope's gap travels with the object: the line decision sees
         // one cell, and may close part of it up or drop it at a line end.
@@ -671,8 +762,9 @@ fn placed_objects(
             // it in the line's direction.
             let (x, width) = match object.metrics.envelope {
                 Some(_) if label_box(request, object.offset).is_none() => {
-                    let own = (object.metrics.width_px.max(0.0)
-                        * request.constraints.scale.px_per_logical)
+                    let own =
+                        object.metrics.width_px.max(0.0) * request.constraints.scale.px_per_logical;
+                    let own = (own * fit_ratio(request, object.offset, own, ObjectSizing::Fit))
                         .min(run.advance_px);
                     let x = match run.direction {
                         RunDirection::Rtl => run.origin_x_px + run.advance_px - own,
@@ -734,7 +826,20 @@ fn line_input<'r>(
                     .map(|envelope| (object.offset, envelope))
             })
             .collect(),
+        blocks: block_offsets(request.source),
     }
+}
+
+/// Source offsets of the objects that take a line of their own.
+fn block_offsets(source: &TextSource) -> Vec<usize> {
+    source
+        .placements()
+        .iter()
+        .filter(|placement| {
+            placement.flow == ObjectFlow::Block && source.object_at(placement.offset).is_some()
+        })
+        .map(|placement| placement.offset)
+        .collect()
 }
 
 /// When a label may skip the paragraph machinery entirely.
@@ -745,10 +850,10 @@ fn line_input<'r>(
 /// the paragraph path would cut into more than one segment.
 ///
 /// That last question is asked of [`segments`] rather than re-derived, so an
-/// authored newline, a forced break and a *trailing* newline — which adds no
-/// paragraph but does add an empty last line — all degrade alike. The scan is
-/// not on the per-frame path: this runs when a layout is *built*, which a cache
-/// hit skips.
+/// authored newline, a forced break, a block object beside other text and a
+/// *trailing* newline — which adds no paragraph but does add an empty last
+/// line — all degrade alike. The scan is not on the per-frame path: this runs
+/// when a layout is *built*, which a cache hit skips.
 fn uses_label_fast_path(request: &LayoutRequest<'_>) -> bool {
     request.kind == TextKind::Label
         && !request.constraints.wraps()
@@ -757,7 +862,13 @@ fn uses_label_fast_path(request: &LayoutRequest<'_>) -> bool {
             .constraints
             .block_budget_px(request.shaped.vertical)
             .is_none()
-        && segments(request.source.text(), &request.shaped.paragraphs).len() == 1
+        && segments(
+            request.source.text(),
+            &request.shaped.paragraphs,
+            &block_offsets(request.source),
+        )
+        .len()
+            == 1
 }
 
 /// Line box height a style asks for, in physical px.
