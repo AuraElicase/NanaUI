@@ -101,4 +101,4 @@ CPU 调用墙钟，单位 ms，不是 GPU 时长：
 
 - 未覆盖 Vulkan、DX12，以及 Windows、Linux 窗口。
 - ~~图标图集在每个目标上提前分配，无图标的目标也占用 256 KiB。~~ 已改为第一个图标出现时才分配。
-- motion 描述符和时间在 painter 共享，并经上传批写入。窗口与同 profile 的 Separate 输出在一帧内绘制不同场景时，最后写入者获胜。这是既有问题；headless driver 各组绘制同一场景，不受影响。
+- ~~motion 描述符和时间在 painter 共享，并经上传批写入。窗口与同 profile 的 Separate 输出在一帧内绘制不同场景时，最后写入者获胜。~~ 已通过同帧后续 paint 的按序上传与丢帧缓存回滚修复；keyframe、描述符和时钟的像素回归及验证见 [#242 收尾记录](issue242-closeout-2026-10-26.md)。

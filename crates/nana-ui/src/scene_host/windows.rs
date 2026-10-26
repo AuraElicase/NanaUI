@@ -2297,6 +2297,33 @@ impl<Program: RuntimeProgram> WindowManager<Program> {
                     Request::Displays(reply) => {
                         reply.finish(Ok(display::display_infos(event_loop)));
                     }
+                    Request::SurfaceInfo(id, generation, reply) => {
+                        if !self.windows.is_current(id, generation) {
+                            reply.finish(Err(crate::WindowError::WindowClosed));
+                        } else if self.render_suspended || self.graphics.gpu().is_lost() {
+                            reply.finish(Err(crate::WindowError::OperationFailed(
+                                "window surface recovery pending".into(),
+                            )));
+                        } else if let Some(host) = self.window_contexts.get(&id) {
+                            let monitor = host.surface.window().current_monitor();
+                            let primary = event_loop.primary_monitor();
+                            let display = monitor
+                                .as_ref()
+                                .map(|monitor| display::display_info(monitor, primary.as_ref()));
+                            let info = host
+                                .surface
+                                .surface_info(self.graphics.gpu().generation(), display);
+                            reply.finish(info.filter(|_| host.surface_retry.is_none()).ok_or_else(
+                                || {
+                                    crate::WindowError::OperationFailed(
+                                        "window surface recovery pending".into(),
+                                    )
+                                },
+                            ));
+                        } else {
+                            reply.finish(Err(crate::WindowError::WindowClosed));
+                        }
+                    }
                     Request::Material(id, generation, effect, reply) => {
                         if !self.windows.is_current(id, generation) {
                             reply.finish(Err(crate::WindowError::WindowClosed));

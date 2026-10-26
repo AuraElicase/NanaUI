@@ -147,7 +147,10 @@ fn gpu() -> Result<(GpuContext, String)> {
         trace: wgpu::Trace::Off,
         experimental_features: wgpu::ExperimentalFeatures::disabled(),
     }))?;
-    Ok((GpuContext::from_wgpu(adapter, device, queue), name))
+    Ok((
+        GpuContext::from_wgpu_with_loss_tracking(adapter, device, queue),
+        name,
+    ))
 }
 
 fn quantiles(values: &mut [f64]) -> Value {

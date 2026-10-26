@@ -408,9 +408,9 @@ pub struct ScenePaintViewport {
 /// which includes an icon atlas of its own. What a working format changes is
 /// a pipeline set, built on first use and kept while the format is painted.
 ///
-/// Targets painted into one frame read the shared glyph atlas when that
-/// frame is submitted, so every paint after the first in a frame records its
-/// atlas uploads in the frame's encoder, behind the passes before it.
+/// Targets painted into one frame read the shared glyph atlas and motion
+/// buffers when that frame is submitted, so every paint after the first
+/// records their uploads in the encoder, behind the passes before it.
 pub struct SceneWgpuPainter {
     targets: std::collections::HashMap<RenderTargetId, TargetState>,
     /// The pipeline sets of the working formats not painted right now.
@@ -424,9 +424,9 @@ pub struct SceneWgpuPainter {
     /// The same for the state [`Self::paint`] keeps in the painter itself, in
     /// a ledger of its own so no host id can alias it.
     retained_default: RetainedWrites,
-    /// Glyph-atlas regions copied in a frame's encoder (see `text/upload.rs`).
-    /// A dropped frame loses them, so the atlas forgets what it placed.
-    retained_atlas: RetainedWrites,
+    /// Shared atlas/motion uploads copied in a frame's encoder. A dropped
+    /// frame invalidates the corresponding CPU upload cache.
+    retained_shared: RetainedWrites,
     device: wgpu::Device,
     queue: wgpu::Queue,
     /// Surface format. Scene pipelines use `working_format` for wide/HDR
@@ -462,7 +462,7 @@ pub struct SceneWgpuPainter {
     last_gpu_timings: Option<GpuStageTimings>,
     last_dest_pass_counts: Option<DestPassCounts>,
     /// The frame the last paint was recorded in. A paint into the same one
-    /// copies its glyph-atlas regions in order rather than ahead of the frame.
+    /// copies its shared atlas/motion uploads in order, not ahead of the frame.
     last_frame: Option<nana_gpu::FrameId>,
     /// Last fully scene-described dest; host textures / GPU slots skip reuse.
     painted: Option<PaintedDest>,
@@ -511,6 +511,8 @@ pub struct RenderTargetId(pub u64);
 
 /// The one key of the ledger behind [`SceneWgpuPainter::paint`].
 const DEFAULT_TARGET: u64 = 0;
+const SHARED_ATLAS: u64 = 0;
+const SHARED_MOTION: u64 = 1;
 
 #[derive(Default)]
 struct TargetState {
@@ -727,7 +729,7 @@ impl SceneWgpuPainter {
             gpu: gpu.clone(),
             retained_targets: RetainedWrites::new(),
             retained_default: RetainedWrites::new(),
-            retained_atlas: RetainedWrites::new(),
+            retained_shared: RetainedWrites::new(),
             device: device.clone(),
             queue: queue.clone(),
             format,
@@ -1152,7 +1154,7 @@ impl SceneWgpuPainter {
             gpu_renderers,
             Some(link),
         );
-        self.record_ordered_atlas_writes(frame);
+        self.record_ordered_shared_writes(frame);
         if result.is_ok() {
             self.host_textures.keep_alive_until_complete(frame);
         }
@@ -1210,15 +1212,19 @@ impl SceneWgpuPainter {
         if in_flight {
             return Err(ScenePaintError::TargetInFlight(target_id));
         }
-        if self.retained_atlas.has_rolled_back() {
-            self.retained_atlas.drain_rolled_back(|_| {});
-            self.text.forget_atlas_placements();
+        if self.retained_shared.has_rolled_back() {
+            self.retained_shared.drain_rolled_back(|key| match key {
+                SHARED_ATLAS => self.text.forget_atlas_placements(),
+                SHARED_MOTION => self.motion.invalidate_uploads(),
+                _ => unreachable!("shared upload ledger key"),
+            });
         }
-        // The glyph atlas is shared by every target, and this frame's queue
-        // writes land ahead of every pass it records; see `text/upload.rs`.
+        // Atlas/motion buffers are shared by every target, and this frame's
+        // queue writes land ahead of every pass; see `text/upload.rs`.
         let follows = self.last_frame == Some(frame.id());
         self.last_frame = Some(frame.id());
         self.text.set_follows_in_frame(follows);
+        self.motion.set_follows_in_frame(follows);
         if self.retained_default.has_rolled_back() {
             self.retained_default.drain_rolled_back(|_| {});
             self.reset_default_target();
@@ -1280,7 +1286,7 @@ impl SceneWgpuPainter {
             gpu_renderers,
             Some(link),
         );
-        self.record_ordered_atlas_writes(frame);
+        self.record_ordered_shared_writes(frame);
         if result.is_ok() {
             self.host_textures.keep_alive_until_complete(frame);
             frame.record_retained_writes(&self.retained_default, DEFAULT_TARGET);
@@ -1290,9 +1296,12 @@ impl SceneWgpuPainter {
 
     /// Recorded whether or not the paint succeeded: the copies are in the
     /// frame's encoder either way, and a frame that is dropped loses them.
-    fn record_ordered_atlas_writes(&mut self, frame: &mut FrameContext) {
+    fn record_ordered_shared_writes(&mut self, frame: &mut FrameContext) {
         if self.text.take_ordered_flush() {
-            frame.record_retained_writes(&self.retained_atlas, 0);
+            frame.record_retained_writes(&self.retained_shared, SHARED_ATLAS);
+        }
+        if self.motion.take_ordered_uploads() {
+            frame.record_retained_writes(&self.retained_shared, SHARED_MOTION);
         }
     }
 
@@ -2467,8 +2476,13 @@ impl SceneWgpuPainter {
             msaa_allocated: dest.msaa_allocated,
             ..DestPassCounts::default()
         };
-        self.motion
-            .sync_with_work(&self.device, &self.queue, scene, Some(&gpu_work));
+        self.motion.sync_with_work(
+            &self.device,
+            &self.queue,
+            scene,
+            Some(&gpu_work),
+            Some(encoder),
+        );
         if gpu_interleaved {
             encode_ordered(
                 &mut EncodeOrdered {

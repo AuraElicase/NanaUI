@@ -1,0 +1,1912 @@
+{
+  "base_head": "1f91962c744d7c0f3d8c99cf2ae10b94ad0a60dc",
+  "builds": {
+    "hardware": "Apple M4\n17179869184\n10\n",
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+    "binaries": {
+      "before": {
+        "nana-output-benchmark": "ee2b9a2389157669d32ec98bb11b12864b59af0f06a4613fce64f135ab5cd5bc",
+        "presentation-output-probe": "df5107964936cc8531002db93deed5ec29bde22f943a77cd4fa424f53233f03a"
+      },
+      "after": {
+        "nana-output-benchmark": "fe7b3a164649c14db6f4f983d470ebd9fc647186d0c0f49fb4742d44ad13e4d4",
+        "presentation-output-probe": "28c2a50d3ad378278eb599cd609a7b8a4c494c0e6d5999995bad8bfe9b319c34"
+      }
+    },
+    "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: aarch64-apple-darwin\nrelease: 1.99.0\nLLVM version: 23.1.1\n"
+  },
+  "source_scope": "git archive of base_head plus only the three reviewed painter implementation files and two test helper visibility changes; no concurrent sticky/layout changes",
+  "round_order": [
+    "AB",
+    "BA",
+    "AB",
+    "BA",
+    "AB"
+  ],
+  "A": "before",
+  "B": "after",
+  "gates": {
+    "before": 70,
+    "after": 70,
+    "invariants_before": 2250,
+    "invariants_after": 2250
+  },
+  "timing_ms": {
+    "output-conversion": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.014917,
+          "p95": 0.035125,
+          "p99": 0.040874999999999995
+        },
+        "after": {
+          "p50": 0.015167,
+          "p95": 0.026042,
+          "p99": 0.082125
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.015167,
+          "p95": 0.0385,
+          "p99": 0.043709
+        },
+        "after": {
+          "p50": 0.015792,
+          "p95": 0.035875,
+          "p99": 0.09483399999999999
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.041667,
+          "p95": 0.080292,
+          "p99": 0.170625
+        },
+        "after": {
+          "p50": 0.051084,
+          "p95": 0.08112499999999999,
+          "p99": 0.109542
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.023583,
+          "p95": 0.115042,
+          "p99": 0.22908299999999998
+        },
+        "after": {
+          "p50": 0.018040999999999998,
+          "p95": 0.063417,
+          "p99": 0.081792
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.023833,
+          "p95": 0.10483300000000001,
+          "p99": 0.14754199999999998
+        },
+        "after": {
+          "p50": 0.023,
+          "p95": 0.099084,
+          "p99": 0.132166
+        }
+      }
+    ],
+    "output-incompatible": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.025375,
+          "p95": 0.09775,
+          "p99": 0.144833
+        },
+        "after": {
+          "p50": 0.027667,
+          "p95": 0.136334,
+          "p99": 0.17124999999999999
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.024875,
+          "p95": 0.078167,
+          "p99": 0.14750000000000002
+        },
+        "after": {
+          "p50": 0.035416,
+          "p95": 0.110042,
+          "p99": 0.19474999999999998
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.09933399999999999,
+          "p95": 0.203709,
+          "p99": 0.239292
+        },
+        "after": {
+          "p50": 0.09849999999999999,
+          "p95": 0.19908299999999998,
+          "p99": 0.228625
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.067209,
+          "p95": 0.221417,
+          "p99": 0.265958
+        },
+        "after": {
+          "p50": 0.081791,
+          "p95": 0.20533300000000002,
+          "p99": 0.27820900000000004
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.065208,
+          "p95": 0.235292,
+          "p99": 0.506417
+        },
+        "after": {
+          "p50": 0.040209,
+          "p95": 0.17875000000000002,
+          "p99": 0.310458
+        }
+      }
+    ],
+    "output-multi": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.016958,
+          "p95": 0.01925,
+          "p99": 0.027250000000000003
+        },
+        "after": {
+          "p50": 0.053417,
+          "p95": 0.1575,
+          "p99": 0.28620799999999996
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.016833,
+          "p95": 0.019583,
+          "p99": 0.025833000000000002
+        },
+        "after": {
+          "p50": 0.022417,
+          "p95": 0.07575,
+          "p99": 0.122583
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.078,
+          "p95": 0.161666,
+          "p99": 0.191167
+        },
+        "after": {
+          "p50": 0.097959,
+          "p95": 0.165875,
+          "p99": 0.607917
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.035500000000000004,
+          "p95": 0.15116700000000002,
+          "p99": 0.356292
+        },
+        "after": {
+          "p50": 0.032833999999999995,
+          "p95": 0.120333,
+          "p99": 0.17791700000000002
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.03825,
+          "p95": 0.115959,
+          "p99": 0.23425
+        },
+        "after": {
+          "p50": 0.034875,
+          "p95": 0.158375,
+          "p99": 0.845458
+        }
+      }
+    ],
+    "output-nested": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.000458,
+          "p95": 0.000791,
+          "p99": 0.004333
+        },
+        "after": {
+          "p50": 0.000625,
+          "p95": 0.003875,
+          "p99": 0.008124999999999999
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.000458,
+          "p95": 0.001,
+          "p99": 0.00475
+        },
+        "after": {
+          "p50": 0.000917,
+          "p95": 0.008041,
+          "p99": 0.010041
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.0025830000000000002,
+          "p95": 0.004667,
+          "p99": 0.0055
+        },
+        "after": {
+          "p50": 0.002791,
+          "p95": 0.004583,
+          "p99": 0.005125
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.000958,
+          "p95": 0.003875,
+          "p99": 0.004667
+        },
+        "after": {
+          "p50": 0.000916,
+          "p95": 0.003416,
+          "p99": 0.004417
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.001167,
+          "p95": 0.003209,
+          "p99": 0.0048330000000000005
+        },
+        "after": {
+          "p50": 0.00075,
+          "p95": 0.0035,
+          "p99": 0.005791999999999999
+        }
+      }
+    ],
+    "output-recovery": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.21437499999999998,
+          "p95": 0.350625,
+          "p99": 1.068958
+        },
+        "after": {
+          "p50": 0.254208,
+          "p95": 0.552125,
+          "p99": 1.11975
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.219833,
+          "p95": 0.410333,
+          "p99": 1.053625
+        },
+        "after": {
+          "p50": 0.293333,
+          "p95": 0.6679999999999999,
+          "p99": 1.015792
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.867208,
+          "p95": 10.331916,
+          "p99": 11.475667
+        },
+        "after": {
+          "p50": 6.613499999999999,
+          "p95": 11.59775,
+          "p99": 15.726166
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 2.002375,
+          "p95": 16.847916,
+          "p99": 29.34175
+        },
+        "after": {
+          "p50": 0.869417,
+          "p95": 7.624874999999999,
+          "p99": 14.233457999999999
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.82025,
+          "p95": 3.923417,
+          "p99": 6.601291
+        },
+        "after": {
+          "p50": 0.9463330000000001,
+          "p95": 7.697459,
+          "p99": 12.377834
+        }
+      }
+    ],
+    "output-slow": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.000167,
+          "p95": 0.000209,
+          "p99": 0.000209
+        },
+        "after": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.00025
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.000209
+        },
+        "after": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.000209
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.000375,
+          "p95": 0.000375,
+          "p99": 0.000375
+        },
+        "after": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.00025
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.000375
+        },
+        "after": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.00025
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.00025
+        },
+        "after": {
+          "p50": 0.00020800000000000001,
+          "p95": 0.000209,
+          "p99": 0.000209
+        }
+      }
+    ],
+    "output-static": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        },
+        "after": {
+          "p50": 0.000292,
+          "p95": 0.000292,
+          "p99": 0.000334
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.000542,
+          "p95": 0.000583,
+          "p99": 0.000625
+        },
+        "after": {
+          "p50": 0.000541,
+          "p95": 0.000542,
+          "p99": 0.000584
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.000542,
+          "p95": 0.000584,
+          "p99": 0.000625
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.00033299999999999996,
+          "p95": 0.000625,
+          "p99": 0.0006670000000000001
+        },
+        "after": {
+          "p50": 0.000542,
+          "p95": 0.000583,
+          "p99": 0.000584
+        }
+      }
+    ],
+    "transport-overlay-changing": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.016834,
+          "p95": 0.077708,
+          "p99": 0.131959
+        },
+        "after": {
+          "p50": 0.017249999999999998,
+          "p95": 0.074458,
+          "p99": 0.150417
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.016084,
+          "p95": 0.024416,
+          "p99": 0.134583
+        },
+        "after": {
+          "p50": 0.027667,
+          "p95": 0.08270899999999999,
+          "p99": 0.11654199999999999
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.085208,
+          "p95": 0.178958,
+          "p99": 0.210625
+        },
+        "after": {
+          "p50": 0.06629199999999999,
+          "p95": 0.15795800000000002,
+          "p99": 0.190666
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.049375,
+          "p95": 0.180209,
+          "p99": 0.205792
+        },
+        "after": {
+          "p50": 0.046959,
+          "p95": 0.201625,
+          "p99": 3.106
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.036042,
+          "p95": 0.17308300000000001,
+          "p99": 1.484625
+        },
+        "after": {
+          "p50": 0.052375,
+          "p95": 0.175541,
+          "p99": 0.7164159999999999
+        }
+      }
+    ],
+    "transport-overlay-multi": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.019417,
+          "p95": 0.082958,
+          "p99": 0.134125
+        },
+        "after": {
+          "p50": 0.016458,
+          "p95": 0.024292,
+          "p99": 0.12324999999999998
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.019083,
+          "p95": 0.11854200000000001,
+          "p99": 0.177792
+        },
+        "after": {
+          "p50": 0.061333000000000006,
+          "p95": 0.104,
+          "p99": 0.12999999999999998
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.081833,
+          "p95": 0.163,
+          "p99": 0.207791
+        },
+        "after": {
+          "p50": 0.083958,
+          "p95": 0.1945,
+          "p99": 2.6775
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.08287499999999999,
+          "p95": 0.144166,
+          "p99": 0.1775
+        },
+        "after": {
+          "p50": 0.052333000000000005,
+          "p95": 0.19045800000000002,
+          "p99": 2.661708
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.045333,
+          "p95": 0.239625,
+          "p99": 6.281791
+        },
+        "after": {
+          "p50": 0.06425,
+          "p95": 0.124167,
+          "p99": 0.16366699999999998
+        }
+      }
+    ],
+    "transport-overlay-slow": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        },
+        "after": {
+          "p50": 0.00025,
+          "p95": 0.000292,
+          "p99": 0.000292
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        },
+        "after": {
+          "p50": 0.0005,
+          "p95": 0.000542,
+          "p99": 0.000542
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        },
+        "after": {
+          "p50": 0.000542,
+          "p95": 0.000583,
+          "p99": 0.000584
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.000541,
+          "p95": 0.000542,
+          "p99": 0.000583
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000375
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        }
+      }
+    ],
+    "transport-overlay-static": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.000292,
+          "p95": 0.000292,
+          "p99": 0.000334
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000375
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.000542,
+          "p95": 0.000542,
+          "p99": 0.0006659999999999999
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.000292,
+          "p95": 0.00033299999999999996,
+          "p99": 0.000334
+        },
+        "after": {
+          "p50": 0.000292,
+          "p95": 0.000292,
+          "p99": 0.000334
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        },
+        "after": {
+          "p50": 0.000541,
+          "p95": 0.000583,
+          "p99": 0.001458
+        }
+      }
+    ],
+    "transport-web-changing": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.023,
+          "p95": 0.09125,
+          "p99": 0.147458
+        },
+        "after": {
+          "p50": 0.016667,
+          "p95": 0.062583,
+          "p99": 0.12645800000000001
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.019041,
+          "p95": 0.098583,
+          "p99": 0.187
+        },
+        "after": {
+          "p50": 0.053834,
+          "p95": 0.10145900000000001,
+          "p99": 0.127959
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.053417,
+          "p95": 0.142667,
+          "p99": 0.210583
+        },
+        "after": {
+          "p50": 0.079,
+          "p95": 0.205,
+          "p99": 2.021916
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.073208,
+          "p95": 0.14162499999999997,
+          "p99": 0.173875
+        },
+        "after": {
+          "p50": 0.046834,
+          "p95": 0.993667,
+          "p99": 5.249833
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.035040999999999996,
+          "p95": 0.138542,
+          "p99": 3.478166
+        },
+        "after": {
+          "p50": 0.06674999999999999,
+          "p95": 0.129708,
+          "p99": 0.170416
+        }
+      }
+    ],
+    "transport-web-static": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000375
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.000292,
+          "p95": 0.000375,
+          "p99": 0.001333
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.000292
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        },
+        "after": {
+          "p50": 0.000292,
+          "p95": 0.000542,
+          "p99": 0.000584
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.000542,
+          "p95": 0.000583,
+          "p99": 0.000917
+        },
+        "after": {
+          "p50": 0.00029099999999999997,
+          "p95": 0.000292,
+          "p99": 0.00033299999999999996
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.000292,
+          "p95": 0.000542,
+          "p99": 0.001042
+        },
+        "after": {
+          "p50": 0.000542,
+          "p95": 0.000583,
+          "p99": 0.000584
+        }
+      }
+    ],
+    "output-direct": [
+      {
+        "round": 1,
+        "before": {
+          "p50": 0.35525,
+          "p95": 0.594584,
+          "p99": 0.784416
+        },
+        "after": {
+          "p50": 0.31024999999999997,
+          "p95": 0.6190829999999999,
+          "p99": 0.761542
+        }
+      },
+      {
+        "round": 2,
+        "before": {
+          "p50": 0.393833,
+          "p95": 1.052333,
+          "p99": 2.901417
+        },
+        "after": {
+          "p50": 0.382417,
+          "p95": 0.485041,
+          "p99": 0.746416
+        }
+      },
+      {
+        "round": 3,
+        "before": {
+          "p50": 0.27825,
+          "p95": 0.406209,
+          "p99": 0.75675
+        },
+        "after": {
+          "p50": 0.32475,
+          "p95": 0.424417,
+          "p99": 0.455625
+        }
+      },
+      {
+        "round": 4,
+        "before": {
+          "p50": 0.436917,
+          "p95": 1.2111669999999999,
+          "p99": 1.747916
+        },
+        "after": {
+          "p50": 0.37020800000000004,
+          "p95": 0.473333,
+          "p99": 0.695917
+        }
+      },
+      {
+        "round": 5,
+        "before": {
+          "p50": 0.36154200000000003,
+          "p95": 3.493958,
+          "p99": 6.454750000000001
+        },
+        "after": {
+          "p50": 0.24579199999999998,
+          "p95": 0.451166,
+          "p99": 0.48725
+        }
+      }
+    ]
+  },
+  "work_differences": [],
+  "measured_policy_differences": [],
+  "heap_differences": [
+    {
+      "round": 1,
+      "scenario": "output-recovery",
+      "key": "measurement_rust_heap",
+      "before": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 272017,
+          "alloc_requested_bytes": 16243246,
+          "dealloc_bytes": 16323157,
+          "dealloc_calls": 271538,
+          "realloc_calls": 342,
+          "realloc_old_bytes": 150892,
+          "realloc_requested_bytes": 305928
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      },
+      "after": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 379953,
+          "alloc_requested_bytes": 21855486,
+          "dealloc_bytes": 21936453,
+          "dealloc_calls": 379474,
+          "realloc_calls": 345,
+          "realloc_old_bytes": 151876,
+          "realloc_requested_bytes": 307968
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      }
+    },
+    {
+      "round": 2,
+      "scenario": "output-recovery",
+      "key": "measurement_rust_heap",
+      "before": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 284039,
+          "alloc_requested_bytes": 16868642,
+          "dealloc_bytes": 16950113,
+          "dealloc_calls": 283560,
+          "realloc_calls": 345,
+          "realloc_old_bytes": 152464,
+          "realloc_requested_bytes": 309060
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      },
+      "after": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 293147,
+          "alloc_requested_bytes": 17341610,
+          "dealloc_bytes": 17422457,
+          "dealloc_calls": 292668,
+          "realloc_calls": 348,
+          "realloc_old_bytes": 152332,
+          "realloc_requested_bytes": 308304
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      }
+    },
+    {
+      "round": 3,
+      "scenario": "output-recovery",
+      "key": "measurement_rust_heap",
+      "before": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 86321,
+          "alloc_requested_bytes": 6587354,
+          "dealloc_bytes": 6668729,
+          "dealloc_calls": 85842,
+          "realloc_calls": 345,
+          "realloc_old_bytes": 152548,
+          "realloc_requested_bytes": 309048
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      },
+      "after": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 121847,
+          "alloc_requested_bytes": 8433770,
+          "dealloc_bytes": 8513537,
+          "dealloc_calls": 121368,
+          "realloc_calls": 339,
+          "realloc_old_bytes": 150424,
+          "realloc_requested_bytes": 305316
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      }
+    },
+    {
+      "round": 3,
+      "scenario": "output-direct",
+      "key": "measurement_rust_heap",
+      "before": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 59170,
+          "alloc_requested_bytes": 10726974,
+          "dealloc_bytes": 12754709,
+          "dealloc_calls": 55493,
+          "realloc_calls": 9122,
+          "realloc_old_bytes": 3274869,
+          "realloc_requested_bytes": 6557674
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "prepare_window_frame through window_frame_presented; aggregation and serialization excluded",
+        "status": "measured"
+      },
+      "after": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 59170,
+          "alloc_requested_bytes": 10737102,
+          "dealloc_bytes": 12764849,
+          "dealloc_calls": 55493,
+          "realloc_calls": 9122,
+          "realloc_old_bytes": 3274869,
+          "realloc_requested_bytes": 6557674
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "prepare_window_frame through window_frame_presented; aggregation and serialization excluded",
+        "status": "measured"
+      }
+    },
+    {
+      "round": 4,
+      "scenario": "output-recovery",
+      "key": "measurement_rust_heap",
+      "before": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 216535,
+          "alloc_requested_bytes": 13357870,
+          "dealloc_bytes": 13438525,
+          "dealloc_calls": 216056,
+          "realloc_calls": 342,
+          "realloc_old_bytes": 151528,
+          "realloc_requested_bytes": 307308
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      },
+      "after": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 163617,
+          "alloc_requested_bytes": 10605846,
+          "dealloc_bytes": 10686525,
+          "dealloc_calls": 163138,
+          "realloc_calls": 345,
+          "realloc_old_bytes": 151288,
+          "realloc_requested_bytes": 307092
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      }
+    },
+    {
+      "round": 5,
+      "scenario": "output-recovery",
+      "key": "measurement_rust_heap",
+      "before": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 159755,
+          "alloc_requested_bytes": 10406066,
+          "dealloc_bytes": 10488437,
+          "dealloc_calls": 159276,
+          "realloc_calls": 348,
+          "realloc_old_bytes": 153004,
+          "realloc_requested_bytes": 310500
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      },
+      "after": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 158039,
+          "alloc_requested_bytes": 10315958,
+          "dealloc_bytes": 10397849,
+          "dealloc_calls": 157560,
+          "realloc_calls": 351,
+          "realloc_old_bytes": 153160,
+          "realloc_requested_bytes": 310176
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "producer render plus nonblocking completion polling; resize and report aggregation excluded",
+        "status": "measured"
+      }
+    },
+    {
+      "round": 5,
+      "scenario": "output-direct",
+      "key": "measurement_rust_heap",
+      "before": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 59170,
+          "alloc_requested_bytes": 10738974,
+          "dealloc_bytes": 12759975,
+          "dealloc_calls": 55474,
+          "realloc_calls": 9122,
+          "realloc_old_bytes": 3274869,
+          "realloc_requested_bytes": 6557674
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "prepare_window_frame through window_frame_presented; aggregation and serialization excluded",
+        "status": "measured"
+      },
+      "after": {
+        "allocator": "Rust System GlobalAlloc wrapper; all process Rust threads within each sampled interval",
+        "counts": {
+          "alloc_calls": 59170,
+          "alloc_requested_bytes": 10726974,
+          "dealloc_bytes": 12754709,
+          "dealloc_calls": 55493,
+          "realloc_calls": 9122,
+          "realloc_old_bytes": 3274869,
+          "realloc_requested_bytes": 6557674
+        },
+        "limitations": "requested calls/bytes, including failed requests; no live/peak heap, foreign malloc, Metal/driver allocations or VRAM; independent Relaxed field snapshots are not an atomic transaction; observer overhead included",
+        "samples": 240,
+        "scope": "prepare_window_frame through window_frame_presented; aggregation and serialization excluded",
+        "status": "measured"
+      }
+    }
+  ],
+  "common_work": {
+    "output-conversion": {
+      "output_work": {
+        "content_revisions": 240,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 240,
+        "gpu_convert_passes": 240,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 480,
+        "target_recreates": 0,
+        "ui_renders": 240
+      },
+      "producer_painter": {
+        "encoded_frames": 240,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 0,
+        "status": "measured",
+        "work": {
+          "batch_rebuilds": 0,
+          "draw_batches": 240,
+          "draw_calls": 240,
+          "gpu_buffer_reallocations": 0,
+          "gpu_upload_bytes": 0
+        }
+      }
+    },
+    "output-incompatible": {
+      "output_work": {
+        "content_revisions": 480,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 480
+      },
+      "producer_painter": {
+        "encoded_frames": 480,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 0,
+        "status": "measured",
+        "work": {
+          "batch_rebuilds": 0,
+          "draw_batches": 480,
+          "draw_calls": 480,
+          "gpu_buffer_reallocations": 0,
+          "gpu_upload_bytes": 0
+        }
+      }
+    },
+    "output-multi": {
+      "output_work": {
+        "content_revisions": 240,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 240
+      },
+      "producer_painter": {
+        "encoded_frames": 240,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 0,
+        "status": "measured",
+        "work": {
+          "batch_rebuilds": 0,
+          "draw_batches": 240,
+          "draw_calls": 240,
+          "gpu_buffer_reallocations": 0,
+          "gpu_upload_bytes": 0
+        }
+      }
+    },
+    "output-nested": {
+      "output_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 240,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 0,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 240,
+        "status": "skipped",
+        "work": null
+      }
+    },
+    "output-recovery": {
+      "output_work": {
+        "content_revisions": 240,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 3,
+        "ui_renders": 240
+      },
+      "producer_painter": {
+        "encoded_frames": null,
+        "reason": "ExternalSurface does not expose its internal painter metrics; actual measured device-policy deltas are separate",
+        "skipped_frames": null,
+        "status": "not instrumented",
+        "work": null
+      }
+    },
+    "output-slow": {
+      "output_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 240,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": null,
+        "reason": "ExternalSurface does not expose its internal painter metrics; actual measured device-policy deltas are separate",
+        "skipped_frames": null,
+        "status": "not instrumented",
+        "work": null
+      }
+    },
+    "output-static": {
+      "output_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 240,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 0,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 240,
+        "status": "skipped",
+        "work": null
+      }
+    },
+    "transport-overlay-changing": {
+      "producer_work": {
+        "content_revisions": 240,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 240
+      },
+      "consumer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 240,
+        "gpu_convert_passes": 240,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 240,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 0,
+        "status": "measured",
+        "work": {
+          "batch_rebuilds": 0,
+          "draw_batches": 240,
+          "draw_calls": 240,
+          "gpu_buffer_reallocations": 0,
+          "gpu_upload_bytes": 0
+        }
+      }
+    },
+    "transport-overlay-multi": {
+      "producer_work": {
+        "content_revisions": 240,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 240
+      },
+      "consumer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 480,
+        "gpu_convert_passes": 480,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 480,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 240,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 0,
+        "status": "measured",
+        "work": {
+          "batch_rebuilds": 0,
+          "draw_batches": 240,
+          "draw_calls": 240,
+          "gpu_buffer_reallocations": 0,
+          "gpu_upload_bytes": 0
+        }
+      }
+    },
+    "transport-overlay-slow": {
+      "producer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 240,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "consumer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 240,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 0,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 240,
+        "status": "skipped",
+        "work": null
+      }
+    },
+    "transport-overlay-static": {
+      "producer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 240,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "consumer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 240,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 0,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 240,
+        "status": "skipped",
+        "work": null
+      }
+    },
+    "transport-web-changing": {
+      "producer_work": {
+        "content_revisions": 240,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 240
+      },
+      "consumer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 240,
+        "gpu_convert_passes": 240,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 240,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 0,
+        "status": "measured",
+        "work": {
+          "batch_rebuilds": 0,
+          "draw_batches": 240,
+          "draw_calls": 240,
+          "gpu_buffer_reallocations": 0,
+          "gpu_upload_bytes": 0
+        }
+      }
+    },
+    "transport-web-static": {
+      "producer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 240,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "consumer_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 240,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 0,
+        "target_recreates": 0,
+        "ui_renders": 0
+      },
+      "producer_painter": {
+        "encoded_frames": 0,
+        "scope": "measured producer Scene painter encodes only; skipped frames do not fabricate GPU counters; buffer reallocations are not process malloc",
+        "skipped_frames": 240,
+        "status": "skipped",
+        "work": null
+      }
+    },
+    "output-direct": {
+      "output_work": {
+        "content_revisions": 0,
+        "cpu_readbacks": 0,
+        "deferred": 0,
+        "extra_passes": 0,
+        "frames": 240,
+        "gpu_convert_passes": 0,
+        "gpu_copies": 0,
+        "gpu_copy_bytes": 0,
+        "idle_reuse_frames": 0,
+        "missing_observations": 0,
+        "output_frames": 0,
+        "plan_rebuilds": 0,
+        "resolve_count": 0,
+        "submissions": 240,
+        "target_recreates": 0,
+        "ui_renders": 240
+      },
+      "producer_painter": {
+        "encoded_frames": 240,
+        "missing_observations": 0,
+        "scope": "measured real Window Scene painter encodes from Runtime WorkCounters; setup and warmup excluded; GPU buffer reallocations are not process malloc",
+        "skipped_frames": 0,
+        "status": "measured",
+        "work": {
+          "batch_rebuilds": 240,
+          "draw_batches": 720,
+          "draw_calls": 720,
+          "gpu_buffer_reallocations": 0,
+          "gpu_upload_bytes": 323473
+        }
+      }
+    }
+  },
+  "raw_reports": [
+    {
+      "path": "target/issue242-closeout/round-1/before/headless.json",
+      "sha256": "2a10481b177042ef86cc5fd618f292b3e3c1d9e6b6e8ba88d206bfa591312634"
+    },
+    {
+      "path": "target/issue242-closeout/round-1/after/headless.json",
+      "sha256": "d0a5ac5ae79d0b0da50ccc667521f86b99c17f635aafd2876d9ca2e0c8c3f086"
+    },
+    {
+      "path": "target/issue242-closeout/round-1/before/transport.json",
+      "sha256": "d2a4f40e24958d5879c590e50f0b580289aabf5f098ddcc17916c04459eff142"
+    },
+    {
+      "path": "target/issue242-closeout/round-1/after/transport.json",
+      "sha256": "6be67e94e767830ad4dda46231b2b94ec9397b84ad7c3985e9623051da91ec93"
+    },
+    {
+      "path": "target/issue242-closeout/round-1/before/window.json",
+      "sha256": "5057418798491934adc5e80d486a40f80e46928357adf450c810f0bad075940a"
+    },
+    {
+      "path": "target/issue242-closeout/round-1/after/window.json",
+      "sha256": "40c22b76f4325229c04bddbb1ca2d9067739863503c4e7c44df4ca803ad20b6a"
+    },
+    {
+      "path": "target/issue242-closeout/round-2/before/headless.json",
+      "sha256": "d4ad590cb00fc97fce9c2fdd76532acba0b2a91d48b4c2c169321a9d491a9bc6"
+    },
+    {
+      "path": "target/issue242-closeout/round-2/after/headless.json",
+      "sha256": "fc778f11a1c85d54857ff5a967cc9afe32303bd79cf29c5bf881ef15b771d3f1"
+    },
+    {
+      "path": "target/issue242-closeout/round-2/before/transport.json",
+      "sha256": "e12297546257e42e90ad3091f65fc4789471fa27cb08a830610e9a139b435b09"
+    },
+    {
+      "path": "target/issue242-closeout/round-2/after/transport.json",
+      "sha256": "363f6e9cfdfa108af99efd393a46886f04a92539ed06e0eb75fc9555d33bed8e"
+    },
+    {
+      "path": "target/issue242-closeout/round-2/before/window.json",
+      "sha256": "c713374ea5225425944578b24ad5b71f7e05327a1e481083ec31a7961d5f2068"
+    },
+    {
+      "path": "target/issue242-closeout/round-2/after/window.json",
+      "sha256": "61da2a182dce576720304e5dbf4bda7ff346f035051ceebf7ae528849d008f95"
+    },
+    {
+      "path": "target/issue242-closeout/round-3/before/headless.json",
+      "sha256": "a1e21268538592dae966cabc6d6450f7dc012d2f84f0a2523a1a01ca160fa7a3"
+    },
+    {
+      "path": "target/issue242-closeout/round-3/after/headless.json",
+      "sha256": "b29bf67b876731f0275eee80b18d8a30fc40e0d57010f5a02f92d017a08848b2"
+    },
+    {
+      "path": "target/issue242-closeout/round-3/before/transport.json",
+      "sha256": "9c8052c23d3e68982a362ddf5ddb01810a196c762a9ba84f420ef8295a9cd9ab"
+    },
+    {
+      "path": "target/issue242-closeout/round-3/after/transport.json",
+      "sha256": "913a2b05d43b26d7eb49e4a790cfaf04f83417c91c65d144cc76d4ba8986bb9f"
+    },
+    {
+      "path": "target/issue242-closeout/round-3/before/window.json",
+      "sha256": "035b47aa8dd7a87b9631441b8c769ca0163c68c28dd89b32d9cc25d1f76d0f14"
+    },
+    {
+      "path": "target/issue242-closeout/round-3/after/window.json",
+      "sha256": "55e4368a9e1bec748f8cc879c50ed26cfef5d7abf9835389b8e533d365b8c6dc"
+    },
+    {
+      "path": "target/issue242-closeout/round-4/before/headless.json",
+      "sha256": "66a373aa24475eb379d04031249334a7824d3a6850ef8eac3529e2e813e6e1c9"
+    },
+    {
+      "path": "target/issue242-closeout/round-4/after/headless.json",
+      "sha256": "82d97707156c19421cc5a5fb33bc0e5f37763a174621a6a991bf36b2ce0ded0b"
+    },
+    {
+      "path": "target/issue242-closeout/round-4/before/transport.json",
+      "sha256": "aa4e5aa0189c6c2d17a6ff40019ad382b70515f910d23f0e938746dc73a68e9f"
+    },
+    {
+      "path": "target/issue242-closeout/round-4/after/transport.json",
+      "sha256": "fcc8a2be18445e1f359fc6669817e07b5aa65030a6f86a78061b360099757405"
+    },
+    {
+      "path": "target/issue242-closeout/round-4/before/window.json",
+      "sha256": "72ff0ec5992e2197fa3e41ae749763f455d1d025a0faef6a0c09bd5f48b1faac"
+    },
+    {
+      "path": "target/issue242-closeout/round-4/after/window.json",
+      "sha256": "765b84e39fadf75f7eeea2ff65edf8a8a6ea021b8ec5b28561eb46a79de7b9ac"
+    },
+    {
+      "path": "target/issue242-closeout/round-5/before/headless.json",
+      "sha256": "4c9e0f6d1a09de3c69f88fc0558d5f64976edb0f97712ef158268a4f8070c2f9"
+    },
+    {
+      "path": "target/issue242-closeout/round-5/after/headless.json",
+      "sha256": "94b4ccd03c07e1cc16f8edcb989c118cd2b50068df62c4ed36cad83b4f0fdd0c"
+    },
+    {
+      "path": "target/issue242-closeout/round-5/before/transport.json",
+      "sha256": "110b1db9baa8e94d86661759d5ad69bfdc3be090d640f38e9ec35af7dd0304d7"
+    },
+    {
+      "path": "target/issue242-closeout/round-5/after/transport.json",
+      "sha256": "0ab71f197e09ab77ffb9c83f69e036b4d303a17ee495b07032722dc5b7dc4aae"
+    },
+    {
+      "path": "target/issue242-closeout/round-5/before/window.json",
+      "sha256": "2f650aa13f1bfaef1306f083006f74043a21736971e0b273d33b9a19cd2425e9"
+    },
+    {
+      "path": "target/issue242-closeout/round-5/after/window.json",
+      "sha256": "5666c1cdab3703350221e4e54f6bf6809f908d73586469182ff3e381a670c9be"
+    }
+  ],
+  "source_changes": {
+    "crates/nana-ui/src/scene_paint/mod.rs": {
+      "before": "d2ca396880fed3ad5258c2f0584507d770d6ea5f8b797f04af63861c3426ec46",
+      "after": "6590d1212249bb2ea996c00ee7e1414b8f5ae9bc3128e9bd638530461eb80b46"
+    },
+    "crates/nana-ui/src/scene_paint/motion.rs": {
+      "before": "440058fe78f266f6d098a0fc262df4332544daea3f1e17ab38bd887ae0eb4c5d",
+      "after": "7d229d1b074d479bf2b4f9ba8e988a9f5445afaaee58a7bc682a98ffe05e071b"
+    },
+    "crates/nana-ui/src/scene_paint/buffer_upload.rs": {
+      "before": "b239a1e8ef8ce9242c81ce10896f4603a0fef1fd5b5c80e3df151844242eb999",
+      "after": "6a1785a3a93a2271829e383cf64e7f9203017f8cf8f352f888824582f405a7cf"
+    }
+  },
+  "validation": {
+    "lib_command": "WGPU_BACKEND=metal CARGO_PROFILE_RELEASE_DEBUG=0 cargo test --locked --release -p nana-ui --features hosted,bundled-fonts --lib -- --test-threads=1",
+    "lib_result": "test result: ok. 973 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 9.02s",
+    "clippy_command": "CARGO_PROFILE_RELEASE_DEBUG=0 cargo clippy --locked --release -p nana-ui --features hosted,bundled-fonts --lib --tests -- -D warnings",
+    "clippy_exit": 0,
+    "mutation_tests": [
+      {
+        "experiment": "without-ordering",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nana-ui",
+          "--features",
+          "hosted,bundled-fonts",
+          "--lib",
+          "scene_paint::motion::tests::same_frame_targets_",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "expected_failure": true
+      },
+      {
+        "experiment": "without-rollback",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "nana-ui",
+          "--features",
+          "hosted,bundled-fonts",
+          "--lib",
+          "scene_paint::motion::tests::same_frame_discard_",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "expected_failure": true
+      }
+    ],
+    "mutation_scope": "Ordering and rollback mutations were exercised on the first fix before the cold-initialization refinement. The final Release suite includes the discard test and the cold-static upload-budget test."
+  },
+  "limitations": [
+    "A is the code before this motion fix, not the historical pre-output implementation: these pairs do not establish #354 causality.",
+    "Window timing is elapsed wall time including native calls/scheduling. No timing threshold or zero-latency-regression claim.",
+    "Portable transport foreign retirement is mock, not SteamVR/Electron conformance.",
+    "GPU duration and driver VRAM are unobserved.",
+    "No Windows/native/device-loss run of this fix.",
+    "The live mixed worktree had concurrent sticky/layout changes; its full format/build checks are separate from this exported-source validation."
+  ],
+  "initial_trial": {
+    "path": "target/issue242-closeout/initial-empty-check",
+    "retained": true,
+    "finding": "The initial empty-cache check added 368 upload bytes and two upload writes/copies to resize recovery. Replaced by an explicit discard invalidation flag and remeasured with new executables."
+  },
+  "working_tree_checks": {
+    "cargo_fmt_all_exit": 1,
+    "reason": "concurrent sticky/layout formatting in nana-ui-runtime; no automatic formatting of those edits",
+    "log": "target/issue242-closeout/working-tree-format.log",
+    "mixed_tree_build": "Earlier in-progress sticky edits failed with missing world/sticky module and nonexistent LayoutStyle.directionality. No pass is inferred for the combined working tree.",
+    "export_format": "cargo fmt -p nana-ui -- --check passed; cargo fmt --all in the nested export hit the excluded icons crate outer-workspace lookup. Initial clean-tree cargo fmt --all passed."
+  }
+}

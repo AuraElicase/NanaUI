@@ -11,7 +11,7 @@ use nana_ui_core::motion::{
 };
 use nana_ui_scene::UiScene;
 
-use super::buffer_upload::upload_changed_with_work;
+use super::buffer_upload::upload_changed;
 use crate::gpu_work::ManagedBuffer;
 
 /// Pick a format for the private motion-evaluation target. The target is
@@ -56,6 +56,9 @@ pub(super) struct MotionGpuResources {
     time: wgpu::Buffer,
     /// What `time` holds, so a frame whose clock did not move writes nothing.
     uploaded_time: Option<MotionGpuTime>,
+    follows_in_frame: bool,
+    ordered_uploads: bool,
+    uploads_invalidated: bool,
     bind_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     /// The parity evaluator, built by the first readback. Product present
@@ -121,6 +124,9 @@ impl MotionGpuResources {
             keyframes,
             time,
             uploaded_time: None,
+            follows_in_frame: false,
+            ordered_uploads: false,
+            uploads_invalidated: false,
             bind_layout,
             bind_group,
             eval: None,
@@ -151,7 +157,23 @@ impl MotionGpuResources {
     }
 
     pub(crate) fn sync(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scene: &UiScene) {
-        self.sync_with_work(device, queue, scene, None);
+        self.sync_with_work(device, queue, scene, None, None);
+    }
+
+    pub(super) fn set_follows_in_frame(&mut self, follows: bool) {
+        self.follows_in_frame = follows;
+    }
+
+    pub(super) fn take_ordered_uploads(&mut self) -> bool {
+        std::mem::take(&mut self.ordered_uploads)
+    }
+
+    /// Encoder copies disappear on discard, unlike frame-batch uploads.
+    pub(super) fn invalidate_uploads(&mut self) {
+        self.uploads_invalidated = true;
+        self.uploaded_descriptors.clear();
+        self.uploaded_keyframes.clear();
+        self.uploaded_time = None;
     }
 
     pub(crate) fn sync_with_work(
@@ -160,7 +182,31 @@ impl MotionGpuResources {
         queue: &wgpu::Queue,
         scene: &UiScene,
         gpu_work: Option<&crate::gpu_work::GpuWorkSink>,
+        encoder: Option<&mut wgpu::CommandEncoder>,
     ) {
+        // Queue/frame-batch writes precede every pass of a submission. Only
+        // the first paint may use them for these buffers shared by all targets.
+        let mut ordered = encoder.filter(|_| self.follows_in_frame);
+        let mut ordered_uploads = false;
+        let mut write = |buffer: &wgpu::Buffer, offset: u64, bytes: &[u8]| {
+            if let Some(encoder) = ordered.as_deref_mut() {
+                use wgpu::util::DeviceExt;
+                let staging = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("nana-ui.scene.motion.ordered-upload"),
+                    contents: bytes,
+                    usage: wgpu::BufferUsages::COPY_SRC,
+                });
+                encoder.copy_buffer_to_buffer(&staging, 0, buffer, offset, bytes.len() as u64);
+                if let Some(work) = gpu_work {
+                    work.record_upload(bytes.len());
+                }
+                ordered_uploads = true;
+            } else if let Some(work) = gpu_work {
+                work.write_buffer(queue, buffer, offset, bytes);
+            } else {
+                queue.write_buffer(buffer, offset, bytes);
+            }
+        };
         self.last_work = MotionWorkCounters::default();
         let surface = scene.surface_generation();
         let epoch = scene.motion_gpu_structure_epoch();
@@ -177,6 +223,7 @@ impl MotionGpuResources {
         let need_descriptors = lost
             || source != self.last_source
             || epoch != self.last_structure_epoch
+            || self.uploads_invalidated
             || descriptors.len() > self.descriptor_capacity
             || keyframes.len() > self.keyframe_capacity;
         if need_descriptors {
@@ -190,40 +237,25 @@ impl MotionGpuResources {
                 self.keyframe_capacity * MOTION_GPU_KEYFRAME_SIZE,
             );
             let uploaded = if self.uploaded_descriptors.len() == desc_bytes.len() {
-                upload_changed_with_work(
-                    queue,
-                    &self.descriptors,
-                    &self.uploaded_descriptors,
-                    &desc_bytes,
-                    gpu_work,
-                )
+                upload_changed(&self.uploaded_descriptors, &desc_bytes, |offset, bytes| {
+                    write(&self.descriptors, offset, bytes)
+                })
             } else {
-                if let Some(work) = gpu_work {
-                    work.write_buffer(queue, &self.descriptors, 0, &desc_bytes);
-                } else {
-                    queue.write_buffer(&self.descriptors, 0, &desc_bytes);
-                }
+                write(&self.descriptors, 0, &desc_bytes);
                 desc_bytes.len()
             };
             if self.uploaded_keyframes.len() == kf_bytes.len() {
-                let _ = upload_changed_with_work(
-                    queue,
-                    &self.keyframes,
-                    &self.uploaded_keyframes,
-                    &kf_bytes,
-                    gpu_work,
-                );
+                let _ = upload_changed(&self.uploaded_keyframes, &kf_bytes, |offset, bytes| {
+                    write(&self.keyframes, offset, bytes)
+                });
             } else {
-                if let Some(work) = gpu_work {
-                    work.write_buffer(queue, &self.keyframes, 0, &kf_bytes);
-                } else {
-                    queue.write_buffer(&self.keyframes, 0, &kf_bytes);
-                }
+                write(&self.keyframes, 0, &kf_bytes);
             }
             self.uploaded_descriptors = desc_bytes;
             self.uploaded_keyframes = kf_bytes;
             self.last_source = source;
             self.last_structure_epoch = epoch;
+            self.uploads_invalidated = false;
             self.last_work.record_descriptor_upload(
                 descriptors
                     .iter()
@@ -233,16 +265,12 @@ impl MotionGpuResources {
             );
         }
         let time = MotionGpuTime::new(scene.motion_gpu_now());
-        if self.uploaded_time == Some(time) {
-            return;
+        if self.uploaded_time != Some(time) {
+            let time_bytes = motion_gpu_as_bytes(std::slice::from_ref(&time));
+            write(&self.time, 0, time_bytes);
+            self.uploaded_time = Some(time);
         }
-        let time_bytes = motion_gpu_as_bytes(std::slice::from_ref(&time));
-        if let Some(work) = gpu_work {
-            work.write_buffer(queue, &self.time, 0, time_bytes);
-        } else {
-            queue.write_buffer(&self.time, 0, time_bytes);
-        }
-        self.uploaded_time = Some(time);
+        self.ordered_uploads |= ordered_uploads;
     }
 
     /// Test/devtools only. Product present must not call this.
@@ -1818,6 +1846,222 @@ mod tests {
             "steady timestamp must not reupload the descriptor table"
         );
         assert_eq!(second.motion_descriptor_bytes_uploaded, 0);
+    }
+
+    #[test]
+    fn a_scene_without_motion_does_not_upload_unused_tables() {
+        let (device, queue) = test_device();
+        let layout = motion_bind_layout(&device);
+        let mut motion = MotionGpuResources::new(&device, &layout);
+        let work = crate::gpu_work::GpuWorkSink::new();
+        motion.sync_with_work(&device, &queue, &UiScene::new(), Some(&work), None);
+        assert_eq!(work.snapshot().gpu_upload_bytes, MOTION_GPU_TIME_SIZE);
+        assert_eq!(motion.last_work().motion_descriptor_bytes_uploaded, 0);
+    }
+
+    fn frame_target() -> (wgpu::Texture, nana_gpu::GpuRenderTarget) {
+        let gpu = crate::test_gpu::context();
+        let (texture, view) = super::super::tests::test_copy_target(
+            nana_gpu::__framework::device(&gpu),
+            wgpu::TextureFormat::Rgba8Unorm,
+            64,
+            64,
+        );
+        let target = nana_gpu::__framework::render_target(
+            &gpu,
+            view,
+            wgpu::TextureFormat::Rgba8Unorm,
+            [64, 64],
+        );
+        (texture, target)
+    }
+
+    fn frame_viewport() -> ScenePaintViewport {
+        ScenePaintViewport {
+            logical_size: [64.0, 64.0],
+            physical_size: [64, 64],
+            scale_factor: 1.0,
+            scene_origin: [0.0; 2],
+            target_origin: [0.0; 2],
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            clear: true,
+        }
+    }
+
+    fn frame_pixels(texture: &wgpu::Texture) -> Vec<u8> {
+        let (device, queue) = test_device();
+        super::super::tests::readback_rgba(
+            &device,
+            &queue,
+            device.create_command_encoder(&Default::default()),
+            texture,
+            64,
+            64,
+        )
+    }
+
+    fn alone_in_frame(scene: &UiScene) -> Vec<u8> {
+        let gpu = crate::test_gpu::context();
+        let (texture, target) = frame_target();
+        let mut painter = SceneWgpuPainter::new(&gpu, nana_gpu::GpuTextureFormat::RGBA8_UNORM);
+        let mut frame = gpu.begin_frame("motion reference");
+        painter
+            .paint(scene, &mut frame, &target, frame_viewport(), None, None)
+            .unwrap();
+        frame.submit();
+        frame_pixels(&texture)
+    }
+
+    fn assert_same_frame_motion(first: &UiScene, second: &UiScene) {
+        let expected = [alone_in_frame(first), alone_in_frame(second)];
+        assert_ne!(
+            expected[0], expected[1],
+            "the fixture must distinguish motion"
+        );
+        let gpu = crate::test_gpu::context();
+        let mut painter = SceneWgpuPainter::new(&gpu, nana_gpu::GpuTextureFormat::RGBA8_UNORM);
+        let targets = [frame_target(), frame_target(), frame_target()];
+        let mut frame = gpu.begin_frame("three motion targets");
+        for (index, scene) in [first, second, first].into_iter().enumerate() {
+            if index == 0 {
+                painter
+                    .paint(
+                        scene,
+                        &mut frame,
+                        &targets[index].1,
+                        frame_viewport(),
+                        None,
+                        None,
+                    )
+                    .unwrap();
+            } else {
+                painter
+                    .paint_target(
+                        crate::RenderTargetId(index as u64 + 1),
+                        scene,
+                        &mut frame,
+                        &targets[index].1,
+                        frame_viewport(),
+                        None,
+                        None,
+                    )
+                    .unwrap();
+            }
+        }
+        frame.submit();
+        for (index, (texture, _)) in targets.iter().enumerate() {
+            assert!(
+                frame_pixels(texture) == expected[index % 2],
+                "target {index} must use its own motion, including A after A/B"
+            );
+        }
+    }
+
+    #[test]
+    fn same_frame_targets_keep_each_documents_motion_descriptors() {
+        let (_, first, _) = animated_opacity_scene(Duration::from_millis(200));
+        let (_, second, _, _) = compositor_motion_scene(
+            opacity_spec(
+                MotionCurve::Easing(Easing::Linear),
+                MotionTo::Value(MotionValue::Scalar(0.25)),
+            ),
+            Duration::from_millis(200),
+        );
+        assert_same_frame_motion(&first, &second);
+    }
+
+    #[test]
+    fn same_frame_targets_keep_each_scenes_motion_clock() {
+        let (world, first, _) = animated_opacity_scene(Duration::from_millis(100));
+        let mut second = first.clone();
+        second.apply_presentation(
+            world.presentation_store(),
+            Duration::from_millis(300),
+            Some(world.motion_descriptors()),
+        );
+        assert_same_frame_motion(&first, &second);
+    }
+
+    #[test]
+    fn same_frame_targets_keep_each_documents_motion_keyframes() {
+        let scene = |middle| {
+            compositor_motion_scene(
+                opacity_spec(
+                    MotionCurve::Easing(Easing::Linear),
+                    MotionTo::Keyframes(vec![
+                        Keyframe {
+                            offset: 0.0,
+                            value: MotionValue::Scalar(0.0),
+                            easing: None,
+                        },
+                        Keyframe {
+                            offset: 0.5,
+                            value: MotionValue::Scalar(middle),
+                            easing: None,
+                        },
+                        Keyframe {
+                            offset: 1.0,
+                            value: MotionValue::Scalar(1.0),
+                            easing: None,
+                        },
+                    ]),
+                ),
+                Duration::from_millis(200),
+            )
+            .1
+        };
+        let (first, second) = (scene(0.2), scene(0.8));
+        assert_eq!(
+            motion_gpu_as_bytes(first.motion_gpu_descriptors()),
+            motion_gpu_as_bytes(second.motion_gpu_descriptors()),
+            "only the keyframe table differs"
+        );
+        assert_same_frame_motion(&first, &second);
+    }
+
+    #[test]
+    fn same_frame_discard_reuploads_the_last_scenes_motion() {
+        let (_, first, _) = animated_opacity_scene(Duration::from_millis(100));
+        let (_, second, _, _) = compositor_motion_scene(
+            opacity_spec(
+                MotionCurve::Easing(Easing::Linear),
+                MotionTo::Value(MotionValue::Scalar(0.25)),
+            ),
+            Duration::from_millis(300),
+        );
+        let expected = alone_in_frame(&second);
+        let gpu = crate::test_gpu::context();
+        let mut painter = SceneWgpuPainter::new(&gpu, nana_gpu::GpuTextureFormat::RGBA8_UNORM);
+        let (texture, target) = frame_target();
+        let mut frame = gpu.begin_frame("discarded motion");
+        for (index, scene) in [&first, &second].into_iter().enumerate() {
+            painter
+                .paint_target(
+                    crate::RenderTargetId(index as u64 + 1),
+                    scene,
+                    &mut frame,
+                    &target,
+                    frame_viewport(),
+                    None,
+                    None,
+                )
+                .unwrap();
+        }
+        drop(frame);
+        let mut frame = gpu.begin_frame("retry last motion");
+        painter
+            .paint_target(
+                crate::RenderTargetId(2),
+                &second,
+                &mut frame,
+                &target,
+                frame_viewport(),
+                None,
+                None,
+            )
+            .unwrap();
+        frame.submit();
+        assert!(frame_pixels(&texture) == expected);
     }
 
     /// Scene identity is refreshed by any node change. Keyed on that rather

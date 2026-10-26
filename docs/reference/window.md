@@ -540,6 +540,8 @@ commands.push(WindowCommand::SetContentAspectRatio { id, ratio: Some(9.0 / 16.0)
 
 `WindowHandle::with_native_handle` 将回调调度到窗口线程。仅借用回调期间有效的 raw handle。不能保存原始指针供回调结束后使用。也不会取得 `winit::Window` 所有权。
 
+`WindowHandle::surface_info()` 显式查询窗口线程持有的 `WindowSurfaceInfo`：已配置的物理尺寸、格式、颜色空间、present mode、alpha、最大帧延迟、设备代际及当前显示器。查询不 acquire、重配、提交或等待 GPU；普通帧不轮询。窗口代际过期返回 `WindowClosed`，Surface 待恢复或重配时返回错误，不把请求值当成已应用结果。自动 present mode 保留自动身份，不能据此推断后端最终模式或显示器实际扫描节拍。`presentation-output-probe --surface-info` 在首个 direct presented 之后、预热期间请求一次；记录缺失、错误或 查询之后直到 direct 测量完成的 resize/move/mode change 时不放行该次观测。诊断启动对照可加 `--presented-counter`，让文本计数只在成功呈现后递增，避免 prepare-only 重试改变后续测量帧的内容；默认 fixture 继续按 prepare 次数递增。这是不同的诊断 population，不能与默认时延直接混合。
+
 `window.effects().set_material()` 返回实际 `MaterialOutcome`。穿透通过 `set_mouse_passthrough()` 控制。`window.capture().set_protected()` 请求 macOS/Windows 的原生捕获保护。其他后端返回 `Unsupported`。这不是对所有捕获方式的保证。
 
 完整示例：`window-service-lifecycle` 无需导入 winit。`embedded-window-lifecycle` 展示高级宿主适配。两个示例都自动验证三窗口真实呈现、按 `tag` 构建的两种附加窗口文档、跨线程控制、主窗关闭、失败回滚、子窗释放与再次创建。

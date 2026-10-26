@@ -1,6 +1,58 @@
 //! Fixture-only bounded sample storage. No diagnostics, scheduling or QoS changes.
 use std::time::Instant;
 
+/// Cold endpoint observations only. A task role is not a thread-group id,
+/// coalition membership, CPU residency or a frequency observation.
+#[derive(serde::Serialize)]
+pub struct NativeProcessSnapshot {
+    pid: u32,
+    thread_id: Option<u64>,
+    thread_id_error: Option<i32>,
+    task_role: Option<i32>,
+    task_policy_get_error: Option<i32>,
+    task_role_default: Option<bool>,
+}
+
+pub fn native_process_snapshot() -> NativeProcessSnapshot {
+    let result = NativeProcessSnapshot {
+        pid: std::process::id(),
+        thread_id: None,
+        thread_id_error: None,
+        task_role: None,
+        task_policy_get_error: None,
+        task_role_default: None,
+    };
+    #[cfg(target_os = "macos")]
+    let result = {
+        let mut result = result;
+        // macOS SDK mach/task_policy.h: TASK_CATEGORY_POLICY=1, one integer_t
+        // role; mach_msg_type_number_t and mach_port_t are natural_t/u32.
+        unsafe extern "C" {
+            static mach_task_self_: u32;
+            fn task_policy_get(
+                task: u32,
+                flavor: u32,
+                policy: *mut i32,
+                count: *mut u32,
+                default: *mut i32,
+            ) -> i32;
+            fn pthread_threadid_np(thread: *mut std::ffi::c_void, id: *mut u64) -> i32;
+        }
+        let (mut role, mut count, mut default) = (0, 1, 0);
+        let error =
+            unsafe { task_policy_get(mach_task_self_, 1, &mut role, &mut count, &mut default) };
+        result.task_policy_get_error = Some(error);
+        result.task_role_default = (error == 0).then_some(default != 0);
+        result.task_role = (error == 0 && count == 1 && default == 0).then_some(role);
+        let mut id = 0;
+        let error = unsafe { pthread_threadid_np(std::ptr::null_mut(), &mut id) };
+        result.thread_id_error = Some(error);
+        result.thread_id = (error == 0).then_some(id);
+        result
+    };
+    result
+}
+
 /// CLOCK_THREAD_CPUTIME_ID measures this thread's CPU execution, excluding
 /// scheduling/drawable waits. It is not a GPU execution timer.
 pub fn thread_cpu_time() -> Option<std::time::Duration> {

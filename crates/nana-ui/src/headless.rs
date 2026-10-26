@@ -695,6 +695,14 @@ impl<P: RuntimeProgram> HeadlessRuntime<P> {
         while let Ok(request) = self.requests.try_recv() {
             match request {
                 Request::Displays(reply) => reply.finish(Ok(Vec::new())),
+                Request::SurfaceInfo(id, generation, reply) => {
+                    let error = if self.service.is_current(id, generation) {
+                        WindowError::Unsupported("a headless window has no native surface".into())
+                    } else {
+                        WindowError::WindowClosed
+                    };
+                    reply.finish(Err(error));
+                }
                 Request::Material(_, _, _, reply) => reply.finish(Err(WindowError::Unsupported(
                     "a headless window has no material".into(),
                 ))),

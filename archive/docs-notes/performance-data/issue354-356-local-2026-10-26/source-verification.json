@@ -1,0 +1,47 @@
+{
+  "crates/nana-gpu/src/wgpu_interop.rs": {
+    "source_sha256": "763651884597a224045885779b73a2d8de83a6c8bdf6da096745d86f7e5c0369",
+    "workspace_sha256": "763651884597a224045885779b73a2d8de83a6c8bdf6da096745d86f7e5c0369"
+  },
+  "crates/nana-gpu/tests/controlled_device_loss.rs": {
+    "source_sha256": "533467033f86d8af62ade4619db2ed6182870db4e0aa874a020c8a5a5e30254d",
+    "workspace_sha256": "533467033f86d8af62ade4619db2ed6182870db4e0aa874a020c8a5a5e30254d"
+  },
+  "crates/nana-ui/src/window_service.rs": {
+    "source_sha256": "9ae13d67eb59e53d2e0b1d9d23e1103c9a9c4b43ddb796bbe8ca8e0c3c1a49ca",
+    "workspace_sha256": "9ae13d67eb59e53d2e0b1d9d23e1103c9a9c4b43ddb796bbe8ca8e0c3c1a49ca"
+  },
+  "crates/nana-ui/src/hosted_context.rs": {
+    "source_sha256": "f98e26a940654c28d528f62b5346d55828472199eec3a574f3bfb337ba146263",
+    "workspace_sha256": "f98e26a940654c28d528f62b5346d55828472199eec3a574f3bfb337ba146263"
+  },
+  "crates/nana-ui/src/scene_host/windows.rs": {
+    "source_sha256": "ada3d117a5ea1c427fb486c09e518b50d7e41c67cecc9621b9f8aec69d068878",
+    "workspace_sha256": "ada3d117a5ea1c427fb486c09e518b50d7e41c67cecc9621b9f8aec69d068878"
+  },
+  "crates/nana-ui/src/headless.rs": {
+    "source_sha256": "d733f9c898e919c237f65a80741c8bc5d159edfa9984100c7d66d8edec92d9fe",
+    "workspace_sha256": "d733f9c898e919c237f65a80741c8bc5d159edfa9984100c7d66d8edec92d9fe"
+  },
+  "crates/nana-ui/src/lib.rs": {
+    "source_sha256": "9ef06c418c1d5e5eb217184ad87004a1325621286ba6d6c706924dc434edc99f",
+    "workspace_sha256": "9ef06c418c1d5e5eb217184ad87004a1325621286ba6d6c706924dc434edc99f"
+  },
+  "crates/nana-ui/examples/presentation-output-probe.rs": {
+    "source_sha256": "e7a62c4d9139c1e0da307d0e5885fac60b9fb935b95e663d98d3076792093f77",
+    "workspace_sha256": "e7a62c4d9139c1e0da307d0e5885fac60b9fb935b95e663d98d3076792093f77"
+  },
+  "crates/nana-ui/examples/support/presentation_timing.rs": {
+    "source_sha256": "583b26bb19b59efd65ece3eb1138b1194d263e1faeb92998e472132a7625d489",
+    "workspace_sha256": "583b26bb19b59efd65ece3eb1138b1194d263e1faeb92998e472132a7625d489"
+  },
+  "crates/nana-ui/examples/support/openvr_dx11.rs": {
+    "source_sha256": "fded89a23e773a28f7153756d1dfb441f73aba956c8ebc5b73db20f5c7be3bbe",
+    "workspace_sha256": "fded89a23e773a28f7153756d1dfb441f73aba956c8ebc5b73db20f5c7be3bbe"
+  },
+  "crates/nana-ui/examples/web_output/producer.rs": {
+    "source_sha256": "7cf3210d3cae52cdd81d7dd106fb7f2d85afab5d5266995b6315a6cb95614d3c",
+    "workspace_sha256": "7cf3210d3cae52cdd81d7dd106fb7f2d85afab5d5266995b6315a6cb95614d3c"
+  },
+  "motion_implementation_same_as_previous_export": true
+}
