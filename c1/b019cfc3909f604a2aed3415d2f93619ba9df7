@@ -1,0 +1,14 @@
+crates/nana-text/src/font/discovery.rs
+  h_8e6780fc7b4bb1 91-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c1b019cfc3909f604a2aed3415d2f93619ba9df7",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
