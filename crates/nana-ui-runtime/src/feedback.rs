@@ -1322,7 +1322,12 @@ mod tests {
         assert!(indicator.width > 0.0);
         assert_eq!(label.font_size, nana_ui_core::type_scale::HINT);
         assert_eq!(label.color, Some(foreground));
-        assert_eq!(label.font_weight, None);
+        // The geometry carries the resolved theme weight; the authored style
+        // stays unset so a parent or a live theme can supply it.
+        assert_eq!(
+            label.font_weight,
+            Some(context.world().theme().typography().regular)
+        );
         assert_eq!(
             context.world().node_style(id).unwrap().layout.font_weight,
             None

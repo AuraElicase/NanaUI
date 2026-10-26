@@ -8970,7 +8970,7 @@ fn a_press_near_a_range_marker_lands_on_that_marker() {
             range.markers = Arc::from([RangeMarker::new(40.0, "章节")]);
         })
         .unwrap();
-    // 5px left of the marker is 2.5 units away, which quantizes to 38.
+    // A press 5px left of the marker snaps to it, whatever the track width.
     let marker_x = x + width * 0.4;
     context
         .begin_range_drag(document, 7, range.stable_id(), marker_x - 5.0)
@@ -8978,8 +8978,12 @@ fn a_press_near_a_range_marker_lands_on_that_marker() {
     assert_eq!(context.read(range, |range| range.value).unwrap(), 40.0);
     context.end_range_drag(document, 7, true).unwrap();
 
+    // Pick a value outside the marker's pixel snap radius without assuming
+    // a fixed track width: the value readout reserves part of the control.
+    let unsnapped_x = x + width * 0.35;
+    assert!(marker_x - unsnapped_x > nana_ui_core::space::SM);
     context
-        .begin_range_drag(document, 8, range.stable_id(), marker_x - 10.0)
+        .begin_range_drag(document, 8, range.stable_id(), unsnapped_x)
         .unwrap();
     assert_eq!(context.read(range, |range| range.value).unwrap(), 35.0);
     context.end_range_drag(document, 8, true).unwrap();
@@ -9135,6 +9139,11 @@ fn component_size_kind_and_fallback_geometry_preserve_design_contracts() {
                     .unit("%")
                     .size(size),
             )
+            .unwrap();
+        // Layout and component geometry consume the resolved typography,
+        // just as they do after the style pass of a product frame.
+        context
+            .resolve_styles(&[switch.stable_id(), range.stable_id()])
             .unwrap();
         context
             .layout_document(document, crate::LayoutViewport::new(380.0, 120.0))
