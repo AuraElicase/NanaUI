@@ -13,6 +13,8 @@ mod mutation;
 mod overlay_index;
 mod presentation;
 pub use i18n::{LocaleGenerations, LocaleScope};
+#[cfg(feature = "controls")]
+mod reorder_motion;
 mod replaced;
 mod responsive;
 pub(crate) use block_reads::BlockExtentReads;
@@ -758,6 +760,10 @@ pub struct UiWorld {
     /// How much of a modal frame's scrim shows while it fades, 0 to 1. A
     /// frame with no entry shows its whole scrim.
     scrim_presence: HashMap<StableNodeId, f32, BuildIdHasher>,
+    /// Rows of a reorder list that follow the pointer in a previewed drag,
+    /// each with its list: they stack at `REORDER_PREVIEW_Z_INDEX`.
+    #[cfg(feature = "controls")]
+    reorder_previews: HashMap<StableNodeId, StableNodeId, BuildIdHasher>,
     /// The reduce-motion preference the application context resolved:
     /// surfaces open and close at once while it holds.
     reduced_motion: bool,
@@ -1028,6 +1034,8 @@ impl UiWorld {
             surface_motion: HashMap::default(),
             closing_surfaces: HashSet::default(),
             scrim_presence: HashMap::default(),
+            #[cfg(feature = "controls")]
+            reorder_previews: HashMap::default(),
             reduced_motion: false,
             hover_transitions: HashMap::default(),
             animation_deadlines: BTreeSet::new(),

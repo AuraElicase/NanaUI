@@ -4,7 +4,11 @@ use super::*;
 
 impl UiWorld {
     pub(super) fn stacking_z_index_memo(&self, id: StableNodeId, memo: &mut AncestorMemo) -> i32 {
-        if self.z_index_nodes == 0 {
+        #[cfg(feature = "controls")]
+        let previews = !self.reorder_previews.is_empty();
+        #[cfg(not(feature = "controls"))]
+        let previews = false;
+        if self.z_index_nodes == 0 && !previews {
             return 0;
         }
         memo.chain.clear();
@@ -26,6 +30,8 @@ impl UiWorld {
                     self.parent_triggered_overlay(node)
                         .map(|_| crate::popover::MENU_OVERLAY_Z_INDEX)
                 });
+            #[cfg(feature = "controls")]
+            let z = z.or_else(|| self.reorder_preview_z_index(node));
             if let Some(z) = z {
                 z_index = z;
                 memo.stacking.insert(node, z);

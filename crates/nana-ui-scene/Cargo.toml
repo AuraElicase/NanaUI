@@ -61,3 +61,8 @@ required-features = ["benchmark"]
 name = "sidebar_row_label_paints_once"
 path = "tests/sidebar_row_label_paints_once.rs"
 required-features = ["controls"]
+
+[[test]]
+name = "reorder_preview_stacking"
+path = "tests/reorder_preview_stacking.rs"
+required-features = ["controls"]

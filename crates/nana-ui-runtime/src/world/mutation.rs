@@ -1436,6 +1436,8 @@ impl UiWorld {
                     self.surface_motion.remove(&id);
                     self.closing_surfaces.remove(&id);
                     self.scrim_presence.remove(&id);
+                    #[cfg(feature = "controls")]
+                    self.forget_reorder_preview(id);
                     self.hover_transitions.remove(&id);
                     self.intent_nodes.remove(&id);
                     self.forget_replaced(id);
@@ -1698,6 +1700,25 @@ impl UiWorld {
                         None,
                     );
                 }
+                #[cfg(feature = "controls")]
+                let reorder_paints_same = match self.nodes.visual(*id) {
+                    previous @ Some(StandardVisual::ReorderList { .. }) => {
+                        let previous = previous.cloned();
+                        self.sync_reorder_list_motion(*id, previous.as_ref(), visual.as_ref());
+                        super::reorder_motion::reorder_list_paints_same(
+                            previous.as_ref(),
+                            visual.as_ref(),
+                        )
+                    }
+                    _ => {
+                        if matches!(visual, Some(StandardVisual::ReorderList { .. })) {
+                            self.sync_reorder_list_motion(*id, None, visual.as_ref());
+                        }
+                        false
+                    }
+                };
+                #[cfg(not(feature = "controls"))]
+                let reorder_paints_same = false;
                 if let Some(next @ StandardVisual::Scrollbar { .. }) = visual.as_ref() {
                     let previous = self
                         .nodes
@@ -1855,9 +1876,16 @@ impl UiWorld {
                         ),
                     );
                 }
+                // A previewed reorder drag moves its rows' presentation, not
+                // what the list paints: the list is not re-extracted for it.
+                let render = if reorder_paints_same {
+                    0
+                } else {
+                    DirtyMask::RENDER
+                };
                 self.mark(
                     *id,
-                    DirtyMask::RENDER
+                    render
                         | if text_input_presentation_changed
                             || empty_state_presentation_changed
                             || modal_presentation_changed
