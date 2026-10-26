@@ -329,6 +329,7 @@ export default defineConfig({
             { text: "打包与分发", link: "/reference/packaging" },
             { text: "开发期热重载", link: "/reference/hot-reload" },
             { text: "Android", link: "/reference/android" },
+            { text: "HarmonyOS / OpenHarmony", link: "/reference/ohos" },
           ],
         },
         {
