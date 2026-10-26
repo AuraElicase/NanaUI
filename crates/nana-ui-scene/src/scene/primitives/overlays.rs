@@ -328,12 +328,17 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                 && (chrome.background.is_some() || chrome.border.is_some())
             {
                 // An avatar trigger's chrome is the circular placeholder the
-                // host texture rides on; text triggers keep the compact
-                // control radius.
+                // host texture rides on. Other triggers take the corners
+                // their style resolved to, the recipe's compact control
+                // radius unless the application wrote its own; with none the
+                // compact radius stands.
+                let style = node.source_style.layout.as_ref();
                 let radius = if trigger_image.is_some() {
-                    chrome.bounds.width.min(chrome.bounds.height) * 0.5
+                    corner_radii(chrome.bounds.width.min(chrome.bounds.height) * 0.5)
+                } else if style.border_radius.is_some() || style.paint.border_radii.is_some() {
+                    surface_corner_radii(style, chrome.bounds.width, chrome.bounds.height)
                 } else {
-                    node.chrome_radii.sm
+                    corner_radii(node.chrome_radii.sm)
                 };
                 emit(ScenePrimitive {
                     id: PrimitiveId { node: id, slot: 1 },
@@ -348,7 +353,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                         background: crate::scene::slot_color(None, chrome.background),
                         border_color: crate::scene::slot_color(None, chrome.border),
                         border_width: 1.0,
-                        corner_radius: corner_radii(radius),
+                        corner_radius: radius,
                         shadow: None,
                         surface: QuadSurfacePaint::default(),
                     },

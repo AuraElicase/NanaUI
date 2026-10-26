@@ -935,6 +935,89 @@ fn a_menu_surface_paints_the_radius_it_was_handed_not_the_constant() {
     );
 }
 
+/// A popover trigger's chrome paints the corners its style resolved to: the
+/// recipe's compact radius, or the radius the application wrote over it,
+/// whole or per corner. A trigger whose style has none keeps the compact
+/// radius, and an avatar trigger its circle.
+#[test]
+fn a_menu_trigger_paints_the_corners_its_style_resolved_to() {
+    let bounds = LayoutBox {
+        x: 0.0,
+        y: 0.0,
+        width: 36.0,
+        height: 36.0,
+    };
+    let trigger_corners = |radius: Option<f32>, corners: Option<[f32; 4]>, image: bool| {
+        let mut menu = node(1, None, &[]);
+        menu.layout = bounds;
+        menu.chrome_radii.sm = 5.0;
+        let layout = Arc::make_mut(&mut menu.source_style.layout);
+        layout.border_radius = radius;
+        layout.paint.border_radii =
+            corners.map(|corners| corners.map(nana_ui_core::LengthSpec::Px));
+        let image = image.then(|| Arc::<str>::from("avatar"));
+        menu.standard_visual = Some(StandardVisual::MenuSurface {
+            trigger_image: image.clone(),
+            open: false,
+            kind: nana_ui_runtime::MenuSurfaceKind::Popover,
+            trigger: None,
+            trigger_icon: Some(nana_ui_core::Icon::Add),
+            gap: 0.0,
+            overlay: None,
+            query: None,
+            rows: Arc::from([]),
+            highlighted: None,
+        });
+        menu.component_geometry = Some(Box::new(ComponentGeometry::MenuSurface {
+            trigger_image: image,
+            trigger_surface: Some(nana_ui_runtime::ComponentTriggerSurface {
+                bounds,
+                background: Some([0.18, 0.18, 0.2, 1.0]),
+                border: None,
+            }),
+            trigger: None,
+            trigger_icon: None,
+            surface: LayoutBox::default(),
+            search: None,
+            search_field: None,
+            options: Vec::new(),
+            elevation: ComponentElevation {
+                color: nana_ui_core::PaintColor::Srgb { rgba: [0.0; 4] },
+                offset_x: 0.0,
+                offset_y: 0.0,
+                blur_radius: 0.0,
+                spread_radius: 0.0,
+                inset: false,
+            },
+            background: [0.0; 4],
+            border: [0.0; 4],
+        }));
+        let mut scene = UiScene::new();
+        scene.apply_delta([menu], []);
+        match scene
+            .primitive(PrimitiveId {
+                node: id(1),
+                slot: 1,
+            })
+            .expect("trigger chrome")
+            .kind
+        {
+            ScenePrimitiveKind::Quad { corner_radius, .. } => corner_radius,
+            ref other => panic!("trigger chrome is a quad, got {other:?}"),
+        }
+    };
+
+    assert_eq!(trigger_corners(None, None, false), [5.0; 4]);
+    assert_eq!(trigger_corners(Some(5.0), None, false), [5.0; 4]);
+    assert_eq!(trigger_corners(Some(18.0), None, false), [18.0; 4]);
+    assert_eq!(trigger_corners(Some(0.0), None, false), [0.0; 4]);
+    assert_eq!(
+        trigger_corners(Some(18.0), Some([2.0, 4.0, 6.0, 8.0]), false),
+        [2.0, 4.0, 6.0, 8.0],
+    );
+    assert_eq!(trigger_corners(Some(5.0), None, true), [18.0; 4]);
+}
+
 #[test]
 fn menu_surface_paints_row_icon_and_iconless_labels() {
     let mut menu = node(3, None, &[]);
