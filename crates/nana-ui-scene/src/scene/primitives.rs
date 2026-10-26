@@ -78,8 +78,17 @@ impl UiScene {
         let local_transform =
             node_scene_transform(node.source_style.layout.as_ref(), layout, parent_blocks_3d);
         let transform = parent_transform.then(local_transform);
+        // The base is the logical projection. While the compositor presents
+        // anything, a node may sit under a layer's transform: stamp the base
+        // stale so the draw rebases it onto the current projection instead of
+        // taking the retained fast path with the logical one.
+        let epoch = if self.compositor.has_presentation() {
+            self.attribute_epoch.wrapping_sub(1)
+        } else {
+            self.attribute_epoch
+        };
         self.projections
-            .insert(id, (self.attribute_epoch, transform, parent_clips.len()));
+            .insert(id, (epoch, transform, parent_clips.len()));
         if super::attributes::inverse(transform).is_none() {
             self.unadjustable_projections.insert(id);
         }
