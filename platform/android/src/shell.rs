@@ -1,8 +1,7 @@
 //! Frozen Android **Nana shell** stub — workspace geometry + chrome band plan.
 //!
-//! NanaUI owns shell layout and an experimental Runtime control slot. Vue apps keep CSS,
-//! custom components, and renderer freedom via [`nana_ui_vue::VueHost`] — this stub does
-//! not restrict Vue widget types. Desktop [`nana_ui::runtime::DesktopShell`] composes the same
+//! NanaUI owns shell layout and an experimental Runtime control slot. Desktop
+//! [`nana_ui::runtime::DesktopShell`] composes the same
 //! regions; this stub keeps [`WorkspaceLayout`] / [`WorkspaceGeometry`] from
 //! `nana-ui-core` so Primary viewport sizing matches desktop. Hosts can present
 //! [`ShellChromeBand`] fills via scissor + solid-color pipeline (title / resources /
@@ -97,7 +96,7 @@ impl AndroidShellStub {
             WorkspaceGeometry::new(&self.layout, logical_w, logical_h, self.scale_factor);
     }
 
-    /// Primary region physical size — feed [`VueHost`] viewport and future Nana Primary slot.
+    /// Primary region physical size.
     pub fn primary_physical_size(&self) -> (u32, u32) {
         self.geometry
             .region(&RegionId::Primary)

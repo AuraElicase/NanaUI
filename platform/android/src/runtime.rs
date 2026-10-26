@@ -1,4 +1,4 @@
-//! Android activity loop: window lifecycle → wgpu Surface → V8 + NanaUI slot.
+//! Android activity loop: window lifecycle → wgpu Surface → NanaUI slot.
 
 use std::time::{Duration, Instant};
 
@@ -8,9 +8,7 @@ use android_activity::input::{
 };
 use android_activity::{AndroidApp, InputStatus, MainEvent, PollEvent};
 use nana_ui_platform::SurfacePhase;
-use nana_ui_vue::VueHost;
 
-use crate::engine::smoke_engine_only;
 use crate::gpu::GpuSurface;
 use crate::shell::{AndroidShellStub, scale_factor_from_density_dpi};
 use crate::slot_ax::SlotAccessibility;
@@ -25,9 +23,7 @@ struct HostState {
     gpu: Option<GpuSurface>,
     slot: Option<SlotPainter>,
     ax: Option<SlotAccessibility>,
-    vue: Option<VueHost>,
     shell: AndroidShellStub,
-    engine_booted: bool,
     last_paint: Instant,
     phase: SurfacePhase,
     /// Mirrors the soft keyboard: `true` after we asked InputMethodManager to
@@ -48,36 +44,13 @@ impl HostState {
             gpu: None,
             slot: None,
             ax: None,
-            vue: None,
             shell: AndroidShellStub::new(),
-            engine_booted: false,
             last_paint: Instant::now() - Duration::from_secs(1),
             phase: SurfacePhase::Pending,
             ime_shown: false,
             ime_buffer: SlotImeBuffer::default(),
             editor_info: None,
             ime_bottom_inset: 0,
-        }
-    }
-
-    fn ensure_engine(&mut self) {
-        if self.engine_booted {
-            return;
-        }
-        match smoke_engine_only() {
-            Ok(report) => {
-                log::info!(
-                    "nana-android-host: V8 ok={} count={} createElement={} caps={:?}",
-                    report.ok,
-                    report.count,
-                    report.create_element,
-                    report.capabilities
-                );
-                self.engine_booted = true;
-                let (pw, ph) = self.shell.primary_physical_size();
-                self.vue = Some(VueHost::with_viewport(pw, ph, self.shell.scale_factor()));
-            }
-            Err(err) => log::error!("nana-android-host: engine boot failed: {err}"),
         }
     }
 
@@ -125,7 +98,6 @@ impl HostState {
         self.gpu = Some(gpu);
         self.shell.resize(w, h, scale);
         self.phase = SurfacePhase::Ready;
-        self.ensure_engine();
         match SlotAccessibility::new(app, self.slot.as_ref().expect("slot painter").runtime()) {
             Ok(ax) => self.ax = Some(ax),
             Err(err) => log::warn!("nana-android-host: accessibility attach failed: {err}"),
@@ -192,12 +164,6 @@ impl HostState {
         self.shell.resize(visible.0, visible.1, scale);
         if let Some(painter) = self.slot.as_mut() {
             painter.resize(visible, scale);
-        }
-
-        if let Some(vue) = self.vue.as_mut() {
-            let (pw, ph) = self.shell.primary_physical_size();
-            vue.set_viewport(pw, ph, scale);
-            vue.resolve_layout();
         }
 
         let bands = self.shell.chrome_present_bands();
@@ -283,7 +249,7 @@ impl HostState {
         let Some(painter) = self.slot.as_mut() else {
             return false;
         };
-        // Only slot-local (or captured drag) samples are Handled; outside → VueHost.
+        // Only slot-local (or captured drag) samples are Handled; outside → system.
         painter.push_touch(slot, kind, physical_x, physical_y, pointer_id)
     }
 
@@ -293,8 +259,8 @@ impl HostState {
     /// focused, printable commits arrive as GameTextInput `TextEvent`s and are
     /// not synthesized from KeyEvents (that would double-commit CJK); shortcuts
     /// still reach the Runtime. Keys are
-    /// Handled only while the slot holds keyboard focus; otherwise they remain
-    /// available to VueHost.
+    /// Handled only while the slot holds keyboard focus; otherwise they stay
+    /// with the system.
     fn handle_key(
         &mut self,
         action: KeyAction,
@@ -393,7 +359,6 @@ impl HostState {
 
 pub fn run(app: AndroidApp) -> Result<(), String> {
     let mut state = HostState::new();
-    state.ensure_engine();
     let mut running = true;
 
     while running {
@@ -444,7 +409,6 @@ pub fn run(app: AndroidApp) -> Result<(), String> {
                 }
                 MainEvent::Resume { .. } | MainEvent::Start => {
                     log::info!("nana-android-host: resume/start");
-                    state.ensure_engine();
                 }
                 _ => {}
             },

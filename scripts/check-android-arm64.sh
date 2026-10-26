@@ -61,15 +61,7 @@ run_crate nana-ui-platform
 run_crate nana-ui --lib
 run_crate nana-ui-vue --no-default-features
 
-if [[ -n "${RUSTY_V8_ARCHIVE:-}" ]]; then
-  echo "check-android-arm64: linking V8 from RUSTY_V8_ARCHIVE=${RUSTY_V8_ARCHIVE}"
-  run_crate nana-js-v8 --features engine
-  run_crate nana-android-host
-else
-  echo "check-android-arm64: no RUSTY_V8_ARCHIVE; V8 stub only (see docs/android-arm64.md)"
-  run_crate nana-js-v8
-  run_crate nana-android-host --no-default-features
-fi
+run_crate nana-android-host
 
 ARTIFACT="${CARGO_TARGET_DIR}/${TARGET}/${PROFILE_DIR}/libnana_android_host.so"
 if [[ -f "${ARTIFACT}" ]]; then

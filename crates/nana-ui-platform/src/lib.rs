@@ -70,8 +70,6 @@ pub struct PlatformCapabilities {
     pub clipboard: bool,
     /// Host presents via wgpu Surface (Vulkan on Android ARM64).
     pub vulkan_surface: bool,
-    /// Rust-owned JS engine (V8) — never System WebView.
-    pub rust_js_engine: bool,
     /// Nana `DesktopShell` paint wired on this target.
     pub desktop_shell: bool,
     /// Shell chrome band plan (title / regions) available.
@@ -88,7 +86,7 @@ pub struct PlatformCapabilities {
 
 #[cfg(feature = "experimental-android")]
 impl PlatformCapabilities {
-    /// Android ARM64 host: Surface + Rust JS engine + slot controls/input.
+    /// Android ARM64 host: Surface + slot controls/input.
     ///
     /// `ime` and `clipboard` are true once GameActivity InputConnection and
     /// JNI `ClipboardManager` are wired. This is not a second product paint
@@ -99,7 +97,6 @@ impl PlatformCapabilities {
             ime: true,
             clipboard: true,
             vulkan_surface: true,
-            rust_js_engine: true,
             desktop_shell: false,
             shell_chrome_bands: true,
             shell_chrome_fill: true,

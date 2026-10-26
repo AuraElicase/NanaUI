@@ -10,9 +10,8 @@ TalkBack Click/Focus/SetValue/SetSelection for Button / Switch / TextInput.
 Scroll / virtual lists stay later. Cross-compile and `--lib` tests are not
 device CJK / TalkBack evidence.
 
-Rust owns V8 (desktop smoke, device via `RUSTY_V8_ARCHIVE`) + Vue custom
-renderer (`VueHost`) + wgpu Vulkan Surface + `AndroidShellStub`. There is no
-System WebView.
+Rust owns the wgpu Vulkan Surface, the Runtime document and
+`AndroidShellStub`. There is no System WebView and no JS engine.
 
 ## Layout
 
@@ -24,7 +23,6 @@ System WebView.
 | `src/gpu.rs` | Host-owned wgpu 30 Surface (Vulkan) |
 | `src/slot_runtime.rs` | RuntimeDocument + pointer/key/IME into Runtime |
 | `src/slot_ime.rs` | GameTextInput buffer → `ImeEvent` (host-testable) |
-| `src/engine.rs` | V8 + VueHost smoke boot (desktop); Android cross-build skips V8 without archive |
 | `app/` | Gradle GameActivity wrapper (`NanaActivity`) |
 
 ## Build
@@ -46,15 +44,11 @@ cargo check -p nana-android-host --locked
 cargo test -p nana-android-host --lib --locked
 ```
 
-## Features
+## Shell
 
-- `engine-v8` (default on host) — desktop smoke. Android ARM64 cross-check links
-  V8 when `RUSTY_V8_ARCHIVE` is set (GitHub Actions `Package V8`); otherwise
-  `--no-default-features` (`docs/reference/android.md`). The `android-arm64-cross` CI job
-  is the V8 **stub** path and does not build GN.
-- **`AndroidShellStub`** sizes Primary viewport from the same `nana-ui-core` geometry as desktop
-  `DesktopShell`. `VueHost` resolves layout in that viewport. Frame presentation is wgpu chrome
-  fill plus a NanaUI Runtime control-slot strip; this is not DesktopShell.
+**`AndroidShellStub`** sizes regions from the same `nana-ui-core` geometry as
+desktop `DesktopShell`. Frame presentation is wgpu chrome fill plus a NanaUI
+Runtime control-slot strip; this is not DesktopShell.
 
 ## Packaging
 
