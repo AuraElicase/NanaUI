@@ -5,8 +5,8 @@ use std::time::Duration;
 
 /// How long a watched tree must stay quiet before a batch is released.
 ///
-/// Covers an editor's write-truncate-rename and a bundler emitting several files
-/// as separate writes.
+/// Covers an editor's write-truncate-rename and a tool (formatter, code
+/// generator) writing several files as separate writes.
 const DEFAULT_QUIET_PERIOD: Duration = Duration::from_millis(120);
 
 /// Directory names never worth watching. A recursive watch on a Vite project
@@ -14,50 +14,21 @@ const DEFAULT_QUIET_PERIOD: Duration = Duration::from_millis(120);
 /// single useful event.
 pub(crate) const IGNORED_DIRECTORIES: &[&str] = &["node_modules", "target", ".git"];
 
-/// Which paths the dev loop watches, reads, and treats as hot-swappable CSS.
+/// Which paths the dev loop watches, and which `.vue` views take the hot-text
+/// path instead of a rebuild.
 #[derive(Debug, Clone)]
 pub struct DevConfig {
-    artifact: Option<PathBuf>,
-    jail: PathBuf,
     watch: Vec<PathBuf>,
-    css: Vec<PathBuf>,
     templates: Vec<PathBuf>,
     quiet_period: Duration,
 }
 
 impl DevConfig {
-    /// Watch the JS tier: `artifact` is the bundle handed to the engine, and its
-    /// parent directory becomes both the jail root and the first watch root.
-    ///
-    /// Point this at the bundler's output, not at the sources — the host reads
-    /// the built artifact, so a `.vue` edit is only interesting once the bundler
-    /// has turned it into new bytes on disk.
-    pub fn new(artifact: impl Into<PathBuf>) -> Self {
-        let artifact = artifact.into();
-        let root = artifact
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-        Self {
-            artifact: Some(artifact),
-            jail: root.clone(),
-            watch: vec![root],
-            css: Vec::new(),
-            templates: Vec::new(),
-            quiet_period: DEFAULT_QUIET_PERIOD,
-        }
-    }
-
     /// Watch the Rust L3 tier: `root` is the source tree whose changes should
-    /// trigger a rebuild. There is no artifact to read — the new code arrives as
-    /// a new binary.
+    /// trigger a rebuild. The new code arrives as a new binary.
     pub fn new_rust(root: impl Into<PathBuf>) -> Self {
-        let root = root.into();
         Self {
-            artifact: None,
-            jail: root.clone(),
-            watch: vec![root],
-            css: Vec::new(),
+            watch: vec![root.into()],
             templates: Vec::new(),
             quiet_period: DEFAULT_QUIET_PERIOD,
         }
@@ -73,35 +44,8 @@ impl DevConfig {
         self
     }
 
-    /// Register a stylesheet for the CSS fast path.
-    ///
-    /// Only registered paths take it. An unregistered `.css` edit is treated as
-    /// a full reload, because a stylesheet the host never loaded under a key has
-    /// nothing to replace — and a bundler that inlines CSS into the JS bundle
-    /// (Vite's IIFE default) will have rewritten the bundle anyway.
-    #[must_use]
-    pub fn css(mut self, path: impl Into<PathBuf>) -> Self {
-        let path = path.into();
-        if !self.css.contains(&path) {
-            self.css.push(path);
-        }
-        self
-    }
-
-    pub fn artifact(&self) -> Option<&Path> {
-        self.artifact.as_deref()
-    }
-
-    pub fn jail_root(&self) -> &Path {
-        &self.jail
-    }
-
     pub fn watch_roots(&self) -> &[PathBuf] {
         &self.watch
-    }
-
-    pub fn css_paths(&self) -> &[PathBuf] {
-        &self.css
     }
 
     /// Treat `.vue` files under `dir` as views compiled in hot mode: their
@@ -149,38 +93,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn artifact_directory_becomes_the_jail_and_the_first_watch_root() {
-        let config = DevConfig::new("web/dist/app.iife.js");
-        assert_eq!(config.jail_root(), Path::new("web/dist"));
-        assert_eq!(config.watch_roots(), [PathBuf::from("web/dist")]);
-        assert_eq!(config.artifact(), Some(Path::new("web/dist/app.iife.js")));
-    }
-
-    #[test]
-    fn a_bare_artifact_filename_falls_back_to_the_current_directory() {
-        let config = DevConfig::new("app.iife.js");
-        assert_eq!(config.jail_root(), Path::new("."));
-    }
-
-    #[test]
-    fn watch_and_css_roots_deduplicate() {
-        let config = DevConfig::new("web/dist/app.iife.js")
-            .watch("web/dist")
-            .watch("assets")
-            .css("web/dist/app.css")
-            .css("web/dist/app.css");
+    fn watch_roots_deduplicate() {
+        let config = DevConfig::new_rust("src").watch("src").watch("assets");
         assert_eq!(
             config.watch_roots(),
-            [PathBuf::from("web/dist"), PathBuf::from("assets")]
+            [PathBuf::from("src"), PathBuf::from("assets")]
         );
-        assert_eq!(config.css_paths(), [PathBuf::from("web/dist/app.css")]);
     }
 
     #[test]
-    fn the_rust_tier_has_no_artifact_to_read() {
-        let config = DevConfig::new_rust("src");
-        assert!(config.artifact().is_none());
-        assert_eq!(config.watch_roots(), [PathBuf::from("src")]);
+    fn templates_are_watched_too() {
+        let config = DevConfig::new_rust("src").templates("views");
+        assert_eq!(
+            config.watch_roots(),
+            [PathBuf::from("src"), PathBuf::from("views")]
+        );
+        assert_eq!(config.template_dirs(), [PathBuf::from("views")]);
     }
 
     #[test]

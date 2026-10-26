@@ -1,6 +1,6 @@
 //! CSS layout parity harness（测试专用）。
 //!
-//! - Nana：`LayoutStyle` → [`nana_ui_vue::measure_layout`]（适配
+//! - Nana：`LayoutStyle` → [`measure::measure_layout`]（适配
 //!   [`nana_ui_runtime::RuntimeLayoutEngine::layout_style_tree`] 共享算法）
 //! - 参照：fixture 内嵌 `expected` 盒。本机 WKWebView 对照见 workspace 外的
 //!   `tools/css-parity-webview`，不得链进 `nana-ui`
@@ -10,10 +10,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nana_ui_vue::{LayoutNode, LayoutStyle, LayoutStyleCss, MeasuredBox, measure_layout};
+use measure::{LayoutNode, MeasuredBox, measure_layout};
+use nana_ui_css::css_map::{LayoutStyle, LayoutStyleCss};
 use serde::{Deserialize, Serialize};
 
 pub mod cases;
+pub mod measure;
 
 /// 默认容差（逻辑像素）。
 pub const DEFAULT_TOLERANCE_PX: f32 = 2.0;

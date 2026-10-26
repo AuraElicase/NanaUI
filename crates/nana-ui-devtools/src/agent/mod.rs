@@ -2,18 +2,11 @@
 //!
 //! CPU readback stays here. Product `run_runtime` present never uses this path.
 //!
-//! [`runtime::RuntimeAgentSession`] drives a plain L3 `RuntimeDocument` and is
-//! available under `runtime-agent` alone: a Rust product must not pull the Vue
-//! renderer and a JS engine into its dependency graph just to click a button
-//! without a window. [`vue::VueAgentSession`] needs `agent`.
-//!
-//! Both implement [`session::AgentSession`], so command dispatch and the stdio
-//! loop are written once in [`session`] and the wire types in [`protocol`] name
-//! no Vue type. [`cli`] drives a `&mut dyn AgentSession`, which is also how a
-//! consuming product joins with its own session and its own document.
-
-#[cfg(feature = "agent")]
-pub mod vue;
+//! [`runtime::RuntimeAgentSession`] drives a plain L3 `RuntimeDocument`. It
+//! implements [`session::AgentSession`], so command dispatch and the stdio loop
+//! are written once in [`session`] and the wire types live in [`protocol`].
+//! [`cli`] drives a `&mut dyn AgentSession`, which is also how a consuming
+//! product joins with its own session and its own document.
 
 pub mod cli;
 pub mod fixtures;
@@ -31,8 +24,6 @@ pub use protocol::{
 };
 pub use runtime::RuntimeAgentSession;
 pub use session::{AgentSession, run_stdio};
-#[cfg(feature = "agent")]
-pub use vue::{VueAgentSession, semantic_counter_artifact, semantic_counter_source};
 
 use std::collections::BTreeMap;
 
@@ -52,13 +43,6 @@ impl std::fmt::Display for AgentError {
 }
 
 impl std::error::Error for AgentError {}
-
-#[cfg(feature = "agent")]
-impl From<nana_js_engine::JsEngineError> for AgentError {
-    fn from(error: nana_js_engine::JsEngineError) -> Self {
-        Self(error.to_string())
-    }
-}
 
 impl From<String> for AgentError {
     fn from(error: String) -> Self {
@@ -157,14 +141,6 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-#[cfg(feature = "agent")]
-fn dump_accessibility_node(
-    node: AccessibilityNode,
-    agent_ids: &BTreeMap<u64, String>,
-) -> AccessibilityDumpNode {
-    dump_accessibility_node_with(node, agent_ids, &BTreeMap::new())
-}
-
 /// Project one document into the Agent accessibility wire shape.
 ///
 /// The main session dump and a product that owns another `RuntimeDocument`
@@ -225,41 +201,6 @@ fn dump_accessibility_node_with(
         numeric_maximum: node.numeric_maximum,
         numeric_step: node.numeric_step,
         numeric_value: node.numeric_value,
-    }
-}
-
-/// Map a recorded diagnostic onto the wire shape.
-#[cfg(feature = "agent")]
-pub(crate) fn diagnostic_dump(event: crate::DiagnosticEvent) -> protocol::DiagnosticDump {
-    use crate::DiagnosticKind;
-    use nana_js_engine::JsDiagnosticLevel;
-    protocol::DiagnosticDump {
-        sequence: event.sequence,
-        elapsed_micros: event.elapsed_micros,
-        kind: match event.kind {
-            DiagnosticKind::JsException => "js_exception",
-            DiagnosticKind::UnhandledPromiseRejection => "unhandled_promise_rejection",
-            DiagnosticKind::VueWarning => "vue_warning",
-            DiagnosticKind::VueError => "vue_error",
-            DiagnosticKind::HostCall => "host_call",
-            DiagnosticKind::ResourceLifecycle => "resource_lifecycle",
-            DiagnosticKind::WindowLifecycle => "window_lifecycle",
-            DiagnosticKind::Frame => "frame",
-            DiagnosticKind::DeviceLost => "device_lost",
-            DiagnosticKind::RenderError => "render_error",
-            DiagnosticKind::Inspector => "inspector",
-        }
-        .into(),
-        level: match event.level {
-            JsDiagnosticLevel::Error => "error",
-            JsDiagnosticLevel::Warning => "warn",
-            JsDiagnosticLevel::Info => "info",
-        }
-        .into(),
-        source: event.source,
-        message: event.message,
-        stack: event.stack,
-        fields: event.fields,
     }
 }
 

@@ -1,4 +1,4 @@
-//! L3 Runtime agent session. Vue-free: no JS engine, no Vue renderer.
+//! L3 Runtime agent session.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

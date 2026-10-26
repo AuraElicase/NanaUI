@@ -1,16 +1,13 @@
 //! Wiring the watcher to a running program.
 //!
-//! Two helpers, one per tier. Both run the same shape: the watcher thread does
-//! the slow work (reading a file, running a build) and hands the UI thread a
-//! message through `RuntimeProgramContext::dispatch`, which is a channel send
+//! Every helper runs the same shape: the watcher thread does the slow work
+//! (reading a file, running a build) and hands the UI thread a message through `RuntimeProgramContext::dispatch`, which is a channel send
 //! plus an event-loop wake and is safe from any thread.
 
 use std::path::{Path, PathBuf};
 
 use nana_ui::{RuntimeProgramContext, WindowDescriptor};
 
-#[cfg(feature = "vue")]
-use crate::ReloadRequest;
 use crate::restart::{DevHandoff, HANDOFF_ENV, RebuildCommand, RebuildOutcome};
 use crate::{DevConfig, DevSignal, DevWatcher};
 
@@ -18,10 +15,8 @@ thread_local! {
     /// Set by the running program when it is ready to hand off, read by
     /// [`run_with_restart`] once the event loop has stopped.
     ///
-    /// Thread-local rather than a `static Mutex`: both ends are the UI thread,
-    /// and `nana-ui-vue` already crosses `run_runtime` this way for its
-    /// bootstrap payload. A mutex here would imply a contention that cannot
-    /// happen.
+    /// Thread-local rather than a `static Mutex`: both ends are the UI thread.
+    /// A mutex here would imply a contention that cannot happen.
     static PENDING_RELAUNCH: std::cell::RefCell<Option<DevHandoff>> =
         const { std::cell::RefCell::new(None) };
 
@@ -127,49 +122,6 @@ where
             RebuildOutcome::Failed(diagnostics) => DevSignal::BuildFailed(diagnostics),
         };
         context.dispatch(Message::from(signal));
-    })
-}
-
-/// Watch the Vue tier: on a change, read the file and tell the program.
-///
-/// Reading happens here rather than in the program so a large bundle never
-/// touches the UI thread, and so a half-written file is rejected before it can
-/// reach the engine.
-#[cfg(feature = "vue")]
-pub fn watch_and_reload<Message>(
-    config: &DevConfig,
-    context: &RuntimeProgramContext<Message>,
-) -> Result<DevWatcher, notify::Error>
-where
-    Message: Send + 'static + From<nana_ui_vue::dev::DevReload>,
-{
-    use nana_ui_vue::dev::DevReload;
-
-    let context = context.clone();
-    let jail = config.jail_root().to_path_buf();
-    let artifact = config.artifact().map(Path::to_path_buf);
-    DevWatcher::spawn(config, move |batch| {
-        for request in batch {
-            // Both arms read through the same jailed, size-capped,
-            // empty-file-checked path, so a stylesheet reload names the key the
-            // same way the artifact does -- and a save caught between truncate
-            // and write never reaches the engine.
-            let reload = match request {
-                ReloadRequest::Css { path } => crate::read_within_jail(&path, &jail)
-                    .ok()
-                    .map(|(key, css)| DevReload::Stylesheet { key, css }),
-                ReloadRequest::Full | ReloadRequest::Template { .. } => {
-                    artifact.as_ref().and_then(|path| {
-                        crate::read_within_jail(path, &jail)
-                            .ok()
-                            .map(|(name, source)| DevReload::Artifact { name, source })
-                    })
-                }
-            };
-            if let Some(reload) = reload {
-                context.dispatch(Message::from(reload));
-            }
-        }
     })
 }
 

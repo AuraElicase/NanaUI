@@ -1,5 +1,3 @@
-#![cfg(feature = "agent")]
-
 use nana_ui::runtime::{
     Button, ComponentGeometry, DocumentId, LengthSpec, NativeMarkdown, RuntimeDocument, Stack,
 };

@@ -1,4 +1,4 @@
-//! Headless session for a Rust L3 Runtime document. No Vue renderer, no V8.
+//! Headless session for a Rust L3 Runtime document.
 //!
 //! A CLI cannot load an arbitrary Rust application from a path, so this drives
 //! named built-in fixtures. To drive your own document, call

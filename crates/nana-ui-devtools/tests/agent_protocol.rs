@@ -384,8 +384,8 @@ fn the_clear_colour_follows_the_active_theme() {
     assert_eq!(session.describe().clear, dark);
 }
 
-/// The protocol must stay drivable through a trait object and must stay free of
-/// Vue types: this test only builds under `runtime-agent`.
+/// The protocol must stay drivable through a trait object, so a product's own
+/// session can join.
 #[test]
 fn a_runtime_session_drives_the_protocol_as_a_trait_object() {
     let mut session = counter();
