@@ -1,0 +1,144 @@
+{
+  "verified_run": {
+    "id": 40299654534,
+    "head_sha": "5a206c39a4390e23a691135734e785272ecf2542",
+    "url": "https://github.com/sena-nana/NanaUI/actions/runs/40299654534",
+    "windows_job": 121494121326,
+    "artifact": "presentation-output-windows-latest"
+  },
+  "native_tests": {
+    "passed": 10,
+    "failed": 0,
+    "ignored": 0,
+    "scope": "actual DX12 native exports, same-LUID D3D11 copies/fences and slot/retirement guards; not hardware driver reset or full foreign process matrix"
+  },
+  "native_host": {
+    "adapter": "Microsoft Basic Render Driver (Dx12) -> same-LUID D3D11",
+    "consumer_record_cpu_ms": {
+      "p50": 0.1009,
+      "p95": 0.14459999999999998,
+      "p99": 0.16899999999999998,
+      "samples": 240
+    },
+    "consumer_work": {
+      "gpu_copies": 240,
+      "gpu_copy_bytes": 884736000,
+      "gpu_ready_waits": 240,
+      "gpu_release_signals": 240,
+      "target_recreates": 0,
+      "validation_readbacks": 0
+    },
+    "device_generation": 1,
+    "driver_vram_bytes": null,
+    "error": null,
+    "evidence": "actual-native-host-gpu",
+    "extent": [
+      1280,
+      720
+    ],
+    "fixture": "native-host-output",
+    "fixture_version": 1,
+    "frames": 240,
+    "gpu_execution_ms": null,
+    "native_api": "DX12-NT-D3D11",
+    "platform": "windows",
+    "producer_window_cpu_ms": {
+      "p50": 6.300199999999999,
+      "p95": 23.1401,
+      "p99": 29.4466,
+      "samples": 722
+    },
+    "producer_work": {
+      "cpu_readbacks": 0,
+      "draw_calls": 2889,
+      "gpu_copies": 241,
+      "gpu_copy_bytes": 888422400,
+      "submissions": 722,
+      "target_recreates": 0,
+      "ui_renders": 963
+    },
+    "proof": {
+      "consumer_completed": true,
+      "explicit_cpu_fence_waits": 0,
+      "native_handle_imports": 6,
+      "production_cpu_readbacks": 0
+    },
+    "schema_version": 1,
+    "scope": "30 native tokens warmup then 240 actual native copies/foreign GPU consumer updates; source Window may redraw more while native consumer is busy; consumer CPU call excludes GPU completion; source timing includes full Window interval",
+    "source_calls": 722,
+    "status": "ok",
+    "warmup_frames": 30
+  },
+  "raw_sha256": {
+    "output-native-tests.log": "f97585b0c4c26702afed353040bb8f9ed7a1b65d29e90595d4af20f5a119a11c",
+    "output-native-host.json": "912571d16ff09c283513ed7e8458598c79f6546bae35f9efe32ab164dd8bf0ca",
+    "output-native-host-gate.json": "95c1d47a945a5d5e8079683879578b94fecfe933da72f6571c5d7f4dde339ebf"
+  },
+  "new_dispatch": {
+    "id": 40318042410,
+    "head_sha": "657c0d2efe4612997ca4966af80891de83bf9d64",
+    "status": "completed",
+    "url": "https://github.com/sena-nana/NanaUI/actions/runs/40318042410",
+    "scope": "release native export/controlled destruction and five serial native/Electron rounds; result not inferred from configuration",
+    "conclusion": "failure",
+    "controlled_destruction": {
+      "passed": 1,
+      "ignored": 0,
+      "scope": "actual Windows backend device.destroy callback, not hardware driver reset"
+    },
+    "native_export": {
+      "passed": 10,
+      "ignored": 0
+    },
+    "native_rounds_completed": 1,
+    "electron_rounds_completed": 0,
+    "electron_report": {
+      "schema_version": 1,
+      "fixture": "electron-webgpu-output",
+      "fixture_version": 1,
+      "platform": "windows",
+      "electron_version": "44.9.1",
+      "status": "unsupported",
+      "evidence": null,
+      "reason": "No WebGPU adapter",
+      "has_pending_gpu_reads": false,
+      "consumer_work": {
+        "displayed_frames": 0,
+        "submissions": 0,
+        "draw_calls": 0
+      },
+      "warmup_consumer_work": {
+        "displayed_frames": 0,
+        "submissions": 0,
+        "draw_calls": 0
+      },
+      "total_consumer_work": {
+        "displayed_frames": 0,
+        "submissions": 0,
+        "draw_calls": 0
+      },
+      "consumer_record_cpu_ms": {
+        "samples": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "warmup_consumer_record_cpu_ms": {
+        "samples": 0,
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "chromium_internal_gpu_copies": null,
+      "gpu_time_ms": null,
+      "driver_vram_bytes": null
+    },
+    "raw_sha256": {
+      "native-tests.log": "05fa2f3f83be6a5936ca86dca6bb108955c23c9cf3318f9226b55a89b287757c",
+      "native-1.json": "cce64bcf6d5bfeb914d8028cde47ddb0b5c98b77bdbbd5416c6665efa585ad0d",
+      "native-gate-1.json": "d2507c44432dc8db27fd073bad3816cfd72b89221f0a8480e9268daf2071ecdf",
+      "electron-1.json": "5fd734689384b3e3a7747d4a5b2acde3425b5e9626be234b1438e2aa1c15707c"
+    }
+  },
+  "remaining": "SteamVR live, actual hardware reset/performance and historical Mac source/TG causality remain unverified"
+}

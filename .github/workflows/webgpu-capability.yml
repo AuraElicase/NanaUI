@@ -1,0 +1,32 @@
+name: WebGPU capability
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-adapters:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install the pinned Electron
+        working-directory: examples/web-output-bridge
+        run: |
+          npm ci --ignore-scripts=false
+          if ($LASTEXITCODE -ne 0) { throw "Electron installation failed" }
+      - name: Observe default and explicit fallback adapters
+        run: |
+          New-Item -ItemType Directory -Force target/webgpu-capability | Out-Null
+          node examples/web-output-bridge/node_modules/electron/cli.js examples/web-output-bridge/adapter-probe.cjs --output target/webgpu-capability/report.json 2>&1 | Tee-Object target/webgpu-capability/probe.log
+          if ($LASTEXITCODE -ne 0) { throw "WebGPU adapter/device unavailable or probe failed" }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-webgpu-capability
+          path: target/webgpu-capability
