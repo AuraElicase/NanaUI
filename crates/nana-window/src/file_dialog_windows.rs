@@ -19,6 +19,12 @@ use windows::Win32::UI::Shell::{
 };
 use windows::core::{HRESULT, PCWSTR};
 
+#[path = "file_dialog_windows_events.rs"]
+mod events;
+
+/// `HRESULT_FROM_WIN32(ERROR_CANCELLED)`: the user closed the dialog.
+const CANCELLED: HRESULT = ERROR_CANCELLED.to_hresult();
+
 struct ComScope;
 
 impl ComScope {
@@ -160,10 +166,15 @@ fn present(owner: HWND, request: &FileDialogRequest) -> FileDialogResult {
     if let Err(error) = configure(&dialog, request) {
         return FileDialogResult::failed(request.id, error);
     }
+    let _events = match events::subscribe(dialog.file_dialog(), request) {
+        Ok(subscription) => subscription,
+        Err(error) => return FileDialogResult::failed(request.id, platform(error)),
+    };
     match unsafe { dialog.file_dialog().Show(Some(owner)) } {
         Ok(()) => match dialog.collect_paths(request.kind.is_multiple()) {
             Ok(paths) => match require_directories(request.kind, paths) {
-                Ok(paths) => FileDialogResult::selected(request.id, paths),
+                Ok(paths) => FileDialogResult::selected(request.id, paths)
+                    .with_selected_filter(selected_type(dialog.file_dialog(), request)),
                 Err(error) => FileDialogResult::failed(request.id, error),
             },
             Err(error) => FileDialogResult::failed(request.id, error),
@@ -196,6 +207,17 @@ fn configure(dialog: &NativeDialog, request: &FileDialogRequest) -> Result<(), F
         }
     }
     apply_filters(file, &request.filters)
+}
+
+/// Folder kinds never apply the request's types, so they report none.
+fn selected_type(dialog: &IFileDialog, request: &FileDialogRequest) -> Option<usize> {
+    if matches!(
+        request.kind,
+        FileDialogKind::PickFolder | FileDialogKind::PickFolders
+    ) {
+        return None;
+    }
+    events::selected_filter(dialog, request.filters.len())
 }
 
 fn apply_directory(dialog: &IFileDialog, directory: Option<&Path>) {
@@ -263,7 +285,8 @@ fn apply_filters(dialog: &IFileDialog, filters: &[FileFilter]) -> Result<(), Fil
         .collect();
     unsafe {
         dialog.SetFileTypes(&list).map_err(platform)?;
-        if let Some(extension) = filters.iter().find_map(|filter| filter.extensions.first()) {
+        // The first type starts selected; a type change follows in `events`.
+        if let Some(extension) = default_extension(&filters[0]) {
             let extension = wide(extension);
             dialog
                 .SetDefaultExtension(PCWSTR(extension.as_ptr()))
@@ -287,7 +310,7 @@ fn dialog_options(kind: FileDialogKind) -> FILEOPENDIALOGOPTIONS {
 }
 
 fn result_from_hresult(id: u64, hr: HRESULT) -> FileDialogResult {
-    if hr == ERROR_CANCELLED.to_hresult() {
+    if hr == CANCELLED {
         FileDialogResult::cancelled(id)
     } else {
         FileDialogResult::failed(
@@ -393,10 +416,11 @@ fn platform(error: impl std::fmt::Display) -> FileDialogError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows::Win32::Foundation::E_FAIL;
 
     #[test]
     fn cancelled_hresult_is_not_a_platform_error() {
-        let result = result_from_hresult(9, ERROR_CANCELLED.to_hresult());
+        let result = result_from_hresult(9, CANCELLED);
         assert!(result.is_cancelled());
         assert_eq!(result.id, 9);
         assert!(result.error.is_none());
@@ -404,7 +428,7 @@ mod tests {
 
     #[test]
     fn other_hresults_are_platform_failures() {
-        let result = result_from_hresult(4, HRESULT(0x8000_4005u32 as i32));
+        let result = result_from_hresult(4, E_FAIL);
         assert!(!result.is_cancelled());
         assert!(matches!(result.error, Some(FileDialogError::Platform(_))));
     }

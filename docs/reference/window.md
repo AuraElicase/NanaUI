@@ -323,9 +323,15 @@ IME：焦点进可编辑字段时 `Window::request_ime_update(Enable)` 一次（
 | Linux | 独立 portal 工作线程，带父窗口标识；响应在打开前订阅并按实际返回的 request path 关联，兼容旧 portal；不可用时沿用可取消并回收子进程的 zenity fallback |
 | 其它 | 返回 `Unavailable`，不静默悬挂 |
 
+**选中的文件类型**：`result.selected_filter` 是关闭时选中的类型在 `request.filters` 中的下标（从 0 开始）。Windows 来自 `IFileDialog::GetFileTypeIndex`（原生从 1 开始，超出请求范围记为 `None`），打开和保存都报告。Linux portal 来自响应里的 `current_filter`：先按名称和模式整体匹配请求发出的过滤器，再按名称匹配；旧 portal 不返回时为 `None`。macOS 的 panel 只有合并后的扩展名列表，zenity 不输出所选类型，两者都是 `None`。目录选择不应用过滤器，请求没有过滤器、取消或失败时也都是 `None`。宿主或测试注入结果用 `FileDialogResult::selected(..).with_selected_filter(..)`；无头宿主用 `HeadlessFileDialog::SelectWithFilter(paths, index)`。`FileDialogRequest` 和 `FileDialogResult` 标为 `#[non_exhaustive]`，通过构造器和 builder 建立。
+
+**保存类型联动**：Windows 保存对话框订阅 `IFileDialogEvents`。`OnTypeChange` 把 `SetDefaultExtension` 换成新类型的第一个具体扩展名，并且只在可见文件名以请求中某个类型的扩展名结尾时把它换成新类型的扩展名；`v1.2` 这类名字里的点不算后缀，留给默认扩展名处理。通配类型（`*`）保持原默认扩展名和文件名。macOS、portal 和 zenity 不做联动，由各自的原生行为决定。
+
+**强制后缀**：`FileDialogRequest::enforce_extension(true)` 只作用于保存，默认关闭。完成时由 `FileDialogRequest::apply_extension_policy` 处理：文件名不以所选类型的某个扩展名结尾（比较末尾、忽略大小写）时追加该类型的第一个扩展名，不会用 `Path::with_extension` 截掉 `v1.2` 的 `.2`。平台没报告所选类型时，以请求中任一扩展名结尾即可，否则追加第一个类型的扩展名；通配类型接受任何名字。各平台的完成回调和无头宿主都经过这一步。Windows 还在 `OnFileOk` 里预先计算：补后缀后的文件已存在（或无法判断）时，把补好的名字填回对话框并返回 `S_FALSE` 保持打开，再次保存时原生覆盖确认针对的就是实际写入的文件；不存在时直接关闭，由完成回调追加。macOS 的 `NSSavePanel` 不允许其它类型，自身会补后缀，策略通常无事可做。portal 和 zenity 的覆盖确认只针对用户输入的名字：追加后的文件若已存在，不会再有原生确认，应用写入前需要时自行检查。
+
 Linux portal 返回 URI 数组。可保留路径中的换行。zenity fallback 多选采用换行分隔的 CLI 输出。文件名本身包含换行时无法无歧义拆分。单选只剥离一个协议结尾换行。保留实际文件名。该 fallback 多选边界不能作为任意路径支持通过的依据。
 
-`describe_configured_dialog(&request)` 读回平台实际配置（标题、起始目录、扩展名）。不呈现对话框。`crates/nana-window/examples/file-dialog-probe.rs` 检查这部分配置。macOS 从 AppKit panel 读回三项。Windows 起始目录来自 `GetFolder`。`IFileDialog` 没有 GetTitle / GetFileTypes。标题是 `SetTitle` 成功后的回显。目录选择不应用过滤器（因此扩展名为空）。也不应用预填文件名。真实交互使用 `crates/nana-ui/examples/hosted-file-dialog-probe.rs`：在应用窗口内覆盖五种选择、重复与忙碌拒绝、取消、窗口退出。并观察对话框打开时持续 `window_frame_presented`。配置检查和交叉编译不能代替各平台原生交互验收。
+`describe_configured_dialog(&request)` 读回平台实际配置（标题、起始目录、扩展名）。不呈现对话框。`crates/nana-window/examples/file-dialog-probe.rs` 检查这部分配置。macOS 从 AppKit panel 读回三项。Windows 起始目录来自 `GetFolder`。`IFileDialog` 没有 GetTitle / GetFileTypes。标题是 `SetTitle` 成功后的回显。目录选择不应用过滤器（因此扩展名为空）。也不应用预填文件名。真实交互使用 `crates/nana-ui/examples/hosted-file-dialog-probe.rs`：在应用窗口内覆盖五种选择、重复与忙碌拒绝、取消、窗口退出；`save-typed` 用两个类型和 `enforce_extension` 检查类型联动、`selected_filter` 与补后缀（输入 `v1.2`、切换类型、覆盖已有文件）。并观察对话框打开时持续 `window_frame_presented`。配置检查和交叉编译不能代替各平台原生交互验收。
 
 ## 在文件管理器中显示
 

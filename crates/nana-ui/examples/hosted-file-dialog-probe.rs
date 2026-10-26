@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 
 //! Native acceptance: stdin accepts file, files, folder, folders, save,
-//! duplicate, busy, and quit. The frame counter keeps updating behind a sheet.
+//! save-typed (two types, `enforce_extension`), duplicate, busy, and quit. The frame counter keeps updating behind a sheet.
 //! Completions and actual presentations are printed for verification.
 use nana_ui::runtime::{
     Activate, Button, DocumentId, Entity, FrameworkError, RuntimeDocument, Stack, Text,
@@ -121,7 +121,7 @@ impl RuntimeProgram for Probe {
             "files" => FileDialogKind::OpenFiles,
             "folder" => FileDialogKind::PickFolder,
             "folders" => FileDialogKind::PickFolders,
-            "save" => FileDialogKind::SaveFile,
+            "save" | "save-typed" => FileDialogKind::SaveFile,
             _ => return RuntimeProgramUpdate::default(),
         };
         if command.trim() != "duplicate" {
@@ -142,6 +142,16 @@ impl RuntimeProgram for Probe {
             )
             .file_name("nana-dialog-selection.txt")
             .filters([FileFilter::new("文本", ["txt"])]);
+        let request = if command.trim() == "save-typed" {
+            request
+                .filters([
+                    FileFilter::new("文本", ["txt"]),
+                    FileFilter::new("JSON", ["json"]),
+                ])
+                .enforce_extension(true)
+        } else {
+            request
+        };
         report(format_args!("request {id} {kind:?}"));
         let _ = io::stdout().flush();
         let mut requests = vec![request.clone()];
