@@ -304,6 +304,11 @@ face。Issue 草案写的是 style → weight → stretch。这里按 CSS 规范
 
 - 可变 face 以**范围**参与：`wght` 轴给 weight 区间。`wdth` 轴给 stretch 区间。`ital` / `slnt`
   轴让 face 同时支持 normal 与 italic / oblique。
+- query 的 stretch 来自 `TextStyle::font_stretch`（正常宽度的百分比，默认 100，clamp 到
+  50..=200）。和 CSS `font-stretch` 一样，调用方只给宽度：字族里有 condensed 静态 face 就选它，
+  选中的 face 有 `wdth` 轴就由下一节的 query 隐含值设坐标。调用方不要自己往 `variations` 写
+  `wdth`。那是显式值，会盖过 stretch。富文本 span 的 `stretch_percent` 走的就是这个字段。
+  它也是 `ShapeKey` 的一部分。
 - 400..=500 先找不超过 500 的更重 face。再找更轻。再找 500 以上。<400 先轻后重。>500 先重后轻。
 - 仍然并列时：显式注册（文件 / 内存）胜过系统扫描。再由**后注册者**胜出。整个过程不遍历
   HashMap。同一 face 集合与 query 永远选出同一个 face。

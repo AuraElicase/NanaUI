@@ -365,6 +365,95 @@ fn a_run_names_the_instance_its_glyphs_were_shaped_at() {
 }
 
 #[test]
+fn font_stretch_sets_a_variable_faces_width_axis() {
+    let (mut fonts, ids) = system(&["nana-test-vf"]);
+    let mut shaper = Shaper::default();
+    let source = TextSource::new("A");
+    let run = |shaper: &mut Shaper, fonts: &mut FontSystem, style: &TextStyle| {
+        shape(shaper, fonts, &source, style, DirSpec::Ltr).runs[0].clone()
+    };
+    let normal = run(&mut shaper, &mut fonts, &style("NanaTestVF"));
+    let condensed = run(
+        &mut shaper,
+        &mut fonts,
+        &TextStyle {
+            font_stretch: 75.0,
+            ..style("NanaTestVF")
+        },
+    );
+    assert_eq!(condensed.font, ids[0]);
+    let instance = condensed
+        .instance
+        .as_ref()
+        .expect("the native shaper reports it");
+    assert_eq!(
+        instance.coords.as_ref(),
+        [nana_text::font::AxisCoord {
+            tag: *b"wdth",
+            value: 75.0
+        }]
+    );
+    assert!(
+        condensed.advance_px < normal.advance_px,
+        "{} < {}",
+        condensed.advance_px,
+        normal.advance_px
+    );
+    assert_eq!(
+        shaper.counters().shape_cache_misses,
+        2,
+        "stretch is a shape cache key"
+    );
+
+    // An explicit axis value still wins over the stretch, as in CSS.
+    let mut explicit = TextStyle {
+        font_stretch: 75.0,
+        ..style("NanaTestVF")
+    };
+    explicit.variations = vec![FontVariationSetting::new(*b"wdth", 150.0)];
+    let explicit = run(&mut shaper, &mut fonts, &explicit);
+    assert_eq!(
+        explicit.instance.as_ref().unwrap().coords.as_ref(),
+        [nana_text::font::AxisCoord {
+            tag: *b"wdth",
+            value: 150.0
+        }]
+    );
+}
+
+#[test]
+fn font_stretch_selects_a_static_condensed_face() {
+    let mut fonts = FontSystem::with_policy(FallbackPolicy::empty());
+    let bytes = font_blob(fixture("noto-sans-kr"));
+    let face = |fonts: &mut FontSystem, descriptor: FaceDescriptor| {
+        fonts
+            .register_bytes(Arc::clone(&bytes), &descriptor)
+            .unwrap()
+            .faces[0]
+    };
+    let normal = face(&mut fonts, FaceDescriptor::family("Stretchy"));
+    let condensed = face(
+        &mut fonts,
+        FaceDescriptor {
+            stretch: Some((75.0, 75.0)),
+            ..FaceDescriptor::family("Stretchy")
+        },
+    );
+    let mut shaper = Shaper::default();
+    let source = TextSource::new("A");
+    let font = |shaper: &mut Shaper, fonts: &mut FontSystem, stretch: f32| {
+        let style = TextStyle {
+            font_stretch: stretch,
+            ..style("Stretchy")
+        };
+        shape(shaper, fonts, &source, &style, DirSpec::Ltr).runs[0].font
+    };
+    assert_eq!(font(&mut shaper, &mut fonts, 100.0), normal);
+    assert_eq!(font(&mut shaper, &mut fonts, 80.0), condensed);
+    assert_eq!(font(&mut shaper, &mut fonts, 120.0), normal);
+}
+
+#[test]
 fn the_language_hint_reaches_opentype_locl() {
     // Noto Sans SC's `latn` script has its own `locl` for each language
     // system: the default one swaps the digits for shorter forms, `ZHS`

@@ -566,3 +566,209 @@ fn a_styled_label_takes_room_and_paints_its_pill_and_picture() {
         longer.width
     );
 }
+
+const YELLOW: PaintColor = PaintColor::srgb([1.0, 0.9, 0.2, 1.0]);
+const MARKED: &str = "a highlighted run long enough to cross onto the next line of this label";
+const BEFORE_MARKED: &str = "Plain words before ";
+
+fn marked(background: PaintColor) -> RichText {
+    RichText::builder()
+        .plain(BEFORE_MARKED)
+        .push(MARKED, RichSpanStyle::new().background_color(background))
+        .plain(" and after.")
+        .build()
+}
+
+fn marked_range() -> std::ops::Range<usize> {
+    BEFORE_MARKED.len()..BEFORE_MARKED.len() + MARKED.len()
+}
+
+/// The label's quad batches in paint order, with their scene order index.
+fn label_fills(
+    runtime: &RuntimeDocument,
+) -> Vec<(usize, Vec<nana_ui_scene::SceneRect>, Option<PaintColor>)> {
+    runtime
+        .scene()
+        .primitives()
+        .enumerate()
+        .filter(|(_, primitive)| primitive.node == id(LABEL))
+        .filter_map(|(at, primitive)| match &primitive.kind {
+            ScenePrimitiveKind::QuadBatch {
+                bounds, background, ..
+            } => Some((at, bounds.clone(), *background)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_span_background_fills_its_run_on_every_line_it_crosses() {
+    let mut runtime = document(label_layout(), marked(YELLOW));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let (_, layout) = runtime.context().world().text_layout(id(LABEL)).unwrap();
+    let expected = layout.selection_rects(marked_range());
+    assert!(expected.len() >= 2, "the span wraps: {expected:?}");
+    let fills = label_fills(&runtime);
+    assert_eq!(fills.len(), 1, "one fill for the one span: {fills:?}");
+    let (_, rects, background) = &fills[0];
+    assert_eq!(
+        *background,
+        Some(YELLOW),
+        "the authored colour reaches the painter"
+    );
+    assert_eq!(rects.len(), expected.len());
+    let origin = (rects[0].x - expected[0].x, rects[0].y - expected[0].y);
+    for (rect, line) in rects.iter().zip(&expected) {
+        assert_eq!(
+            (
+                rect.x - origin.0,
+                rect.y - origin.1,
+                rect.width,
+                rect.height
+            ),
+            (line.x, line.y, line.width, line.height),
+            "each line's fill is that line's run of the span"
+        );
+    }
+    assert!(rects[1].y > rects[0].y);
+    assert!(
+        label_text(&runtime).2.is_none(),
+        "a background alone adds no glyph effect"
+    );
+}
+
+#[test]
+fn a_span_background_paints_under_the_selection_and_the_glyphs() {
+    let selectable = LayoutStyle {
+        user_select: Some(nana_ui_core::UserSelectSpec::Text),
+        ..label_layout()
+    };
+    let mut runtime = document(selectable, marked(YELLOW));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let lines = runtime
+        .context()
+        .world()
+        .text_layout(id(LABEL))
+        .unwrap()
+        .1
+        .selection_rects(0..BEFORE_MARKED.len() + 4)
+        .into_iter()
+        .map(|rect| nana_ui_runtime::LayoutBox {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        })
+        .collect();
+    runtime
+        .context_mut()
+        .compat_world_mut()
+        .set_document_text_selection(
+            DocumentId::new(1).unwrap(),
+            Some(nana_ui_runtime::DocumentTextSelection {
+                node: id(LABEL),
+                start: 0,
+                end: BEFORE_MARKED.len() + 4,
+                lines,
+            }),
+        );
+    settle(&mut runtime, &mut shaper);
+    let fills = label_fills(&runtime);
+    let background = fills
+        .iter()
+        .find(|(_, _, color)| *color == Some(YELLOW))
+        .expect("the span background")
+        .0;
+    let selection = fills
+        .iter()
+        .find(|(_, _, color)| *color != Some(YELLOW))
+        .expect("the document selection")
+        .0;
+    let glyphs = runtime
+        .scene()
+        .primitives()
+        .position(|primitive| {
+            primitive.node == id(LABEL) && matches!(primitive.kind, ScenePrimitiveKind::Text { .. })
+        })
+        .unwrap();
+    assert!(
+        background < selection && selection < glyphs,
+        "background {background} < selection {selection} < glyphs {glyphs}"
+    );
+}
+
+#[test]
+fn recolouring_a_span_background_shapes_and_lays_out_nothing() {
+    let mut runtime = document(label_layout(), marked(YELLOW));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let (handle, _) = runtime.context().world().text_layout(id(LABEL)).unwrap();
+    let before = text_work(&runtime);
+
+    set_rich(&mut runtime, marked(BLUE));
+    let update = runtime.flush(viewport(), &mut shaper).unwrap();
+    assert!(!update.is_idle(), "a repaint is a scene change");
+    let work = text_work(&runtime);
+    if work != before {
+        assert_eq!(work.text_nodes_shaped, 0, "a recolour reshapes nothing");
+        assert_eq!(work.layouts_created, 0, "a recolour lays nothing out");
+    }
+    assert_eq!(
+        runtime.context().world().text_layout(id(LABEL)).unwrap().0,
+        handle,
+        "the retained layout survives a background change"
+    );
+    let fills = label_fills(&runtime);
+    assert_eq!(fills.len(), 1);
+    assert_eq!(fills[0].2, Some(BLUE));
+
+    // Clearing it removes the fill, still without shaping.
+    set_rich(&mut runtime, RichText::new(marked(BLUE).text()));
+    runtime.flush(viewport(), &mut shaper).unwrap();
+    assert!(label_fills(&runtime).is_empty());
+    assert_eq!(
+        runtime.context().world().text_layout(id(LABEL)).unwrap().0,
+        handle
+    );
+}
+
+#[test]
+fn a_stretched_span_shapes_at_the_variable_faces_width() {
+    let engine = || {
+        let mut fonts = FontSystem::with_policy(FallbackPolicy::empty());
+        fonts
+            .register_bytes(
+                font_blob(include_bytes!("../../nana-text/fonts/nana-test-vf.ttf")),
+                &FaceDescriptor::default(),
+            )
+            .expect("the width fixture registers");
+        Arc::new(Mutex::new(NativeTextEngine::new(fonts))) as SharedTextEngine
+    };
+    let laid_out = |style: RichSpanStyle| {
+        let mut runtime = document(
+            label_layout(),
+            RichText::new("AAAA").with_span(0..4, style.family("NanaTestVF")),
+        );
+        let mut shaper = NanaTextEngineShaper::new(engine());
+        settle(&mut runtime, &mut shaper);
+        let layout = runtime.context().world().text_layout(id(LABEL)).unwrap().1;
+        let run = &layout.runs[0];
+        (
+            layout.lines[0].metrics.width_px,
+            run.instance.as_ref().and_then(|instance| {
+                instance
+                    .coords
+                    .iter()
+                    .find(|coord| coord.tag == *b"wdth")
+                    .map(|coord| coord.value)
+            }),
+        )
+    };
+    let (normal, normal_wdth) = laid_out(RichSpanStyle::new());
+    let (condensed, condensed_wdth) = laid_out(RichSpanStyle::new().stretch(75.0));
+    assert_eq!(normal_wdth, None, "normal width is the axis default");
+    assert_eq!(condensed_wdth, Some(75.0));
+    assert!(condensed < normal, "{condensed} < {normal}");
+}

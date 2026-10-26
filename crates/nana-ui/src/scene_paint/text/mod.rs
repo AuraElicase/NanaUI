@@ -1935,6 +1935,9 @@ impl TextPipeline {
             font_family: family.map(nana_ui_runtime::nana_font_family),
             font_size_px,
             font_weight: weight.unwrap_or(400),
+            // As Runtime's base style: only a rich span stretches, and rich
+            // text paints from its retained layout.
+            font_stretch: 100.0,
             italic,
             line_height: Some(LineHeightSpec::Absolute(line_height_px)),
             // A non-finite tracking would poison every advance after it.

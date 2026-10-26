@@ -33,6 +33,11 @@ pub struct TextStyle {
     pub font_size_px: f32,
     /// Already resolved to a number. `nana-text` never sees `font-weight: bold`.
     pub font_weight: u16,
+    /// CSS `font-stretch` as a percentage of normal width. Face selection
+    /// narrows on it before style and weight, and a face with a `wdth` axis
+    /// is set to it; an explicit `"wdth"` in [`Self::variations`] wins.
+    #[serde(default = "normal_stretch")]
+    pub font_stretch: f32,
     #[serde(default)]
     pub italic: bool,
     #[serde(default)]
@@ -59,6 +64,7 @@ impl Default for TextStyle {
             font_family: None,
             font_size_px: 16.0,
             font_weight: 400,
+            font_stretch: normal_stretch(),
             italic: false,
             line_height: None,
             letter_spacing_px: 0.0,
@@ -68,6 +74,10 @@ impl Default for TextStyle {
             language: None,
         }
     }
+}
+
+const fn normal_stretch() -> f32 {
+    100.0
 }
 
 impl TextStyle {

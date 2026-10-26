@@ -2283,7 +2283,7 @@ fn a_custom_render_node_keeps_its_paint_while_text_is_selected() {
     );
     let fill_id = PrimitiveId {
         node: id(1),
-        slot: collection_slot(DOCUMENT_TEXT_SELECTION, 0),
+        slot: collection_slot(DOCUMENT_TEXT_SELECTION, DOCUMENT_SELECTION_INDEX),
     };
     assert!(
         matches!(
@@ -2332,7 +2332,7 @@ fn document_selection_fill_paints_under_glyphs() {
     scene.apply_delta([text], []);
     let fill_id = PrimitiveId {
         node: id(1),
-        slot: collection_slot(DOCUMENT_TEXT_SELECTION, 0),
+        slot: collection_slot(DOCUMENT_TEXT_SELECTION, DOCUMENT_SELECTION_INDEX),
     };
     let glyph_id = PrimitiveId {
         node: id(1),
