@@ -54,6 +54,8 @@ pub enum HeadlessFileDialog {
     Cancel,
     Fail(FileDialogError),
     Select(Vec<PathBuf>),
+    /// Paths chosen with the request's filter at this index selected.
+    SelectWithFilter(Vec<PathBuf>, usize),
 }
 
 /// A virtual window.
@@ -839,7 +841,13 @@ impl<P: RuntimeProgram> HeadlessRuntime<P> {
                     HeadlessFileDialog::Select(paths) => {
                         FileDialogResult::selected(request.id, paths)
                     }
+                    HeadlessFileDialog::SelectWithFilter(paths, filter) => {
+                        FileDialogResult::selected(request.id, paths)
+                            .with_selected_filter(Some(filter))
+                    }
                 };
+                // Same completion policy as a native dialog.
+                let result = request.apply_extension_policy(result);
                 self.deliver(WindowEvent::FileDialogCompleted { id: *id, result })
             }
             _ => RuntimeProgramUpdate::default(),

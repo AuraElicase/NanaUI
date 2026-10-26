@@ -8,7 +8,7 @@
 //! This is the answering half of that contract. Before it, every consumer had
 //! to pull in its own dialog crate to respond to a browse button.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// What the dialog is for.
@@ -60,7 +60,11 @@ impl FileFilter {
 }
 
 /// A dialog the application wants opened.
+///
+/// Built with [`FileDialogRequest::new`] and the builder methods, so a new
+/// option does not break callers.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FileDialogRequest {
     /// Echoed back in the result, so an application with several browse
     /// buttons knows which one answered.
@@ -72,6 +76,10 @@ pub struct FileDialogRequest {
     pub directory: Option<PathBuf>,
     /// Pre-filled name for a save dialog.
     pub file_name: Option<Arc<str>>,
+    /// Save dialogs only: when the chosen name does not end with one of the
+    /// selected filter's extensions, append its first one. Off by default.
+    /// See [`FileDialogRequest::apply_extension_policy`].
+    pub enforce_extension: bool,
 }
 
 impl FileDialogRequest {
@@ -83,6 +91,7 @@ impl FileDialogRequest {
             filters: Vec::new(),
             directory: None,
             file_name: None,
+            enforce_extension: false,
         }
     }
 
@@ -107,6 +116,61 @@ impl FileDialogRequest {
         self.file_name = Some(file_name.into());
         self
     }
+
+    /// Make a save dialog's result carry the selected type's extension.
+    pub fn enforce_extension(mut self, enforce: bool) -> Self {
+        self.enforce_extension = enforce;
+        self
+    }
+
+    /// Applies [`FileDialogRequest::enforce_extension`] to a completed save.
+    ///
+    /// Only the end of the file name is compared, ignoring case, so `v1.2`
+    /// becomes `v1.2.json` instead of losing `.2`. The extensions are those of
+    /// `result.selected_filter`; when the platform did not report one, a name
+    /// ending with any requested extension is kept and the first one is
+    /// appended otherwise. A wildcard filter accepts every name.
+    pub fn apply_extension_policy(&self, mut result: FileDialogResult) -> FileDialogResult {
+        if !self.enforce_extension || !self.kind.is_save() {
+            return result;
+        }
+        let filters = match result
+            .selected_filter
+            .and_then(|index| self.filters.get(index))
+        {
+            Some(filter) => std::slice::from_ref(filter),
+            None => self.filters.as_slice(),
+        };
+        for path in &mut result.paths {
+            if let Some(extension) = missing_extension(path, filters) {
+                let name = path.as_mut_os_string();
+                name.push(".");
+                name.push(extension);
+            }
+        }
+        result
+    }
+}
+
+/// The extension to append to `path`, or `None` when its name already ends
+/// with an accepted one (or any name is accepted).
+fn missing_extension<'a>(path: &Path, filters: &'a [FileFilter]) -> Option<&'a str> {
+    let name = path.file_name()?.to_string_lossy().to_lowercase();
+    let mut first = None;
+    for extension in filters.iter().flat_map(|filter| &filter.extensions) {
+        if extension.is_empty() || extension.as_ref() == "*" {
+            return None;
+        }
+        let suffix = extension.to_lowercase();
+        if name
+            .strip_suffix(suffix.as_str())
+            .is_some_and(|stem| stem.ends_with('.'))
+        {
+            return None;
+        }
+        first.get_or_insert(extension.as_ref());
+    }
+    first
 }
 
 /// A host or platform failure, distinct from the user choosing Cancel.
@@ -129,12 +193,20 @@ pub enum FileDialogError {
 /// A cancelled dialog is an empty `paths`, not an error: the user declining is
 /// a normal outcome, and making callers match on an error to detect it invites
 /// treating it as a failure.
+///
+/// Built with the constructors below, so a new field does not break hosts
+/// that inject results.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FileDialogResult {
     /// The `id` of the request this answers.
     pub id: u64,
     pub paths: Vec<PathBuf>,
     pub error: Option<FileDialogError>,
+    /// Index into the request's `filters` of the type selected when the
+    /// dialog closed. `None` where the platform does not report it (macOS,
+    /// the zenity fallback) or the request had no filters.
+    pub selected_filter: Option<usize>,
 }
 
 impl FileDialogResult {
@@ -143,6 +215,7 @@ impl FileDialogResult {
             id,
             paths,
             error: None,
+            selected_filter: None,
         }
     }
 
@@ -151,6 +224,7 @@ impl FileDialogResult {
             id,
             paths: Vec::new(),
             error: Some(error),
+            selected_filter: None,
         }
     }
 
@@ -159,7 +233,14 @@ impl FileDialogResult {
             id,
             paths: Vec::new(),
             error: None,
+            selected_filter: None,
         }
+    }
+
+    /// Record the type the user left selected, as reported by the platform.
+    pub fn with_selected_filter(mut self, filter: Option<usize>) -> Self {
+        self.selected_filter = filter;
+        self
     }
 
     /// Whether the user chose nothing.
@@ -202,5 +283,85 @@ mod tests {
         assert_eq!(request.id, 7);
         assert_eq!(request.filters[0].extensions.len(), 2);
         assert_eq!(FileDialogResult::cancelled(request.id).id, 7);
+        assert!(!request.enforce_extension);
+    }
+
+    fn save(name: &str, filter: Option<usize>) -> PathBuf {
+        let request = FileDialogRequest::new(1, FileDialogKind::SaveFile)
+            .filters([
+                FileFilter::new("JSON", ["json"]),
+                FileFilter::new("文本", ["txt", "md"]),
+            ])
+            .enforce_extension(true);
+        let result = FileDialogResult::selected(1, vec![PathBuf::from("out").join(name)])
+            .with_selected_filter(filter);
+        let result = request.apply_extension_policy(result);
+        assert_eq!(result.selected_filter, filter);
+        result.paths.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn a_dot_inside_the_name_is_not_the_selected_extension() {
+        assert_eq!(save("v1.2", Some(0)), PathBuf::from("out/v1.2.json"));
+        assert_eq!(save("剧本", Some(1)), PathBuf::from("out/剧本.txt"));
+    }
+
+    #[test]
+    fn a_name_with_the_selected_extension_is_kept() {
+        assert_eq!(save("v1.2.json", Some(0)), PathBuf::from("out/v1.2.json"));
+        assert_eq!(save("notes.md", Some(1)), PathBuf::from("out/notes.md"));
+        // Another type's extension is not the selected one.
+        assert_eq!(
+            save("notes.md", Some(0)),
+            PathBuf::from("out/notes.md.json")
+        );
+        // A bare suffix without its dot is part of the name.
+        assert_eq!(save("ajson", Some(0)), PathBuf::from("out/ajson.json"));
+    }
+
+    #[test]
+    fn extension_case_is_ignored() {
+        assert_eq!(
+            save("REPORT.JSON", Some(0)),
+            PathBuf::from("out/REPORT.JSON")
+        );
+        assert_eq!(save("Notes.Txt", Some(1)), PathBuf::from("out/Notes.Txt"));
+    }
+
+    #[test]
+    fn without_a_reported_type_any_requested_extension_is_kept() {
+        assert_eq!(save("notes.md", None), PathBuf::from("out/notes.md"));
+        assert_eq!(save("v1.2", None), PathBuf::from("out/v1.2.json"));
+        // An index the request does not have is treated as unreported.
+        assert_eq!(save("notes.txt", Some(9)), PathBuf::from("out/notes.txt"));
+    }
+
+    #[test]
+    fn the_policy_is_opt_in_and_save_only() {
+        let filters = [FileFilter::new("JSON", ["json"])];
+        let picked = || FileDialogResult::selected(2, vec![PathBuf::from("v1.2")]);
+        let off = FileDialogRequest::new(2, FileDialogKind::SaveFile).filters(filters.clone());
+        assert_eq!(off.apply_extension_policy(picked()), picked());
+        let open = FileDialogRequest::new(2, FileDialogKind::OpenFile)
+            .filters(filters)
+            .enforce_extension(true);
+        assert_eq!(open.apply_extension_policy(picked()), picked());
+        let any = FileDialogRequest::new(2, FileDialogKind::SaveFile)
+            .filters([FileFilter::new("全部", ["*"])])
+            .enforce_extension(true);
+        assert_eq!(any.apply_extension_policy(picked()), picked());
+        let cancelled = FileDialogResult::cancelled(2);
+        assert_eq!(any.apply_extension_policy(cancelled.clone()), cancelled);
+    }
+
+    #[test]
+    fn constructors_report_no_selected_filter() {
+        assert_eq!(FileDialogResult::cancelled(1).selected_filter, None);
+        assert_eq!(
+            FileDialogResult::failed(1, FileDialogError::Busy).selected_filter,
+            None
+        );
+        let result = FileDialogResult::selected(1, Vec::new()).with_selected_filter(Some(2));
+        assert_eq!(result.selected_filter, Some(2));
     }
 }

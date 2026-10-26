@@ -9,7 +9,7 @@ use nana_ui::{
     DocumentAccessError, RoutedInput, RuntimeProgram, RuntimeProgramContext, RuntimeProgramUpdate,
     WindowDescriptor,
 };
-use nana_ui_core::{FileDialogKind, FileDialogRequest};
+use nana_ui_core::{FileDialogKind, FileDialogRequest, FileFilter};
 use nana_ui_devtools::agent::fixtures;
 use nana_ui_devtools::headless::{
     HeadlessFileDialog, HeadlessHost, HeadlessOptions, headless_geometry,
@@ -22,6 +22,7 @@ enum Message {
     OpenAux,
     AuxCreated(Result<WindowId, String>),
     Browse,
+    Export,
 }
 
 #[derive(Default)]
@@ -32,6 +33,7 @@ struct Seen {
     presented: usize,
     aux: Option<WindowId>,
     picked: Vec<PathBuf>,
+    picked_filter: Option<usize>,
 }
 
 struct Probe {
@@ -122,6 +124,18 @@ impl RuntimeProgram for Probe {
                 }],
                 ..RuntimeProgramUpdate::default()
             },
+            Message::Export => RuntimeProgramUpdate {
+                window_commands: vec![WindowCommand::OpenFileDialog {
+                    id: WindowId::PRIMARY,
+                    request: FileDialogRequest::new(7, FileDialogKind::SaveFile)
+                        .filters([
+                            FileFilter::new("JSON", ["json"]),
+                            FileFilter::new("Text", ["txt"]),
+                        ])
+                        .enforce_extension(true),
+                }],
+                ..RuntimeProgramUpdate::default()
+            },
         }
     }
 
@@ -146,6 +160,7 @@ impl RuntimeProgram for Probe {
         if let WindowEvent::FileDialogCompleted { result, .. } = event {
             assert_eq!(result.id, 7);
             self.seen.picked = result.paths;
+            self.seen.picked_filter = result.selected_filter;
         }
         RuntimeProgramUpdate::default()
     }
@@ -275,6 +290,22 @@ fn a_file_dialog_is_answered_once_and_logged() {
     host.dispatch(Message::Browse);
     host.turn();
     assert!(host.program().seen.picked.is_empty());
+}
+
+#[test]
+fn an_injected_filter_reaches_the_program_with_the_save_policy_applied() {
+    let Some(mut host) = host() else { return };
+    host.set_file_dialog(HeadlessFileDialog::SelectWithFilter(
+        vec![PathBuf::from("/picked/v1.2")],
+        1,
+    ));
+    host.dispatch(Message::Export);
+    host.turn();
+    assert_eq!(
+        host.program().seen.picked,
+        vec![PathBuf::from("/picked/v1.2.txt")]
+    );
+    assert_eq!(host.program().seen.picked_filter, Some(1));
 }
 
 #[test]

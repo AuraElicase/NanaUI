@@ -5,6 +5,9 @@ use futures_lite::{StreamExt, future};
 use std::{collections::HashMap, path::PathBuf};
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 
+/// Chosen paths and the index of the request filter left selected.
+type Picked = (Vec<PathBuf>, Option<usize>);
+
 pub(super) fn open<W>(
     window: Arc<W>,
     request: FileDialogRequest,
@@ -31,12 +34,12 @@ where
                         .await
                         {
                             Some(parent) => parent,
-                            None => return Ok(Vec::new()),
+                            None => return Ok(Picked::default()),
                         },
                         None => return Err(FileDialogError::WindowClosed),
                     };
                     if cancelled.try_recv().is_ok() {
-                        return Ok(Vec::new());
+                        return Ok(Picked::default());
                     }
                     match portal(
                         &request,
@@ -52,7 +55,9 @@ where
             }))
             .unwrap_or_else(|_| Err(platform("file dialog backend panicked")));
             completion(match result {
-                Ok(paths) => FileDialogResult::selected(request.id, paths),
+                Ok((paths, filter)) => {
+                    FileDialogResult::selected(request.id, paths).with_selected_filter(filter)
+                }
                 Err(error) => FileDialogResult::failed(request.id, error),
             });
         })
@@ -84,9 +89,9 @@ async fn portal(
     request: &FileDialogRequest,
     parent: String,
     cancel: &async_channel::Receiver<()>,
-) -> Option<Result<Vec<PathBuf>, FileDialogError>> {
+) -> Option<Result<Picked, FileDialogError>> {
     let Some(connection) = until_cancel(zbus::Connection::session(), cancel).await else {
-        return Some(Ok(Vec::new()));
+        return Some(Ok(Picked::default()));
     };
     let connection = connection.ok()?;
     let chooser = match until_cancel(
@@ -101,7 +106,7 @@ async fn portal(
     .await
     {
         Some(result) => result.ok()?,
-        None => return Some(Ok(Vec::new())),
+        None => return Some(Ok(Picked::default())),
     };
     let mut token = [0u8; 16];
     getrandom::fill(&mut token).ok()?;
@@ -125,7 +130,7 @@ async fn portal(
     .await
     {
         Some(result) => result.ok()?,
-        None => return Some(Ok(Vec::new())),
+        None => return Some(Ok(Picked::default())),
     };
     let mut options = HashMap::<&str, Value<'_>>::new();
     options.insert("handle_token", Value::from(token.as_str()));
@@ -150,33 +155,10 @@ async fn portal(
         options.insert("current_name", Value::from(name.as_ref()));
     }
     if !request.filters.is_empty() {
-        let filters: Vec<(String, Vec<(u32, String)>)> = request
-            .filters
-            .iter()
-            .map(|filter| {
-                (
-                    filter.name.to_string(),
-                    filter
-                        .extensions
-                        .iter()
-                        .map(|ext| {
-                            (
-                                0,
-                                if ext.as_ref() == "*" || ext.is_empty() {
-                                    "*".into()
-                                } else {
-                                    format!("*.{ext}")
-                                },
-                            )
-                        })
-                        .collect(),
-                )
-            })
-            .collect();
-        options.insert("filters", Value::new(filters));
+        options.insert("filters", Value::new(portal_filters(request)));
     }
     if cancel.try_recv().is_ok() {
-        return Some(Ok(Vec::new()));
+        return Some(Ok(Picked::default()));
     }
     let method = if request.kind.is_save() {
         "SaveFile"
@@ -192,7 +174,7 @@ async fn portal(
             // request-only bus connection revokes its portal ownership even
             // if OpenFile was still being processed. No fallback may open.
             let _ = connection.clone().close().await;
-            return Some(Ok(Vec::new()));
+            return Some(Ok(Picked::default()));
         }
     };
     enum Outcome {
@@ -231,47 +213,106 @@ async fn portal(
                     &(),
                 )
                 .await;
-            Some(result.map(|_| Vec::new()).map_err(platform))
+            Some(result.map(|_| Picked::default()).map_err(platform))
         }
         Outcome::Response(None) => Some(Err(platform("portal response stream closed"))),
         Outcome::Response(Some(Err(error))) => Some(Err(platform(error))),
-        Outcome::Response(Some(Ok(message))) => Some((|| {
-            let (status, mut values): (u32, HashMap<String, OwnedValue>) =
-                message.body().deserialize().map_err(platform)?;
-            if status == 1 {
-                return Ok(Vec::new());
-            }
-            if status != 0 {
-                return Err(platform(format!(
-                    "portal rejected file selection ({status})"
-                )));
-            }
-            let uris = Vec::<String>::try_from(
-                values
-                    .remove("uris")
-                    .ok_or_else(|| platform("portal omitted selected paths"))?,
-            )
-            .map_err(platform)?;
-            uris.into_iter()
-                .map(|uri| {
-                    url::Url::parse(&uri)
-                        .map_err(platform)?
-                        .to_file_path()
-                        .map_err(|_| platform("portal returned a non-file URI"))
-                })
-                .collect()
-        })()),
+        Outcome::Response(Some(Ok(message))) => Some(
+            message
+                .body()
+                .deserialize()
+                .map_err(platform)
+                .and_then(|(status, values)| portal_response(request, status, values)),
+        ),
     }
+}
+
+/// `a(sa(us))` filters: a glob per extension, `*` for a wildcard.
+fn portal_filters(request: &FileDialogRequest) -> Vec<PortalFilter> {
+    request
+        .filters
+        .iter()
+        .map(|filter| {
+            (
+                filter.name.to_string(),
+                filter
+                    .extensions
+                    .iter()
+                    .map(|ext| {
+                        (
+                            0,
+                            if ext.as_ref() == "*" || ext.is_empty() {
+                                "*".into()
+                            } else {
+                                format!("*.{ext}")
+                            },
+                        )
+                    })
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+type PortalFilter = (String, Vec<(u32, String)>);
+
+/// Reads a `org.freedesktop.portal.Request::Response`. The selected type comes
+/// back as `current_filter`, one of the filters sent; it is matched whole, then
+/// by name, since a portal may rebuild the patterns. Older portals omit it.
+fn portal_response(
+    request: &FileDialogRequest,
+    status: u32,
+    mut values: HashMap<String, OwnedValue>,
+) -> Result<Picked, FileDialogError> {
+    if status == 1 {
+        return Ok(Picked::default());
+    }
+    if status != 0 {
+        return Err(platform(format!(
+            "portal rejected file selection ({status})"
+        )));
+    }
+    let uris = Vec::<String>::try_from(
+        values
+            .remove("uris")
+            .ok_or_else(|| platform("portal omitted selected paths"))?,
+    )
+    .map_err(platform)?;
+    let paths = uris
+        .into_iter()
+        .map(|uri| {
+            url::Url::parse(&uri)
+                .map_err(platform)?
+                .to_file_path()
+                .map_err(|_| platform("portal returned a non-file URI"))
+        })
+        .collect::<Result<_, _>>()?;
+    let folder = matches!(
+        request.kind,
+        FileDialogKind::PickFolder | FileDialogKind::PickFolders
+    );
+    let filter = values
+        .get("current_filter")
+        .filter(|_| !folder)
+        .and_then(|value| value.try_clone().ok())
+        .and_then(|value| Value::from(value).downcast::<PortalFilter>().ok())
+        .and_then(|current| {
+            let sent = portal_filters(request);
+            sent.iter()
+                .position(|filter| *filter == current)
+                .or_else(|| sent.iter().position(|filter| filter.0 == current.0))
+        });
+    Ok((paths, filter))
 }
 
 async fn zenity(
     request: &FileDialogRequest,
     cancel: &async_channel::Receiver<()>,
-) -> Result<Vec<PathBuf>, FileDialogError> {
+) -> Result<Picked, FileDialogError> {
     use async_process::Command;
     use std::process::Stdio;
     if cancel.try_recv().is_ok() {
-        return Ok(Vec::new());
+        return Ok(Picked::default());
     }
     let mut command = Command::new("zenity");
     command.args(["--file-selection", "--no-markup"]);
@@ -349,18 +390,19 @@ async fn zenity(
         Outcome::Cancel => {
             let _ = child.kill();
             let _ = child.status().await;
-            Ok(Vec::new())
+            Ok(Picked::default())
         }
         Outcome::Exit(status) => {
             let (status, output) = status.map_err(platform)?;
             if status.code() == Some(1) {
-                return Ok(Vec::new());
+                return Ok(Picked::default());
             }
             if !status.success() {
                 return Err(platform(format!("file chooser exited with {status}")));
             }
             let output = output.strip_suffix('\n').unwrap_or(&output);
-            Ok(if request.kind.is_multiple() {
+            // zenity does not report the selected type.
+            let paths = if request.kind.is_multiple() {
                 output
                     .split('\n')
                     .filter(|path| !path.is_empty())
@@ -370,7 +412,98 @@ async fn zenity(
                 Vec::new()
             } else {
                 vec![output.into()]
-            })
+            };
+            Ok((paths, None))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request() -> FileDialogRequest {
+        FileDialogRequest::new(5, FileDialogKind::SaveFile).filters([
+            FileFilter::new("JSON", ["json"]),
+            FileFilter::new("文本", ["txt", "md"]),
+            FileFilter::new("全部", ["*"]),
+        ])
+    }
+
+    fn response(current: Option<PortalFilter>) -> HashMap<String, OwnedValue> {
+        let mut values = HashMap::new();
+        values.insert(
+            "uris".to_owned(),
+            OwnedValue::try_from(Value::new(vec!["file:///tmp/%E5%89%A7%E6%9C%AC.txt"])).unwrap(),
+        );
+        if let Some(current) = current {
+            values.insert(
+                "current_filter".to_owned(),
+                OwnedValue::try_from(Value::new(current)).unwrap(),
+            );
+        }
+        values
+    }
+
+    #[test]
+    fn current_filter_maps_back_to_the_request_index() {
+        let request = request();
+        let sent = portal_filters(&request);
+        assert_eq!(sent[1].1, vec![(0, "*.txt".into()), (0, "*.md".into())]);
+        assert_eq!(sent[2].1, vec![(0, "*".into())]);
+        let (paths, filter) =
+            portal_response(&request, 0, response(Some(sent[1].clone()))).unwrap();
+        assert_eq!(paths, vec![PathBuf::from("/tmp/剧本.txt")]);
+        assert_eq!(filter, Some(1));
+        // A portal that rebuilds the patterns is matched by name.
+        let renamed = ("全部".to_owned(), vec![(0, "*.*".to_owned())]);
+        assert_eq!(
+            portal_response(&request, 0, response(Some(renamed)))
+                .unwrap()
+                .1,
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn an_absent_or_foreign_filter_is_unreported() {
+        let request = request();
+        assert_eq!(
+            portal_response(&request, 0, response(None)).unwrap().1,
+            None
+        );
+        let folder = FileDialogRequest::new(6, FileDialogKind::PickFolder).filters(request.filters);
+        let sent = portal_filters(&folder);
+        assert_eq!(
+            portal_response(&folder, 0, response(Some(sent[0].clone())))
+                .unwrap()
+                .1,
+            None
+        );
+        let request = self::request();
+        let foreign = ("Images".to_owned(), vec![(0, "*.png".to_owned())]);
+        assert_eq!(
+            portal_response(&request, 0, response(Some(foreign)))
+                .unwrap()
+                .1,
+            None
+        );
+    }
+
+    #[test]
+    fn cancel_and_rejection_keep_their_meaning() {
+        let request = request();
+        assert_eq!(
+            portal_response(&request, 1, HashMap::new()).unwrap(),
+            Picked::default()
+        );
+        assert!(matches!(
+            portal_response(&request, 2, HashMap::new()),
+            Err(FileDialogError::Platform(_))
+        ));
+        assert!(matches!(
+            portal_response(&request, 0, HashMap::new()),
+            Err(FileDialogError::Platform(_))
+        ));
     }
 }
