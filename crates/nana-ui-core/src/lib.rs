@@ -151,9 +151,9 @@ pub use persist::{
     window_storage_key,
 };
 pub use rich_text::{
-    AttributedRanges, MAX_TEXT_SHADOWS, OBJECT_REPLACEMENT, RichLabelStyle, RichObject,
-    RichObjectContent, RichObjectFlow, RichPaintStyle, RichShapeStyle, RichSpanStyle, RichText,
-    RichTextBuilder, RichTextShadow, RichTextStroke, TextStrokeJoin, TextStrokePlacement,
+    AttributedRanges, MAX_TEXT_SHADOWS, OBJECT_REPLACEMENT, RichEmphasisStyle, RichLabelStyle,
+    RichObject, RichObjectContent, RichObjectFlow, RichPaintStyle, RichShapeStyle, RichSpanStyle,
+    RichText, RichTextBuilder, RichTextShadow, RichTextStroke, TextStrokeJoin, TextStrokePlacement,
 };
 pub use scrollbar::{
     SCROLLBAR_METRICS, ScrollbarAxis, ScrollbarExtent, ScrollbarLayout, ScrollbarMetrics,
@@ -200,7 +200,8 @@ pub use theme::{
 };
 pub use tree::{TreeNavigation, TreeNode, TreeViewEvent, tree_navigation_event};
 pub use typography::{
-    FontKerningSpec, FontVariationSetting, LineBreakSpec, TextAutospaceSpec, TextJustifySpec,
+    FontKerningSpec, FontVariationSetting, LineBreakSpec, TextAutospaceSpec, TextEmphasis,
+    TextEmphasisColor, TextEmphasisPosition, TextEmphasisShape, TextEmphasisStyle, TextJustifySpec,
     TextSpacingTrimSpec, TextTypography, TextWrapStyleSpec, UsedTextTypography,
 };
 pub use url_jail::{

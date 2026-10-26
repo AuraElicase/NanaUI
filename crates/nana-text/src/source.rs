@@ -173,6 +173,29 @@ pub struct RubySpan {
 /// An annotation's size relative to its base.
 pub const RUBY_SCALE: f32 = 0.5;
 
+/// Emphasis marks (CSS `text-emphasis`) over a byte range: one mark beside
+/// each character of it that takes one.
+///
+/// The mark is the first grapheme cluster of [`Self::mark`], shaped as
+/// ordinary text at [`EMPHASIS_SCALE`] of the size of the character it
+/// stands on and centred on that character's advance. Separators,
+/// punctuation, control and format characters and inline objects take no
+/// mark. A line holding marks grows by their height on their side, as it
+/// does for ruby; the characters themselves are neither reshaped nor moved.
+/// Horizontal text only: a vertical layout drops marks and says so.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EmphasisSpan {
+    /// Byte range in [`TextSource::text`].
+    pub range: Range<usize>,
+    /// The mark: for a CSS keyword, the character
+    /// [`nana_ui_core::TextEmphasisStyle::mark_text`] names.
+    pub mark: Arc<str>,
+    pub position: nana_ui_core::TextEmphasisPosition,
+}
+
+/// An emphasis mark's size relative to the character it stands on.
+pub const EMPHASIS_SCALE: f32 = 0.5;
+
 /// A label an inline object shows inside itself: an editor's marker tag
 /// ("pause", "sound: coin"), or a name with a picture before it. The object
 /// takes the label's room — shaped at [`Self::scale`] of the text around it,
@@ -330,6 +353,9 @@ pub struct TextSource {
     /// default placement.
     #[serde(default)]
     placements: Vec<ObjectPlacement>,
+    /// Sorted, non-overlapping.
+    #[serde(default)]
+    emphasis: Vec<EmphasisSpan>,
     revision: TextRevision,
     /// Hash of `text`, filled on first use and reset by every mutation.
     #[serde(skip)]
@@ -355,6 +381,7 @@ impl PartialEq for TextSource {
             && self.rubies == other.rubies
             && self.labels == other.labels
             && self.placements == other.placements
+            && self.emphasis == other.emphasis
             && self.revision == other.revision
     }
 }
@@ -375,6 +402,7 @@ impl TextSource {
             rubies: Vec::new(),
             labels: Vec::new(),
             placements: Vec::new(),
+            emphasis: Vec::new(),
             revision: TextRevision::INITIAL,
             content_hash: OnceLock::new(),
             folded: OnceLock::new(),
@@ -434,6 +462,11 @@ impl TextSource {
     /// The ruby annotations, sorted by base.
     pub fn rubies(&self) -> &[RubySpan] {
         &self.rubies
+    }
+
+    /// The emphasis ranges, sorted.
+    pub fn emphasis(&self) -> &[EmphasisSpan] {
+        &self.emphasis
     }
 
     /// The object labels, sorted by offset.
@@ -508,6 +541,31 @@ impl TextSource {
             }
         }
         self.rubies = kept;
+        self.bump();
+    }
+
+    /// Replaces the emphasis ranges. One that is empty, past the text, off
+    /// character boundaries or without a mark is dropped, and so is one
+    /// overlapping an earlier one.
+    pub fn set_emphasis(&mut self, mut emphasis: Vec<EmphasisSpan>) {
+        emphasis.retain(|span| {
+            span.range.start < span.range.end
+                && span.range.end <= self.text.len()
+                && self.text.is_char_boundary(span.range.start)
+                && self.text.is_char_boundary(span.range.end)
+                && !span.mark.is_empty()
+        });
+        emphasis.sort_by_key(|span| span.range.start);
+        let mut kept: Vec<EmphasisSpan> = Vec::with_capacity(emphasis.len());
+        for span in emphasis {
+            if kept
+                .last()
+                .is_none_or(|last| last.range.end <= span.range.start)
+            {
+                kept.push(span);
+            }
+        }
+        self.emphasis = kept;
         self.bump();
     }
 
@@ -634,6 +692,27 @@ impl TextSource {
                 object.offset = object.offset + added - removed;
             }
         }
+        // Emphasis is a style of the characters, not a unit: one holding the
+        // edit takes the replacement in, one the edit cuts into loses the
+        // part cut.
+        for span in &mut self.emphasis {
+            if span.range.end <= range.start {
+                continue;
+            }
+            if span.range.start >= range.end {
+                span.range.start = span.range.start + added - removed;
+                span.range.end = span.range.end + added - removed;
+            } else if span.range.start <= range.start && range.end <= span.range.end {
+                span.range.end = span.range.end + added - removed;
+            } else if span.range.start < range.start {
+                span.range.end = range.start;
+            } else {
+                span.range.start = range.start + added;
+                span.range.end = (span.range.end + added).saturating_sub(removed);
+            }
+        }
+        self.emphasis
+            .retain(|span| span.range.start < span.range.end);
         self.labels
             .retain(|label| label.offset < range.start || label.offset >= range.end);
         for label in &mut self.labels {
@@ -659,6 +738,7 @@ impl TextSource {
         self.rubies.clear();
         self.labels.clear();
         self.placements.clear();
+        self.emphasis.clear();
         self.bump();
     }
 
@@ -713,6 +793,7 @@ impl TextSource {
                         rubies: self.rubies.clone(),
                         labels: self.labels.clone(),
                         placements: self.placements.clone(),
+                        emphasis: self.emphasis.clone(),
                         revision: self.revision,
                         content_hash: OnceLock::new(),
                         folded: OnceLock::new(),

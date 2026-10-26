@@ -639,8 +639,13 @@ impl UiScene {
                         // Decorations, outline and shadows are drawn by the
                         // text painter from the paragraph's own lines and
                         // runs, not as strokes across the whole box.
-                        rich: crate::scene::SceneRichPaint::from_style(
-                            style,
+                        rich: crate::scene::SceneRichPaint::from_base(
+                            crate::scene::SceneTextEffects {
+                                // Inherited, unlike the rest of the node's
+                                // own CSS effects.
+                                emphasis_color: node.style.text_emphasis.color.paint(),
+                                ..crate::scene::css_text_effects(style)
+                            },
                             node.rich_text.as_ref(),
                         ),
                         presentation: glyph_presentation.clone(),

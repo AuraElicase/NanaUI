@@ -7,6 +7,9 @@ use nana_ui_core::box_layout::{
     LinearGradient, MAX_BACKGROUND_LAYERS, MaskImage, MixBlendMode, OutlineStyle, OverflowSpec,
     PointerEventsSpec, RadialGradient, TextDecorationLine, TextStrokeSpec,
 };
+use nana_ui_core::typography::{
+    TextEmphasisColor, TextEmphasisPosition, TextEmphasisShape, TextEmphasisStyle,
+};
 
 use crate::css_map::{
     CssLayoutParse, parse_css_length_px, resolve_paint_color, split_css_space_tokens,
@@ -117,6 +120,28 @@ pub fn apply_css_paint_property(style: &mut nana_ui_core::LayoutStyle, name: &st
         }
         "line-clamp" | "-webkit-line-clamp" => apply_line_clamp(style, val),
         "text-decoration" | "text-decoration-line" => apply_text_decoration_line(style, val),
+        "text-emphasis" | "-webkit-text-emphasis" => apply_text_emphasis_shorthand(style, val),
+        "text-emphasis-style" | "-webkit-text-emphasis-style" => {
+            if let Some(value) = css_global(val) {
+                style.text_emphasis_style = value.then_some(TextEmphasisStyle::None);
+            } else if let Some(emphasis) = parse_text_emphasis_style(val) {
+                style.text_emphasis_style = Some(emphasis);
+            }
+        }
+        "text-emphasis-position" | "-webkit-text-emphasis-position" => {
+            if let Some(value) = css_global(val) {
+                style.text_emphasis_position = value.then_some(TextEmphasisPosition::OVER);
+            } else if let Some(position) = parse_text_emphasis_position(val) {
+                style.text_emphasis_position = Some(position);
+            }
+        }
+        "text-emphasis-color" | "-webkit-text-emphasis-color" => {
+            if let Some(value) = css_global(val) {
+                style.text_emphasis_color = value.then_some(TextEmphasisColor::CurrentColor);
+            } else if let Some(color) = parse_text_emphasis_color(val) {
+                style.text_emphasis_color = Some(color);
+            }
+        }
         "font-feature-settings" => apply_font_feature_settings(style, val),
         "font-variation-settings" => apply_font_variation_settings(style, val),
         "pointer-events" => {
@@ -1069,6 +1094,113 @@ fn text_stroke_color(val: &str) -> (Option<[f32; 4]>, Option<nana_ui_core::Paint
         resolve_paint_color(val),
         crate::style::resolve_css_paint_color(val).map(|color| color.to_core()),
     )
+}
+
+/// `inherit` / `unset` (`Some(false)`: the inherited properties take their
+/// parent's) and `initial` (`Some(true)`); `None` for any other value.
+fn css_global(val: &str) -> Option<bool> {
+    match val.trim().to_ascii_lowercase().as_str() {
+        "inherit" | "unset" => Some(false),
+        "initial" => Some(true),
+        _ => None,
+    }
+}
+
+/// `text-emphasis: <'text-emphasis-style'> || <'text-emphasis-color'>`. What
+/// it leaves out goes back to its initial value; the position is not part of
+/// it.
+fn apply_text_emphasis_shorthand(style: &mut nana_ui_core::LayoutStyle, val: &str) {
+    if let Some(value) = css_global(val) {
+        style.text_emphasis_style = value.then_some(TextEmphasisStyle::None);
+        style.text_emphasis_color = value.then_some(TextEmphasisColor::CurrentColor);
+        return;
+    }
+    let mut marks = Vec::new();
+    let mut color = None;
+    for token in split_css_space_tokens(val.trim()) {
+        if color.is_none()
+            && let Some(parsed) = parse_text_emphasis_color(&token)
+        {
+            color = Some(parsed);
+        } else {
+            marks.push(token);
+        }
+    }
+    let emphasis = if marks.is_empty() {
+        Some(TextEmphasisStyle::None)
+    } else {
+        parse_text_emphasis_style(&marks.join(" "))
+    };
+    let Some(emphasis) = emphasis else {
+        return;
+    };
+    style.text_emphasis_style = Some(emphasis);
+    style.text_emphasis_color = Some(color.unwrap_or_default());
+}
+
+/// `none | [filled | open] || [dot | circle | double-circle | triangle |
+/// sesame] | <string>`.
+pub(crate) fn parse_text_emphasis_style(val: &str) -> Option<TextEmphasisStyle> {
+    let trimmed = val.trim();
+    if trimmed.eq_ignore_ascii_case("none") {
+        return Some(TextEmphasisStyle::None);
+    }
+    for quote in ['"', '\''] {
+        if let Some(inner) = trimmed
+            .strip_prefix(quote)
+            .and_then(|rest| rest.strip_suffix(quote))
+        {
+            return (!inner.is_empty()).then(|| TextEmphasisStyle::String(inner.into()));
+        }
+    }
+    let mut fill = None;
+    let mut shape = None;
+    for token in split_css_space_tokens(trimmed) {
+        match token.to_ascii_lowercase().as_str() {
+            "filled" if fill.is_none() => fill = Some(false),
+            "open" if fill.is_none() => fill = Some(true),
+            "dot" if shape.is_none() => shape = Some(TextEmphasisShape::Dot),
+            "circle" if shape.is_none() => shape = Some(TextEmphasisShape::Circle),
+            "double-circle" if shape.is_none() => shape = Some(TextEmphasisShape::DoubleCircle),
+            "triangle" if shape.is_none() => shape = Some(TextEmphasisShape::Triangle),
+            "sesame" if shape.is_none() => shape = Some(TextEmphasisShape::Sesame),
+            _ => return None,
+        }
+    }
+    (fill.is_some() || shape.is_some()).then_some(TextEmphasisStyle::Mark {
+        shape,
+        open: fill.unwrap_or(false),
+    })
+}
+
+/// `[over | under] && [right | left]?`.
+pub(crate) fn parse_text_emphasis_position(val: &str) -> Option<TextEmphasisPosition> {
+    let mut under = None;
+    let mut left = None;
+    for token in split_css_space_tokens(val.trim()) {
+        match token.to_ascii_lowercase().as_str() {
+            "over" if under.is_none() => under = Some(false),
+            "under" if under.is_none() => under = Some(true),
+            "right" if left.is_none() => left = Some(false),
+            "left" if left.is_none() => left = Some(true),
+            _ => return None,
+        }
+    }
+    Some(TextEmphasisPosition {
+        under: under?,
+        left: left.unwrap_or(false),
+    })
+}
+
+/// `<color>`; `currentColor` is the text's own.
+pub(crate) fn parse_text_emphasis_color(val: &str) -> Option<TextEmphasisColor> {
+    if val.trim().eq_ignore_ascii_case("currentcolor") {
+        return Some(TextEmphasisColor::CurrentColor);
+    }
+    crate::style::resolve_css_paint_color(val)
+        .map(|color| color.to_core())
+        .or_else(|| resolve_paint_color(val).map(nana_ui_core::PaintColor::srgb))
+        .map(TextEmphasisColor::Color)
 }
 
 fn apply_text_decoration_line(style: &mut nana_ui_core::LayoutStyle, val: &str) {
@@ -2975,6 +3107,190 @@ mod tests {
             Some(TextDecorationLine::default()),
             "overline fails closed (Scene stroke is underline / line-through only)"
         );
+    }
+
+    #[test]
+    fn text_emphasis_style_keywords_and_strings() {
+        let style = |css: &str| {
+            let mut layout = LayoutStyle::default();
+            layout.apply_css_text(css, None, None);
+            layout.text_emphasis_style
+        };
+        let mark = |shape, open| Some(TextEmphasisStyle::Mark { shape, open });
+        assert_eq!(
+            style("text-emphasis-style: dot"),
+            mark(Some(TextEmphasisShape::Dot), false)
+        );
+        assert_eq!(
+            style("text-emphasis-style: sesame open"),
+            mark(Some(TextEmphasisShape::Sesame), true)
+        );
+        assert_eq!(
+            style("text-emphasis-style: filled double-circle"),
+            mark(Some(TextEmphasisShape::DoubleCircle), false)
+        );
+        assert_eq!(style("text-emphasis-style: open"), mark(None, true));
+        assert_eq!(
+            style("text-emphasis-style: 'x'"),
+            Some(TextEmphasisStyle::String("x".into()))
+        );
+        assert_eq!(
+            style("text-emphasis-style: none"),
+            Some(TextEmphasisStyle::None)
+        );
+        assert_eq!(
+            style("text-emphasis-style: initial"),
+            Some(TextEmphasisStyle::None)
+        );
+        assert_eq!(style("text-emphasis-style: inherit"), None);
+        for invalid in ["dot dot", "filled open", "square", "dot 3px"] {
+            assert_eq!(
+                style(&format!("text-emphasis-style: {invalid}")),
+                None,
+                "{invalid} fails closed"
+            );
+        }
+        // Each keyword sets the character CSS Text Decoration 4 names.
+        let text = |shape, open| {
+            TextEmphasisStyle::Mark {
+                shape: Some(shape),
+                open,
+            }
+            .mark_text(false)
+            .as_deref()
+            .map(str::to_owned)
+        };
+        assert_eq!(
+            text(TextEmphasisShape::Dot, false).as_deref(),
+            Some("\u{2022}")
+        );
+        assert_eq!(
+            text(TextEmphasisShape::Circle, true).as_deref(),
+            Some("\u{25CB}")
+        );
+        assert_eq!(
+            text(TextEmphasisShape::Sesame, false).as_deref(),
+            Some("\u{FE45}")
+        );
+        assert_eq!(
+            TextEmphasisStyle::Mark {
+                shape: None,
+                open: false
+            }
+            .mark_text(false)
+            .as_deref(),
+            Some("\u{25CF}"),
+            "a circle across"
+        );
+        assert_eq!(
+            TextEmphasisStyle::Mark {
+                shape: None,
+                open: false
+            }
+            .mark_text(true)
+            .as_deref(),
+            Some("\u{FE45}"),
+            "sesame down"
+        );
+    }
+
+    #[test]
+    fn text_emphasis_position_and_color() {
+        let mut layout = LayoutStyle::default();
+        layout.apply_css_text("text-emphasis-position: under", None, None);
+        assert_eq!(
+            layout.text_emphasis_position,
+            Some(TextEmphasisPosition::UNDER)
+        );
+        layout.apply_css_text("text-emphasis-position: left over", None, None);
+        assert_eq!(
+            layout.text_emphasis_position,
+            Some(TextEmphasisPosition {
+                under: false,
+                left: true
+            })
+        );
+        layout.apply_css_text("text-emphasis-position: right", None, None);
+        assert_eq!(
+            layout.text_emphasis_position,
+            Some(TextEmphasisPosition {
+                under: false,
+                left: true
+            }),
+            "over or under is required"
+        );
+        layout.apply_css_text("text-emphasis-color: #ff0000", None, None);
+        assert_eq!(
+            layout.text_emphasis_color,
+            Some(TextEmphasisColor::Color(nana_ui_core::PaintColor::srgb([
+                1.0, 0.0, 0.0, 1.0
+            ])))
+        );
+        layout.apply_css_text("text-emphasis-color: currentColor", None, None);
+        assert_eq!(
+            layout.text_emphasis_color,
+            Some(TextEmphasisColor::CurrentColor)
+        );
+    }
+
+    #[test]
+    fn text_emphasis_shorthand_sets_style_and_color() {
+        let mut layout = LayoutStyle::default();
+        layout.apply_css_text("text-emphasis-position: under", None, None);
+        layout.apply_css_text("text-emphasis: open triangle #00ff00", None, None);
+        assert_eq!(
+            layout.text_emphasis_style,
+            Some(TextEmphasisStyle::Mark {
+                shape: Some(TextEmphasisShape::Triangle),
+                open: true
+            })
+        );
+        assert_eq!(
+            layout.text_emphasis_color,
+            Some(TextEmphasisColor::Color(nana_ui_core::PaintColor::srgb([
+                0.0, 1.0, 0.0, 1.0
+            ])))
+        );
+        assert_eq!(
+            layout.text_emphasis_position,
+            Some(TextEmphasisPosition::UNDER),
+            "the shorthand leaves the position alone"
+        );
+        layout.apply_css_text("-webkit-text-emphasis: '\u{203B}'", None, None);
+        assert_eq!(
+            layout.text_emphasis_style,
+            Some(TextEmphasisStyle::String("\u{203B}".into()))
+        );
+        assert_eq!(
+            layout.text_emphasis_color,
+            Some(TextEmphasisColor::CurrentColor),
+            "what it leaves out is reset"
+        );
+        layout.apply_css_text("text-emphasis: dot nonsense", None, None);
+        assert_eq!(
+            layout.text_emphasis_style,
+            Some(TextEmphasisStyle::String("\u{203B}".into())),
+            "an invalid shorthand changes nothing"
+        );
+    }
+
+    #[test]
+    fn text_emphasis_inherits() {
+        let mut parent = LayoutStyle::default();
+        parent.apply_css_text(
+            "text-emphasis: sesame red; text-emphasis-position: under",
+            None,
+            None,
+        );
+        let mut child = LayoutStyle::default();
+        child.apply_css_text("text-emphasis-color: blue", None, None);
+        child.inherit_typography_from(&parent);
+        assert_eq!(child.text_emphasis_style, parent.text_emphasis_style);
+        assert_eq!(
+            child.text_emphasis_position,
+            Some(TextEmphasisPosition::UNDER)
+        );
+        assert_ne!(child.text_emphasis_color, parent.text_emphasis_color);
     }
 
     #[test]

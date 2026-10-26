@@ -28,7 +28,9 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::{FontFeatureSetting, PaintColor, TextDecorationLine};
+use crate::{
+    FontFeatureSetting, PaintColor, TextDecorationLine, TextEmphasisPosition, TextEmphasisStyle,
+};
 
 /// Sorted, non-overlapping, non-empty byte ranges, one attribute each.
 ///
@@ -383,9 +385,29 @@ pub struct RichPaintStyle {
     /// Drawn first to last under the glyphs, the first one on top (CSS
     /// order). At most [`MAX_TEXT_SHADOWS`].
     pub shadows: Option<Arc<[RichTextShadow]>>,
+    /// Emphasis mark colour; the node's `text-emphasis-color` when unset.
+    pub emphasis_color: Option<PaintColor>,
 }
 
 impl RichPaintStyle {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// The emphasis tier of a span: marks set beside glyphs already shaped.
+/// They take room on the line, so a change lays the text out again; the
+/// glyphs themselves are not shaped again.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RichEmphasisStyle {
+    /// CSS `text-emphasis-style`; `Some(None)`-like [`TextEmphasisStyle::None`]
+    /// turns the node's marks off for the span.
+    pub style: Option<TextEmphasisStyle>,
+    /// CSS `text-emphasis-position`.
+    pub position: Option<TextEmphasisPosition>,
+}
+
+impl RichEmphasisStyle {
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
     }
@@ -396,6 +418,7 @@ impl RichPaintStyle {
 pub struct RichSpanStyle {
     pub shape: RichShapeStyle,
     pub paint: RichPaintStyle,
+    pub emphasis: RichEmphasisStyle,
     /// Index of a glyph effect the presentation layer plays over the span.
     /// Read by the compositor only: changing it shapes, lays out and paints
     /// nothing.
@@ -408,7 +431,10 @@ impl RichSpanStyle {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.shape.is_empty() && self.paint.is_empty() && self.effect.is_none()
+        self.shape.is_empty()
+            && self.paint.is_empty()
+            && self.emphasis.is_empty()
+            && self.effect.is_none()
     }
 
     pub fn family(mut self, family: impl Into<Arc<str>>) -> Self {
@@ -493,6 +519,25 @@ impl RichSpanStyle {
         self
     }
 
+    /// Sets emphasis marks (CSS `text-emphasis-style`) on the span.
+    pub fn emphasis(mut self, style: TextEmphasisStyle) -> Self {
+        self.emphasis.style = Some(style);
+        self
+    }
+
+    /// Which side of the line the span's marks go (CSS
+    /// `text-emphasis-position`).
+    pub fn emphasis_position(mut self, position: TextEmphasisPosition) -> Self {
+        self.emphasis.position = Some(position);
+        self
+    }
+
+    /// The colour of the span's marks (CSS `text-emphasis-color`).
+    pub fn emphasis_color(mut self, color: PaintColor) -> Self {
+        self.paint.emphasis_color = Some(color);
+        self
+    }
+
     pub fn stroke(mut self, stroke: RichTextStroke) -> Self {
         self.paint.stroke = Some(stroke);
         self
@@ -555,6 +600,11 @@ impl RichSpanStyle {
                 decoration_color: pick(&self.paint.decoration_color, &over.paint.decoration_color),
                 stroke: pick(&self.paint.stroke, &over.paint.stroke),
                 shadows: pick(&self.paint.shadows, &over.paint.shadows),
+                emphasis_color: pick(&self.paint.emphasis_color, &over.paint.emphasis_color),
+            },
+            emphasis: RichEmphasisStyle {
+                style: pick(&self.emphasis.style, &over.emphasis.style),
+                position: pick(&self.emphasis.position, &over.emphasis.position),
             },
             effect: over.effect.or(self.effect),
         }

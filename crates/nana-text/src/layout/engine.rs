@@ -50,6 +50,20 @@ pub struct LayoutRequest<'a> {
     pub rubies: &'a [Arc<ShapedText>],
     /// The shaped text of each of [`TextSource::labels`], in order.
     pub labels: &'a [Arc<ShapedText>],
+    /// [`TextSource::emphasis`] with each mark shaped, cut where the style
+    /// the mark is sized from changes; empty when marks are not laid out
+    /// (vertical text).
+    pub emphasis: &'a [ShapedEmphasis],
+}
+
+/// A stretch of emphasis in one style, with its mark shaped.
+#[derive(Debug, Clone)]
+pub struct ShapedEmphasis {
+    /// Byte range in [`TextSource::text`].
+    pub range: std::ops::Range<usize>,
+    /// [`nana_ui_core::TextEmphasisPosition::under`].
+    pub under: bool,
+    pub shaped: Arc<ShapedText>,
 }
 
 impl<'a> LayoutRequest<'a> {
@@ -70,7 +84,14 @@ impl<'a> LayoutRequest<'a> {
             strut_metrics: None,
             rubies: &[],
             labels: &[],
+            emphasis: &[],
         }
+    }
+
+    #[must_use]
+    pub fn with_emphasis(mut self, emphasis: &'a [ShapedEmphasis]) -> Self {
+        self.emphasis = emphasis;
+        self
     }
 
     #[must_use]
@@ -228,6 +249,11 @@ impl Layouter {
                 .zip(request.labels)
                 .map(|(label, shaped)| (label.offset, label.layout_bits(), Arc::clone(shaped)))
                 .collect(),
+            request
+                .emphasis
+                .iter()
+                .map(|marks| (marks.range.clone(), marks.under, Arc::clone(&marks.shaped)))
+                .collect(),
         );
         if let Some(hit) = self.cache.get(&key) {
             self.counters.layout_cache_hits += 1;
@@ -344,6 +370,10 @@ impl Layouter {
         let rubies_dropped = !request.source.rubies().is_empty()
             && (request.rubies.len() != request.source.rubies().len() || request.shaped.vertical);
         let labels = placed_labels(request, &objects, &laid_out.lines);
+        let (emphasis, emphasis_marks) =
+            placed_emphasis(request, &laid_out.lines, &laid_out.runs, &rubies);
+        let emphasis_dropped = !request.source.emphasis().is_empty()
+            && (request.emphasis.is_empty() || request.shaped.vertical);
 
         TextLayout {
             id: self.issue_id(),
@@ -360,6 +390,9 @@ impl Layouter {
             rubies,
             rubies_dropped,
             labels,
+            emphasis,
+            emphasis_marks,
+            emphasis_dropped,
         }
     }
 
@@ -663,6 +696,168 @@ pub(super) fn ruby_boxes(request: &LayoutRequest<'_>) -> Vec<RubyBox> {
         .collect()
 }
 
+/// One grapheme that takes an emphasis mark, and how much room the mark
+/// takes on its side of the line, physical px.
+pub(super) struct EmphasisCell {
+    pub range: std::ops::Range<usize>,
+    pub under: bool,
+    pub height_px: f32,
+    /// Index into [`LayoutRequest::emphasis`].
+    pub marks: usize,
+}
+
+/// A shaped mark's width, ascent and descent.
+fn mark_box(shaped: &ShapedText) -> (f32, f32, f32) {
+    shaped
+        .runs
+        .iter()
+        .fold((0.0f32, 0.0f32, 0.0f32), |(w, a, d), run| {
+            (
+                w + run.advance_px,
+                a.max(run.metrics.ascent_px),
+                d.max(run.metrics.descent_px),
+            )
+        })
+}
+
+/// Every grapheme of the request's emphasis ranges that takes a mark, in
+/// text order.
+pub(super) fn emphasis_cells(request: &LayoutRequest<'_>) -> Vec<EmphasisCell> {
+    use unicode_segmentation::UnicodeSegmentation as _;
+    let text = request.source.text();
+    let mut cells = Vec::new();
+    for (index, marks) in request.emphasis.iter().enumerate() {
+        let Some(stretch) = text.get(marks.range.clone()) else {
+            continue;
+        };
+        let (_, ascent, descent) = mark_box(&marks.shaped);
+        cells.extend(
+            stretch
+                .grapheme_indices(true)
+                .filter(|(_, grapheme)| unicode::takes_emphasis(grapheme))
+                .map(|(at, grapheme)| {
+                    let start = marks.range.start + at;
+                    EmphasisCell {
+                        range: start..start + grapheme.len(),
+                        under: marks.under,
+                        height_px: ascent + descent,
+                        marks: index,
+                    }
+                }),
+        );
+    }
+    cells
+}
+
+/// Each emphasis mark centred on its character's advance: over it, standing
+/// on the character's ascent (or on its ruby, when the character has one),
+/// or under it, hanging from its descent. Returns the marks and the runs of
+/// each distinct mark they use.
+fn placed_emphasis(
+    request: &LayoutRequest<'_>,
+    lines: &[super::ir::LineBox],
+    runs: &[ShapedRun],
+    rubies: &[super::ir::PlacedRuby],
+) -> (Vec<super::ir::PlacedEmphasis>, Vec<Vec<ShapedRun>>) {
+    if request.emphasis.is_empty() || request.shaped.vertical {
+        return (Vec::new(), Vec::new());
+    }
+    let cells = emphasis_cells(request);
+    if cells.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+    // Each cell's extent on its line, and the tallest run it touches.
+    let mut found: Vec<Option<(u32, f32, f32, f32, f32)>> = vec![None; cells.len()];
+    for line in lines {
+        for run in &runs[line.runs.start as usize..line.runs.end as usize] {
+            let mut pen = run.origin_x_px;
+            for glyph in &run.glyphs {
+                let cluster = glyph.cluster as usize;
+                let at = cells.partition_point(|cell| cell.range.end <= cluster);
+                if cells
+                    .get(at)
+                    .is_some_and(|cell| cell.range.contains(&cluster))
+                {
+                    let entry = found[at].get_or_insert((
+                        line.index,
+                        f32::INFINITY,
+                        f32::NEG_INFINITY,
+                        0.0,
+                        0.0,
+                    ));
+                    entry.1 = entry.1.min(pen);
+                    entry.2 = entry.2.max(pen + glyph.advance_px);
+                    entry.3 = entry.3.max(run.metrics.ascent_px);
+                    entry.4 = entry.4.max(run.metrics.descent_px);
+                }
+                pen += glyph.advance_px;
+            }
+        }
+    }
+    // One entry per distinct mark, in first-use order.
+    let mut marks: Vec<Vec<ShapedRun>> = Vec::new();
+    let mut mark_index: Vec<Option<u32>> = vec![None; request.emphasis.len()];
+    let mut placed = Vec::new();
+    for (cell, found) in cells.iter().zip(found) {
+        let Some((line_index, left, right, ascent, descent)) = found else {
+            continue;
+        };
+        let Some(line) = lines.iter().find(|line| line.index == line_index) else {
+            continue;
+        };
+        let shaped = &request.emphasis[cell.marks].shaped;
+        let index = match mark_index[cell.marks] {
+            Some(index) => index,
+            None => {
+                let existing = request.emphasis[..cell.marks]
+                    .iter()
+                    .zip(&mark_index)
+                    .find(|(other, index)| index.is_some() && Arc::ptr_eq(&other.shaped, shaped))
+                    .and_then(|(_, index)| *index);
+                let index = existing.unwrap_or_else(|| {
+                    let mut cursor = 0.0;
+                    marks.push(
+                        shaped
+                            .runs
+                            .iter()
+                            .map(|run| {
+                                let mut run = run.clone();
+                                run.origin_x_px = cursor;
+                                cursor += run.advance_px;
+                                run
+                            })
+                            .collect(),
+                    );
+                    (marks.len() - 1) as u32
+                });
+                mark_index[cell.marks] = Some(index);
+                index
+            }
+        };
+        let (width, mark_ascent, mark_descent) = mark_box(shaped);
+        let baseline = if cell.under {
+            line.metrics.baseline_y_px + descent + mark_ascent
+        } else {
+            // Outside the character's ruby, when it has one on this line.
+            let top = rubies
+                .iter()
+                .find(|ruby| ruby.line == line.index && ruby.range.contains(&cell.range.start))
+                .map_or(line.metrics.baseline_y_px - ascent, |ruby| ruby.rect.y);
+            top - mark_descent
+        };
+        let x = (left + right) * 0.5 - width * 0.5;
+        placed.push(super::ir::PlacedEmphasis {
+            offset: cell.range.start,
+            line: line.index,
+            x_px: x,
+            baseline_y_px: baseline,
+            rect: TextRect::new(x, baseline - mark_ascent, width, mark_ascent + mark_descent),
+            mark: index,
+        });
+    }
+    (placed, marks)
+}
+
 /// Each annotation placed centred above its base, on the line the base
 /// starts on, sitting on the base's ascent.
 fn placed_rubies(
@@ -804,6 +999,7 @@ fn line_input<'r>(
         paragraph_alignments: request.source.paragraph_alignments(),
         runs: sized.unwrap_or(&request.shaped.runs),
         rubies: ruby_boxes(request),
+        emphasis: emphasis_cells(request),
         paragraphs: &request.shaped.paragraphs,
         run_line_heights,
         constraints: request.constraints,

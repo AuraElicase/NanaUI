@@ -76,6 +76,7 @@ NANA_TEXT_CORE_ALLOWLIST = {
     "LineHeightSpec",
     "TextAlignSpec",
     "TextAutospaceSpec",
+    "TextEmphasisPosition",
     "TextJustifySpec",
     "TextOrientationSpec",
     "TextSpacingTrimSpec",

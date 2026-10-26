@@ -881,3 +881,124 @@ fn a_stretched_span_shapes_at_the_variable_faces_width() {
     assert_eq!(condensed_wdth, Some(75.0));
     assert!(condensed < normal, "{condensed} < {normal}");
 }
+
+fn dot() -> nana_ui_core::TextEmphasisStyle {
+    nana_ui_core::TextEmphasisStyle::Mark {
+        shape: Some(nana_ui_core::TextEmphasisShape::Dot),
+        open: false,
+    }
+}
+
+fn emphasised(color: PaintColor) -> RichText {
+    RichText::builder()
+        .plain("Hello ")
+        .push(
+            "world",
+            RichSpanStyle::new().emphasis(dot()).emphasis_color(color),
+        )
+        .build()
+}
+
+#[test]
+fn an_emphasis_colour_change_shapes_and_lays_out_nothing() {
+    let mut runtime = document(label_layout(), emphasised(RED));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let (handle, layout) = runtime
+        .context()
+        .world()
+        .text_layout(id(LABEL))
+        .expect("the label retains a layout");
+    assert_eq!(
+        layout
+            .emphasis
+            .iter()
+            .map(|mark| mark.offset)
+            .collect::<Vec<_>>(),
+        (6..11).collect::<Vec<_>>(),
+        "one mark per letter of the span"
+    );
+    let before = text_work(&runtime);
+
+    set_rich(&mut runtime, emphasised(BLUE));
+    let update = runtime.flush(viewport(), &mut shaper).unwrap();
+    assert!(!update.is_idle(), "a repaint is a scene change");
+    let work = text_work(&runtime);
+    if work != before {
+        assert_eq!(work.text_nodes_shaped, 0, "a mark colour reshapes nothing");
+        assert_eq!(work.layouts_created, 0, "and lays nothing out");
+    }
+    assert_eq!(
+        runtime.context().world().text_layout(id(LABEL)).unwrap().0,
+        handle,
+        "the retained layout survives"
+    );
+    let (_, _, rich, layout) = label_text(&runtime);
+    assert_eq!(layout, Some(handle));
+    let rich = rich.expect("a mark colour is an effect");
+    assert_eq!(rich.effects_at("Hello w".len()).emphasis_color, Some(BLUE));
+    assert_eq!(rich.effects_at(0).emphasis_color, None);
+}
+
+#[test]
+fn css_emphasis_grows_the_line_and_a_new_position_relays_out_without_reshaping() {
+    let mut runtime = document(label_layout(), RichText::new("Hello world"));
+    let mut shaper = NanaTextEngineShaper::new(engine());
+    settle(&mut runtime, &mut shaper);
+    let plain = runtime.context().world().text_metrics(id(LABEL)).unwrap();
+
+    let restyle = |runtime: &mut RuntimeDocument, position| {
+        let mut queue = MutationQueue::new();
+        queue.set_style(
+            id(LABEL),
+            NodeStyle {
+                layout: Arc::new(LayoutStyle {
+                    text_emphasis_style: Some(dot()),
+                    text_emphasis_position: Some(position),
+                    ..label_layout()
+                }),
+                ..NodeStyle::default()
+            },
+        );
+        runtime.context_mut().commit_mutations(queue).unwrap();
+    };
+    restyle(&mut runtime, nana_ui_core::TextEmphasisPosition::OVER);
+    settle(&mut runtime, &mut shaper);
+    let marked = runtime.context().world().text_metrics(id(LABEL)).unwrap();
+    assert!(
+        marked.height > plain.height,
+        "the marks take room: {} -> {}",
+        plain.height,
+        marked.height
+    );
+    let over = runtime
+        .context()
+        .world()
+        .text_layout(id(LABEL))
+        .unwrap()
+        .1
+        .clone();
+    assert_eq!(
+        over.emphasis.len(),
+        "Helloworld".len(),
+        "no mark on the space"
+    );
+    let laid_out = runtime.context().world().layout_box(id(LABEL)).unwrap();
+    assert!(laid_out.height >= marked.height - 0.5, "layout read it");
+
+    restyle(&mut runtime, nana_ui_core::TextEmphasisPosition::UNDER);
+    runtime.flush(viewport(), &mut shaper).unwrap();
+    let work = text_work(&runtime);
+    assert!(
+        work.layouts_created > 0,
+        "a new side is a new layout: {work:?}"
+    );
+    assert_eq!(
+        work.shape_cache_misses,
+        Some(0),
+        "from the runs already shaped: {work:?}"
+    );
+    settle(&mut runtime, &mut shaper);
+    let (_, under) = runtime.context().world().text_layout(id(LABEL)).unwrap();
+    assert!(under.emphasis[0].rect.y > over.emphasis[0].rect.y);
+}

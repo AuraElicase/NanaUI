@@ -394,14 +394,24 @@ impl TextNodeState {
     /// each a full `nana-text` style resolved over `base` — so a theme change
     /// that moves the node's own font restyles every span that does not
     /// override it. Such a source is also rebuilt when the shape revision
-    /// moves. Paint and presentation fields never reach the source.
+    /// moves. The node's `text-emphasis` with the spans' emphasis tier over
+    /// it becomes the source's emphasis ranges; a source holding them is also
+    /// rebuilt when the constraint revision moves. Paint and presentation
+    /// fields never reach the source.
     pub fn source_for(
         &mut self,
         text: &str,
         rich: Option<&RichText>,
         base: &ComputedStyle,
     ) -> (&TextSource, bool) {
-        let shaped = rich.filter(|rich| rich.text() == text).filter(|rich| {
+        let rich = rich.filter(|rich| rich.text() == text);
+        let emphasised = !base.text_emphasis.style.is_none()
+            || rich.is_some_and(|rich| {
+                rich.spans()
+                    .iter()
+                    .any(|(_, style)| style.emphasis.style.is_some())
+            });
+        let shaped = rich.filter(|rich| {
             !rich.objects().is_empty()
                 || !rich.paragraph_alignments().is_empty()
                 || !rich.rubies().is_empty()
@@ -411,15 +421,19 @@ impl TextNodeState {
                     .any(|(_, style)| !style.shape.is_empty())
         });
         let revision = self.revisions.content;
-        let shape = match shaped {
-            // An object's box is a layout input, so a source holding objects
-            // is rebuilt when the constraint revision moves too.
-            Some(rich) if !rich.objects().is_empty() || !rich.paragraph_alignments().is_empty() => {
-                (self.revisions.shape ^ self.revisions.constraint.rotate_left(16)) | 1 << 31
-            }
+        // An object's box and an emphasis mark are layout inputs, so a source
+        // holding either is rebuilt when the constraint revision moves too.
+        let layout_inputs = emphasised
+            || shaped.is_some_and(|rich| {
+                !rich.objects().is_empty() || !rich.paragraph_alignments().is_empty()
+            });
+        let shape = if shaped.is_none() && !emphasised {
+            0
+        } else if layout_inputs {
+            (self.revisions.shape ^ self.revisions.constraint.rotate_left(16)) | 1 << 31
+        } else {
             // Never zero, so a rich source is never mistaken for a plain one.
-            Some(_) => self.revisions.shape | 1 << 31,
-            None => 0,
+            self.revisions.shape | 1 << 31
         };
         let stale = self
             .source
@@ -479,6 +493,14 @@ impl TextNodeState {
                     );
                 }
             }
+            if emphasised {
+                source.set_emphasis(emphasis_spans(
+                    text.len(),
+                    rich,
+                    &base.text_emphasis,
+                    base.writing_mode.is_vertical(),
+                ));
+            }
             self.source = Some(Box::new((revision, shape, source)));
         }
         let (_, _, source) = self.source.as_deref().expect("built above");
@@ -502,6 +524,58 @@ pub(crate) fn rich_text_spans(
             composition: None,
         })
         .collect()
+}
+
+/// The node's emphasis with the spans' emphasis tier over it, as `nana-text`
+/// emphasis ranges over a text `len` bytes long. A stretch whose style sets
+/// no mark is left out.
+fn emphasis_spans(
+    len: usize,
+    rich: Option<&RichText>,
+    base: &nana_ui_core::TextEmphasis,
+    vertical: bool,
+) -> Vec<nana_text::EmphasisSpan> {
+    let mut spans: Vec<nana_text::EmphasisSpan> = Vec::new();
+    let mut push = |range: std::ops::Range<usize>,
+                    style: &nana_ui_core::TextEmphasisStyle,
+                    position: nana_ui_core::TextEmphasisPosition| {
+        let Some(mark) = style.mark_text(vertical) else {
+            return;
+        };
+        match spans.last_mut() {
+            Some(last)
+                if last.range.end == range.start
+                    && last.mark == mark
+                    && last.position == position =>
+            {
+                last.range.end = range.end;
+            }
+            _ => spans.push(nana_text::EmphasisSpan {
+                range,
+                mark,
+                position,
+            }),
+        }
+    };
+    let mut at = 0;
+    for (range, style) in rich.into_iter().flat_map(|rich| rich.spans().iter()) {
+        if style.emphasis.is_empty() {
+            continue;
+        }
+        if at < range.start {
+            push(at..range.start, &base.style, base.position);
+        }
+        push(
+            range.clone(),
+            style.emphasis.style.as_ref().unwrap_or(&base.style),
+            style.emphasis.position.unwrap_or(base.position),
+        );
+        at = range.end;
+    }
+    if at < len {
+        push(at..len, &base.style, base.position);
+    }
+    spans
 }
 
 /// A rich text's inline objects as `nana-text` objects: the box each takes on
@@ -621,6 +695,12 @@ pub(crate) fn classify_rich_change(
     {
         dirty |= TextDirty::CONSTRAINT;
     }
+    // Emphasis marks take room on the line; the glyphs keep their shapes.
+    let emphasis =
+        |style: &RichSpanStyle| (!style.emphasis.is_empty()).then(|| style.emphasis.clone());
+    if before.map(emphasis) != after.map(emphasis) {
+        dirty |= TextDirty::CONSTRAINT;
+    }
     let paint = |style: &RichSpanStyle| (!style.paint.is_empty()).then(|| style.paint.clone());
     if before.map(paint) != after.map(paint) {
         dirty |= TextDirty::PAINT;
@@ -685,6 +765,8 @@ pub(crate) fn classify_computed_style_change(
         || previous.line_break != next.line_break
         || previous.text_typography != next.text_typography
         || previous.writing_mode != next.writing_mode
+        || previous.text_emphasis.style != next.text_emphasis.style
+        || previous.text_emphasis.position != next.text_emphasis.position
     {
         dirty |= TextDirty::CONSTRAINT;
     }
@@ -695,6 +777,7 @@ pub(crate) fn classify_computed_style_change(
         || previous.paint_colors.color != next.paint_colors.color
         || previous.paint_colors.selection_background != next.paint_colors.selection_background
         || previous.paint_colors.selection_color != next.paint_colors.selection_color
+        || previous.text_emphasis.color != next.text_emphasis.color
     {
         dirty |= TextDirty::PAINT;
     }
@@ -1136,6 +1219,116 @@ mod tests {
             source.placements(),
             [nana_text::ObjectPlacement::new(1, nana_text::ObjectFlow::Block).fit_width(true)]
         );
+    }
+
+    #[test]
+    fn emphasis_relays_out_and_its_colour_only_repaints() {
+        use nana_ui_core::{
+            PaintColor, TextEmphasisColor, TextEmphasisPosition, TextEmphasisShape,
+            TextEmphasisStyle,
+        };
+        let dot = TextEmphasisStyle::Mark {
+            shape: Some(TextEmphasisShape::Dot),
+            open: false,
+        };
+        let red = PaintColor::srgb([1.0, 0.0, 0.0, 1.0]);
+        // The node's own `text-emphasis`.
+        let mut base = ComputedStyle::default();
+        base.text_emphasis.style = dot.clone();
+        let classify = |edit: fn(&mut ComputedStyle)| {
+            let mut next = base.clone();
+            edit(&mut next);
+            classify_computed_style_change(&base, &next)
+        };
+        assert_eq!(
+            classify(|s| s.text_emphasis.position = TextEmphasisPosition::UNDER),
+            TextDirty::CONSTRAINT
+        );
+        assert_eq!(
+            classify(|s| s.text_emphasis.style = TextEmphasisStyle::None),
+            TextDirty::CONSTRAINT
+        );
+        assert_eq!(
+            classify(|s| s.text_emphasis.color =
+                TextEmphasisColor::Color(PaintColor::srgb([1.0, 0.0, 0.0, 1.0]))),
+            TextDirty::PAINT
+        );
+        // A span's emphasis tier lays out again; its mark colour repaints.
+        let plain =
+            RichText::new("重点").with_span(0..6, RichSpanStyle::new().emphasis(dot.clone()));
+        let under = RichText::new("重点").with_span(
+            0..6,
+            RichSpanStyle::new()
+                .emphasis(dot.clone())
+                .emphasis_position(TextEmphasisPosition::UNDER),
+        );
+        let coloured = RichText::new("重点").with_span(
+            0..6,
+            RichSpanStyle::new()
+                .emphasis(dot.clone())
+                .emphasis_color(red),
+        );
+        assert_eq!(
+            classify_rich_change(Some(&plain), Some(&under)),
+            TextDirty::CONSTRAINT
+        );
+        assert_eq!(
+            classify_rich_change(Some(&plain), Some(&coloured)),
+            TextDirty::PAINT
+        );
+        assert!(
+            !TextDirty::PAINT.work().intersects(TextWork::SHAPE),
+            "a colour never reshapes"
+        );
+
+        // The node's emphasis covers its text; a span overrides its part.
+        let mut node = TextNodeState::default();
+        let (source, _) = node.source_for("重点在此", None, &base);
+        assert!(source.spans().is_empty(), "emphasis shapes nothing");
+        assert_eq!(source.emphasis().len(), 1);
+        assert_eq!(source.emphasis()[0].range, 0..12);
+        assert_eq!(&*source.emphasis()[0].mark, "\u{2022}");
+        let mixed = RichText::new("重点在此").with_span(
+            6..9,
+            RichSpanStyle::new()
+                .emphasis(TextEmphasisStyle::String("x".into()))
+                .emphasis_position(TextEmphasisPosition::UNDER),
+        );
+        node.invalidate(TextDirty::CONSTRAINT);
+        let (source, copied) = node.source_for("重点在此", Some(&mixed), &base);
+        assert!(copied);
+        let ranges: Vec<_> = source
+            .emphasis()
+            .iter()
+            .map(|span| {
+                (
+                    span.range.clone(),
+                    span.mark.to_string(),
+                    span.position.under,
+                )
+            })
+            .collect();
+        assert_eq!(
+            ranges,
+            vec![
+                (0..6, "\u{2022}".to_owned(), false),
+                (6..9, "x".to_owned(), true),
+                (9..12, "\u{2022}".to_owned(), false),
+            ]
+        );
+        // A span may turn the node's marks off.
+        let off = RichText::new("重点在此")
+            .with_span(0..6, RichSpanStyle::new().emphasis(TextEmphasisStyle::None));
+        node.invalidate(TextDirty::CONSTRAINT);
+        let (source, _) = node.source_for("重点在此", Some(&off), &base);
+        assert_eq!(source.emphasis()[0].range, 6..12);
+        // A position change on the node rebuilds the source.
+        let mut moved = base.clone();
+        moved.text_emphasis.position = TextEmphasisPosition::UNDER;
+        node.invalidate(classify_computed_style_change(&base, &moved));
+        let (source, copied) = node.source_for("重点在此", None, &moved);
+        assert!(copied);
+        assert!(source.emphasis()[0].position.under);
     }
 
     #[test]

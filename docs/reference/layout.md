@@ -760,6 +760,8 @@ Select、Dropdown、SearchDropdown 打开的菜单也排在根层叠上下文。
 
 `text-decoration: underline | line-through` 由 Scene 在文本盒上描线。
 
+`text-emphasis`、`text-emphasis-style`、`text-emphasis-position`、`text-emphasis-color`（以及 `-webkit-` 前缀）给每个字加着重号：`dot`、`circle`、`double-circle`、`triangle`、`sesame` 加 `filled` / `open`，或一个字符串（只取第一个字）。位置是 `over` 或 `under`（中文常用 `under`），默认 `over right`。三者都继承；简写设样式和颜色，不碰位置。记号是半字号的普通字形，标点和空白不加；行盒按记号实际高度长高。改样式或位置只重新布局，改颜色只重画。见 [text-engine.md](text-engine.md) 的「着重号」。
+
 `font-feature-settings` 和 `font-kerning` 写入 `nana-text` 的 OpenType features。
 
 `font-variation-settings` 把已经声明的轴交给 shaper。`wght` 仍并进 `font-weight`。字体没有该轴，则**该轴** fail-closed。不把标签改写成 `wght`。也不塞进 `FontFeatures`。
@@ -1050,6 +1052,7 @@ prelude 是 `[名字] 条件`：
 - `sideways-rl` 和 `sideways-lr`。
 - 完整的 Tate-chu-yoko。
 - 竖排 ruby。
+- 竖排着重号（`text-emphasis-position` 的 `right` / `left` 会被解析，但竖排不画记号）。
 - 竖排 table。
 - 竖排加上 float 绕排。
 - 用旋转整盒冒充 glyph 朝向。

@@ -3207,6 +3207,8 @@ impl UiWorld {
             || previous.layout.word_break != style.layout.word_break
             || previous.layout.line_break != style.layout.line_break
             || previous.layout.text_typography != style.layout.text_typography
+            || previous.layout.text_emphasis_style != style.layout.text_emphasis_style
+            || previous.layout.text_emphasis_position != style.layout.text_emphasis_position
             // Writing mode and direction inherit into layout, not just
             // text: a descendant container lays out along them too, and
             // the INPUT bit re-projects the accessibility nodes that
@@ -3216,6 +3218,7 @@ impl UiWorld {
             || previous.layout.text_orientation != style.layout.text_orientation;
         let inherited_paint_changed = previous.foreground != style.foreground
             || previous.layout.color != style.layout.color
+            || previous.layout.text_emphasis_color != style.layout.text_emphasis_color
             || previous.layout.selection_background != style.layout.selection_background
             || previous.layout.selection_color != style.layout.selection_color
             || previous.layout.paint_colors.color != style.layout.paint_colors.color

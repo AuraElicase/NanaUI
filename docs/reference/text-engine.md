@@ -1688,6 +1688,22 @@ entry 的颜色指纹把 span 颜色和 `rich.revision` 合在一起：改描边
 
 测试：`nana-text` `tests/ruby.rs`（居中在基字上方且行长高、宽注音撑开基字并顺移后文、基字内不断行、编辑平移和丢弃、竖排丢弃）；`nana-ui-core` `rich_text::tests`；`nana-ui-scene` `tests/rich_text_editor.rs`（编辑器加的注音，编辑器和展示框断行逐位相同，可撤销）；`nana-ui` `scene_paint::text`（注音字形画在基字上方，比基字小）。
 
+### 着重号
+
+着重号（CSS `text-emphasis`）是每个字上方或下方的一个小记号。`TextSource::set_emphasis` 给源配一张表：`EmphasisSpan { range, mark, position }`，`range` 是加记号的字节范围，`mark` 是记号文本，`position` 是 `TextEmphasisPosition`（`over` / `under`，`right` / `left` 只对竖排有意义）。表按范围排序、互不重叠。编辑落在范围里时范围跟着伸缩（打进去的字也加记号），部分重叠的被裁掉，空了就丢掉。只做横排。
+
+- **记号是哪个字。** `TextEmphasisStyle::mark_text` 把 CSS 关键字换成字符：`dot` • / ◦，`circle` ● / ○，`double-circle` ◉ / ◎，`triangle` ▲ / △，`sesame` ﹅ / ﹆（实心 / 空心）；只写 `filled` / `open` 时横排取 `circle`、竖排取 `sesame`。`<string>` 原样给出，引擎只取它的第一个字素簇。
+- **哪些字加记号。** `font::unicode::takes_emphasis` 跳过分隔符（空格）、标点、控制和格式字符、未分配码位以及对象占位符 U+FFFC。所以「重，点」只有两个记号，一行全是标点的范围不长高。
+- **塑形。** 记号按它所在字的样式、`EMPHASIS_SCALE`（0.5）倍字号、零字距单独塑形，走同一个 shape cache。范围在 span 边界处切开，相邻且同一记号的段合并；每段的 `ShapedText` 按指针进 layout key。改记号或位置是另一份布局，基字不重新塑形，字的 advance 不变。
+- **摆放。** 每个加记号的字素簇放一个记号，水平居中在簇的 advance 上。`over` 的记号站在该 run 的 ascent 上；那个字若是注音基字且注音在这一行，记号站在注音上方。`under` 的记号挂在 run 的 descent 下。
+- **行盒长高。** 和注音一样只长出记号伸出 half-leading 的那一截：上方的走 `lift`，基线随之下移；下方的走新增的 `sink`，基线不动。`half_leading` 计算时把 `lift` 和 `sink` 都扣掉，所以向下长高的行（包括 descent 很大的行内对象）不再把基线往下推半截。
+- **`TextLayout.emphasis`** 是 `PlacedEmphasis { offset, line, x_px, baseline_y_px, rect, mark }`，`mark` 索引 `TextLayout.emphasis_marks`：每种记号一份已经塑好的 run，同一记号的所有字共享它。竖排布局不放记号，`emphasis_dropped` 为真。
+- **画笔** 在注音之后画记号的字形，同一个 entry，走普通字形图集，没有另一条 quad 路径。颜色取 `text-emphasis-color`（富文本 span 的 `emphasis_color` 优先，其次节点的），`currentColor` 时取该字的文字颜色。没有 retained 布局、画笔自己排版的退路不画记号。
+
+应用一侧：节点样式是 `LayoutStyle.text_emphasis_style` / `text_emphasis_position` / `text_emphasis_color`，三者都继承；富文本 span 用 `RichSpanStyle::emphasis(style)`、`emphasis_position(pos)`（`RichEmphasisStyle`，span 上写 `TextEmphasisStyle::None` 能关掉节点给的记号）和 `emphasis_color(color)`（在 paint 层）。`source_for` 把 span 叠在节点值上合成 `EmphasisSpan` 表。失效分级：样式或位置变了是 `CONSTRAINT`（重新布局，不重新塑形），只改颜色是 `PAINT`（不塑形、不布局，只换画笔指纹）。
+
+测试：`nana-text` `tests/emphasis.rs`（上方长高且基线下移、下方长高基线不动、跳过标点和空白、字符串记号只取首字素且为半字号、大字号 span 记号更大、换位置不重新塑形、注音上的记号站在注音上、编辑跟随、竖排丢弃）；`nana-ui-css` `css_paint` 的 `text_emphasis_*`；`nana-ui-runtime` `text_node`（`emphasis_relays_out_and_its_colour_only_repaints`）；`nana-ui-scene` `tests/rich_text_spans.rs`（改颜色不塑形不布局，CSS 着重号让行长高、换位置只重新布局）；`nana-ui` `scene_paint::text`（记号画在字上方或下方，比字小）；component-gallery 快照 `component-migration/text` 的 `emphasis` 状态（中文在下、日文在上）。
+
 ### 富文本编辑器
 
 `RichTextEditor` 不是另一种编辑器存储，而是一个普通文本节点加一份编辑状态：

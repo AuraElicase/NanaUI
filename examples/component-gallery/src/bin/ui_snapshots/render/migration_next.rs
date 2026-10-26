@@ -81,9 +81,13 @@ use nana_ui::{
     component_catalog, component_ids,
 };
 use nana_ui_core::{
-    ContentFit, DialogSize, DrawerSide, LengthSpec, SemanticColorRole, SplitPaneModel, StatusTone,
-    SwitchControlPosition, ToastTone, UI_METRICS, ValidationIntent, WorkspaceModel,
+    ContentFit, DialogSize, DrawerSide, LengthSpec, PaintColor, RichSpanStyle, RichText,
+    SemanticColorRole, SplitPaneModel, StatusTone, SwitchControlPosition, TextEmphasisPosition,
+    TextEmphasisShape, TextEmphasisStyle, ToastTone, UI_METRICS, ValidationIntent, WorkspaceModel,
 };
+
+/// Emphasis marks under Chinese and over Japanese, on one line.
+const EMPHASIS_TEXT: &str = "着重号标在下方。傍点は上に。";
 use nana_ui_platform::{
     InputDisposition, InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey,
     PointerInput, PointerPhase,
@@ -649,26 +653,60 @@ fn runtime_fixture(
             } else {
                 LengthSpec::Percent(100.0)
             });
-            layout.height = Some(LengthSpec::Px(if fixture.state == "wrap" {
-                44.0
-            } else {
-                32.0
-            }));
+            layout.height = Some(LengthSpec::Px(
+                if matches!(fixture.state, "wrap" | "emphasis") {
+                    44.0
+                } else {
+                    32.0
+                },
+            ));
             layout.font_size = Some(13.0);
             layout.white_space_nowrap = fixture.state == "ellipsis";
             layout.text_overflow_ellipsis = fixture.state == "ellipsis";
-            document
+            if fixture.state == "emphasis" {
+                // Chinese sets its dots under the text; the Japanese span
+                // overrides them with sesame marks over it in its own colour.
+                layout.text_emphasis_style = Some(TextEmphasisStyle::Mark {
+                    shape: Some(TextEmphasisShape::Dot),
+                    open: false,
+                });
+                layout.text_emphasis_position = Some(TextEmphasisPosition::UNDER);
+            }
+            let text = document
                 .context_mut()
                 .create_component(
                     document_id,
-                    RuntimeText::new(if matches!(fixture.state, "wrap" | "ellipsis") {
-                        "A deliberately long migration label that must respect its authored content box."
-                    } else {
-                        "Migration text 文本"
+                    RuntimeText::new(match fixture.state {
+                        "wrap" | "ellipsis" => {
+                            "A deliberately long migration label that must respect its authored content box."
+                        }
+                        "emphasis" => EMPHASIS_TEXT,
+                        _ => "Migration text 文本",
                     })
                     .style(style),
                 )?
-                .stable_id()
+                .stable_id();
+            if fixture.state == "emphasis" {
+                let japanese = EMPHASIS_TEXT.find('傍').expect("a Japanese half");
+                let mut rich = MutationQueue::new();
+                rich.set_rich_text(
+                    text,
+                    RichText::new(EMPHASIS_TEXT).with_span(
+                        japanese..EMPHASIS_TEXT.len(),
+                        RichSpanStyle::new()
+                            .emphasis(TextEmphasisStyle::Mark {
+                                shape: Some(TextEmphasisShape::Sesame),
+                                open: false,
+                            })
+                            .emphasis_position(TextEmphasisPosition::OVER)
+                            .emphasis_color(PaintColor::Srgb {
+                                rgba: [0.86, 0.24, 0.24, 1.0],
+                            }),
+                    ),
+                );
+                document.context_mut().commit_mutations(rich)?;
+            }
+            text
         }
         Component::Button => document
             .context_mut()

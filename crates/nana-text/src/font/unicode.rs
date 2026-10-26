@@ -2,12 +2,14 @@
 //! `icu_properties`.
 //!
 //! Nothing here is a hand-written table: script, `Emoji_Presentation`,
-//! `Default_Ignorable_Code_Point` and `Vertical_Orientation` (UAX #50) come
-//! from ICU's compiled data, grapheme clusters from `unicode-segmentation`.
+//! `Default_Ignorable_Code_Point`, `Vertical_Orientation` (UAX #50) and the
+//! general category come from ICU's compiled data, grapheme clusters from
+//! `unicode-segmentation`.
 
 use crate::shape::ScriptTag;
 use icu_properties::props::{
-    DefaultIgnorableCodePoint, EmojiPresentation, Script, VerticalOrientation,
+    DefaultIgnorableCodePoint, EmojiPresentation, GeneralCategory, GeneralCategoryGroup, Script,
+    VerticalOrientation,
 };
 use icu_properties::{CodePointMapData, CodePointSetData, PropertyNamesShort};
 use std::ops::Range;
@@ -47,6 +49,25 @@ pub fn is_default_ignorable(ch: char) -> bool {
 /// rotated run would never ask for.
 pub fn is_upright_in_vertical(ch: char) -> bool {
     CodePointMapData::<VerticalOrientation>::new().get(ch) != VerticalOrientation::Rotated
+}
+
+/// Whether a grapheme cluster takes an emphasis mark (CSS Text Decoration 4
+/// `text-emphasis-skip: spaces punctuation`): not when its base character is
+/// a separator (`Z*`), punctuation (`P*`), a control or format character
+/// (`Cc`, `Cf`), unassigned (`Cn`), or an inline object's U+FFFC.
+pub fn takes_emphasis(grapheme: &str) -> bool {
+    let Some(base) = grapheme.chars().next() else {
+        return false;
+    };
+    if base == crate::source::OBJECT_REPLACEMENT {
+        return false;
+    }
+    let skipped = GeneralCategoryGroup::Separator
+        .union(GeneralCategoryGroup::Punctuation)
+        .union(GeneralCategoryGroup::Control)
+        .union(GeneralCategoryGroup::Format)
+        .union(GeneralCategoryGroup::Unassigned);
+    !skipped.contains(CodePointMapData::<GeneralCategory>::new().get(base))
 }
 
 fn specific_script(ch: char) -> Option<ScriptTag> {

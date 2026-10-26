@@ -328,6 +328,9 @@ pub fn resolve_layout_intent(
                 "word_break",
                 "overflow_wrap",
                 "text_decoration",
+                "text_emphasis_style",
+                "text_emphasis_position",
+                "text_emphasis_color",
             ][..],
         ),
         (

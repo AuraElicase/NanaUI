@@ -34,6 +34,11 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "muted text keeps readable semantic contrast",
     ),
     f(
+        Component::Text,
+        "emphasis",
+        "emphasis marks sit under Chinese and over Japanese, and the line grows to hold them",
+    ),
+    f(
         Component::Button,
         "ghost",
         "ghost kind is transparent until interaction",
