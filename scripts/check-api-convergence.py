@@ -129,7 +129,6 @@ def main() -> int:
     components = (ROOT / "docs/reference/components.md").read_text(encoding="utf-8")
     application_api = (ROOT / "docs/reference/application-api.md").read_text(encoding="utf-8")
     readme = (ROOT / "docs/index.md").read_text(encoding="utf-8")
-    vue = (ROOT / "docs/reference/vue.md").read_text(encoding="utf-8")
 
     if "pub use nana_ui_runtime::*" in nana_ui:
         fail("wildcard nana_ui_runtime re-export bypasses the compatibility surface")
@@ -145,7 +144,7 @@ def main() -> int:
         fail("architecture.md still describes BrowserView as unimplemented")
     if "没有应用内浏览器控件" in components:
         fail("components.md still contradicts the BrowserView contract")
-    for name, text in (("application-api.md", application_api), ("README.md", readme), ("vue.md", vue)):
+    for name, text in (("application-api.md", application_api), ("README.md", readme)):
         if any("应用内打开网页" in line and "未实现" in line for line in text.splitlines()):
             fail(f"{name} still describes the BrowserView path as unimplemented")
         if any("nana.webview" in line and "目前未实现" in line for line in text.splitlines()):

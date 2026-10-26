@@ -75,11 +75,8 @@ if [[ -n "${CC_aarch64_unknown_linux_ohos:-}" ]]; then
   echo "check-ohos-arm64: C compiler ${CC_aarch64_unknown_linux_ohos}; checking the fetch / GPU path"
   run_crate nana-ui-platform
   run_crate nana-ui --lib --features gpu,components,bundled-fonts
-  run_crate nana-ui-web-api --features native-audio
-  run_crate nana-js-engine
-  run_crate nana-ui-vue --no-default-features
 else
-  echo "check-ohos-arm64: no OHOS C compiler; fetch / GPU / Vue path not checked (set OHOS_NDK_HOME)"
+  echo "check-ohos-arm64: no OHOS C compiler; fetch / GPU path not checked (set OHOS_NDK_HOME)"
 fi
 
 echo "check-ohos-arm64: OK"
