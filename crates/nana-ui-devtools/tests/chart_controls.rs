@@ -1,5 +1,3 @@
-#![cfg(feature = "agent")]
-
 use nana_ui::runtime::chart::hit::{ANY_SERIES, ItemRegion};
 use nana_ui::runtime::chart::{
     Animation, AreaStyle, Axis, BarSeries, ChartColor, ChartOption, GaugeSeries, Legend,

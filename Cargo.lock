@@ -2494,7 +2494,10 @@ dependencies = [
 name = "nana-css-parity"
 version = "0.1.0"
 dependencies = [
- "nana-ui-vue",
+ "nana-ui",
+ "nana-ui-core",
+ "nana-ui-css",
+ "nana-ui-runtime",
  "serde",
  "serde_json",
 ]
@@ -2679,7 +2682,6 @@ dependencies = [
 name = "nana-ui-dev"
 version = "0.1.0"
 dependencies = [
- "nana-js-engine",
  "nana-ui",
  "nana-ui-core",
  "nana-ui-devtools",
@@ -2687,7 +2689,6 @@ dependencies = [
  "nana-ui-runtime",
  "nana-ui-scene",
  "nana-ui-sfc",
- "nana-ui-vue",
  "notify",
  "serde",
  "serde_json",
@@ -2699,13 +2700,10 @@ version = "0.1.0"
 dependencies = [
  "image",
  "nana-gpu",
- "nana-js-engine",
- "nana-js-v8",
  "nana-ui",
  "nana-ui-core",
  "nana-ui-platform",
  "nana-ui-scene",
- "nana-ui-vue",
  "png",
  "pollster",
  "serde",

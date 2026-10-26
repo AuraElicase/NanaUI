@@ -1,9 +1,6 @@
 //! Wire types shared by every headless Agent session.
 //!
-//! This module deliberately names no Vue type and no JS engine: it sits in the
-//! `runtime-agent` tier so a plain Rust product can speak the same protocol
-//! without pulling the Vue renderer or V8 into its dependency graph. The trait
-//! that consumes these types lives in [`crate::agent::session`].
+//! The trait that consumes these types lives in [`crate::agent::session`].
 
 use serde::{Deserialize, Serialize};
 
@@ -11,8 +8,8 @@ use super::AccessibilityDumpNode;
 
 /// How a command addresses a node.
 ///
-/// One grammar for both tiers. `agent_id` is the Vue `data-agent-id`; a Rust L3
-/// tree usually has none, which is why `role` + `label` exists — it reads the
+/// `agent_id` is an explicit id the application attached; a Rust L3 tree
+/// usually has none, which is why `role` + `label` exists — it reads the
 /// projection the Runtime already computes, so it needs nothing from the
 /// application author.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -205,9 +202,6 @@ pub struct GpuDump {
 
 /// One recorded diagnostic.
 ///
-/// `nana-js-engine` carries no serde derives, so the wire shape is defined here
-/// rather than by adding a serialization surface to an engine crate for a
-/// dev-only consumer.
 /// A node as the declarative view layer sees it (`inspect`): the built-in
 /// control and each bindable field, where its bindings were declared, and,
 /// with `reactive-trace`, the signal writes that last patched it.
@@ -334,7 +328,7 @@ pub struct CauseDump {
 pub struct DiagnosticDump {
     pub sequence: u64,
     pub elapsed_micros: u64,
-    /// `js_exception`, `vue_error`, `render_error`, `device_lost`, …
+    /// `render_error`, `device_lost`, …
     pub kind: String,
     /// `error`, `warn` or `info`.
     pub level: String,
@@ -348,7 +342,7 @@ pub struct DiagnosticDump {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionInfo {
-    /// `"runtime"` or `"vue"`.
+    /// `"runtime"`, or the name a product's own session reports.
     pub kind: String,
     pub width: u32,
     pub height: u32,
@@ -390,9 +384,8 @@ pub enum AgentCommand {
         #[serde(flatten)]
         target: Target,
     },
-    /// JS exceptions, Vue errors, render errors and device loss recorded since
-    /// the session started. A blank screenshot is most often an exception, and
-    /// without this the Agent cannot see one.
+    /// Errors and device loss a session recorded since it started. The Runtime
+    /// session records none; a product's own session may.
     Diagnostics,
 
     // ---- act ----
@@ -469,8 +462,9 @@ pub enum AgentCommand {
     /// swaps one keyed stylesheet and touches no node. Both are paths on the
     /// host's filesystem, read by the session.
     ///
-    /// Serde-only here: the implementation belongs to whichever session tier can
-    /// actually reload, so the Vue-free tier still names no JS engine.
+    /// Serde-only here: the implementation belongs to whichever session can
+    /// actually reload. The Runtime session cannot; its application is compiled
+    /// in.
     Reload {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         js: Option<String>,

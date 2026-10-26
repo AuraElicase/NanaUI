@@ -4,7 +4,7 @@
 //! unit-tested without touching the filesystem, and [`DevWatcher`] is the thin
 //! layer that wires `notify` to them.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -19,8 +19,8 @@ use crate::config::{DevConfig, is_ignored};
 /// Collects raw filesystem events and releases them once the tree goes quiet.
 ///
 /// A batch is released only when the *newest* recorded event is at least
-/// `quiet` old. Releasing per-path instead would split one bundler emit across
-/// several reloads.
+/// `quiet` old. Releasing per-path instead would split one multi-file write
+/// across several rebuilds.
 #[derive(Debug)]
 pub(crate) struct Debouncer {
     pending: HashMap<PathBuf, Instant>,
@@ -70,22 +70,10 @@ impl Debouncer {
 
 /// Turn a settled batch into the smallest set of requests that covers it.
 ///
-/// A path takes the CSS fast path only if it was registered with
-/// [`DevConfig::css`]. Anything else — a script, an asset, an unregistered
-/// stylesheet — means the artifact bytes may have changed, and the whole batch
-/// collapses to a single [`ReloadRequest::Full`].
-#[cfg(test)]
-pub(crate) fn classify(paths: &[PathBuf], css: &BTreeSet<PathBuf>) -> Vec<ReloadRequest> {
-    classify_with(paths, css, &[])
-}
-
-/// [`classify`], with `.vue` files under `templates` taking the template
-/// path.
-pub(crate) fn classify_with(
-    paths: &[PathBuf],
-    css: &BTreeSet<PathBuf>,
-    templates: &[PathBuf],
-) -> Vec<ReloadRequest> {
+/// A `.vue` file under one of `templates` takes the template path. Anything
+/// else means the binary may have changed, and the whole batch collapses to a
+/// single [`ReloadRequest::Full`].
+pub(crate) fn classify(paths: &[PathBuf], templates: &[PathBuf]) -> Vec<ReloadRequest> {
     let template = |path: &PathBuf| {
         path.extension().is_some_and(|ext| ext == "vue")
             && templates.iter().any(|dir| path.starts_with(dir))
@@ -93,18 +81,12 @@ pub(crate) fn classify_with(
     if paths.is_empty() {
         return Vec::new();
     }
-    if paths
-        .iter()
-        .any(|path| !css.contains(path) && !template(path))
-    {
+    if paths.iter().any(|path| !template(path)) {
         return vec![ReloadRequest::Full];
     }
     paths
         .iter()
-        .map(|path| match template(path) {
-            true => ReloadRequest::Template { path: path.clone() },
-            false => ReloadRequest::Css { path: path.clone() },
-        })
+        .map(|path| ReloadRequest::Template { path: path.clone() })
         .collect()
 }
 
@@ -116,7 +98,7 @@ fn is_settled_on_disk(path: &Path) -> bool {
 }
 
 /// Best-effort canonicalization: a path that does not exist yet keeps its
-/// given form so a later create still matches the registered CSS set.
+/// given form so a later create still matches a registered template dir.
 fn canonical_or_given(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
@@ -141,11 +123,6 @@ impl DevWatcher {
     where
         F: Fn(Vec<ReloadRequest>) + Send + 'static,
     {
-        let css: BTreeSet<PathBuf> = config
-            .css_paths()
-            .iter()
-            .map(|path| canonical_or_given(path))
-            .collect();
         let roots: Vec<PathBuf> = config
             .watch_roots()
             .iter()
@@ -249,7 +226,7 @@ impl DevWatcher {
                                 .clone()
                         })
                         .collect();
-                    let batch = classify_with(&settled, &css, &templates);
+                    let batch = classify(&settled, &templates);
                     if !batch.is_empty() {
                         on_batch(batch);
                     }
@@ -300,16 +277,16 @@ mod tests {
     fn a_batch_waits_for_the_newest_event_not_the_oldest() {
         let base = Instant::now();
         let mut debouncer = Debouncer::new(Duration::from_millis(120));
-        debouncer.record(PathBuf::from("a.js"), base);
-        debouncer.record(PathBuf::from("b.css"), at(base, 100));
+        debouncer.record(PathBuf::from("a.rs"), base);
+        debouncer.record(PathBuf::from("b.rs"), at(base, 100));
 
-        // `a.js` alone would have settled by now; `b.css` has not.
+        // `a.rs` alone would have settled by now; `b.rs` has not.
         assert!(debouncer.take_ready(at(base, 150)).is_empty());
         assert!(debouncer.is_pending());
 
         assert_eq!(
             debouncer.take_ready(at(base, 221)),
-            [PathBuf::from("a.js"), PathBuf::from("b.css")]
+            [PathBuf::from("a.rs"), PathBuf::from("b.rs")]
         );
         assert!(!debouncer.is_pending());
     }
@@ -321,56 +298,25 @@ mod tests {
     }
 
     #[test]
-    fn only_registered_stylesheets_take_the_css_fast_path() {
-        let css = BTreeSet::from([PathBuf::from("app.css"), PathBuf::from("theme.css")]);
+    fn any_non_template_change_is_one_full_rebuild() {
         assert_eq!(
-            classify(&[PathBuf::from("app.css")], &css),
-            [ReloadRequest::Css {
-                path: PathBuf::from("app.css")
-            }]
-        );
-        assert_eq!(
-            classify(
-                &[PathBuf::from("app.css"), PathBuf::from("theme.css")],
-                &css
-            ),
-            [
-                ReloadRequest::Css {
-                    path: PathBuf::from("app.css")
-                },
-                ReloadRequest::Css {
-                    path: PathBuf::from("theme.css")
-                }
-            ]
-        );
-    }
-
-    #[test]
-    fn a_mixed_batch_collapses_to_one_full_reload() {
-        let css = BTreeSet::from([PathBuf::from("app.css")]);
-        assert_eq!(
-            classify(
-                &[PathBuf::from("app.css"), PathBuf::from("app.iife.js")],
-                &css
-            ),
+            classify(&[PathBuf::from("src/a.rs"), PathBuf::from("src/b.rs")], &[]),
             [ReloadRequest::Full]
         );
     }
 
     #[test]
     fn views_under_a_template_dir_take_the_template_path() {
-        let css = BTreeSet::new();
         let templates = [PathBuf::from("views")];
         assert_eq!(
-            classify_with(&[PathBuf::from("views/App.vue")], &css, &templates),
+            classify(&[PathBuf::from("views/App.vue")], &templates),
             [ReloadRequest::Template {
                 path: PathBuf::from("views/App.vue")
             }]
         );
         assert_eq!(
-            classify_with(
+            classify(
                 &[PathBuf::from("views/App.vue"), PathBuf::from("src/main.rs")],
-                &css,
                 &templates
             ),
             [ReloadRequest::Full],
@@ -380,21 +326,24 @@ mod tests {
 
     #[test]
     fn an_empty_batch_asks_for_nothing() {
-        assert_eq!(classify(&[], &BTreeSet::new()), []);
+        assert_eq!(classify(&[], &[]), []);
     }
 
     #[test]
     fn a_half_written_file_is_not_settled() {
         let dir = crate::testing::scratch("watch-settled");
 
-        let truncated = dir.join("app.js");
+        let truncated = dir.join("main.rs");
         std::fs::write(&truncated, b"").expect("write");
         assert!(!is_settled_on_disk(&truncated));
 
-        std::fs::write(&truncated, b"globalThis.x = 1;").expect("write");
+        std::fs::write(&truncated, b"fn main() {}").expect("write");
         assert!(is_settled_on_disk(&truncated));
 
-        assert!(!is_settled_on_disk(&dir.join("missing.js")));
-        assert!(!is_settled_on_disk(&dir), "a directory is not an artifact");
+        assert!(!is_settled_on_disk(&dir.join("missing.rs")));
+        assert!(
+            !is_settled_on_disk(&dir),
+            "a directory is not a source file"
+        );
     }
 }

@@ -1,5 +1,5 @@
 #![cfg(feature = "runtime-agent")]
-//! Headless scroll / hover / key coverage for the Vue-free session.
+//! Headless scroll / hover / key coverage for the Runtime session.
 //! Retained scroll and nested clipping only misbehave once something has
 //! actually scrolled, so a session that cannot scroll cannot reproduce them.
 

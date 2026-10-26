@@ -173,7 +173,7 @@ jobs:
       # the offscreen pixel tests genuinely execute there; elsewhere they skip
       # visibly through `offscreen::pixels_available`.
       - name: Run headless Agent tests
-        run: cargo test -p nana-ui-devtools --features runtime-agent --all-targets --locked
+        run: cargo test -p nana-ui-devtools --features runtime-agent,nana-ui/components --all-targets --locked
       # Self-verifying real-window hosts: one event loop, shared device, close and
       # re-create. Windows runners have a desktop and the WARP adapter.
       - name: Run multi-window lifecycle hosts

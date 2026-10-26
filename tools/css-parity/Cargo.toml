@@ -12,6 +12,11 @@ name = "css-parity"
 path = "src/bin/css_parity.rs"
 
 [dependencies]
-nana-ui-vue = { path = "../../crates/nana-ui-vue" }
+# Same font as the shipped measure path, so text boxes match the fixtures.
+nana-ui-core = { workspace = true, features = ["bundled-font-regular"] }
+nana-ui-css.workspace = true
+nana-ui-runtime = { workspace = true, features = ["icu"] }
+# The process-wide `nana-text` engine (NanaTextShaper) lives in `nana-ui`.
+nana-ui = { path = "../../crates/nana-ui", default-features = false, features = ["icu"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

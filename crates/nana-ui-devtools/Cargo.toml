@@ -3,7 +3,7 @@ name = "nana-ui-devtools"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
-description = "NanaUI JS diagnostics plus optional headless Agent snapshot session"
+description = "NanaUI headless Agent snapshot session and offscreen diagnostics"
 license = "MIT OR Apache-2.0"
 
 [lints]
@@ -13,23 +13,9 @@ name = "nana_ui_devtools"
 path = "src/lib.rs"
 
 [[bin]]
-name = "nana-agent-session"
-path = "src/bin/nana-agent-session.rs"
-required-features = ["agent-bin"]
-
-# The Vue-free tier gets its own binary rather than a feature-gated branch, so
-# Rust-only work never pays the V8 build cost.
-[[bin]]
 name = "nana-runtime-agent"
 path = "src/bin/nana-runtime-agent.rs"
 required-features = ["runtime-agent"]
-
-# Per-pointer-event cost, Vue vs Rust L3, in one process. Needs both sessions,
-# so it sits behind the same feature as the V8 binary.
-[[bin]]
-name = "nana-hover-benchmark"
-path = "src/bin/nana-hover-benchmark.rs"
-required-features = ["agent-bin"]
 
 # Per-event input routing cost on the L3 path, without paint.
 [[bin]]
@@ -52,9 +38,8 @@ offscreen = [
     "dep:pollster",
     "dep:wgpu",
 ]
-# Vue-free headless session for plain Rust Runtime products: offscreen pixels,
-# a11y dump, pointer/keyboard/scroll. Deliberately does NOT pull the Vue
-# renderer or a JS engine.
+# Headless session for a Rust Runtime document: offscreen pixels, a11y dump,
+# pointer/keyboard/scroll.
 runtime-agent = [
     "offscreen",
     "dep:nana-ui-platform",
@@ -66,27 +51,12 @@ runtime-agent = [
 headless-host = ["runtime-agent", "nana-ui/hosted"]
 # Why a node last changed, in the runtime session's view inspector.
 reactive-trace = ["runtime-agent", "nana-ui/reactive-trace"]
-agent = [
-    "runtime-agent",
-    "dep:nana-ui-vue",
-    # The Agent tier is a development surface by definition, so it always gets
-    # the reload path. A product build reaches neither.
-    "nana-ui-vue/dev-reload",
-    "nana-ui-vue/scene-view",
-    "nana-ui-vue/components",
-    "nana-ui/components",
-    "nana-ui/syntax-highlighting",
-]
-agent-bin = ["agent", "dep:nana-js-v8", "nana-js-v8/engine", "nana-ui-vue/benchmark"]
 
 [dependencies]
-nana-js-engine.workspace = true
 nana-ui-core.workspace = true
 nana-ui-platform = { workspace = true, optional = true }
 nana-ui = { workspace = true, optional = true }
 nana-ui-scene = { workspace = true, optional = true }
-nana-ui-vue = { workspace = true, optional = true }
-nana-js-v8 = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 png = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
@@ -97,13 +67,17 @@ nana-gpu = { workspace = true, optional = true }
 
 
 [[example]]
-name = "spacing-layout"
-required-features = ["agent-bin"]
-
-[[example]]
 name = "restored-content-probe"
 required-features = ["runtime-agent", "nana-ui/components"]
 
 [[example]]
 name = "diagram-probe"
+required-features = ["runtime-agent", "nana-ui/components"]
+
+[[test]]
+name = "chart_controls"
+required-features = ["runtime-agent", "nana-ui/components"]
+
+[[test]]
+name = "content_measurement"
 required-features = ["runtime-agent", "nana-ui/components"]

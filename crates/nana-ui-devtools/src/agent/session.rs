@@ -1,11 +1,9 @@
 //! The capability trait every headless session implements, plus the one copy of
 //! command dispatch and the stdio loop.
 //!
-//! Before this existed, the JSON protocol lived inside the Vue session, so half
-//! the capabilities the Runtime session already had were unreachable over stdio
-//! and the Vue session had none of them at all. The trait is object-safe on
-//! purpose: the CLI drives a `&mut dyn AgentSession`, and a consuming product's
-//! own session can join without naming a Vue type.
+//! The trait is object-safe on purpose: the CLI drives a `&mut dyn
+//! AgentSession`, and a consuming product's own session can join with its own
+//! document.
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -47,9 +45,9 @@ pub trait AgentSession {
     fn set_clear(&mut self, clear: Option<[f32; 4]>);
     fn pointer(&mut self, gesture: PointerGesture) -> Result<bool, AgentError>;
     /// Activate a node the way this backend's own click path does. Kept
-    /// separate from [`Self::pointer`] because the two tiers legitimately
-    /// differ: the Runtime applies an accessibility action, the Vue session
-    /// falls back to a bridge event when a node has no painted geometry.
+    /// separate from [`Self::pointer`] because sessions legitimately differ:
+    /// the Runtime applies an accessibility action, a product session may route
+    /// it through its own event path.
     fn activate(&mut self, node: u64) -> Result<bool, AgentError>;
     fn keyboard(&mut self, stroke: KeyStroke) -> Result<(), AgentError>;
     fn type_text(&mut self, text: &str) -> Result<(), AgentError>;
@@ -58,16 +56,16 @@ pub trait AgentSession {
     fn scene_probe(&self, node: u64) -> Option<SceneProbeDump>;
     fn screenshot_rgba(&mut self) -> Result<(Size<u32>, Vec<u8>), AgentError>;
 
-    /// Vue overrides this; a Runtime document has no semantic layer, and
-    /// synthesizing one would be a second facade.
+    /// A Runtime document has no semantic layer, and synthesizing one would be
+    /// a second facade; a product session with one overrides this.
     fn semantic_widgets(&self) -> Option<Vec<SemanticDumpWidget>> {
         None
     }
 
     /// Re-evaluate the application from `js` and rebuild the tree, keeping the
-    /// window and GPU context. Only a tier with a JS engine can do this; the
-    /// Vue-free Runtime tier has no artifact to re-evaluate, because its
-    /// application is Rust code that a running process cannot replace.
+    /// window and GPU context. The Runtime session has no artifact to
+    /// re-evaluate: its application is Rust code that a running process cannot
+    /// replace.
     fn reload_artifact(&mut self, _path: &Path) -> Result<(), AgentError> {
         Err(AgentError(
             "this session cannot reload an artifact: its application is compiled in".into(),
@@ -81,8 +79,7 @@ pub trait AgentSession {
         ))
     }
 
-    /// Recorded JS exceptions, Vue errors, render errors and device loss.
-    /// Empty for a session that records none.
+    /// Recorded errors and device loss. Empty for a session that records none.
     fn diagnostics(&self) -> Vec<DiagnosticDump> {
         Vec::new()
     }
@@ -98,8 +95,8 @@ pub trait AgentSession {
         Err(AgentError("this session has no view inspector".into()))
     }
 
-    /// Vue overrides this to consult the semantic snapshot, which can carry a
-    /// widget that never reaches the accessibility projection.
+    /// A session with a semantic layer overrides this to consult it, since it
+    /// can carry a widget that never reaches the accessibility projection.
     fn resolve_agent_id(&self, agent_id: &str) -> Option<u64> {
         self.accessibility_nodes()
             .into_iter()
@@ -260,9 +257,9 @@ pub trait AgentSession {
             }
             AgentCommand::Semantic => match self.semantic_widgets() {
                 Some(widgets) => AgentReply::ok().with_widgets(widgets),
-                None => {
-                    AgentReply::err("semantic dump is Vue-only; use a11y for a Runtime document")
-                }
+                None => AgentReply::err(
+                    "this session has no semantic layer; use a11y for a Runtime document",
+                ),
             },
             AgentCommand::Screenshot { path } => {
                 let path = path.unwrap_or_else(|| "target/agent-session/screenshot.png".into());
