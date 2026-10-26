@@ -212,6 +212,7 @@ device/surface 丢失后宿主调用 `RuntimeDocument::set_surface_generation`�
 | `window_material_mode_for(&self, id)` | `window_material_mode_for` |
 | `appearance_backdrop_opacity_for(&self, id)` | `appearance_backdrop_opacity_for` |
 | `input_event(&mut self, id, input, windows, cx)` | `input_event`，多给一份全部窗口的 `ApplicationWindow` |
+| `animation_frame(&mut self, id, frame, windows, cx)` | `animation_frame`：宿主已把这一帧的采样写进 `id` 的文档，应用读 `frame.events` 里结束或取消的动画 |
 | `next_wakeup(&self)` / `wake(&mut self, now, windows, cx)` | `next_wakeup` / `wake` |
 | `close_requested(&mut self, id, windows, cx)` | `window_event` 的 `CloseRequested`。默认回 `WindowCommand::Close(id)`；回答里不带它，窗口就留着（先确认、收到托盘），决定后再从 `update` 关 |
 
