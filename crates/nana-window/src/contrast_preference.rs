@@ -45,7 +45,6 @@ pub fn force_high_contrast(value: Option<bool>) {
 fn platform_high_contrast() -> Option<bool> {
     #[cfg(target_os = "windows")]
     {
-        use windows_sys::Win32::Foundation::LocalFree;
         use windows_sys::Win32::UI::WindowsAndMessaging::SystemParametersInfoW;
 
         const SPI_GETHIGHCONTRAST: u32 = 0x0042;
@@ -64,14 +63,11 @@ fn platform_high_contrast() -> Option<bool> {
             scheme: std::ptr::null_mut(),
         };
         // SAFETY: SPI_GETHIGHCONTRAST writes one HIGHCONTRASTW. The scheme
-        // string, when present, is a LocalAlloc the caller frees.
+        // pointer it fills in belongs to USER32, not to the caller: freeing
+        // it corrupts the process heap on the next settings change.
         let ok = unsafe {
             SystemParametersInfoW(SPI_GETHIGHCONTRAST, info.cb_size, (&raw mut info).cast(), 0)
         };
-        if !info.scheme.is_null() {
-            // SAFETY: the system allocated this scheme string for the caller.
-            unsafe { LocalFree(info.scheme.cast()) };
-        }
         (ok != 0).then_some(info.flags & HCF_HIGHCONTRASTON != 0)
     }
     #[cfg(not(target_os = "windows"))]
