@@ -20,7 +20,7 @@ title: 布局引擎
 | `nana-ui-core` | 提供 `LayoutStyle`、`LengthSpec`、`FlexDirection` / `GridTrack` / `GridPlacement`、失效分类 `LayoutInvalidation` / `LayoutDependencyFootprint`，以及动态自适应布局的 `solve_deficit` / `EnvelopeShape` |
 | `nana-text` | 提供文本叶子节点的固有宽度与行排版度量；引擎通过 `TextLayoutCache` 与 `UiWorld` 侧表读取 |
 | `UiWorld` | 提供输入树与写回目标；增量失效种子由 `commit` 生成（`pending_layout_invalidations`） |
-| `tools/css-parity` / Vue `measure_layout` | 通过 `RuntimeLayoutEngine::layout_style_tree` 直接复用同一套算法（`layout_engine.rs:85-87`） |
+| `tools/css-parity` `measure_layout` | 通过 `RuntimeLayoutEngine::layout_style_tree` 直接复用同一套算法（`layout_engine.rs:85-87`） |
 
 ## 关键类型与数据
 

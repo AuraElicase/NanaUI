@@ -63,7 +63,7 @@ fn install(cx: &mut AppContext) -> Result<(), FrameworkError> {
 
 `RegisterableComponent` 给出类型 id、标签，以及从 `SemanticSpec` 构造的 `from_semantic`。`install` 里调用 `ExtensionRegistrar::register_component`。额外标签用 `register_component_alias`。指针和键盘激活用 `register_activation`，不要去改 `activate_node`。
 
-Rust 用 `create_component` 按类型建节点。Vue 标签解析同一张表。给 Vue 用的 tag 等于 `ComponentTypeId` 去掉 `nana.` 前缀：`nana.preview-card` 对应 `preview-card`。和 HTML 同语义就用原生标签（`button`、`table` / `tr` / `td`）。语义不同就换名：`search-dropdown`，不是 HTML `<search>`。没登记、也不是已知 HTML 的 tag 会报错，不会当成布局盒。
+Rust 用 `create_component` 按类型建节点。按标签构造解析同一张表。tag 等于 `ComponentTypeId` 去掉 `nana.` 前缀：`nana.preview-card` 对应 `preview-card`。和 HTML 同语义就用原生标签（`button`、`table` / `tr` / `td`）。语义不同就换名：`search-dropdown`，不是 HTML `<search>`。没登记、也不是已知 HTML 的 tag 会报错，不会当成布局盒。
 
 ## 事件名单和 GPU 槽
 
@@ -84,9 +84,7 @@ mutations.set_custom_render(
 
 普通实时画面仍然用 `GpuTextureView` 和同一条字符串 slot。那条路径的槽也落在 Runtime 的 `CustomRenderNode` 上。见 [实时画面](../../reference/gpu.md)。
 
-## 另外两张表不是这条路
-
-只给 JavaScript 一组命令和属性白名单时，走 Vue 的 `NativeComponentRegistry`（`Nana.components.call`）。那张表不会让节点进入布局和命中。只登记其中一张，另一条路径不生效。
+## 限制
 
 发布用的 `dist` 档是 `panic = "abort"`。工厂里的 panic 会直接终止进程，不要把它当成可恢复的错误。也不支持把控件做成动态加载的 dylib。
 
@@ -101,7 +99,7 @@ impl nana_ui::ApplicationState for App {
 }
 ```
 
-不经过宿主时用 `AppContext::typed()`、`RuntimeDocument::typed(document)`。模式必须是编译期常量，运行时再选会把两套都链接进来。精简模式下按标签构造内置控件返回 `FrameworkError::InvalidComponentType`。Vue 宿主继续用完整模式。
+不经过宿主时用 `AppContext::typed()`、`RuntimeDocument::typed(document)`。模式必须是编译期常量，运行时再选会把两套都链接进来。精简模式下按标签构造内置控件返回 `FrameworkError::InvalidComponentType`。
 
 release、strip 之后：最小无头程序从 5.40 MB 到 2.28 MB；托管窗口 `examples/reactive-sfc` 从 35.48 MB 到 33.42 MB。托管体积主要在 GPU、文字和内置字体。
 

@@ -31,7 +31,7 @@ Phase 0 的章节保留成**当时**的审计记录。不回头重写。那份�
 
 | 问题 | 现状 |
 | --- | --- |
-| 有没有 Style Model | 有，而且是唯一一套：`nana_ui_core::style_model`，L1/L2/L3 共用 |
+| 有没有 Style Model | 有，而且是唯一一套：`nana_ui_core::style_model`，Rust API 与 CSS 共用 |
 | 颜色权威 | `SemanticPalette`（24 个字段 + 15 个派生角色）；组件按角色表达意图，不写 RGB |
 | 尺寸权威 | **收敛中**：radius、滚动条、control height、control/field/list inset、**panel inset、icon-button 方盒、多行 field 垂直 inset、Large padding** 已跟随安装的 `ThemeMetrics`；renderer 一处都不读常量。剩下的是局部几何 `const` 与少数菜单高度估算 |
 | 运动权威 | ~~**分裂**：`ThemeMetrics::motion_*_ms` 是死字段（零消费方），实际时长是 `nana_ui_core::motion` 的 `const`~~ → **§7 已解决**：八个时长各成一个 `MotionRole`，`motion` 的 `const` 反过来读默认主题 |
@@ -60,12 +60,11 @@ Phase 0 的章节保留成**当时**的审计记录。不回头重写。那份�
                               install_theme_tokens
                               → AppContext::set_theme_tokens
                                           ▼
-   L1 CSS 子集 ─┐                 StyleModelRef  ← ThemeAppearance
-   L2 Vue props ─┼──► Semantics ──►  · theme_id / appearance
-   L3 Rust API ─┘   (WidgetKind/     · metrics : ThemeMetrics
-                     ButtonKind/     · palette : SemanticPalette
-                     ControlSize/    · titlebar: SemanticColor
-                     StatusTone…)            │
+   CSS 子集    ─┐                 StyleModelRef  ← ThemeAppearance
+                ├───► Semantics ──►  · theme_id / appearance
+   L3 Rust API ─┘   (ButtonKind/     · metrics : ThemeMetrics
+                     ControlSize/    · palette : SemanticPalette
+                     StatusTone…)    · titlebar: SemanticColor
                             │                │
                             ▼                ▼
                      NodeStyle           UiWorld.style_model
@@ -116,7 +115,6 @@ nana_ui_core::motion::{HOVER_COLOR, …} ─────► 组件动画
 | `StyleModelRef` | [style_model.rs](../../crates/nana-ui-core/src/style_model.rs) | appearance + metrics + palette + titlebar 的只读视图，`color(role)` 是 token 读取入口 | 由已安装的 `CompiledTheme` 提供 |
 | `ControlSemantics` | 同上 | size + button/card kind + status 的组合 | **保留**，是 recipe 的 selector |
 | `ControlSize` / `ButtonKind` / `CardKind` / `StatusTone` / `ToastTone` / `ValidationIntent` | [semantics.rs](../../crates/nana-ui-core/src/semantics.rs) | 组件意图枚举 | **保留**，Component Recipe 的 variant 轴 |
-| `WidgetKind` | [bridge/semantic.rs](../../crates/nana-ui-vue/src/bridge/semantic.rs) | L1/L2 tag/class → 控件类型 | **保留**，仅 Vue 适配层 |
 | `ThemeTokens` / `ThemeAppearanceExt` | [nana-ui/theme.rs](../../crates/nana-ui/src/theme.rs) | L3 宿主侧 adapter：直接装 `SemanticPalette` + `ThemeMetrics` + titlebar | **保留**（`Colors` 副本本轮已删，见 §1.5）；§7 起 `ThemeTokens` 是 `ThemeDefinition` 的颜色+尺寸投影，`with_backdrop` 按 `SurfaceTokens` 决定给哪个角色上 alpha |
 | `RadiusTier` | [theme.rs](../../crates/nana-ui-core/src/theme.rs) | 圆角档位意图（Xs/Sm/Md/Lg），由 `NodeStyle.radius` 携带、样式写入时对安装的 `ThemeMetrics` 解析 | **保留**：这是「组件说意图、主题给数值」在尺寸侧的第一个落点，其余 metrics 按同一形状推进 |
 | `ControlHeight` | [theme.rs](../../crates/nana-ui-core/src/theme.rs) | 控件高度意图：`Min(ControlSize)` / `Exact(ControlSize)`，由 `NodeStyle.control_height` 携带、样式写入时解析 | **保留**：`Min` / `Exact` 的区分以前藏在调用点写 `min_height` 还是 `height` 里，现在是被说出来的意图 |
@@ -130,15 +128,14 @@ nana_ui_core::motion::{HOVER_COLOR, …} ─────► 组件动画
 | `ComputedStyle` + `ResolvedStyle(Arc<ComputedStyle>, palette_epoch)` | [nana-ui-runtime](../../crates/nana-ui-runtime/src) | 继承解析结果 + 主题代 | **演进**为 #100 §6 的 `ResolvedStyle`（现在已经叫这个名字，但只覆盖继承与颜色，不覆盖 metrics/recipe） |
 | `StandardVisual` / `ComponentGeometry` | 同上 | 保留期「这是个什么控件 / 它的几何」 | **保留**，是 recipe 的 selector 与 layout 产物 |
 
-### 1.3 L1 / L2 / L3 默认样式来源
+### 1.3 默认样式来源
 
 | 层 | 默认样式从哪来 | 冲突点 |
 | --- | --- | --- |
 | **L3 Rust** | `view_components.rs` 的 `impl ComponentView`：按 `ButtonKind` 等语义选 `SemanticColorRole`，写进 `NodeStyle.interaction`；几何与其余颜色由 `world/geometry.rs` + `world/extraction.rs` 决定 | 同一控件的外观分散在三处：组件体（角色 + 状态）、extraction（`StandardVisual` 配色）、scene primitives（圆角/描边） |
-| **L2 NanaVue** | `packages/nanavue-components` 的 props → Semantics；`src/nana-controls.css` 仍有 532 行样式，含 `--lilia-*` / `--nana-*` 变量与 fallback 字面色（`#dfe2e7`、`#e2e2e2` 等） | CSS fallback 值与 `SemanticPalette` 是两份数字。`SEMANTICS.md` 已禁止独立 `#3867ff`，但 fallback 链还在 |
-| **L1 Vue/CSS** | [`css_map.rs`](../../crates/nana-ui-css/src/css_map.rs) 把 CSS 子集映射到 Layout；[`style.rs`](../../crates/nana-ui-css/src/style.rs) 只做 paint 解析；已知 token 名经 `SemanticColorRole::from_css_token_name` 进 Tokens，未知 `#hex` 只能当受限 paint hint | 规则已经写死且有测试，是目前最干净的一层 |
+| **CSS** | [`css_map.rs`](../../crates/nana-ui-css/src/css_map.rs) 把 CSS 子集映射到 Layout；[`style.rs`](../../crates/nana-ui-css/src/style.rs) 只做 paint 解析；已知 token 名经 `SemanticColorRole::from_css_token_name` 进 Tokens，未知 `#hex` 只能当受限 paint hint | 规则已经写死且有测试，是目前最干净的一层 |
 
-`from_css_token_name` 认得的名字就是 L1 的正式 token 表面：`background`/`surface`/`subtle`/`hover`/`active`/`selected*`/`border*`/`text`/`muted`/`faint`/`accent*`/`success`/`warning*`/`danger*`/`titlebar`/`on-media`。以及 `--nana-` 前缀与 `var()` 包裹。9 个代码 token 角色（`Keyword`/`Function`/…）**不在** L1 表面。只在 L3 语义高亮里用。
+`from_css_token_name` 认得的名字就是 CSS 的正式 token 表面：`background`/`surface`/`subtle`/`hover`/`active`/`selected*`/`border*`/`text`/`muted`/`faint`/`accent*`/`success`/`warning*`/`danger*`/`titlebar`/`on-media`。以及 `--nana-` 前缀与 `var()` 包裹。9 个代码 token 角色（`Keyword`/`Function`/…）**不在** CSS 表面。只在 L3 语义高亮里用。
 
 ### 1.4 审计发现
 
@@ -324,7 +321,7 @@ runtime crate 里 `const NAME: f32/u16/u64 = <数字>` 共 217 个（`ROW_HEIGHT
 - `SquareSize::{IconButton, Control(size), Keycap}`：icon button 默认走 `icon_button_size`，键帽走 `keycap.height`。`size()` 才换成 ControlSize。显式边长优先：节点写了 `width` / `height` 的那一轴，`square` 不写最小值（sidebar 20px 工具、应用给的 22px 关闭钮），意图不会把花掉的盒子撑回方盒。
 - `control_padding_y`：多行 TextArea 用 `Field` 做块轴 inset。单行 field 不写。避免撑开行盒。
 - `ThemeMetrics.large_control_padding_x`：`serde(default)` 仍是 `space::XXL`。旧 settings blob 能读。Large / Roomy 终于能被安装主题移动。
-- 工作区主区圆角改成 `RadiusTier::Lg`。L1 card 缺 CSS radius 时命名 `Md`。不再花 `UI_METRICS.radius_md`。
+- 工作区主区圆角改成 `RadiusTier::Lg`。不再花 `UI_METRICS.radius_md`。
 - extract / 菜单 / Select / TreeView / ReorderList 几何改读 `height_in` / `padding_x_in` 对安装值。
 
 钉住它们的测试：`an_installed_panel_padding_reaches_a_card_that_named_the_surface`、`an_installed_icon_button_size_reaches_the_square`、`an_installed_field_padding_reaches_a_textarea_block_inset`、`an_installed_roomy_padding_is_no_longer_a_spacing_constant`。
@@ -638,7 +635,7 @@ Theme Resolver  = retained StyleSystem 工作            ← 未成立：解析�
 ResolvedStyle   = Layout/Text/Paint 下游合同           ← 部分：ComputedStyle 只覆盖继承与颜色
 Renderer       != Theme resolver                       ← 成立（F8），除 scene 读 UI_METRICS（F1）
 Motion         != Theme runtime                        ← 成立：Motion IR 是唯一执行器；但 Theme 也没有 transition policy（F2） → §7 补上了 policy，执行器仍只有一个
-CSSOM          != Nana core                            ← 成立：CSS 解析只在 nana-ui-css（Vue 路径运行时用，L3 视图构建时用）
+CSSOM          != Nana core                            ← 成立：CSS 解析只在 nana-ui-css（`.vue` 编译器、`view!` 与 `css!` 构建时用）
 ```
 
 各层职责。本轮确认的说法：

@@ -71,7 +71,7 @@ let _session = NanaApplication::builder(identity)
     .start();
 ```
 
-样式、`@font-face`、`url()` 和 Vue 的 `@import` 写 `nana://res/ui/app.css`。开发期没有 manifest 时，同一套逻辑路径从 `loose_root` 读。安装版和便携版里，没有显式 base 的相对 `url()` 以 `runtime_resources` 为基准。开发与嵌入宿主仍以当前工作目录为基准。每个 pack 在第一次被查到时才打开。
+样式、`@font-face` 和 `url()` 写 `nana://res/ui/app.css`。开发期没有 manifest 时，同一套逻辑路径从 `loose_root` 读。安装版和便携版里，没有显式 base 的相对 `url()` 以 `runtime_resources` 为基准。开发与嵌入宿主仍以当前工作目录为基准。每个 pack 在第一次被查到时才打开。
 
 ## 发布前校验
 
@@ -86,7 +86,7 @@ nana-packager validate "out/app/Nana Fixture.app" --trust-key ed25519:… --run 
 
 CLI 还有 `package`、`keygen content|publisher`、`inspect`、`delta OLD NEW`、`macos-app`。`macos-app` 只生成一个没有资源包、没有 manifest 的 `.app`。
 
-还没有的：平台签名 adapter、安装包后端、可选自更新、打包校验里的真窗口 Early Splash / UiReady、StaticAppPlan 指纹、从 pack 读取 JS / Vue bundle、Android AssetManager、Linux FHS 路径、分页 TOC。
+还没有的：平台签名 adapter、安装包后端、可选自更新、打包校验里的真窗口 Early Splash / UiReady、StaticAppPlan 指纹、Android AssetManager、Linux FHS 路径、分页 TOC。
 
 字段、读取顺序和每一项检查在 [打包与分发](../../reference/packaging.md)。
 

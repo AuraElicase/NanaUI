@@ -21,7 +21,7 @@ NanaApplication::builder(ApplicationIdentity::new(
 ```
 
 - **默认关闭**：不调用 `.diagnostics(..)`（或直接使用裸 `run_runtime`）时诊断保持关闭，框架内所有埋点退化为一次 `0.5 ns` 的 `Relaxed` 原子读取。
-- **生命周期管理**：`builder.run(...)` 返回时会自动执行最终排空（drain）与 `sync_data`。如果应用自管事件循环（如 Vue 宿主或嵌入式宿主），请用 `let _session = builder.start();` 持有返回的 `ApplicationSession` 直到进程退出——切勿写成 `let _ = builder.start();`，否则会立即析构并关停诊断线程。
+- **生命周期管理**：`builder.run(...)` 返回时会自动执行最终排空（drain）与 `sync_data`。如果应用自管事件循环（如嵌入式宿主），请用 `let _session = builder.start();` 持有返回的 `ApplicationSession` 直到进程退出——切勿写成 `let _ = builder.start();`，否则会立即析构并关停诊断线程。
 - **目录解析容错**：当容器或特殊环境缺少 `HOME` / `LOCALAPPDATA` 导致平台目录解析失败时，不会阻断应用启动——此时向 `stderr` 打印一行提示，`session.paths()` 返回 `None`，诊断数据仅保留在内存环形缓冲中。
 
 ## 定义应用自有事件与指标

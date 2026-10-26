@@ -25,7 +25,7 @@ NanaApplication::builder(identity)
     .run::<RuntimeApplication<App>>(WindowDescriptor::new("App"))
 ```
 
-不经过 `NanaApplication::builder` 的宿主（如 Vue 宿主）可使用 `nana_ui::with_startup(StartupOptions::default().with_splash(spec), || run_runtime::<P>(settings))`。完整可运行演示与验收探针见 `crates/nana-ui/examples/startup-splash.rs`（传入 `--probe` 可在交接完成后输出结构化 JSON 计时记录并校验合同）。
+不经过 `NanaApplication::builder` 的宿主可使用 `nana_ui::with_startup(StartupOptions::default().with_splash(spec), || run_runtime::<P>(settings))`。完整可运行演示与验收探针见 `crates/nana-ui/examples/startup-splash.rs`（传入 `--probe` 可在交接完成后输出结构化 JSON 计时记录并校验合同）。
 
 ## 第一阶段：Early Splash 配置与平台实现
 
@@ -35,7 +35,7 @@ NanaApplication::builder(identity)
 | --- | --- |
 | `logo` | `SplashLogo::png(&'static [u8])`（内嵌静态 PNG）或 `SplashLogo::packaged("nana://res/…")`（从 `early-splash` 资源包读取）。编码大小上限 `1 MiB`，最长边上限 `1024 px`，解码后像素上限 `4 MiB`（启动前先校验 PNG 头，超限直接拒绝而不解码）。 |
 | `logo_size` | 独立 Splash 窗口与 Logo 内容框的逻辑像素尺寸（Logo 按比例缩放居中；独立 Splash 窗口不进任务栏、不抢焦点，仅跟随主窗口中心点与 DPI）。 |
-| `background` | `System`（取默认主题调色板在当前系统明暗下的背景色）、`Color(..)` 或 `Transparent`（仅画 Logo）。若应用自身主题不跟随系统明暗（例如 Vue 宿主默认 `Light`），请显式指定 `Color(..)` 以避免交接时底色跳变。 |
+| `background` | `System`（取默认主题调色板在当前系统明暗下的背景色）、`Color(..)` 或 `Transparent`（仅画 Logo）。若应用自身主题不跟随系统明暗，请显式指定 `Color(..)` 以避免交接时底色跳变。 |
 | `animation` | `None`、`FadeIn`（默认，淡入一次后保持）、`Pulse`（呼吸脉动）、`Rotate`（持续旋转）。 |
 
 ### 跨平台原生实现与交接方式
@@ -72,7 +72,6 @@ startup.cancel_takeover(ticket)?;    // 撤回接管请求并使旧 ticket 作�
 ```
 
 - **代际票据与目标帧确认**：调用 `cancel_takeover` 会使旧 `ticket` 作废（若接管帧已 present 则返回 `AlreadyHandedOff`；迟到的后台任务持旧票据调用会收到 `StaleTicket`）。`take_over` 会记录主窗口当前的 `flush` 序号——**只有在此之后完成 `flush` 且真正 `present` 成功的主窗口帧才算完成交接**（跳过的帧、失败的帧或设备重建前的旧帧均不算数）。
-- **Vue / JS 投影接口**：前端通过 `Nana.startup` 访问同一套状态机（`Nana.startup.deferTakeover()`、`Nana.startup.state`、`Nana.startup.takeOver()`、`Nana.startup.onChange(fn)`）。
 
 ## 启动线程并行化与着色器编译加速
 

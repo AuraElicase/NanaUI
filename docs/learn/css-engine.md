@@ -4,7 +4,7 @@ title: CSS 引擎：nana-ui-css
 
 # CSS 引擎：`nana-ui-css`
 
-本章深入 `nana-ui-css`：全框架唯一的 CSS 引擎，负责样式表解析、选择器匹配、级联排序，以及将命中的声明映射到 Style Model（`nana_ui_core::LayoutStyle`）。读完后你能搞懂：一份 CSS 从源码字符串到 `LayoutStyle` 字段的完整内部流水线（手写词法/切分 → 选择器匹配 → 级联排序 → 字段映射）；`@media`、`@import`、`@layer`、`@font-face`、`@keyframes`、`@container` 各自被编译成什么数据结构；为什么同一个引擎同时服务于 `view-codegen` 构建期与 Vue 运行期两个时机；以及 `tools/css-parity` 如何用 149 组测试夹具守住它与浏览器盒模型的一致性。
+本章深入 `nana-ui-css`：全框架唯一的 CSS 引擎，负责样式表解析、选择器匹配、级联排序，以及将命中的声明映射到 Style Model（`nana_ui_core::LayoutStyle`）。读完后你能搞懂：一份 CSS 从源码字符串到 `LayoutStyle` 字段的完整内部流水线（手写词法/切分 → 选择器匹配 → 级联排序 → 字段映射）；`@media`、`@import`、`@layer`、`@font-face`、`@keyframes`、`@container` 各自被编译成什么数据结构；为什么这个引擎只在 `view-codegen` 构建期运行；以及 `tools/css-parity` 如何用 149 组测试夹具守住它与浏览器盒模型的一致性。
 
 ## 职责与边界
 
@@ -18,12 +18,12 @@ title: CSS 引擎：nana-ui-css
 
 ## 依赖与邻居
 
-`crates/nana-ui-css/Cargo.toml` 的普通依赖只有 `nana-ui-core` 与 `serde_json`（`:14-15`），属于标准的第 2 层（L2）crate。全工作区只有两个直接消费方：
+`crates/nana-ui-css/Cargo.toml` 的普通依赖只有 `nana-ui-core` 与 `serde_json`（`:14-15`），属于标准的第 2 层 crate。框架内唯一的直接消费方是 `nana-ui-view-codegen`，另有一致性工具 `tools/css-parity` 直接依赖它：
 
 | 消费方 Crate | 消费时机 | 具体职责 |
 | --- | --- | --- |
 | `nana-ui-view-codegen`（`crates/nana-ui-view-codegen/Cargo.toml:11`） | **应用构建时** | 为 `view!`、`stylesheet!`、`css!` 与 `.vue` 解析并匹配类规则，编译为静态 `StylePatch` 数据，使 Rust L3 视图运行时零 CSS 解析开销 |
-| `nana-ui-vue`（`crates/nana-ui-vue/Cargo.toml:46`） | **应用运行时** | 为 Vue Custom Renderer 动态解析样式表并执行级联（同时再导出给 `tools/css-parity` 使用） |
+| `tools/css-parity`（`tools/css-parity/Cargo.toml:17`） | **一致性验证** | 将夹具中的 CSS 文本映射为 `LayoutStyle`，送入 Runtime 布局引擎比对几何盒 |
 
 ## 关键类型与数据
 
@@ -78,7 +78,7 @@ title: CSS 引擎：nana-ui-css
 
 ### 4. 属性映射表：`LayoutStyleCss`（`css_map.rs`）
 
-`crates/nana-ui-css/src/css_map.rs`（约 9,100 行）将 CSS 属性键值对写入 `nana_ui_core::LayoutStyle`（通过 `LayoutStyleCss` trait，`:1862`）。颜色解析走 `CssPaintColor`（`style.rs:30`），保留 `Oklch` / `Hsv` / `Srgb` 精度并通过 `map_css_color_for_tokens`（`:635`）执行 L1 语义色令牌策略。宿主工具类（如 `gap-sm`、`p-*`、`w-full`、`flex-1`、`rounded*`）集中隔离在 `crates/nana-ui-css/src/shell_contract.rs` 中，与标准 CSS 语法解析保持清晰分界。
+`crates/nana-ui-css/src/css_map.rs`（约 9,100 行）将 CSS 属性键值对写入 `nana_ui_core::LayoutStyle`（通过 `LayoutStyleCss` trait，`:1862`）。颜色解析走 `CssPaintColor`（`style.rs:30`），保留 `Oklch` / `Hsv` / `Srgb` 精度并通过 `map_css_color_for_tokens`（`:635`）执行语义色令牌策略。宿主工具类（如 `gap-sm`、`p-*`、`w-full`、`flex-1`、`rounded*`）集中隔离在 `crates/nana-ui-css/src/shell_contract.rs` 中，与标准 CSS 语法解析保持清晰分界。
 
 ### 5. 各 `@` 规则与伪类的编译去向
 
@@ -92,10 +92,9 @@ title: CSS 引擎：nana-ui-css
 | `@container` | `ContainerQuery`（容器名、查询轴与半开区间集合） | `plan_container_queries` 切分为至多 `17` 个尺寸桶，Runtime 按容器实测尺寸选桶 |
 | `:hover` / `:focus` / `:active` | `InteractiveStyleRule`（`:focus-visible` 映射为 `Focus`） | 静态级联不应用，交由宿主交互状态层按需叠加 |
 
-### 6. 两个消费时机：构建时 vs 运行时
+### 6. 消费时机：只在构建时
 
 - **构建时（`crates/nana-ui-view-codegen/src/style.rs:239`）**：调用 `parse_stylesheet_full` 解析 `<style>`、`stylesheet!` 或 `css!`，在空 `LayoutStyle` 上应用声明并 diff 出被修改的字段，生成携带级联优先级 `Rank` 的静态 `StylePatch`（`@container` 规则同步附带桶索引）。因此 Rust L3 视图在运行期直接按位组合补丁，**零 CSS 解析开销**。
-- **运行时（`crates/nana-ui-vue/src/bridge/cascade.rs:763`）**：Vue 适配器在样式表加载时解析一次并缓存规则表与 `RuleIndex`，元素重算样式时现场组装 `MatchContext` 调用 `rebuild_layout_style_indexed`。
 
 ## 与 `tools/css-parity` 的一致性验证
 
@@ -105,7 +104,7 @@ title: CSS 引擎：nana-ui-css
 cargo run -p nana-css-parity -- compare
 ```
 
-每个夹具给出一棵带样式的节点树、视口尺寸与期望的盒子坐标（默认容差 `2.0 px`），通过 `nana_ui_vue::measure_layout` 调用与生产环境完全相同的 `RuntimeLayoutEngine::layout_style_tree` 进行比对。
+每个夹具给出一棵带样式的节点树、视口尺寸与期望的盒子坐标（默认容差 `2.0 px`），通过 `measure::measure_layout`（`tools/css-parity/src/measure.rs:90`）调用与生产环境完全相同的 `RuntimeLayoutEngine::layout_style_tree` 进行比对。
 
 ## 代码地图
 
@@ -116,15 +115,14 @@ cargo run -p nana-css-parity -- compare
 | `crates/nana-ui-css/src/css_at_rule.rs` | `@media`、`@supports`、`@import`、`@layer`、`@font-face`、`@keyframes` 解析与求值 |
 | `crates/nana-ui-css/src/css_container.rs` | `@container` 查询解析、半开区间运算与尺寸桶规划（`plan_container_queries`） |
 | `crates/nana-ui-css/src/css_interactive.rs` | 解析期分桶：交互伪类、生成伪元素、关键帧与过渡规则 |
-| `crates/nana-ui-css/src/style.rs` | `CssPaintColor` 颜色解析与 L1 语义色 token 映射策略 |
+| `crates/nana-ui-css/src/style.rs` | `CssPaintColor` 颜色解析与语义色 token 映射策略 |
 | `crates/nana-ui-css/src/css_motion.rs` | `transition` 简写语法解析 |
 | `crates/nana-ui-css/src/shell_contract.rs` | 宿主内置工具类映射（`gap-sm` 等） |
 | `crates/nana-ui-view-codegen/src/style.rs` | 构建期消费者：将类规则编译为静态 `StylePatch` |
-| `crates/nana-ui-vue/src/bridge/cascade.rs` | 运行期消费者：Vue 节点级联与样式重建 |
 | `tools/css-parity/` | 149 组 CSS 盒模型一致性夹具与比对 CLI |
 
 ## 延伸阅读
 
 - [核心合同](/learn/core-contracts)：`LayoutStyle` 与 Style Model 三层定义（属性映射的目的地）
 - [布局引擎](/learn/runtime-layout)：拿到 `LayoutStyle` 后 Flexbox / Grid 如何求解几何
-- [三种作者入口](/learn/authoring-paths) · [作者工具链](/learn/toolchain)：构建期与运行期两条样式路径如何汇合
+- [作者入口](/learn/authoring-paths) · [作者工具链](/learn/toolchain)：`view!` 与 `.vue` 的样式如何在构建期编译为 Style Model 数据

@@ -13,7 +13,7 @@ title: 文本引擎：nana-text
 - **阶段一：字体层（#90）**：负责字体注册、世代管理、字体面匹配、可变字体轴坐标解析与基于 `cmap` 覆盖率的缺字回退。
 - **阶段二：OpenType 整形（#91）**：负责字素簇/脚本/双向文本（BiDi）分段、HarfRust 整形与有界整形缓存（`ShapeCache`）。
 - **阶段三：段落行布局（#92）**：负责单行标签快路径、基于 UAX #14 断行机会的贪心折行、逐行 BiDi 视觉重排、行盒度量、对齐、省略号截断与有界布局缓存（`LayoutCache`）。`NativeTextEngine` 将这三段统一收在 `TextEngine::layout` 一个入口后面。
-- **阶段四至八：保留句柄与唯一产品权威（#95 / #99）**：`UiWorld` 的文本节点通过 `TextLayoutStore` 世代句柄保留排版结果，Rust L3、`.vue` 与 Vue 运行时共用同一台进程级引擎测量，并由 `nana-ui` 的 `NanaRenderer::text` 直接绘制保留的 `TextLayout`。
+- **阶段四至八：保留句柄与唯一产品权威（#95 / #99）**：`UiWorld` 的文本节点通过 `TextLayoutStore` 世代句柄保留排版结果，Rust L3 与 `.vue` 共用同一台进程级引擎测量，并由 `nana-ui` 的 `NanaRenderer::text` 直接绘制保留的 `TextLayout`。
 - **底层算法封装与词汇借用**：`cosmic-text` 与 `cryoglyph` 已从依赖图中彻底移除（由 `scripts/check-engine-boundary.py` 守门）；底层标准库（`fontdb`、`skrifa`、`harfrust`、`unicode-bidi`、`unicode-linebreak`）严格封闭在各自的私有子模块内，绝不泄漏到公开签名中；12 个排版枚举（如 `FontVariationSetting`、`LineBreakSpec`、`WritingModeSpec` 等，`lib.rs:30-37`）直接从 `nana-ui-core` 白名单导入，不重复定义。
 - **光标与编辑是 IR 上的纯推导**：光标定位、命中测试与选区矩形是已完成 `TextLayout` 上的纯函数推导（`crates/nana-text/src/edit.rs`），不污染引擎缓存状态。
 

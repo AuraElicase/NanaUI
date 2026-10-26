@@ -57,7 +57,7 @@ Windows 原生拖动／缩放保留系统标题栏、Aero Snap 和系统边框�
 自绘标题栏通过队列投递启动原生拖动，使当前输入回调先返回，避免整个拖动期间
 占用应用回调。`host_managed_drag(true)` 仍是可选替代行为，不是维持渲染的必要开关。
 
-关闭 / 最小化 / 最大化是窗口动作。控件发出语义（`WindowChromeAction`）。Scene host 去执行。关闭与系统关闭一样只向程序发 `CloseRequested`。由程序决定是否关闭。普通控件拿不到窗口句柄。L1 CSS `-webkit-app-region` / `app-region` 不是拖拽合同：任意盒写 `drag` 也不会变成 caption。
+关闭 / 最小化 / 最大化是窗口动作。控件发出语义（`WindowChromeAction`）。Scene host 去执行。关闭与系统关闭一样只向程序发 `CloseRequested`。由程序决定是否关闭。普通控件拿不到窗口句柄。CSS `-webkit-app-region` / `app-region` 不是拖拽合同：任意盒写 `drag` 也不会变成 caption。
 
 `WindowChromeState` 绑在明确的 `WindowId` 上。单窗口可用默认入口（只认收到的第一扇窗）。多窗口在等待 `WindowService::create_window` 获得 handle 后。用其 `id()` 调用 `for_window` 各建一份。关窗后不会自动接管别的窗口。
 
@@ -250,9 +250,9 @@ Scene Host                       →  唯一负责 transaction Commit
 2. 标题栏空白处发出 `WindowChromeAction::Drag`：macOS 在按下时即交给 AppKit。且 `currentEvent` 必须仍是左键按下或拖动。否则不拖。其他平台按下后移动超过 4px 才发出。Scene host 调用 `nana_window::drag_custom_title_bar`。非 macOS 失败再 `winit::drag_window`。原生拖窗接管按键释放。拖动开始后 host 立即补发一次 `PointerPhase::Cancel`。结束按键掩码、Runtime 按压/捕获、标题栏手势与程序侧手势。`WindowService::begin_drag` 同样适用。
 3. 无系统 caption、可缩放、未最大化、非全屏时。客户区最外 `RESIZE_HANDLE_SIZE`（8px）走 `LiveFrameResize`（macOS `setFrame`、Windows `SetWindowPos`）。不进入系统嵌套 size-move 循环。系统 caption 窗口不叠第二套缩放命中。
 
-`WindowCommand::Drag` 是「用当前在飞的手势移动这扇窗」的唯一信号：标题栏拖动和消费应用自定的手势（例如整窗中键拖动）发的是同一个。host 按按下的键分派。默认主键走上面的原生拖窗。设置 `WindowDescriptor::host_managed_drag = true` 的窗口也把主键交给 `LiveFrameMove`。因此不会进入 Windows 的嵌套移动循环。宿主事件循环可以继续驱动其他窗口。其他键仍走 `LiveFrameMove`（macOS `setFrameOrigin`、Windows `SetWindowPos`）。因为平台拖窗只认主键。AppKit 直接拒绝。Win32 的 caption 移动循环只有主键释放才收尾。窗口会粘在光标上。host 自管的移动在该键释放、新的主键按下、Esc（还原原位）或失焦时结束。结束时补发一次 `PointerPhase::Cancel`。全屏窗口不移动。最大化窗口先还原。还原后的窗口放回光标下、光标在宽度上的比例和到顶边的距离与按下时一致（与系统拖窗相同。不会跳回它原来的还原位置）。期间指针事件在到达文档前被吃掉。移动本身不改 drawable 因而不重绘。原生模式保留系统贴边等平台拖动能力。host-managed 模式只保留 NanaUI 的持续事件循环与指针跟随。该路径只在 macOS 与 Windows 上存在。其他平台仍回落原生拖窗。Vue 用 `Nana.windows.create({ hostManagedDrag: true })` 打开同样的选项。
+`WindowCommand::Drag` 是「用当前在飞的手势移动这扇窗」的唯一信号：标题栏拖动和消费应用自定的手势（例如整窗中键拖动）发的是同一个。host 按按下的键分派。默认主键走上面的原生拖窗。设置 `WindowDescriptor::host_managed_drag = true` 的窗口也把主键交给 `LiveFrameMove`。因此不会进入 Windows 的嵌套移动循环。宿主事件循环可以继续驱动其他窗口。其他键仍走 `LiveFrameMove`（macOS `setFrameOrigin`、Windows `SetWindowPos`）。因为平台拖窗只认主键。AppKit 直接拒绝。Win32 的 caption 移动循环只有主键释放才收尾。窗口会粘在光标上。host 自管的移动在该键释放、新的主键按下、Esc（还原原位）或失焦时结束。结束时补发一次 `PointerPhase::Cancel`。全屏窗口不移动。最大化窗口先还原。还原后的窗口放回光标下、光标在宽度上的比例和到顶边的距离与按下时一致（与系统拖窗相同。不会跳回它原来的还原位置）。期间指针事件在到达文档前被吃掉。移动本身不改 drawable 因而不重绘。原生模式保留系统贴边等平台拖动能力。host-managed 模式只保留 NanaUI 的持续事件循环与指针跟随。该路径只在 macOS 与 Windows 上存在。其他平台仍回落原生拖窗。
 
-窗口光标还会消费 L1 CSS `cursor` 的常用关键字：`default`、`pointer`、`text`、`move`、`grab`、`grabbing`、`not-allowed`、`crosshair`、`help`、`wait`、`progress`、`zoom-in`、`zoom-out`、`none`。该属性按 CSS 继承。未知关键字和 `url()` 光标 fail-closed。`WindowCursor` 程序化入口与上述关键字对齐。并多一个 `Automatic` 以恢复 Runtime/CSS 选择。光标优先级低于窗口边框缩放和分割/停靠/工作区 resize 手柄。高于未声明 cursor 时 TextInput 的 I 型光标。`none` 只隐藏系统光标。不加载自定义图片。
+窗口光标还会消费 CSS `cursor` 的常用关键字：`default`、`pointer`、`text`、`move`、`grab`、`grabbing`、`not-allowed`、`crosshair`、`help`、`wait`、`progress`、`zoom-in`、`zoom-out`、`none`。该属性按 CSS 继承。未知关键字和 `url()` 光标 fail-closed。`WindowCursor` 程序化入口与上述关键字对齐。并多一个 `Automatic` 以恢复 Runtime/CSS 选择。光标优先级低于窗口边框缩放和分割/停靠/工作区 resize 手柄。高于未声明 cursor 时 TextInput 的 I 型光标。`none` 只隐藏系统光标。不加载自定义图片。
 
 ### 实时缩放
 
@@ -270,7 +270,7 @@ macOS 的几何快照及自管移动开始时通过 `nana-window::native_window_
 
 IME：焦点进可编辑字段时 `Window::request_ime_update(Enable)` 一次（hint / purpose、caret 盒、非密码的 surrounding text）。之后 caret 或 surrounding 变化走 `Update`，和上次应用的状态相同就不发。换了字段（owner）或 purpose 才开新会话：先 `Disable` 再 `Enable`。同一字段一时给不出 caret 或 surrounding（编辑后、新排版之前）沿用会话里的上一个值，不拆会话：拆会话会取消正在组的字。只有多出一种能力才重开。离开可编辑字段后 `Disable`。原生窗口失焦时 Runtime 取消预编辑、保留字段焦点；宿主记下预编辑重置，得焦也重置，不能只忘记已应用状态再把 `AlreadyEnabled` 降为 `Update`。同一轮内失焦再得焦也必须保留重置边沿。有编辑字段时恢复会话，无编辑字段时不启用；不按 key-window 状态持续屏蔽 IME，避免候选窗妨碍编辑。macOS 只对当前 key 窗口取消原生转换：旧窗口的失焦消息出队时，新窗口可能已激活，不能通过失焦客户端取消当前转换会话；旧窗口再次得焦时必须重置，且在重置或禁用、替换会话之前，由 `nana-window::discard_native_ime_preedit` 调用文本客户端的 `unmarkText`：先清除视图的 marked range，再由 winit 取消输入上下文的 `discardMarkedText` 并回到 Ground，且不提交旧文字；不能只取消上下文而保留客户端 marked range；仅清 winit 的 marked-text 缓冲不足以取消简体拼音的旧预编辑。同一编辑字段及能力未变时保留 AppKit 的活动输入上下文，通过 Update 同步；不要在 unmarkText 后再次关闭重开同一会话。Windows 先在 winit 的锁外对输入上下文发 `ImmNotifyIME(NI_COMPOSITIONSTR, CPS_CANCEL)` 再 Disable：winit 持窗口状态锁调 `ImmAssociateContextEx`，IMM 结束活动组字时同步回送 `WM_IME_ENDCOMPOSITION`，窗口过程再取同一把锁会卡死（上游修复见 [winit#4798](https://github.com/rust-windowing/winit/pull/4798)，升级到含该修复的版本后可去掉这一步）。其他后端通过 Disable / Enable 取消原生预编辑。路由时宿主只记下 Runtime 要的状态，到这一轮的 `about_to_wait` 末尾才发给窗口：按键和组字消息正在处理时调 IME 会重入窗口过程（winit 的 Win32 后端持有窗口状态锁调 IMM，IMM 同步回送的消息再取同一把锁就会卡死）。winit 的空 `Ime::Preedit`（不论 cursor 是否为 None）表示清除预编辑，桥接必须发 `CompositionInput::End`；不能发空 Update，否则 Runtime 会重新进入空组字并阻断全选等编辑操作。平台附在 Command 或 Control（不含 AltGr）快捷键上的文字不能作为输入插入，即使快捷键操作因选区已满足而无变化；仅抑制同序号附带文字，保留按键本身的应用路由。原生请求或启用数据校验失败时通过 `HostFailure::ImeDispatch` 报告，并撤销已应用缓存，不能静默认定会话已经启用。候选框相对 caret。不相对系统非客户区。AccessKit 增量更新与视觉几何同一套 layout box。composition 期间不得出现悬空 `parent_and_index`。
 
-透明 Alpha（`settings.transparent`）强制 `MaterialEffect::Transparent`。不会改试 Mica / Acrylic。失败只能回不透明实色。并带 `MaterialFallback`。真机入口：`vue-hosted-acceptance --chrome-probe`、`--input-probe`、`--hybrid --windows`。以及 `nana-ui` 的 `transparent-window` 示例。
+透明 Alpha（`settings.transparent`）强制 `MaterialEffect::Transparent`。不会改试 Mica / Acrylic。失败只能回不透明实色。并带 `MaterialFallback`。真机入口：`nana-ui` 的 `transparent-window` 示例。
 
 ## 菜单栏
 
@@ -428,7 +428,7 @@ fn build(&mut self, window: &mut ApplicationWindow, context: &RuntimeProgramCont
 }
 ```
 
-程序自选 `WindowId` + `WindowCommand::Open` 仍只是框架适配器（Vue、Dock）的通道。普通应用不需要它来区分窗口种类。
+程序自选 `WindowId` + `WindowCommand::Open` 仍只是框架适配器（Dock）的通道。普通应用不需要它来区分窗口种类。
 
 操作返回 `WindowRequest<T>`。支持 `.await`、工作线程 `.wait()` 和窗口线程非阻塞的 `try_take()`。在窗口线程调用 `.wait()` 返回 `HostThreadWait`。不阻塞事件循环。待处理窗口请求最多 1024 个。队列满时立即返回 `QueueFull`。调用方可等待已提交请求完成后重试。关闭后的 handle 返回 `WindowClosed`。宿主释放后返回 `HostStopped`。身份及世代检查防止旧请求作用于重新创建的窗口。
 
@@ -550,19 +550,19 @@ commands.push(WindowCommand::SetContentAspectRatio { id, ratio: Some(9.0 / 16.0)
 - `WindowDescriptor` 新增 `tag`。显式结构体初始化补 `tag: None` 或使用 `..Default::default()`。
 - `WindowDescriptor` 新增 `restoration_scope`。显式结构体初始化补 `RestorationPath::root()`。多 profile / workspace / window 应传入各自稳定的 scope path。或使用 `..Default::default()`。
 - 普通应用用 `WindowService` / `WindowHandle` 替代自行分配窗口 ID 和提交 `WindowCommand`。
-- `WindowCommand` 从平台 crate 根导出移入 `nana_ui_platform::host`。仅供 Vue、Dock、chrome 等框架适配器使用。适配器提交的批次仍在宿主 commit 时进入同一个 WindowManager。
+- `WindowCommand` 从平台 crate 根导出移入 `nana_ui_platform::host`。仅供 Dock、chrome 等框架适配器使用。适配器提交的批次仍在宿主 commit 时进入同一个 WindowManager。
 - 主窗口不再具有隐式退出特权。需要“关主窗退出”的产品应显式返回退出更新。
 - `WindowCommand::SetFullscreen` 的参数从 `bool` 改为 `Option<FullscreenRequest>`：`None` 退出全屏。`Some` 进入。删除 `SetSimpleFullscreen`。macOS 不切 Space 的全屏改为 `FullscreenRequest { mode: FullscreenMode::Simple, display: None }`。`WindowHandle::set_simple_fullscreen` 一并删除。
 - `WindowLevel` 从 `nana_ui::window_service` 下沉到 `nana_ui_platform`。`nana_ui` 再导出。全屏和置顶的有效值走 `WindowEvent::ModeChanged`。不要自己记一份请求镜像。
 - LiliaBilibili `app/presentation.rs` 仍按 `SetFullscreen { fullscreen: bool }` 编译。下次升级 pin 时改为 `fullscreen: on.then(FullscreenRequest::default)`。并在 `WindowEvent` match 中处理 `ModeChanged`。
 
-窗口几何可以交给框架：`WindowDescriptor::persist_key("main")` 会在创建前从版本化 `ViewStateStore` 恢复位置 / 尺寸 / 最大化。并在移动、缩放后异步合并写回。全屏、最小化。以及 Win32 最小化常见的 `-32000` 原点都不写。目录由宿主选择：`app_data_dir("YourApp")` 得到平台数据目录。再 `FileStore::open` 注入 `run_runtime_with_store`（落成 `local-storage.bin`）。不注入则全程内存。进程退出即丢。Dock 布局进入 `ViewStateStore`。Appearance 进入独立 Settings namespace。旧 `nana.dock.*`、`nana.appearance.*` 只做一次迁移。JS `localStorage` 与 `Nana.storage` 无法访问这些 framework namespace。
+窗口几何可以交给框架：`WindowDescriptor::persist_key("main")` 会在创建前从版本化 `ViewStateStore` 恢复位置 / 尺寸 / 最大化。并在移动、缩放后异步合并写回。全屏、最小化。以及 Win32 最小化常见的 `-32000` 原点都不写。目录由宿主选择：`app_data_dir("YourApp")` 得到平台数据目录。再 `FileStore::open` 注入 `run_runtime_with_store`（落成 `local-storage.bin`）。不注入则全程内存。进程退出即丢。Dock 布局进入 `ViewStateStore`。Appearance 进入独立 Settings namespace。旧 `nana.dock.*`、`nana.appearance.*` 只做一次迁移。
 
 ### 独立透明工具窗
 
 `WindowDescriptor::focus_on_show = false` 让显示不抢占前台焦点：首次显示和之后 `set_visible(true)` 再次显示都适用。macOS 以 `orderFront` 显示而不成为 key window（winit 的显示会调用 `makeKeyAndOrderFront`）。Windows 与其他平台仍走 winit 显示路径。默认 `true` 保持原行为。工具层可组合 `transparent = true`、`always_on_top = true` 与非模态 `WindowRole::Tool`。属于某个主窗的工具窗设置 `parent`。在 Windows 上由父窗 own。点击父窗不会把工具窗压到后面。不需要 `DesktopShell` 才能使用边缘缩放。
 
-`WindowService::create_window` 在完整就绪并发送 `WindowEvent::Ready` 后完成凭据。创建失败通过凭据返回错误。窗口若在处理 `Ready` 时被应用关闭。凭据返回 `WindowClosed`。服务从 `1 << 63` 起分配窗口 ID。并跳过仍存活的程序自选 ID（例如 Dock 浮动窗口的哈希 ID）。Vue 等宿主批次适配器另通过 `OpenFailed { id, error }` 通知失败。撤销创建中状态。`SetMousePassthrough { id, enabled }` 关闭整窗原生命中测试（Windows `WS_EX_TRANSPARENT`）。overlay 收不到指针。也无法按命中自己收回。`SetMousePassthroughForward { id, enabled }` 是宿主持有的 Forward 模式：OS 穿透保持开启。宿主在窗口线程采样全局指针（Windows `GetCursorPos`、macOS `mouseLocationOutsideOfEventStream`、Linux X11 `XQueryPointer`。Wayland 当前采不到则无法自动收回）。换算为 overlay 逻辑坐标后走现有 `pointer_target`。命中 `pointer-events` 非 `none` 的不透明/可交互内容时 `set_cursor_hittest(true)` 收回。离开该区域或窗口后再穿透。采样到的 Move 仍可喂 overlay hover/光标。按下必须在收回之后才由本窗接收。底层窗口在穿透期间可点。控件拿不到 HWND。`WindowHandle::set_mouse_passthrough_mode` 对应 `MousePassthroughMode::{Off, Passthrough, Forward}`。每次命中测试变化都回报 `MousePassthroughChanged { id, enabled, result }`（`enabled` 为当前 OS 穿透是否开启。未知窗口也回报失败）。应用收到成功确认后才显示锁定状态。并保留另一窗口的解除穿透入口。异形窗 / per-pixel alpha OS 形状不是这条合同。
+`WindowService::create_window` 在完整就绪并发送 `WindowEvent::Ready` 后完成凭据。创建失败通过凭据返回错误。窗口若在处理 `Ready` 时被应用关闭。凭据返回 `WindowClosed`。服务从 `1 << 63` 起分配窗口 ID。并跳过仍存活的程序自选 ID（例如 Dock 浮动窗口的哈希 ID）。宿主批次适配器另通过 `OpenFailed { id, error }` 通知失败。撤销创建中状态。`SetMousePassthrough { id, enabled }` 关闭整窗原生命中测试（Windows `WS_EX_TRANSPARENT`）。overlay 收不到指针。也无法按命中自己收回。`SetMousePassthroughForward { id, enabled }` 是宿主持有的 Forward 模式：OS 穿透保持开启。宿主在窗口线程采样全局指针（Windows `GetCursorPos`、macOS `mouseLocationOutsideOfEventStream`、Linux X11 `XQueryPointer`。Wayland 当前采不到则无法自动收回）。换算为 overlay 逻辑坐标后走现有 `pointer_target`。命中 `pointer-events` 非 `none` 的不透明/可交互内容时 `set_cursor_hittest(true)` 收回。离开该区域或窗口后再穿透。采样到的 Move 仍可喂 overlay hover/光标。按下必须在收回之后才由本窗接收。底层窗口在穿透期间可点。控件拿不到 HWND。`WindowHandle::set_mouse_passthrough_mode` 对应 `MousePassthroughMode::{Off, Passthrough, Forward}`。每次命中测试变化都回报 `MousePassthroughChanged { id, enabled, result }`（`enabled` 为当前 OS 穿透是否开启。未知窗口也回报失败）。应用收到成功确认后才显示锁定状态。并保留另一窗口的解除穿透入口。异形窗 / per-pixel alpha OS 形状不是这条合同。
 
 `RuntimeProgram::window_material_mode_for(id)` 与 `appearance_backdrop_opacity_for(id)` 默认调用现有全局方法。允许主窗和透明工具窗分别配置。宿主在创建、外观变化、Surface 恢复时都按目标窗口调用。背景透明不改变前景文字的不透明度。纯透明窗口的内容背景由应用 Runtime 节点绘制。
 
@@ -659,12 +659,3 @@ Surface 创建、验证或材质 alpha 配置失败只暂停对应窗口。并�
 创建描述符的尺寸必须有限且为正。位置必须有限。模态窗口必须指定父窗口。`WindowService::create_window` 对这些错误直接完成为 `InvalidParameter`。不入队、不唤醒宿主。standalone/embedded 的初始窗口同样在分配原生资源前校验。并且不能指定父窗口。有父窗口的窗口通过服务创建。
 
 宿主直接销毁 `EmbeddedRuntime` 时。会先关闭请求队列并完成等待中的请求。再销毁应用状态。因此应用析构可以等待正在等待窗口请求的工作线程。未处理和后续请求均得到 `HostStopped`。`embedded-window-lifecycle --probe-host-stop` 覆盖这一退出顺序。
-
-隔离窗口（`Nana.windows.create({ isolation: "isolated" })`。见 [Vue](vue.md#多窗口与-javascript-隔离)）的脚本在 `initialize_window` 里、窗口显示之前于它自己的 JavaScript 上下文中执行。执行失败按创建失败回滚。打开方收到 `window-open-failed`。关闭时 `window-closed` 同时送到它自己的上下文和打开方的上下文。卸载完成后。若这是该上下文里最后一扇窗口。上下文与其私有 `localStorage` 随即销毁。
-
-Vue 主窗口也遵循独立关闭语义：原生关闭确认后释放对应文档、JS 定时器和监听器。其他 Vue 窗口及共享引擎继续存活。主窗口 DOM 操作在调用时解析存活文档。不会因引擎保留宿主操作而延长已关闭文档的生命周期。最后一个窗口的关闭通知仍会在引擎销毁前派发。材质和背景透明度按目标窗口读取。
-
-
-`vue-hosted-acceptance --window-lifecycle-probe` 使用实际 Vue 组件验证主窗口独立关闭：两个 Surface 首先 present。主窗口关闭后检查 Vue 卸载钩子、文档和 JS 上下文释放。再确认附加窗口继续 present。最后检查其关闭通知与缓存释放。探针会将附加窗口置前。避免启动时被主窗口完全遮挡而等待不到首帧。加 `--isolated` 时附加窗口以隔离模式打开：两个 Surface 仍在同一 GPU generation 上 present。并在主窗口关闭前核对隔离窗口自己的上下文执行了应用、读不到主上下文写入的 `localStorage`、定时器照常触发。
-
-Vue 窗口关闭时会卸载该窗口通过 `createApp().mount()` 或窗口 handle 挂载的应用。清理节点身份缓存、样式、动画、定时器及监听器。原生文档已先行销毁。因此同步卸载范围中的文档操作只完成 JS 侧清理。业务需要持久化数据时应在关闭请求阶段处理。普通存活窗口的卸载和宿主错误语义保持正常。

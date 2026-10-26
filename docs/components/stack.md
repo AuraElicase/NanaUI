@@ -54,7 +54,7 @@ widget(Stack::row(8.0)).children((
 
 ## 布局字段
 
-`Stack::from_layout` 承接已经解析好的 `LayoutStyle`，默认可点，和 Vue 布局盒一致。`.with_layout` 就地改布局字段。
+`Stack::from_layout` 承接已经解析好的 `LayoutStyle`，默认可点。`.with_layout` 就地改布局字段。
 
 `.gap`、`.align`、`.justify`、`.width`、`.height`、`.grow`、`.shrink`、`.padding` 改预设上的对应项。`.surface` 写语义背景。`.outline` 要同时给出边框色和宽度，缺一则不画边框。
 
@@ -79,7 +79,7 @@ widget(Stack::row(8.0)).children((
 | `Stack::bar(gap)` | — | 水平占满整行，自己不伸展 |
 | `Stack::spacer()` | — | 零宽 flex-grow。基准宽度是 0，否则会把兄弟挤出去 |
 | `Stack::overlay_layer()` | — | 绝对定位，铺满已经定位的父级，溢出裁剪，指针事件关掉。Rust 预设默认不参与命中 |
-| `Stack::from_layout` | `LayoutStyle` | 已经解析好的布局。默认可点，和 Vue 布局盒一致 |
+| `Stack::from_layout` | `LayoutStyle` | 已经解析好的布局。默认可点 |
 | `.with_layout` | — | 就地改布局字段 |
 | `.gap` | — | 改预设上的对应项。间距不为 0 时直接构造 |
 | `.align` | — | 改预设上的对应项 |

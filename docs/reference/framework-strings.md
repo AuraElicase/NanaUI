@@ -17,17 +17,6 @@ context.set_framework_strings(strings)?;
 
 除按键名调用 `.set(key, value)` 外，也可以直接读写结构体字段（如 `strings.window_close = "Close".into()`）。建议在挂载视图前设置；若在运行期动态切换语言并调用 `set_framework_strings`，已挂载的内置复合控件会自动重新装配并重新投影为新文案。
 
-### Vue 路径
-
-在前端脚本中调用宿主接口 `setFrameworkStrings` 并传入「键 → 文本」映射对象（返回值为未识别的未知键列表）：
-
-```js
-const unknown = __nanaHost.call("setFrameworkStrings", [{
-  "window.close": "Close",
-  "dialog.confirm": "OK",
-}]);
-```
-
 ## 带参数的模板键与键名前缀
 
 部分条目包含花括号占位符（如 `diff.reject_hunk` 默认为 `"拒绝块{hunk}"`，`calendar.month` 默认为 `"{month}月"`，`toast.percent` 默认为 `"{percent}%"`）。替换多语言译文时请保留同名花括号参数（例如 `"Reject hunk {hunk}"`）。

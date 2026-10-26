@@ -38,7 +38,7 @@ NanaUI 的默认视觉面向桌面生产力软件设计：同时提供深色与�
 
 界面表面按层级递进：面板是一层基础表面，输入框与未激活项退后一层，悬停（hover）、按下（pressed）与选中（selected）依次抬升；文本相应分为主要（primary）、次要（muted）与弱化（faint）三档。输入框聚焦时增加一圈中性描边而不改变底色；校验错误优先使用危险色（danger）。卡片默认不画描边，需要区分层级时使用阴影；选中态卡片使用柔和的选中底色，不用强调色包边。
 
-Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-shadow`（仅 outset）已接入渲染管线：inset 阴影使用内阴影 SDF 绘制；当容器带有子节点时，自动通过目标合成组（dest group）以 overlay 方式叠在内容之上，而不是把外阴影画进盒子里充数。
+CSS 的单层 `box-shadow`（支持 outset 与 inset）与 `text-shadow`（仅 outset）已接入渲染管线：inset 阴影使用内阴影 SDF 绘制；当容器带有子节点时，自动通过目标合成组（dest group）以 overlay 方式叠在内容之上，而不是把外阴影画进盒子里充数。
 
 ### 主题定义与高对比度覆盖
 
@@ -60,8 +60,6 @@ Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-sh
 
 1. **进程级常驻字体**：调用 `register_host_font_bytes` 或 `register_host_font_file`，注册后的字体保留至进程结束。
 2. **可卸载的作用域字体（皮肤 / 主题包）**：使用 `HostFontScope`，其 `add_bytes`、`add_file`、`add_face` 方法各返回一份带字体族名的 `HostFontRegistration`；调用 `clear()` 或 drop 该 scope 即可一次性撤回其注册的全部字体（单份注册也可用 `register_host_font_source*` 配合 `unregister_host_font` 手动管理）。撤回字体会推进一次新的字体代际（`FontGeneration`）：凡是用过这些字体的文本会在下一次 `flush` 时自动重新测量，旧代际的字形位图不会再被采样。
-
-在 CSS 路径中，`@font-face` 在解析样式表时只收集规则；`url(...)` 的实际加载与字体注册发生在宿主适配器（`scene-view`）的 `inject_stylesheet` 阶段。CSS `font-family`、字重与斜体样式会映射到刚载入的字体面（face）；损坏的 `src` 会直接丢弃该字体面，不会静默拿系统字体顶替。
 
 ### OpenType 整形、中日文标点挤压与竖排
 
@@ -116,7 +114,7 @@ Vue CSS 路径下的单层 `box-shadow`（支持 outset 与 inset）与 `text-sh
 ## 动效与浮层交互细节
 
 - **壳层过渡**：Runtime 侧栏折叠与分组展开时长均为 `260 ms`，缓动曲线为 `EaseInOutCubic`。只有动画进行中才请求帧，中途反向操作会从当前进度平滑接续。
-- **Motion IR 分流**：Vue 路径的 `@keyframes` 同样编译进 `nana-ui-core::motion` 的 Motion IR。`opacity` 与 `transform` 走合成器 overlay；`color` 与 `filter` 走 Paint 类 CPU 插值；`width`、`height` 与逐轴的 `font-variation-settings` 走 Layout 类轨道（可变字体轴每帧生成真实的字形变体、重新整形并栅格化，绝不用几何缩放伪造）。
+- **Motion IR 分流**：`nana-ui-core::motion` 的 Motion IR 按属性分流。`opacity` 与 `transform` 走合成器 overlay；`color` 与 `filter` 走 Paint 类 CPU 插值；`width`、`height` 与逐轴的 `font-variation-settings` 走 Layout 类轨道（可变字体轴每帧生成真实的字形变体、重新整形并栅格化，绝不用几何缩放伪造）。
 - **浮层与拖拽阈值**：菜单默认与触发控件的起始边对齐，靠近窗口边缘时由框架自动收回视口内，应用无需手算坐标。可拖拽的 Tab 与列表在按下后移动超过 `4 px` 才进入拖拽态，未越过阈值仍视为普通点击选中。命令面板（`CommandPalette`）标准宽度为 `680 px`，打开后输入框自动获取焦点。
 
 ### 通知操作按钮

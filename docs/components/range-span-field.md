@@ -111,7 +111,7 @@ Arc::make_mut(&mut field.style.layout).height = Some(LengthSpec::Px(180.0));
 | --- | --- |
 | 无 | 两个滑块节点由控件自己装配 |
 
-控件没有登记到组件注册表，Vue / L3 文档里没有对应标签；只在 Rust 和 `view!` 里用。
+控件没有登记到组件注册表，没有对应标签；只在 Rust 和 `view!` 里用。
 
 ## 参见
 

@@ -268,7 +268,7 @@ Phase 0 没有产品生产者。这是设计如此。当时防止它们变成摆
 `nana_text::font` 输出的是**可供 Phase 2 shaping 消费的确定性字体选择**。不做 shaping。
 
 ```text
-TextStyle / CSS font-* / NanaVue props
+TextStyle / CSS font-*
         ↓ FontQuery::from_style
 FontQuery { families, weight, stretch, style, language }
         ↓ FontSystem::select（按 query 缓存，代际变化即清空）
@@ -299,7 +299,7 @@ FontAssignment { range, font, reason }          FontInstance { key: FontInstance
 ### 匹配
 
 CSS Fonts 4 §5.2：先 `font-stretch`。再 `font-style`。再 `font-weight`。每步只保留最优距离的
-face。Issue 草案写的是 style → weight → stretch。这里按 CSS 规范的顺序。因为 CSS / Rust / NanaVue
+face。Issue 草案写的是 style → weight → stretch。这里按 CSS 规范的顺序。因为 CSS / Rust
 最终都转成同一个 `FontQuery`。和浏览器不一致的顺序会让同一份样式在两处选出不同 face。
 
 - 可变 face 以**范围**参与：`wght` 轴给 weight 区间。`wdth` 轴给 stretch 区间。`ital` / `slnt`
@@ -807,7 +807,7 @@ RTL 贴右、竖排贴顶、竖排 rtl 贴底。都是一个滚动量）。单�
 - **横向滚动交给画笔当平移**：多行编辑器的几何另带 `scroll`（`EditorFrame::scroll_x`）。见「编辑器的横向滚动也是平移」。
 - **指针**：页面点经 `text_point` 转回文本空间再做命中。与画几何是同一个换算。
 - **IME**：宿主交给输入法的 cursor area 是编辑器画出来的光标（`ComponentGeometry::TextInput`
-  的 `caret`）。原生宿主与 Vue 宿主同一个来源。竖排时就是横跨一列的那条横条。候选窗贴着正在
+  的 `caret`）。竖排时就是横跨一列的那条横条。候选窗贴着正在
   编辑的字。而不是贴着整个输入框。
 - **无障碍**：accesskit 的 `TextRun` 按 inline 起点带 `text_direction`：横排 LTR / RTL。竖排
   `TopToBottom`。竖排 rtl `BottomToTop`。值是逻辑顺序的文字。逐字符的位置与宽度（`character_positions`
@@ -829,7 +829,7 @@ RTL 贴右、竖排贴顶、竖排 rtl 贴底。都是一个滚动量）。单�
   从 0 往负走（CSSOM 的负 `scrollLeft`）。滚轮、`scroll_to` 与夹取和其他容器走同一条路。记录的
   偏移是**请求**（组件字段投影、滚轮、minimap 写入）。画笔与命中在 `editor_frame` 里把它夹进值的
   范围、换成行空间的沿列 / 跨列两个量。聚焦的多行编辑器再按横排同样的规则把光标滚进视口。
-  `UiWorld::scroll_offset` 报的是这个画出来的位置。所以滚轮、脚本读到的就是屏幕上的位置：打字后
+  `UiWorld::scroll_offset` 报的是这个画出来的位置。所以滚轮和应用读到的就是屏幕上的位置：打字后
   滚轮从光标所在处接着滚。值变短后第一格就动。视口钉住比的是请求（`scroll_request`）。
 - **不画的东西**：行号栏、minimap、缩进 / 列参考线、行尾诊断文案、补全 / hover / 签名浮窗这些
   按横排行摆的代码编辑器装饰没有诚实的竖排版本。竖排编辑器里一律不画。而不是横着画在列上。
@@ -999,7 +999,7 @@ renderer。#99 才把产品路径的段落换成 `TextLayout`）和可编辑路�
 ### 语言作用域与外部度量（#260）
 
 文本按什么语言整形，优先级如下：
-1. 节点自己命名的语言：`MutationQueue::set_language`，相当于 HTML 的 `lang`。Vue 宿主把元素的 `lang` 属性投影到这里。
+1. 节点自己命名的语言：`MutationQueue::set_language`，相当于 HTML 的 `lang`。
 2. 继承自子树的语言。
 3. 应用的默认语言：`AppContext::set_default_language`。
 4. 文本引擎的兜底提示：`NativeTextEngine::set_language`。
@@ -1165,7 +1165,7 @@ locale 作用域有三层：
 格式化走 `LocaleFormatter` 这个后端无关的接口：
 - 运行时默认装的是 `IcuFormatter`（`icu` 特性，默认开启），用 ICU4X 和它编译进来的 CLDR 数据：复数规则、数字、日期和时间；
 - 关掉这个特性时用 `PlainFormatter`：英语复数规则、`.` 作小数点的数字、ISO 日期；
-- `nana-ui`、`nana-ui-scene` 和 `nana-ui-vue` 显式转发 `icu`，并在默认 feature 中保留它；`nana-ui` / `nana-ui-vue` 的 `full` 也包含它。应用可以使用 `default-features = false` 并只启用实际组件，以省去 ICU 格式化和 CLDR 数据。工作区内部的 runtime/scene 依赖不继承默认 feature，避免重新开启它；`nana-text` 的 Unicode 属性和 URL 处理所需的 ICU 不受此开关影响。
+- `nana-ui` 和 `nana-ui-scene` 显式转发 `icu`，并在默认 feature 中保留它；`nana-ui` 的 `full` 也包含它。应用可以使用 `default-features = false` 并只启用实际组件，以省去 ICU 格式化和 CLDR 数据。工作区内部的 runtime/scene 依赖不继承默认 feature，避免重新开启它；`nana-text` 的 Unicode 属性和 URL 处理所需的 ICU 不受此开关影响。
 - 应用也可以装自己的实现：`UiWorld::set_locale_formatter`。ICU 的类型不出这个接口。
 - 货币目前写成「代码 + 按 locale 分组的两位小数」（`USD 1,234.50`）。ICU4X 的货币格式化还在 experimental 里，没有用。
 
@@ -1201,8 +1201,6 @@ locale 作用域有三层：
 - Rust：`Text::localized`，视图里的 `t(...)`，以及 `El::locale(...)` 声明子树的 locale 作用域
   （见 [响应式视图](reactive-view.md)）。
 - `.vue` 编译成 Rust 视图和 `view!`：`<T id="files" :count="n" />`，以及元素上的 `locale="ar"`。
-- Vue + JS 宿主：同样写 `<T>` 和 `locale`，目录和应用、窗口的 locale 用 `Nana.i18n` 设置
-  （见 [宿主边界](vue-host.md#本地化文字)）。
 
 `lang` 一直只管塑形语言；消息、格式和方向跟 locale 走。
 
@@ -1457,7 +1455,6 @@ editor_text_bytes_compared      同步几何时为确认文本未变而逐字节
 | --- | --- |
 | 1. 内部 fixture | `EditSession` + `EditorGeometry` 覆盖 Latin 输入删除、拼音组字提交、日文目标段、韩文字母组字、emoji / 肤色修饰删除、组合记号移动、连字内 caret、阿拉伯混排视觉移动 / affinity / 选区、换行多行选区、点击与拖选、组字中失焦、取消组字、剪贴板 |
 | 2–4. TextInput / TextArea / 编辑器 | **语义委托 `nana-text`**：grapheme / word / 行导航、选区合法性、IME 删除周边（组字中保留 preedit 替换的选区）与宿主上报的 surrounding text 窗口（`clip_ime_surrounding`：放得下的选区完整上报，预算两侧互补）都走 `nana-text` 的规则；**存储是 `EditSession`**（#182，见「编辑器的存储：EditSession」）：Runtime 的 `SetTextInput` / `SetTextSelection` / `ReplaceTextSelection` / `SetIme` 都落在会话上，编辑计数直接取自会话（随下一趟文本 pass 上报）。**几何按宿主分阶段**：`NanaTextEngineShaper`（能绘制 retained layout 的引擎宿主）为每个编辑器节点保留一份 `EditorGeometry`，`text_position` / `text_caret_position` / `text_highlights` / 新增的 `TextShaper::text_hit_at_point` 与编辑器度量都由它回答；上下移动与翻页在支持点命中的宿主上用「caret 位置 + 末行位置 + 一次点命中」解析（目标 y 取相邻行内侧 0.5px，行高不同也不跳行），不再对位置探针二分。几何按节点保留：同一份文本快照的探针批次（`with_text_probes`）只同步一次；批次外的单个探针（上下移动、左右视觉移动、点击、每趟度量）凭文本的**印记**（`TextStamp`）确认几何仍是这份文本，一个字节都不比较（`EditorGeometry::sync_stamped`；没有印记的匿名文本才退回逐段比较，`editor_text_bytes_compared` 记下比较了多少）；探针一律按 presentation 的约束提问（`text_input_presentation_constraints`）——问别的约束等于在问编辑器没有被绘制的那份几何，保留几何的宿主还会为一个节点摆两份布局；编辑器的 shape 不经过 Runtime 的内容寻址 layout cache（`retains_measurement`）；`TextShaper::horizontal_offset` 按单行独立排版，不碰编辑器几何；#99 之后产品 `NanaTextShaper` 就是 `NanaTextEngineShaper` 的壳，测量与绘制同源，编辑器几何因此也走这条路 |
-| 5. Vue / NanaVue | 同一 `TextInputState` / `ImeComposition` 写入合同，经 Runtime 落到会话；读回的是会话的视图 |
 
 引擎宿主的保证（`crates/nana-ui-scene/tests/editable_text_node.rs`。走 `RuntimeDocument::flush`）：
 caret / 选区移动整帧 `layouts_created == 0` 且引擎 shape miss 不变。在 30 段 TextArea 中间打一个字只新建
@@ -1540,7 +1537,7 @@ caret / 选区移动整帧 `layouts_created == 0` 且引擎 shape miss 不变。
 3. **产品合同保留、换成共享值。** `TextValue`（`nana_text::SharedText`）是 Arc 缓冲 + 印记：
    `TextContent.value`、`TextInputState.value`、`display_value`、a11y 的 `value`、场景 Text 图元、
    `TextChanged.value` 都是它。克隆只是引用计数。`UiWorld::text_input` / `ime` 返回借用会话的
-   `TextInputView` / `ImeView`。`TextInputState` / `ImeComposition` 是写入合同（Vue / JS、应用、
+   `TextInputView` / `ImeView`。`TextInputState` / `ImeComposition` 是写入合同（应用、
    `SetTextInput` / `SetIme`）与拥有型快照。
 
 组件（`TextInput` / `TextArea` / …）的 `state` 是会话文本的**共享句柄**：组件编辑写出新值。投影时
@@ -1755,7 +1752,6 @@ entry 的颜色指纹把 span 颜色和 `rich.revision` 合在一起：改描边
 - 竖排段落的装饰线；`text-decoration-style`（波浪、双线）、`text-decoration-thickness`。
 - 颜色位图字形（无轮廓的 emoji）的阴影和描边：只从轮廓栅格，这类字形画不出阴影。
 - 画笔自排的回退路径（保留 layout 的对齐盒对不上时）不读塑形 span，按节点样式排。
-- Vue 没有 `RichText` 的值，`rich-text` 标签只造纯文本。
 
 ## 性能与许可证收口（#99）
 
@@ -1781,8 +1777,7 @@ cutover 之后仍有几条路径不经过 `nana-text` 量字。或者量了但�
 | Markdown 几何（`UiWorld::markdown_layout`） | 逐字素从 Runtime 的 `GlyphCache` 取宽度求和，没见过的字按 0.6em 估算；画的时候同一 span 同一行却整段交给引擎排 | 每个 span 的每一行交给引擎整形一次（`text_engine_shaper::grapheme_advances`），逐字素 advance 取相邻 caret 之差。gallery 富文本页里粗体 span 之后的空隙因此消失：标题 run 61.20 → 44.90 px |
 | SelectableRichText 的框高、拖选与高亮 | 框高按 `\n` 行数写死，命中每个字素固定 12 px，高亮盖满内容框 | 框高由 Runtime 按框宽测量，命中与高亮都读节点保留的那份 `TextLayout`（10db26c1e） |
 | 单字符快路径（`NanaTextEngineShaper::shape_cached`） | 见过的字符直接返回缓存 advance、`ascent: None`：同一个 “A” 冷缓存 ascent 13.57、热缓存退回 0.8em 基线 | 删除。引擎自己的 layout cache 已经回答重复字符串；`GlyphCache` 只剩不带引擎的测试 shaper 用 |
-| 不带 `scene-view` 的 nana-ui-vue | `MeasureTextShaper`（em 宽度）：同一份 Vue 文档按 feature 换测量后端 | 始终用进程级引擎（`nana-ui` 无 GPU 部分成为必选依赖） |
-| `RuntimeLayoutEngine::layout_style_tree`（Vue 预绘制回退、css-parity） | 写死 `MeasureTextShaper` | 调用方传 shaper，Vue 传 `NanaTextShaper` |
+| `RuntimeLayoutEngine::layout_style_tree`（css-parity） | 写死 `MeasureTextShaper` | 调用方传 shaper |
 
 行为测试在 `crates/nana-ui/tests/rich_text_measurement.rs` 与 `nana_text.rs` 的
 `a_measurement_does_not_depend_on_what_was_measured_before`。各自在旧实现上 A/B 过（旧实现分别
@@ -2546,7 +2541,7 @@ text_prepare_nodes_considered / skipped / culled
   重新解析。CSS `translate` 也一样吸附：quad、图标和行框本来就各自取整。只有文字 x、
   路径网格和纹理不取整。现在都在同一个整像素上。
 - **吸附到物理像素。还是保留小数。** 逻辑值保留小数。呈现值吸附。Runtime 的
-  `ScrollOffset`、hit test、无障碍边界和 JS `scrollLeft` 都不变：触控板慢速滚动时。一次
+  `ScrollOffset`、hit test 和无障碍边界都不变：触控板慢速滚动时。一次
   增量不到半像素。吸附逻辑值会把它吞掉。命中与画面相差不到半个设备像素。和 quad 自己的
   边缘取整是同一量级。
 - **动画中和静止后是否不同。** 没有区别。始终吸附。Runtime 没有平滑滚动或惯性动画。惯性
@@ -2737,7 +2732,7 @@ aliased 模式会把字形吸到整像素。跟不上四分之一像素的亚像
   resolve。`set_subpixel_text` 切换时丢掉保留的 batch。
 - 谁来开：hosted 宿主按窗口 surface 的 alpha 模式与 `SubpixelOrder::system()` 每帧决定。
   自己持有 surface、直接嵌 `SceneWgpuPainter` 的宿主（只开 `gpu` feature）调用同一个
-  公开的 `SceneWgpuPainter::set_subpixel_text`。离屏截图（devtools、Vue `scene-view`）不开。
+  公开的 `SceneWgpuPainter::set_subpixel_text`。离屏截图（devtools）不开。
   保持灰度。
 
 ### 验证
@@ -3001,7 +2996,7 @@ grep -c '^name = "cosmic-text"$' Cargo.lock   # 0
 ```
 
 Phase 4 起 `nana-ui-runtime` 依赖 `nana-text`（保留文本节点与句柄）。#99 起 `nana-ui` 的测量与
-绘制都经过它。`nana-ui-web-api` 的 Canvas2D 也是。全工作区的同一条断言：
+绘制都经过它。全工作区的同一条断言：
 
 ```bash
 cargo tree --workspace --locked --edges normal | grep -ci cosmic   # 0

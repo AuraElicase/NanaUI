@@ -1,6 +1,6 @@
 # 架构总览
 
-本板块面向**应用作者**，建立开发 NanaUI 桌面产品所需的核心心智模型。如果你需要查阅 crate 之间的完整边界合同，请见 [架构合同](../reference/architecture.md)；如果你想深入 28 个 crate 的内部源码与数据流，请进入 [架构学习](/learn/)。
+本板块面向**应用作者**，建立开发 NanaUI 桌面产品所需的核心心智模型。如果你需要查阅 crate 之间的完整边界合同，请见 [架构合同](../reference/architecture.md)；如果你想深入各个 crate 的内部源码与数据流，请进入 [架构学习](/learn/)。
 
 ## 一条唯一的产品路径
 
@@ -17,7 +17,7 @@ UiScene          与图形后端无关的保留绘制图
 宿主 Surface     应用持有的 Window / Device / Queue
 ```
 
-Rust 的 `view!` 宏、函数式视图以及 Vue 3 Custom Renderer 写的都是同一棵 `UiWorld`——它们是不同的作者入口，而不是第二棵树或第二套绘制器。CSS 解析与级联也只有 `nana-ui-css` 一处实现：Vue 路径在运行时调用它，而 `view!` 的 `<style>`、`stylesheet!` 与 `css!` 在构建时调用它并编译为 Style Model 数据。
+Rust 的 `view!` 宏、函数式视图以及 `.vue` 方言写的都是同一棵 `UiWorld`——它们是不同的作者入口，而不是第二棵树或第二套绘制器。CSS 解析与级联也只有 `nana-ui-css` 一处实现：`.vue` 的 `<style>`、`stylesheet!` 与 `css!` 在构建时调用它并编译为 Style Model 数据。
 
 应用持有业务状态、路由以及每个区域里的具体内容；框架提供控件语义、布局求解、命中测试、焦点/IME、无障碍增量投影，以及将场景绘制进宿主 Surface 的管线。
 
@@ -70,6 +70,6 @@ NanaUI 不提供整窗浏览器 DOM、内置业务路由栈或服务端渲染。
   </a>
   <a class="next-step" href="/learn/">
     <p class="next-step-link">架构学习（深入源码）</p>
-    <p class="next-step-caption">按 28 个 crate 与子系统拆解框架内部实现与数据流。</p>
+    <p class="next-step-caption">按 crate 与子系统拆解框架内部实现与数据流。</p>
   </a>
 </div>

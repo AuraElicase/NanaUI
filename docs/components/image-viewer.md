@@ -4,8 +4,6 @@
 
 控件表里没有 `<ImageViewer>`。
 
-Vue 的 `nana-image-viewer` 只做投影，不建控件，关闭由宿主负责。
-
 ## 基本用法
 
 `ImageViewer::new(content)` 的内容是 `ImageViewerContent`：`None`、`Child(id)`、`HostTexture(槽名)` 或 `CustomRender`。

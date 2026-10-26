@@ -44,7 +44,7 @@ let card = Stack::column(7.0)
 如果发现主内容区没有撑开、或者底部状态栏/输入框没有贴到窗口底边，几乎都是因为本该使用 `Stack::fill_column` 的容器写成了随内容收缩的 `Stack::column`。
 :::
 
-Rust 预设的 `Stack` 容器默认不参与指针命中测试（`pointer_events: false`），不会拦截下层点击；而承接 Vue 布局盒的 `Stack::from_layout` 默认可命中。
+Rust 预设的 `Stack` 容器默认不参与指针命中测试（`pointer_events: false`），不会拦截下层点击；而承接已解析 `LayoutStyle` 的 `Stack::from_layout` 默认可命中。
 
 ## 节点样式：`NodeStyle` 与边框规则
 

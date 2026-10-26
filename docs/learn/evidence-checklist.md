@@ -18,7 +18,7 @@ cargo metadata --format-version 1 --no-deps | ConvertFrom-Json
 # 读法：遍历每个成员包的 dependencies[]，凡 path 落在 crates/ 内且 kind 为空（normal）的即一条普通依赖边
 ```
 
-**当前读数**：`crates/` 内共有 **77 条普通依赖边**（28 个成员 crate 之间 76 条 + `nana-ui → nana-icons-tabler` 1 条），**全部严格前向**。核心主线：`nana-ui-core` 仅依赖 `nana-diagnostics`；`nana-ui-runtime` 依赖 `{core, text, charts, input, view-macros, view-schema, diagnostics}`；`nana-ui-scene` 依赖 `{runtime, core, text(可选 benchmark), charts, diagnostics}`；`nana-ui` 依赖 `{scene, runtime, core, …}`。没有任何一条低层指回高层的普通边。仅用于测试宿主的 6 组 `dev-dependencies` 例外已单独列于 [模块与分层](/learn/modules-and-layers#dev-边与例外)，不进入产品二进制。
+**当前读数**：`crates/` 内共有 **55 条普通依赖边**（24 个成员 crate 之间 54 条 + `nana-ui → nana-icons-tabler` 1 条），**全部严格前向**。核心主线：`nana-ui-core` 仅依赖 `nana-diagnostics`；`nana-ui-runtime` 依赖 `{core, text, charts, input, view-macros, view-schema, diagnostics}`；`nana-ui-scene` 依赖 `{runtime, core, text(可选 benchmark), charts, diagnostics}`；`nana-ui` 依赖 `{scene, runtime, core, …}`。没有任何一条低层指回高层的普通边。仅用于测试宿主的 4 组 `dev-dependencies` 例外已单独列于 [模块与分层](/learn/modules-and-layers#dev-边与例外)，不进入产品二进制。
 
 ### A2. 四个 UI 主线 crate 均不依赖 CSS 引擎
 
@@ -26,7 +26,7 @@ cargo metadata --format-version 1 --no-deps | ConvertFrom-Json
 rg "nana-ui-css" crates/nana-ui-core/Cargo.toml crates/nana-ui-runtime/Cargo.toml crates/nana-ui-scene/Cargo.toml crates/nana-ui/Cargo.toml
 ```
 
-**当前读数**：`0` 命中。`nana-ui-css` 的消费者仅有 `nana-ui-view-codegen`（构建期）与 `nana-ui-vue`（运行期），详见 B1。
+**当前读数**：`0` 命中。`nana-ui-css` 在 `crates/` 内的消费者仅有 `nana-ui-view-codegen`（构建期），详见 B1。
 
 ## B. 唯一权威实现清单
 
@@ -35,7 +35,7 @@ rg "nana-ui-css" crates/nana-ui-core/Cargo.toml crates/nana-ui-runtime/Cargo.tom
 ```powershell
 cargo tree -p nana-ui-css --depth 1                          # css -> core + serde_json，无保留树依赖
 rg -i "selector|cascade" crates/nana-ui-runtime/src -g '!tests'  # 命中均为注释/文档/ICU selectordinal
-rg "nana_ui_css" crates/*/src                                # 仅 view-codegen（构建期）与 vue（运行期）
+rg "nana_ui_css" crates/*/src                                # 仅 view-codegen（构建期）
 ```
 
 **当前读数**：`crates/nana-ui-runtime/src/view/style.rs:8-9` 模块文档写明 `"No CSS is parsed and no selector is matched at run time, and this crate has no CSS in it"`；`nana-ui-core` 无样式表解析器、选择器匹配或级联实现（仅在 `box_layout.rs` / `geometry.rs` / `style_model.rs:341` 中提供单值枚举关键字解析、`calc()` AST 与 `--nana-*` 语义色令牌名映射）；`nana-ui-scene` 仅一处基准测试注释；`nana-ui` 为 `0` 命中。
@@ -48,18 +48,9 @@ rg "pub fn route_input" crates                               # 唯一定义：cr
 rg "route_input|route_shaped" crates -g '!*tests*'           # 各宿主全部汇入 context.route_input
 ```
 
-**当前读数**：`route_input` 的唯一实现在 `crates/nana-ui-runtime/src/framework/input.rs:397`（`impl AppContext`）；`nana-ui-vue` 的 `route_input`（`crates/nana-ui-vue/src/host/input_projection.rs:386`）只是 DOM 投影包装，内部在第 `:430` 行调用 `context.route_input`（`hosted_adapter.rs:468/:1813` 同理）；`nana-ui-devtools` 调用 `route_shaped`（`crates/nana-ui-devtools/src/agent/runtime.rs:123`）→ 内部在 `crates/nana-ui-runtime/src/framework/input/headless.rs:126` 仍然调用 `context.route_input`，不存在任何旁路路由。
+**当前读数**：`route_input` 的唯一实现在 `crates/nana-ui-runtime/src/framework/input.rs:397`（`impl AppContext`）；`nana-ui-devtools` 调用 `route_shaped`（`crates/nana-ui-devtools/src/agent/runtime.rs:123`）→ 内部在 `crates/nana-ui-runtime/src/framework/input/headless.rs:126` 仍然调用 `context.route_input`，不存在任何旁路路由。
 
-### B3. Vue / JS 宿主不建第二棵树、不建第二个绘制器
-
-```powershell
-rg "PendingHostOps" crates/nana-ui-vue/src/tree.rs           # :220，宿主操作队列即 runtime 的 UiMutation 队列
-rg "SceneWgpuPainter|scene_paint" crates/nana-ui-vue/src     # 仅文档引用，无独立绘制管线
-```
-
-**当前读数**：`crates/nana-ui-vue/src/tree.rs:220` 的 `PendingHostOps` 底层即 Runtime 的 `MutationQueue`；`tree.rs:206-218` 中 `VueRuntime` 直接 `Deref` 到 `UiWorld`；`crates/nana-ui-vue/src/hosted_adapter.rs:966`（`VueRuntimeProgram` 文档）写明进入 `run_runtime` 与 `SceneWgpuPainter`；`bridge.rs:9-19` 的 `MessageBridge` 仅作级联投影索引。
-
-### B4. 文本引擎唯一、GPU 后端唯一
+### B3. 文本引擎唯一、GPU 后端唯一
 
 ```powershell
 rg "cosmic_text|cryoglyph" crates/nana-text/src              # 仅 lib.rs:25 文档声明本身
@@ -67,14 +58,14 @@ rg "nana_gpu::__framework" crates                            # __framework 仅�
 python3 scripts/check-engine-boundary.py                     # 自动化守门脚本
 ```
 
-**当前读数**：`crates/nana-text/src/lib.rs:25` 仅有一处陈述该禁令本身的模块注释（`"No cosmic_text or cryoglyph identifier appears under src/"`）；GPU 侧以 WGPU 为唯一后端，公开签名中的 `wgpu::*` 仅允许在 `wgpu-interop` feature 下出现在白名单中的五个 crate 内，由 `scripts/check-engine-boundary.py` 强制校验通过。
+**当前读数**：`crates/nana-text/src/lib.rs:25` 仅有一处陈述该禁令本身的模块注释（`"No cosmic_text or cryoglyph identifier appears under src/"`）；GPU 侧以 WGPU 为唯一后端，公开签名中的 `wgpu::*` 仅允许在 `wgpu-interop` feature 下出现在白名单中的四个 crate 内，由 `scripts/check-engine-boundary.py` 强制校验通过。
 
 ## C. 帧路径关键不变量锚点
 
 | 架构断言 | 源码锚点位置 | 核对要点 |
 | --- | --- | --- |
-| `PendingHostOps` 在帧边界原子提交 | `crates/nana-ui-scene/src/runtime_document.rs:109`（`flush`） | 有界 8-pass 收敛，布局、提取、命中与无障碍共享同一 `layout_generation`（`:28`） |
-| 滚动不改写 Runtime 布局盒 | `crates/nana-ui-runtime/src/world/mutation.rs:2758`（`scroll_to_clamped`） | 仅更新 `scroll_offset` 与命中滚动偏移，`LayoutBox` 保持不变；`LayoutBoxStore` 仅为绘制后投影 |
+| 变更在帧边界原子提交 | `crates/nana-ui-scene/src/runtime_document.rs:109`（`flush`） | 有界 8-pass 收敛，布局、提取、命中与无障碍共享同一 `layout_generation`（`:28`） |
+| 滚动不改写 Runtime 布局盒 | `crates/nana-ui-runtime/src/world/mutation.rs:2758`（`scroll_to_clamped`） | 仅更新 `scroll_offset` 与命中滚动偏移，`LayoutBox` 保持不变 |
 | 单一 `Device` / `Queue`，跨代际资源拒绝 | `crates/nana-gpu/src/context.rs:19`（`DeviceGeneration`）、`:715`（`check_device`） | 设备丢失粘性记录首次原因，旧代际纹理或目标在入口即返回 `DeviceMismatch` |
 | 产品呈现路径无 CPU 回读 | `crates/nana-ui-devtools/src/offscreen.rs`（Agent 会话） | CPU 回读仅存在于 devtools 离屏快照；`run_runtime` 的 `present` 路径绝不经过它 |
 | 帧路径零字符串格式化、零文件 I/O | `crates/nana-diagnostics/src/framework.rs:2` | `event!` / `metric!` 均基于静态描述符，ID 只增不改 |
@@ -90,5 +81,5 @@ rg "fn redraw" crates/nana-ui/src/scene_host/present.rs      # pub(super) fn red
 ## 接着读
 
 - [合同与不变量](/learn/contracts-and-invariants)：九条核心合同的设计缘由与违反后果
-- [模块与分层](/learn/modules-and-layers)：77 条普通依赖边全量清单与 dev 边说明
-- [28 crate 覆盖矩阵](/learn/coverage-matrix)：每个 crate 的四要素速查表
+- [模块与分层](/learn/modules-and-layers)：55 条普通依赖边全量清单与 dev 边说明
+- [24 crate 覆盖矩阵](/learn/coverage-matrix)：每个 crate 的四要素速查表

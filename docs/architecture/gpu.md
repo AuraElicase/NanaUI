@@ -10,7 +10,7 @@
 
 ## 默认路径：从 `HostTexture` 到 `GpuTextureView` 节点
 
-90% 以上的场景都走这条默认路径：先把画面画到一张可采样纹理（`GpuTexture`）上，再作为 `GpuTextureView`（模板标签 `<Texture>`，Vue 为 `NanaGpu` / `<nana-gpu>`）挂进界面树。
+90% 以上的场景都走这条默认路径：先把画面画到一张可采样纹理（`GpuTexture`）上，再作为 `GpuTextureView`（模板标签 `<Texture>`）挂进界面树。
 
 :::api
 

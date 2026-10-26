@@ -8,9 +8,6 @@
 | --- | --- | --- |
 | 新的桌面界面 | `nana-ui`（feature `hosted`） | `nana_ui::runtime`、`ApplicationState`、`RuntimeApplication`、`NanaApplication::builder` / `run_runtime` |
 | 窗口设置 / 输入类型 | 通常经 `nana-ui` 再导出；需要时直接 `nana-ui-platform`（输入合同本身在 `nana-ui-input`） | `WindowDescriptor`、`WindowHandle`、`CanonicalInputEvent`、`InputPayload`、`InputEndpoint`、`HostServices` |
-| Vue 宿主 | `nana-ui-vue` + `nana-js-v8` | `nana_ui_vue::prelude`（`VueRuntimeProgram::run`） |
-| Vue 控件 | `@nanaui/nanavue-components` | `NanaButton` 等 |
-| Vue renderer | `@nanaui/nanavue-runtime` | `createApp()` |
 
 不要直接依赖 `nana-ui-devtools`、`nana-css-parity` 来画产品界面。前者是无头调试。后者是 CSS 对照测试。
 
@@ -19,7 +16,7 @@
 长期 conformance 矩阵与可重复命令见 [Issue 243 输入 conformance](input-conformance.md)。
 
 所有输入只有一种形态：`CanonicalInputEvent`（`nana-ui-input`。经 `nana-ui-platform` 和
-`nana-ui` 再导出）。原生窗口、Vue、devtools、Android 和测试都在自己的边界把原生事件降级成
+`nana-ui` 再导出）。原生窗口、devtools、Android 和测试都在自己的边界把原生事件降级成
 它一次。之后只走一条路由：
 
 ```text
@@ -118,8 +115,6 @@ Android、XR 与 accessibility provider 的设备验收。
 
 `ActionDescriptor` 只有一个。定义在 Runtime（`nana_ui::runtime`。`nana_ui` 再导出同一个类型）：keymap 读 `id` / `enabled` / `when`。命令面板另外读 `label` / `category` / `keywords`。只绑快捷键的宿主用 `ActionDescriptor::new(id)`。要进面板的用 `ActionDescriptor::labeled(id, label)`。`ActionRegistry` 同样只有一个。按注册顺序保序。`search` / `available` 供面板检索。
 
-Vue 产品窗口需要 `nana-ui-vue` 的 `hosted`（隐含 `scene-view`。把 UiScene 交给 `SceneWgpuPainter`）。没有 `scene-view` 的构建只做 flush / 对照。不画产品帧。
-
 ## Cargo feature
 
 `nana-ui` 默认打开 `wgpu-backends`（仅在启用 `gpu` 时生效）。需要自选图形后端的应用使用 `default-features = false`，再按职责打开：
@@ -148,9 +143,9 @@ Cargo 不会因你写了 `CalendarHeatmap` 就自动打开 `calendar`。
 普通 Rust 应用优先实现 `ApplicationState`。由 `RuntimeApplication<State>` 管理
 每个窗口的 `RuntimeDocument` 和资源注册表。最小可运行程序见
 `crates/nana-ui/examples/application-counter.rs`。
-下列低层合同仍用于 Vue 和自行管理窗口/文档的嵌入式宿主。
+下列低层合同用于自行管理窗口/文档的嵌入式宿主。
 
-只从 Rust 类型创建控件（`mount` / 声明式视图 / `.vue`）的应用。可以设 `const BUILTINS: BuiltinComponents = BuiltinComponents::Typed;`：内置控件只注册标识。程序没创建过的控件不会被链接进来。Vue 等按标签构造控件的宿主保持默认的 `Full`。详见 [声明式视图](reactive-view.md#控件级摇树builtincomponentstyped)。
+只从 Rust 类型创建控件（`mount` / 声明式视图 / `.vue`）的应用。可以设 `const BUILTINS: BuiltinComponents = BuiltinComponents::Typed;`：内置控件只注册标识。程序没创建过的控件不会被链接进来。按标签构造控件的宿主保持默认的 `Full`。详见 [声明式视图](reactive-view.md#控件级摇树builtincomponentstyped)。
 
 `ApplicationWindow::demand` 与低层 `RuntimeProgram::frame_demand` 使用同一
 `FrameDemand`：默认 `OnDemand`。单次截止时间 `At(Instant)`。持续刷新
@@ -230,7 +225,6 @@ device/surface 丢失后宿主调用 `RuntimeDocument::set_surface_generation`�
 `RuntimeRedraw::merge` 与 `RuntimeProgramUpdate::merge` 是公开的：`All` 吸收另一方，`None` 不加窗口，窗口列表取并集；更新的窗口命令按先后拼接，任一方要求退出即退出。宿主自己也用它们把一次回调里的各个更新合成一个。
 `FrameworkError` 可以转成 `String`，所以 `type Error = String` 的回调里直接对文档操作写 `?`。
 `RuntimeRedraw` 现在持有窗口列表。只实现 `Clone`。不再实现 `Copy`。穷尽匹配需处理 `Windows`。
-Vue 输入按语义变化和已挂载节点消费的 Canvas／HostTexture 版本选择窗口。
 
 ## 建树
 
@@ -246,7 +240,7 @@ update_component(entity, |view, _| { … }) // 改单个字段
 set_component(entity, Button::new(…))     // 整体换 props，保留交互态
 ```
 
-挂载视图是初次整页（一次 commit）。之后靠绑定定点更新。`mount` 是 keyed 子树协调。不是第二套渲染器。点击 handler 不要重新挂载一遍。Vue 不得用 `create_component` / `mount_view*` 分配 ID。它绑定自己已有的节点。细则见 [L3：用 Rust 建界面](l3-authoring.md)。
+挂载视图是初次整页（一次 commit）。之后靠绑定定点更新。`mount` 是 keyed 子树协调。不是第二套渲染器。点击 handler 不要重新挂载一遍。细则见 [L3：用 Rust 建界面](l3-authoring.md)。
 
 从应用状态整体重建一个组件时用 `set_component`。不要在 `update_component` 里写
 `*view = 新的()`：后者连运行时拥有的交互态一起覆盖。表现为刷新一下菜单就收起、
@@ -274,8 +268,7 @@ slots / overlay 组装接口。`mount` 仍用于按 key 构造并销毁缺席组
 
 | 目标 | 路径 |
 | --- | --- |
-| 进入布局、命中、Scene | `UiExtension` + `register_component`；Vue tag 为 `ComponentTypeId` 去掉 `nana.`（与 HTML 同语义用原生标签；不同语义换名） |
-| 仅 JS 命令 / props 白名单 | `NativeComponentRegistry` + `Nana.components.call` |
+| 进入布局、命中、Scene | `UiExtension` + `register_component` |
 | GPU 内容 | `GpuTextureView` + 宿主纹理；直写见 `GpuView` |
 | 改一个节点长什么样 | `Painter` 挂到 `NodeStyle::painter`（`Card::painter` / `Stack::painter` / `Panel::painter`），见下 |
 | 悬停、拖拽、滚轮 | `NodePointerHooks` + `ExtensionRegistrar::register_pointer`（内建控件写在 `TypeBehavior::pointer`），见下 |
@@ -364,39 +357,22 @@ painter。组件重写节点样式也不会把它冲掉。适合给内建组件�
 拿不到 Rust trait 的消费方用 `PaintScript`：一份 JSON 命令列表。覆盖 `cx` 的
 全部绘制命令（需要读回结果的 `measure_text` 和自定义命中逻辑除外。命中可以给
 一条路径）。长度可以写成相对节点尺寸的 `"50%"`、`"100% - 12"`。颜色写语义
-角色名、主题混色或 typed paint。Vue 的 `paint` 属性还会由
-`nana-ui-css` 将 CSS 颜色字符串解析成同一份 typed paint；直接调用 Runtime
+角色名、主题混色或 typed paint；调用 Runtime
 `PaintScript::from_json` 时请传 typed paint。路径写 SVG path 字符串。命令可按交互状态筛选。
 写错的字段名直接报错（格式见 `PaintScript::from_json` 的文档）。图标按内建
 图标名画。
 
 单元测试里可以用 `PaintRecording::record(&painter, &theme, size, state)` 不借助
-`UiWorld` 录一次 painter。检查它录下的命令。Vue 里把它写在任意元素
-的 `paint` 属性上（JSON 字符串或对象）。包括按钮这类内建组件。解析失败时不挂
-painter。原因记在 `WidgetProps::paint_error`。并以 `nana.paint` 来源的警告
-送到 `VueHost::set_diagnostics` 接的诊断回调（同一元素的同一错误只报一次）。
+`UiWorld` 录一次 painter。检查它录下的命令。
 
 `Panel::kind(CardKind::Flat)` / `Card::kind(CardKind::Flat)` 不画底色和边框。
 适合交给 painter 自绘外框。
 
-## JavaScript 产物形态
-
-Vue / JS 入口交给宿主的是一份 `RuntimeArtifact`。两种形态：
-
-| 形态 | 构造 | 说明 |
-| --- | --- | --- |
-| 源码 | `RuntimeArtifact::from_source(name, source)` | UTF-8 JavaScript（通常是你 Vite 打出的 IIFE）。框架在加载前用 `compose_runtime_artifact` 把 Web API shim 拼到前面。 |
-| Binary Release | `RuntimeArtifact::from_v8_snapshot(name, bytes)` | V8 `SnapshotCreator::create_blob` 的快照。`is_binary_release()` 为真，**原样加载**，框架不再拼 shim。 |
-
-因此快照必须在 `compose_runtime_artifact` **之后**编译：shim 要一起进快照。否则运行时找不到 `__nanaWebApi`。源码形态下框架会检测 `__nanaWebApi` 是否已存在。已拼过的不会重复拼。
-
-`name` 同时是样式表解析的基准：相对 `@import` 与 `url()` 都相对它兑现（见[布局](layout.md)的 `stylesheet_base`）。
-
 ## Fetch 宿主
 
-网络权限属于宿主。不属于页面。页面作者那一侧（`response.body` 怎么读、`text()` / `json()`、`FormData`、`ReadableStream` 的限制）见 [Vue](vue.md) 的「它提供的 Web 面」与「网络与宿主命令」。这里只说嵌入方要实现和配置的那一半。
+网络权限属于宿主。这里说嵌入方要实现和配置的部分。
 
-`WebApiState::new()` 默认装的是 `NativeFetchHost::new(FetchPolicy::default())`。而默认策略**一个源都不放行**。不配白名单就是全拒。没有宿主点头。页面碰不到网络。
+默认策略 `FetchPolicy::default()` **一个源都不放行**。不配白名单就是全拒。
 
 ### FetchHost
 
@@ -420,54 +396,45 @@ Vue / JS 入口交给宿主的是一份 `RuntimeArtifact`。两种形态：
 | `max_request_bytes` | 16 MiB | 请求正文，发出前查 |
 | `max_response_bytes` | 16 MiB | 响应正文；流式下按**累计**字节算，不因为分块就放行更大的正文 |
 | `max_redirects` | 5 | 超过报 `Redirect` |
-| `worker_count` | 4 | 见下面的 worker 边界 |
 
 源用 `allow_origin` / `with_allowed_origin` 登记。格式 `scheme://host[:port]`。按 URL origin 的 ascii 序列化存：带路径、query 或 fragment 的写法报 `InvalidRequest`。非 http/https 报 `Policy`。放行 `https://example.com` 就放行了它下面的所有路径。但**不**包括 `https://api.example.com`。子域名是另一个 origin。要单独登记。`authorize(&Url)` 是执行点。`allowed_origins()` 可回读。
 
 ### 内置 NativeFetchHost 做了什么
 
-阻塞式 `ureq` 实现。必须跑在 UI / JS 线程之外（`nana-ui-web-api` 提供这条 worker 边界）。它在每一跳之前执行策略：
+阻塞式 `ureq` 实现。必须跑在 UI 线程之外。它在每一跳之前执行策略：
 
 - 请求正文超 `max_request_bytes` → `RequestTooLarge`。不发。
 - 响应先看 `Content-Length`。超了直接 `ResponseTooLarge`。正文一个字节都不进 sink。读的过程中再按累计字节判一次。超了当场断流。
 - 每一跳都重新 `authorize`。重定向目标不在白名单里照样拒。跨源时 `authorization` / `proxy-authorization` 被摘掉。303 以及 POST 的 301 / 302 转成 GET。清空正文与 `content-length` / `content-type`。
-- `set-cookie` 不会出现在交给 JS 的响应头里。
+- `set-cookie` 不会出现在返回的响应头里。
 - 超时是整次请求的总预算：每跳按已用时间扣减。扣光报 `Timeout`。
 
 错误按 `FetchErrorKind` 分类：`Policy`、`InvalidRequest`、`Network`、`Timeout`、`RequestTooLarge`、`ResponseTooLarge`、`Redirect`、`Cancelled`、`Unsupported`。
-
-### worker 边界
-
-`worker_count`（至少 1）条阻塞线程调 `fetch_streaming`。任务队列长 `worker_count * 2`。队列满时 `fetchStart` 抛「fetch worker queue is full」。不会阻塞发起请求的那条线程。响应头、分块和错误都只在帧泵里回到引擎线程。`FetchHost` 实现不碰 JS。
 
 ### 装上去
 
 | 入口 | 用法 |
 | --- | --- |
-| `MountOptions.fetch_host` | Vue 宿主的常规入口；`mount_vue_as_nana` 用它建带该 host 的 web-api 状态 |
 | `shared_fetch_host(host)` | 把自己的 `FetchHost` 实现包成 `SharedFetchHost`（`Arc<dyn FetchHost>`） |
-| `WebApiState::with_fetch_host` / `with_fetch_host_and_local_storage` / `shared_web_api_state_with_fetch` | 自己管 web-api 状态的嵌入式宿主 |
-| `RuntimeProgram::resource_fetch_host(id)` / `ApplicationWindow.fetch_host` | 该窗口文档的引擎资源出口（`url()` 图片等）。Vue 宿主自动返回该窗口 web-api 的 `fetch()` host；纯 Rust 应用按窗口填写，缺省为 `None`（拒绝远程图） |
-| `SceneWgpuPainter::set_resource_fetch_host` / `NanaVueApp::fetch_host` | 自己持有 painter 的嵌入式宿主：每次绘制某个文档前，把该文档的 host 交给 painter |
+| `RuntimeProgram::resource_fetch_host(id)` / `ApplicationWindow.fetch_host` | 该窗口文档的引擎资源出口（`url()` 图片等）。应用按窗口填写，缺省为 `None`（拒绝远程图） |
+| `SceneWgpuPainter::set_resource_fetch_host` | 自己持有 painter 的嵌入式宿主：每次绘制某个文档前，把该文档的 host 交给 painter |
 
 ```rust
 let policy = FetchPolicy::default().with_allowed_origin("https://api.example.com")?;
-let app = mount_vue_as_nana(MountOptions {
-    fetch_host: Some(shared_fetch_host(NativeFetchHost::new(policy))),
-    ..MountOptions::default()
-});
+let mut window = ApplicationWindow::new();
+window.fetch_host = Some(shared_fetch_host(NativeFetchHost::new(policy)));
 ```
 
-自己实现 `FetchHost` 最少写 `fetch` 和 `policy`。要让页面能边到边读。再实现 `fetch_streaming`。
+自己实现 `FetchHost` 最少写 `fetch` 和 `policy`。要流式读响应。再实现 `fetch_streaming`。
 
 ### 这条路上明确没有的
 
-- **cookie**：JS 侧带 `cookie` / `set-cookie` 请求头直接 `TypeError`。响应里的 `set-cookie` 被丢弃。没有 cookie jar。
+- **cookie**：响应里的 `set-cookie` 被丢弃。没有 cookie jar。
 - **CORS / preflight**：没有浏览器同源模型。也不会发 `OPTIONS` 预检。唯一的门是宿主白名单。
-- **cache**：没有 HTTP 缓存层。`cache` 选项在 JS 侧被拒。
-- **请求侧流式正文**：正文在发给宿主之前已经是完整字节。`duplex` 在 JS 的拒绝列表里。响应侧的流式见上面的 `FetchSink`。
+- **cache**：没有 HTTP 缓存层。
+- **请求侧流式正文**：正文在发给宿主之前已经是完整字节。响应侧的流式见上面的 `FetchSink`。
 
-引擎自己的资源出口走的也是这条路。`url()` 图片、`<img src>`、`mask-image`、`border-image` 与 JS `fetch()` 共用同一个 `FetchHost` 和同一份 `FetchPolicy`：同样的 origin 白名单、同样逐跳复核重定向、同样跨源摘授权头。**没装 host 就一张远程图都不取**。`data:`、`file:` 与 jail 内的相对路径不受影响。这份 host 按文档而非按进程：同一进程里多次 mount、多个窗口共用一个 painter 时。每个文档的图片只经过它自己的 host。缓存结果也按 host 分开。不会拿到另一份策略放行的图。取消在 painter 析构与图片连续 120 帧无人引用时触发。终结的是网络等待。不是已经开始的解码。`@font-face` 没有网络传输。只认 `local()`、`data:` 和 jail 内的本机文件。
+引擎的资源出口走这条路。`url()` 图片、`<img src>`、`mask-image`、`border-image` 共用同一个 `FetchHost` 和同一份 `FetchPolicy`：同样的 origin 白名单、同样逐跳复核重定向、同样跨源摘授权头。**没装 host 就一张远程图都不取**。`data:`、`file:` 与 jail 内的相对路径不受影响。这份 host 按文档而非按进程：同一进程里多次 mount、多个窗口共用一个 painter 时。每个文档的图片只经过它自己的 host。缓存结果也按 host 分开。不会拿到另一份策略放行的图。取消在 painter 析构与图片连续 120 帧无人引用时触发。终结的是网络等待。不是已经开始的解码。`@font-face` 没有网络传输。只认 `local()`、`data:` 和 jail 内的本机文件。
 
 ## 性能上你不用手写的
 
@@ -507,7 +474,6 @@ cx.set_image_sampling(ImageSampling::Mipmap); // Painter 里之后的 cx.image
 HostTexture 的像素归宿主：默认仍只采样第 0 层。宿主按 `painted_extent` 准备尺寸（见
 [实时画面](gpu.md#按实际绘制像素准备内容)）。宿主自己上传了 mip 链时。在 `GpuTextureView` /
 `Thumbnail` / `Avatar` 上用 `.sampling(ImageSampling::Mipmap)`（`CustomRenderNode::with_sampling`）切到三线性采样。
-Vue 目前没有对应的 CSS 属性。`<img>` 只走默认重采样。
 
 消息有两个入口。按类型选：`dispatch_program` **按 Rust 类型只保留最后一条**。适合「后一条取代前一条」的状态消息（resize、主题变了、请求重绘）。`dispatch_program_all` 按派发顺序全部送达。业务消息通常是一个 `enum`。那就是**同一个类型**。用 `dispatch_program` 会让同一帧内的两次点击塌成一次、悄悄丢掉第一次。这种情况用 `dispatch_program_all`。两者都在下一帧进入 `update`。
 
@@ -589,10 +555,10 @@ fingerprint 和活动焦点/IME 状态都不变时不挂/卸单元格。冻结�
 
 ## 非目标
 
-- 完整浏览器、Tauri、裸 `@vue/runtime-dom` 产物、把整窗 WebView 当产品 UI
+- 完整浏览器、Tauri、把整窗 WebView 当产品 UI
 - 第二套 Device / Queue、CPU 回读伪装零拷贝
 - 不要让控件拿窗口句柄。不要在 UI 画完后把原生 WebView 盖在 Surface 上
-- 以 crate 根控件表或 Vue 的 DOM facade 定义新的框架合同
+- 以 crate 根控件表定义新的框架合同
 
 应用内打开网页使用 `runtime::BrowserView` 的宿主原生内容例外。当前只有
 macOS `WKWebView`。Windows/Linux 明确不可用。`nana-ui` 没有独立的
