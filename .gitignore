@@ -1,6 +1,7 @@
 target/
 /tools/css-parity-webview/target/
 /target-android/
+/target-ohos/
 /dist/
 docs/node_modules/
 docs/.vitepress/dist/

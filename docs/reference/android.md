@@ -2,6 +2,8 @@
 
 Android（`platform/android`）是仓库内的**实验性 ARM64 宿主路径**，并非当前正式产品交付目标，也不是第二套产品渲染内核——请勿将其写入面向用户的跨平台承诺。
 
+比它低一级的 HarmonyOS / OpenHarmony 编译档见 [OHOS](ohos.md)：只承诺能编译，没有仓库内宿主。
+
 在 Android 宿主上，界面同样进入 `nana-ui-runtime`（`UiWorld`）与 `nana-ui-scene`（`UiScene`），并由同一个 `SceneWgpuPainter` 绘制；窗口与 Vulkan 图形设备由宿主的 Android `Activity` 持有（不调用桌面端的 `run_runtime`），Vue + JS 路径也复用同一份 Runtime 合同。
 
 ## Phase 2 平台合同（基于 `GameActivity`）
