@@ -1876,6 +1876,65 @@ fn area_layout_names_its_areas_with_the_application_labels() {
 }
 
 #[test]
+fn area_layout_chrome_paints_every_frame_and_header() {
+    use crate::area_layout::{AreaBox, AreaPart};
+    use crate::view::widget;
+    use crate::{AreaAxis, AreaChrome, AreaLayout, AreaLayoutModel};
+    use nana_ui_core::{RadiusTier, SemanticColorRole};
+
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let root = context
+        .create_component(document, crate::Stack::fill_column(0.0))
+        .unwrap();
+    let mut model = AreaLayoutModel::single("left", "outliner");
+    assert!(model.split("left", AreaAxis::Horizontal, 0.25, "right"));
+    let chrome = AreaChrome {
+        frame_radius: RadiusTier::Lg,
+        header_background: SemanticColorRole::Surface,
+        header_divider: true,
+    };
+    context
+        .mount_view(root.stable_id(), move || {
+            widget(AreaLayout::new(model.clone()).gap(4.0).chrome(chrome)).children((
+                widget(crate::Text::new("outliner")).key("left"),
+                widget(crate::Text::new("viewport")).key("right"),
+            ))
+        })
+        .unwrap();
+    context
+        .layout_document(document, crate::LayoutViewport::new(400.0, 300.0))
+        .unwrap();
+    let layout = Entity::<AreaLayout>::from_stable_id(
+        context.world().node(root.stable_id()).unwrap().children[0],
+    );
+    let parts = context
+        .read(layout, |l| l.parts.as_ref().unwrap().nodes.clone())
+        .unwrap();
+    let style = |context: &AppContext, id| {
+        context
+            .read(Entity::<AreaBox>::from_stable_id(id), |b| b.style.clone())
+            .unwrap()
+    };
+    let mut areas = 0;
+    for part in parts {
+        if let AreaPart::Area { frame, header, .. } = part {
+            areas += 1;
+            assert_eq!(style(&context, frame).radius, Some(RadiusTier::Lg));
+            let header = style(&context, header);
+            assert_eq!(header.background, Some(SemanticColorRole::Surface));
+            assert_eq!(header.border, Some(SemanticColorRole::BorderSoft));
+            assert_eq!(
+                header.layout.border_bottom_width,
+                Some(nana_ui_core::HAIRLINE)
+            );
+            assert_eq!(header.layout.border_width, Some(0.0));
+        }
+    }
+    assert_eq!(areas, 2);
+}
+
+#[test]
 fn area_layout_places_editor_contents_and_switches_them_from_the_header() {
     use crate::view::widget;
     use crate::{

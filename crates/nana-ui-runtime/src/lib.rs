@@ -181,8 +181,8 @@ pub use animation::{
 };
 pub use app_menu_bar::{AppMenuBar, MenuBarActivated, ShortcutNotation, menu_shortcut_label};
 pub use area_layout::{
-    Area, AreaAxis, AreaChange, AreaEditorSelect, AreaGeometry, AreaLayout, AreaLayoutChanged,
-    AreaLayoutError, AreaLayoutModel, AreaNode, AreaSplitter,
+    Area, AreaAxis, AreaChange, AreaChrome, AreaEditorSelect, AreaGeometry, AreaLayout,
+    AreaLayoutChanged, AreaLayoutError, AreaLayoutModel, AreaNode, AreaSplitter,
 };
 pub use avatar::{Avatar, DEFAULT_SIZE as AVATAR_DEFAULT_SIZE};
 pub use bars::{StatusBar, Toolbar};

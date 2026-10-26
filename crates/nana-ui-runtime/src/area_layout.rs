@@ -142,6 +142,8 @@ pub struct AreaLayout {
     /// The least either side of a divider keeps, px.
     pub min_size: f32,
     pub style: NodeStyle,
+    /// How every area's frame and header are painted.
+    pub chrome: AreaChrome,
     /// What assistive technology calls an area, by its editor type id, in the
     /// interface's language (#350). An editor without one is called by its id.
     /// Not part of [`AreaLayoutModel`], which stays language-free data.
@@ -154,6 +156,31 @@ pub struct AreaLayout {
     pub(crate) hosts: std::collections::BTreeMap<String, String>,
     pub(crate) drag: Option<CornerDrag>,
     pub(crate) parts: Option<AreaParts>,
+}
+
+/// How every area is painted. The default is the tiled look: small corners and
+/// a header filled apart from the content. A larger corner tier, a header in
+/// the frame's own fill and a hairline under it make each area read as a
+/// separate panel when the layout's [`AreaLayout::gap`] shows the background
+/// between them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AreaChrome {
+    /// The corner tier of each area's frame.
+    pub frame_radius: nana_ui_core::RadiusTier,
+    /// The fill of each area's header; the frame itself is the surface.
+    pub header_background: SemanticColorRole,
+    /// A hairline between the header and the content.
+    pub header_divider: bool,
+}
+
+impl Default for AreaChrome {
+    fn default() -> Self {
+        Self {
+            frame_radius: nana_ui_core::RadiusTier::Sm,
+            header_background: SemanticColorRole::Subtle,
+            header_divider: false,
+        }
+    }
 }
 
 /// The editor types an area's header select offers, in order, named by
@@ -189,6 +216,7 @@ impl AreaLayout {
             gap: nana_ui_core::space::XXS,
             min_size: 48.0,
             style: layout_style(),
+            chrome: AreaChrome::default(),
             labels: Default::default(),
             editor_select: None,
             hosts: Default::default(),
@@ -226,6 +254,12 @@ impl AreaLayout {
 
     pub fn gap(mut self, gap: f32) -> Self {
         self.gap = gap.max(1.0);
+        self
+    }
+
+    /// See [`AreaChrome`].
+    pub fn chrome(mut self, chrome: AreaChrome) -> Self {
+        self.chrome = chrome;
         self
     }
 
@@ -481,7 +515,7 @@ fn bar_style(axis: AreaAxis, gap: f32, shown: bool) -> NodeStyle {
     style
 }
 
-fn frame_style(grow: f32, shown: bool) -> NodeStyle {
+fn frame_style(grow: f32, shown: bool, chrome: AreaChrome) -> NodeStyle {
     let mut style = NodeStyle::default();
     {
         let layout = Arc::make_mut(&mut style.layout);
@@ -491,11 +525,11 @@ fn frame_style(grow: f32, shown: bool) -> NodeStyle {
         layout.overflow_y = OverflowSpec::Hidden;
     }
     style.background = Some(SemanticColorRole::Surface);
-    style.radius = Some(nana_ui_core::RadiusTier::Sm);
+    style.radius = Some(chrome.frame_radius);
     side_style(style, grow, shown)
 }
 
-fn header_style() -> NodeStyle {
+fn header_style(chrome: AreaChrome) -> NodeStyle {
     let mut style = NodeStyle::default();
     {
         let layout = Arc::make_mut(&mut style.layout);
@@ -506,8 +540,18 @@ fn header_style() -> NodeStyle {
         layout.padding_right = Some(LengthSpec::Px(CORNER));
         layout.flex_shrink = Some(0.0);
         layout.align_self = Some(AlignSpec::Stretch);
+        if chrome.header_divider {
+            // only the edge that meets the content
+            layout.border_width = Some(0.0);
+            layout.border_bottom_width = Some(nana_ui_core::HAIRLINE);
+            layout.theme.border_bottom_width =
+                Some(nana_ui_core::ThemeToken::Border(nana_ui_core::BorderWidth::Hairline).into());
+        }
     }
-    style.background = Some(SemanticColorRole::Subtle);
+    style.background = Some(chrome.header_background);
+    if chrome.header_divider {
+        style.border = Some(SemanticColorRole::BorderSoft);
+    }
     style.control_height = Some(nana_ui_core::ControlHeight::Exact(
         nana_ui_core::ControlSize::Small,
     ));
@@ -1148,7 +1192,9 @@ impl AppContext {
                         bar.style = bar_style(axis, gap, visible && both);
                     })?;
                 }
-                AreaPart::Area { id, frame, .. } => {
+                AreaPart::Area {
+                    id, frame, header, ..
+                } => {
                     let (visible, grow, _) = shown[index];
                     index += 1;
                     let editor = model.area(id).map(|area| {
@@ -1161,13 +1207,17 @@ impl AppContext {
                     self.update_component(
                         Entity::<AreaBox>::from_stable_id(*frame),
                         |frame, _| {
-                            frame.style = frame_style(grow, visible);
+                            frame.style = frame_style(grow, visible, snapshot.chrome);
                             frame.accessibility = AccessibilityState {
                                 role: AccessibilityRole::Region,
                                 label: editor,
                                 ..AccessibilityState::default()
                             };
                         },
+                    )?;
+                    self.update_component(
+                        Entity::<AreaBox>::from_stable_id(*header),
+                        |header, _| header.style = header_style(snapshot.chrome),
                     )?;
                 }
             }
@@ -1222,13 +1272,13 @@ impl AppContext {
                 let frame = self
                     .create_detached_component(
                         document,
-                        AreaBox::new("area", frame_style(1.0, true)),
+                        AreaBox::new("area", frame_style(1.0, true, AreaChrome::default())),
                     )?
                     .stable_id();
                 let header = self
                     .create_detached_component(
                         document,
-                        AreaBox::new("area-header", header_style()),
+                        AreaBox::new("area-header", header_style(AreaChrome::default())),
                     )?
                     .stable_id();
                 let content = self

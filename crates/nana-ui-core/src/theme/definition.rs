@@ -960,11 +960,12 @@ const MOTION_NAMES: [&str; 8] = [
     "motion.loading_spin",
 ];
 
-fn palette_fields(palette: &SemanticPalette) -> [(&'static str, SemanticColor); 24] {
+fn palette_fields(palette: &SemanticPalette) -> [(&'static str, SemanticColor); 25] {
     [
         ("palette.background", palette.background),
         ("palette.surface", palette.surface),
         ("palette.subtle", palette.subtle),
+        ("palette.raised", palette.raised),
         ("palette.hover", palette.hover),
         ("palette.active", palette.active),
         ("palette.selected", palette.selected),
