@@ -156,6 +156,18 @@ pub trait ApplicationState: Sized + 'static {
     ) -> Result<RuntimeProgramUpdate, nana_ui_runtime::FrameworkError> {
         Ok(RuntimeProgramUpdate::default())
     }
+    /// Animation samples the host already applied to `id`'s document, with
+    /// the runs that finished or were cancelled. See
+    /// [`RuntimeProgram::animation_frame`].
+    fn animation_frame(
+        &mut self,
+        _id: WindowId,
+        _frame: nana_ui_runtime::AnimationFrame,
+        _windows: &mut HashMap<WindowId, ApplicationWindow>,
+        _context: &RuntimeProgramContext<Self::Message>,
+    ) -> Result<RuntimeProgramUpdate, nana_ui_runtime::FrameworkError> {
+        Ok(RuntimeProgramUpdate::default())
+    }
     /// Application-owned wake deadline, independent of redraw cadence. See
     /// [`RuntimeProgram::next_wakeup`].
     fn next_wakeup(&self) -> Option<Instant> {
@@ -258,6 +270,15 @@ impl<State: ApplicationState> RuntimeProgram for RuntimeApplication<State> {
     ) -> Result<RuntimeProgramUpdate, nana_ui_runtime::FrameworkError> {
         self.state
             .input_event(id, input, &mut self.windows, context)
+    }
+    fn animation_frame(
+        &mut self,
+        id: WindowId,
+        frame: nana_ui_runtime::AnimationFrame,
+        context: &RuntimeProgramContext<Self::Message>,
+    ) -> Result<RuntimeProgramUpdate, nana_ui_runtime::FrameworkError> {
+        self.state
+            .animation_frame(id, frame, &mut self.windows, context)
     }
     fn next_wakeup(&self) -> Option<Instant> {
         self.state.next_wakeup()
@@ -516,6 +537,66 @@ mod tests {
             None,
             crate::startup::StartupHandle::detached(),
         )
+    }
+
+    /// Records the animation runs that ended, per window.
+    #[derive(Default)]
+    struct Animated {
+        ended: Vec<(WindowId, nana_ui_runtime::AnimationEvent)>,
+    }
+
+    impl ApplicationState for Animated {
+        type Message = ();
+        type Error = String;
+        fn initialize(_: &RuntimeProgramContext<()>) -> Result<Self, String> {
+            unreachable!("constructed directly")
+        }
+        fn build(
+            &mut self,
+            _: &mut ApplicationWindow,
+            _: &RuntimeProgramContext<()>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+        fn animation_frame(
+            &mut self,
+            id: WindowId,
+            frame: nana_ui_runtime::AnimationFrame,
+            _: &mut HashMap<WindowId, ApplicationWindow>,
+            _: &RuntimeProgramContext<()>,
+        ) -> Result<RuntimeProgramUpdate, nana_ui_runtime::FrameworkError> {
+            self.ended
+                .extend(frame.events.into_iter().map(|event| (id, event)));
+            Ok(RuntimeProgramUpdate::redraw(id))
+        }
+    }
+
+    #[test]
+    fn an_application_state_observes_the_animation_frames_the_host_applied() {
+        use nana_ui_runtime::{AnimationEvent, AnimationEventKind, AnimationFrame, AnimationId};
+
+        let id = WindowId(3);
+        let context = program_context(id);
+        let mut program = RuntimeApplication {
+            state: Animated::default(),
+            windows: HashMap::new(),
+        };
+        let event = AnimationEvent {
+            id: AnimationId::new(7).unwrap(),
+            target: nana_ui_runtime::StableNodeId::new(1).unwrap(),
+            kind: AnimationEventKind::Finished,
+        };
+        let frame = AnimationFrame {
+            samples: Vec::new(),
+            component_updates: Vec::new(),
+            events: vec![event],
+            next_deadline: None,
+            animation_deadlines_scanned: 1,
+            animations_considered: 1,
+        };
+        let answer = RuntimeProgram::animation_frame(&mut program, id, frame, &context).unwrap();
+        assert_eq!(answer.redraw, crate::RuntimeRedraw::Window(id));
+        assert_eq!(program.state.ended, [(id, event)]);
     }
 
     /// Asks before closing: keeps the window and remembers the request.
