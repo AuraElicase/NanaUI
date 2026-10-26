@@ -1072,7 +1072,7 @@ impl From<FrameworkError> for String {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BuiltinComponents {
     /// Every built-in component can also be built from a tag and attributes
-    /// (`bind_semantic`, the Vue path). Links every built-in component.
+    /// (`bind_semantic`). Links every built-in component.
     #[default]
     Full,
     /// Built-in components are created from their Rust types only (`build`,
@@ -1486,7 +1486,7 @@ impl AppContext {
 
     /// Wrap an existing retained tree.
     ///
-    /// Hosts that already own node identity (Vue) create nodes on a [`UiWorld`]
+    /// Hosts that already own node identity create nodes on a [`UiWorld`]
     /// then adopt it here. The component ID allocator still starts at 1 and
     /// skips live or retired IDs; do not treat allocated chrome IDs as host
     /// tree identities.
@@ -2425,7 +2425,7 @@ impl AppContext {
 
     /// Bind a typed component view onto an existing world node.
     ///
-    /// The node must already exist — hosts such as Vue own identity and must
+    /// The node must already exist — hosts that own identity must
     /// not allocate IDs through [`Self::create_component`]. This replaces any
     /// previous view at `id`, projects `component` into the retained tree, and
     /// commits internally so [`Self::read`], [`Self::update_component`], and

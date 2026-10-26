@@ -228,9 +228,9 @@ impl RegisterableComponent for Stack {
         // `nana.column` must NOT be seeded, even though it reads as the
         // symmetric case. `used_flow_direction` is `unwrap_or(Column)`, so
         // `None` and `Some(Column)` are the same layout -- and writing the
-        // second spelling over the first is not free. The Vue cascade rebuilds
+        // second spelling over the first is not free. A cascade that rebuilds
         // a node's `LayoutStyle` from scratch whenever author CSS applies to
-        // it, which leaves `direction` unset; this seed then wrote
+        // it leaves `direction` unset; this seed then wrote
         // `Some(Column)` back through `project_common`, and the two writers
         // alternated on every node, every pointer event. On a 2,000-row list
         // that alternation scheduled a layout pass per event that nothing had
@@ -4150,8 +4150,8 @@ mod stack_direction_tests {
 
     /// Projection must not ask to rewrite the style the cascade just wrote.
     ///
-    /// The Vue cascade rebuilds a node's `LayoutStyle` from scratch whenever
-    /// author CSS applies to it, which leaves `direction` unset. If projection
+    /// A cascade that rebuilds a node's `LayoutStyle` from scratch whenever
+    /// author CSS applies to it leaves `direction` unset. If projection
     /// seeds a value there, the next cascade drops it again and the two writers
     /// alternate on that node forever -- a style write per node per frame, and
     /// with it a layout pass nothing asked for. On a 2,000-row list that cost

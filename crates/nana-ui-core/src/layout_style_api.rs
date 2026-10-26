@@ -1,6 +1,6 @@
 //! Consuming builders for every [`LayoutStyle`] / [`PaintStyle`] field.
 //!
-//! This is the L3 layout API. L1 CSS adapters write the same fields after parse;
+//! This is the L3 layout API. The CSS engine writes the same fields after parse;
 //! they do not invent a second model.
 
 use crate::box_layout::{

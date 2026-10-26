@@ -1,9 +1,8 @@
-//! Nana **Style Model** — the single styling contract shared by L1 / L2 / L3.
+//! Nana **Style Model** — the single styling contract every authoring path shares.
 //!
 //! ```text
-//! L1 CSS 子集 ──► Nana Style Model（Tokens + Semantics + Layout）
-//! L2 Vue props ─► 同一套 Model
-//! L3 Rust API ──► 同一套 Model
+//! CSS 子集（nana-ui-css）──► Nana Style Model（Tokens + Semantics + Layout）
+//! L3 Rust API ────────────► 同一套 Model
 //!                  ▼
 //!            唯一绘制：Runtime / UiScene → SceneWgpuPainter
 //! ```
@@ -14,7 +13,7 @@
 //! |------|---------|-------------|
 //! | **Tokens** | Theme spacing / radius / control metrics; semantic palette roles | [`ThemeMetrics`](crate::ThemeMetrics), [`ThemeAppearance`](crate::ThemeAppearance), [`SemanticPalette`] |
 //! | **Semantics** | Widget kind + control intent (`ButtonKind`, `ControlSize`, …) | [`crate::semantics`] |
-//! | **Layout** | Flex/gap/padding/size intent | Workspace regions: [`crate::layout`]; box flex: [`crate::LayoutStyle`] / [`crate::LengthSpec`] / [`crate::ParentBox`]（CSS parse 在 `nana-ui-vue::css_map`） |
+//! | **Layout** | Flex/gap/padding/size intent | Workspace regions: [`crate::layout`]; box flex: [`crate::LayoutStyle`] / [`crate::LengthSpec`] / [`crate::ParentBox`]（CSS parse 在 `nana-ui-css::css_map`） |
 //!
 //! ## Mapping rules (do not distort)
 //!
@@ -23,11 +22,11 @@
 //! - flex / gap / padding / sizes → Layout (`LayoutStyle` …)
 //! - Arbitrary business CSS color values must **not** invent formal token roles
 //!
-//! ## L1 color policy
+//! ## CSS color policy
 //!
 //! - Known token / class names → [`SemanticColorRole`] / [`SemanticPalette`] field
-//! - Unknown `#hex` / `rgb()` → **do not** write into formal ThemeTokens; L1 may keep a
-//!   restricted paint hint on the L1 bridge or drop it
+//! - Unknown `#hex` / `rgb()` → **do not** write into formal ThemeTokens; CSS may keep a
+//!   restricted paint hint on the CSS bridge or drop it
 //!
 //! ## Restricted paint hints (no second paint path)
 //!
@@ -36,14 +35,14 @@
 //! - open a parallel paint pipeline beside L3 NanaUI widgets
 //! - enter `nana-ui` public core as CSSOM / free-form color maps
 //!
-//! If a value cannot map to [`SemanticColorRole`], keep it as a restricted L1
+//! If a value cannot map to [`SemanticColorRole`], keep it as a restricted CSS
 //! paint hint or drop it. Formal appearance always goes through Tokens +
 //! Semantics + Layout → L3.
 //!
 //! ## Non-goals
 //!
 //! - CSS parsing / CSSOM must not enter `nana-ui` or this crate
-//! - L1 adapters may map a CSS **subset** into this model; that adapter stays in `nana-ui-vue`
+//! - A CSS **subset** maps into this model; that mapping stays in `nana-ui-css`
 
 use serde::{Deserialize, Serialize};
 
@@ -54,7 +53,7 @@ use crate::theme::{ThemeAppearance, ThemeMetrics, UI_BASE_TEXT_SIZE, UI_METRICS}
 /// Backend-neutral RGBA in 0..=1.
 ///
 /// RGBA conversion stays in `nana-ui` (adapter layer). Arbitrary CSS
-/// hex from L1 must map to an existing [`SemanticPalette`] role or stay as a
+/// hex from CSS must map to an existing [`SemanticPalette`] role or stay as a
 /// one-off paint hint on the bridge — never as a new formal token.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SemanticColor {
@@ -251,7 +250,7 @@ impl SemanticColor {
 
 /// Named roles inside [`SemanticPalette`] (Tokens slice).
 ///
-/// L1 may map known CSS token / class names onto these roles. Unknown hex
+/// CSS may map known token / class names onto these roles. Unknown hex
 /// must not create new roles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SemanticColorRole {
@@ -938,7 +937,7 @@ impl Default for StyleModelRef {
     }
 }
 
-/// Control-facing semantic slice of the Style Model (L2 props / L3 builders).
+/// Control-facing semantic slice of the Style Model (L3 builders).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ControlSemantics {
     pub size: ControlSize,

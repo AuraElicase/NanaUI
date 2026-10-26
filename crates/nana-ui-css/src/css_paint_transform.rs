@@ -1,6 +1,6 @@
 //! CSS `transform` list → [`PaintTransform`] 2×3 or planar [`PaintMat4`].
 //!
-//! Parse lives here (L1 adapter). Scene paints 2×3 via
+//! Parse lives here. Scene paints 2×3 via
 //! [`PaintTransform::around_origin`] and planar 3D via the z=0 homography in
 //! the existing quad pass (perspective divide, same 4 vertices).
 //! `transform-origin` / `transform-box` are separate Style Model fields

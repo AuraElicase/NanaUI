@@ -2,7 +2,7 @@
 //!
 //! [`ThemeMetrics`] / [`ThemeAppearance`] / [`SemanticPalette`] live in `nana-ui-core`.
 //! This module is the L3 token view used by the Scene host. It is **not** a CSS
-//! / ThemeTokens factory for arbitrary L1 paint values — see
+//! / ThemeTokens factory for arbitrary CSS paint values — see
 //! `nana_ui_core::style_model`.
 
 use nana_ui_core::{AppearanceSettings, BackdropTarget};
@@ -64,7 +64,7 @@ const fn host_theme_id(mode: ThemeAppearance) -> nana_ui_core::ThemeId {
 /// Runtime token bundle: [`SemanticPalette`] + [`ThemeMetrics`] + chrome.
 ///
 /// This is the Style Model Tokens view for the Scene host — not a dump of
-/// arbitrary CSS. L1 maps known theme tiers here; unknown business colors must
+/// arbitrary CSS. CSS maps known theme tiers here; unknown business colors must
 /// not invent formal token fields.
 ///
 /// The palette is the one in `nana-ui-core`, not a copy of it. There used to

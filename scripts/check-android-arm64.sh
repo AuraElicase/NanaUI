@@ -54,12 +54,9 @@ run_crate() {
   cargo "${MODE}" -p "${crate}" --target "${TARGET}" --profile "${PROFILE}" --locked "$@"
 }
 
-run_crate nana-js-engine
 run_crate nana-ui-core
-run_crate nana-ui-web-api
 run_crate nana-ui-platform
 run_crate nana-ui --lib
-run_crate nana-ui-vue --no-default-features
 
 run_crate nana-android-host
 

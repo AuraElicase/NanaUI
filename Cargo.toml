@@ -13,12 +13,8 @@ members = [
     "crates/nana-ui",
     "crates/nana-window",
     "crates/nana-app-icon",
-    "crates/nana-js-engine",
-    "crates/nana-js-v8",
-    "crates/nana-ui-web-api",
     "crates/nana-svg-raster",
     "crates/nana-text",
-    "crates/nana-ui-vue",
     "tools/css-parity",
     "crates/nana-ui-platform",
     "crates/nana-ui-input",
@@ -31,9 +27,6 @@ members = [
     "crates/nana-packager",
     "platform/android",
     "examples/component-gallery",
-    "examples/vue-v8",
-    "examples/vue-counter",
-    "examples/vue-hosted-acceptance",
     "examples/native-rhi-probe",
     "examples/runtime-host-fixture",
     "examples/package-fixture",
@@ -51,12 +44,8 @@ nana-ui-runtime = { path = "crates/nana-ui-runtime", default-features = false }
 nana-ui-scene = { path = "crates/nana-ui-scene", default-features = false }
 nana-ui-charts = { path = "crates/nana-ui-charts" }
 nana-ui-diagram = { path = "crates/nana-ui-diagram" }
-nana-js-engine = { path = "crates/nana-js-engine" }
-nana-js-v8 = { path = "crates/nana-js-v8" }
-nana-ui-web-api = { path = "crates/nana-ui-web-api" }
 nana-svg-raster = { path = "crates/nana-svg-raster" }
 nana-text = { path = "crates/nana-text" }
-nana-ui-vue = { path = "crates/nana-ui-vue" }
 nana-ui-platform = { path = "crates/nana-ui-platform", default-features = false }
 nana-ui-input = { path = "crates/nana-ui-input" }
 nana-ui-devtools = { path = "crates/nana-ui-devtools" }
@@ -75,7 +64,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 futures-core = "0.3.31"
 base64 = "0.23"
-crossbeam-channel = "0.5"
 url = "2.5"
 sys-locale = "0.3.2"
 # Exact pin: nana-ui-platform/src/fetch.rs implements ureq's `unversioned`
@@ -83,7 +71,7 @@ sys-locale = "0.3.2"
 ureq = { version = "=3.4.2", default-features = false, features = ["rustls"] }
 tungstenite = { version = "0.30", default-features = false, features = ["handshake", "rustls-tls-native-roots"] }
 # Keep a single WGPU major version across NanaUI.
-# Framework crates never pick graphics backends. `nana-ui` / `nana-ui-vue` turn
+# Framework crates never pick graphics backends. `nana-ui` turns
 # them all on through their default `wgpu-backends` feature; an application
 # that builds with `default-features = false` names its own backends on `wgpu`.
 wgpu = { version = "30.0.0", default-features = false, features = ["std", "parking_lot", "wgsl"] }
@@ -91,8 +79,6 @@ wgpu = { version = "30.0.0", default-features = false, features = ["std", "parki
 # crates.io 0.31.0 stable is not required yet; pin exact sha (not floating master).
 # rwh_06 is always-on in 0.31; x11/wayland features are Linux-only optional backends.
 winit = { git = "https://github.com/rust-windowing/winit", rev = "874a1e31f194d11313c1ac133b28037b99db3e19", default-features = false, features = ["x11", "wayland", "wayland-dlopen"] }
-# Product JS engine. crates.io `v8` is the rusty_v8 successor package name.
-v8 = "152.2.0"
 tiny-skia = "0.12"
 # Issue #217 custom paint: CPU path tessellation and polygon clipping.
 lyon_tessellation = "1.0.22"
@@ -105,7 +91,6 @@ unicode-width = "0.2"
 raw-window-handle = "0.6.2"
 windows-sys = "0.61.2"
 pollster = "1.0"
-cpal = "0.18"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false }
 objc2-foundation = { version = "0.3.2", default-features = false }
@@ -137,9 +122,8 @@ object = { version = "0.40.0", default-features = false, features = ["read_core"
 # profile allowed into an .app bundle or an APK.
 #
 # `panic = "abort"` drops the unwind tables (~7 MB of __eh_frame /
-# __unwind_info / __gcc_except_tab on the desktop binary). It also means a
-# panicking native component aborts the process instead of surfacing a
-# NativeComponentCommandError — see nana-ui-vue/src/native_component.rs.
+# __unwind_info / __gcc_except_tab on the desktop binary). A panic anywhere
+# aborts the process instead of unwinding.
 [profile.dist]
 inherits = "release"
 lto = "fat"

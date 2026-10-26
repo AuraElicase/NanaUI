@@ -4821,7 +4821,7 @@ impl ComponentView for Switch {
             }
         }
         if !bare || effective_style.layout.height.is_some() {
-            // The hint row is taller than the size step, and an L2 CSS box is
+            // The hint row is taller than the size step, and a CSS box is
             // a spent number; don't let intent write the control height back
             // over either.
             effective_style.control_height = None;
@@ -5606,10 +5606,10 @@ impl ComponentView for List {
 /// - [`Stack::fill_column`]：竖直排列并占满父容器剩余高度（主内容区）。
 /// - [`Stack::bar`]：水平排列占满整行但不伸展（顶栏、底栏）。
 ///
-/// Vue / CSS 路径用 [`Stack::from_layout`] 写入已解析的 [`nana_ui_core::LayoutStyle`]。
+/// CSS 路径用 [`Stack::from_layout`] 写入已解析的 [`nana_ui_core::LayoutStyle`]。
 /// grid / position / overflow / paint 用 [`Self::with_layout`]，不要另造布局控件。
 ///
-/// Rust 预设容器默认不参与命中测试；[`Self::from_layout`] 与 Vue 布局盒默认可点。
+/// Rust 预设容器默认不参与命中测试；[`Self::from_layout`] 与 CSS 布局盒默认可点。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stack {
     style: NodeStyle,
@@ -5640,9 +5640,9 @@ impl Stack {
         }
     }
 
-    /// 承接已解析的 [`nana_ui_core::LayoutStyle`]（Vue CSS / 直写字段）。
+    /// 承接已解析的 [`nana_ui_core::LayoutStyle`]（CSS / 直写字段）。
     ///
-    /// 不套用 [`Self::row`] 一类预设默认。默认可点，与 Vue 布局盒一致。
+    /// 不套用 [`Self::row`] 一类预设默认。默认可点，与 CSS 布局盒一致。
     pub fn from_layout(layout: impl Into<Arc<nana_ui_core::LayoutStyle>>) -> Self {
         let mut style = NodeStyle::default();
         style.layout = layout.into();
@@ -5928,7 +5928,7 @@ impl Stack {
         self.structural
     }
 
-    /// Vue / CSS 布局盒：参与命中。Rust 预设默认可点关闭。
+    /// CSS 布局盒：参与命中。Rust 预设默认可点关闭。
     pub fn hittable(mut self) -> Self {
         self.hittable = true;
         self

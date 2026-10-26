@@ -166,7 +166,7 @@ fn overflow_contained_axes(
 /// Deepest retained tree the frame pipeline accepts.
 ///
 /// Style resolution walks ancestors, layout and hit-test walk descendants, and
-/// paint walks the scene: all recursive. Tree shape comes from application or JS
+/// paint walks the scene: all recursive. Tree shape comes from application
 /// input and is not trustworthy, so the bound is enforced once where the tree is
 /// written. Real UIs nest one to two orders of magnitude below this.
 pub const MAX_TREE_DEPTH: usize = 512;
@@ -174,7 +174,7 @@ pub const MAX_TREE_DEPTH: usize = 512;
 /// Retired node IDs, stored as coalesced inclusive runs.
 ///
 /// Retirement is permanent: a stale handle must never alias a node created
-/// later. Both ID allocators ([`crate::AppContext`] and the Vue tree) are
+/// later. The ID allocator ([`crate::AppContext`]) is
 /// strictly monotonic, so churning a list retires consecutive IDs. Keeping runs
 /// instead of one entry per ID bounds the ledger by the number of gaps in the
 /// allocation stream rather than by every node ever destroyed, with identical
@@ -243,8 +243,7 @@ impl RetiredIds {
 pub struct DocumentId(u64);
 
 /// First id [`DocumentId::allocate`] hands out: above any number a test or
-/// fixture writes by hand, and low enough that a Vue document's node handles
-/// (`(id - 1) * 2^32 + local`) stay exact in a JavaScript number.
+/// fixture writes by hand.
 const FIRST_ALLOCATED_DOCUMENT: u64 = 1 << 16;
 static NEXT_DOCUMENT: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(FIRST_ALLOCATED_DOCUMENT);

@@ -3928,7 +3928,7 @@ pub struct EventRoute {
     pub bubble: Vec<StableNodeId>,
 }
 
-/// Subscribed DOM/Vue event names. Capture/bubble paths stay on [`EventRoute`].
+/// Subscribed DOM event names. Capture/bubble paths stay on [`EventRoute`].
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EventListeners {
     events: BTreeSet<String>,

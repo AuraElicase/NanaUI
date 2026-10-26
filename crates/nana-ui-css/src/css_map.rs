@@ -1,4 +1,4 @@
-//! L1 adapter: CSS 子集 → Nana **Style Model** 的 Layout 切片（非 CSS 引擎）。
+//! CSS 子集 → Nana **Style Model** 的 Layout 切片（非 CSS 引擎）。
 //!
 //! **Adapter internals.** Application hosts should use [`crate::prelude`].
 //!
@@ -33,8 +33,8 @@
 //! positioned；流内跳过，产品浮层走 Nana Overlay。`fixed`：脱流 + **视口**
 //! CB，根层绘制（非 Overlay 特判）。`sticky`：流内粘性定位（投影在布局侧）。
 //!
-//! **Overlay 分工**：L2 Dialog/Popover/Drawer/ContextMenu 剥离 companion CSS 的
-//! `fixed`/`sticky`；匿名 Vue/CSS 的 `position:fixed` 走视口子集。
+//! **Overlay 分工**：Dialog/Popover/Drawer/ContextMenu 剥离 companion CSS 的
+//! `fixed`/`sticky`；匿名 CSS 盒的 `position:fixed` 走视口子集。
 //!
 //! ## display / grid
 //! `display: contents` → [`DisplaySpec::Contents`]（不生成盒，亦非 `omits_box`）。
@@ -92,7 +92,7 @@ pub use nana_ui_core::{
     TextJustifySpec, TextSpacingTrimSpec, TextWrapStyleSpec, WordBreakSpec,
 };
 
-/// CSS keyword / length parsing for Style Model layout enums (L1 only).
+/// CSS keyword / length parsing for Style Model layout enums.
 pub trait CssLayoutParse: Sized {
     fn parse(raw: &str) -> Option<Self>;
 }
@@ -1858,7 +1858,7 @@ fn length_spec_to_atom(spec: LengthSpec) -> Option<LengthAtom> {
     }
 }
 
-/// L1 CSS / class → [`LayoutStyle`] mutation (parse stays in this crate).
+/// CSS / class → [`LayoutStyle`] mutation (parse stays in this crate).
 pub trait LayoutStyleCss {
     fn apply_class_layout_hints(&mut self, class_names: &[String]);
     fn apply_css_text(&mut self, style: &str, percent_w: Option<f32>, percent_h: Option<f32>);
@@ -2390,7 +2390,7 @@ impl LayoutStyleCss for LayoutStyle {
             "stroke" => {
                 // SVG `stroke` paints CSS border on boxes. Generic `<svg>`
                 // charts rasterize via resvg (attrs including pathLength).
-                // There is no Vue/CSS extract into Scene StrokePattern.
+                // There is no CSS extract into Scene StrokePattern.
                 if let Some(c) = resolve_paint_color(val) {
                     self.border_color = Some(c);
                     self.paint_colors.border =

@@ -1,7 +1,7 @@
 //! Backend-neutral metadata for the single layout intent/resolution authority.
 //!
-//! The mask is intentionally independent from `nana-ui-css`: CSS, Vue
-//! semantic projection, and Rust L3 can all describe the same ownership
+//! The mask is intentionally independent from `nana-ui-css`: CSS, semantic
+//! projection, and Rust L3 can all describe the same ownership
 //! contract without importing a parser or a runtime tree.
 
 use crate::FlexDirection;

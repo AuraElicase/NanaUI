@@ -82,16 +82,15 @@ fn viewport_basis(style: &LayoutStyle, viewport: LayoutViewport) -> LayoutViewpo
 /// (flex wrap / `display:grid` 2D tracks·repeat·areas·placement via
 /// `uses_2d_grid` / percent / calc / absolute / fixed / float / IFC subset
 /// including shrink-to-avoid-float line boxes beside sibling floats)
-/// and returns atomic layout writeback. Vue `measure_layout` and css-parity
-/// call [`Self::layout_style_tree`] so mixed trees and fixtures share this
-/// algorithm.
+/// and returns atomic layout writeback. css-parity calls
+/// [`Self::layout_style_tree`] so its fixtures share this algorithm.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RuntimeLayoutEngine;
 
 /// Style-only tree accepted by [`RuntimeLayoutEngine::layout_style_tree`].
 ///
-/// Vue `LayoutNode` and css-parity fixtures adapt onto this type; they do not
-/// keep a second layout algorithm.
+/// css-parity fixtures adapt onto this type; they do not keep a second layout
+/// algorithm.
 #[derive(Debug, Clone, Default)]
 pub struct StyleLayoutNode {
     pub id: String,
@@ -612,8 +611,8 @@ impl RuntimeLayoutEngine {
 
     /// Layout a style tree with the same algorithm as [`Self::layout_document`].
     ///
-    /// Hidden / `display:none` nodes are omitted from the result (css-parity /
-    /// Vue measure contract). Product `UiWorld` still records a zero box.
+    /// Hidden / `display:none` nodes are omitted from the result (css-parity
+    /// measure contract). Product `UiWorld` still records a zero box.
     ///
     /// Text leaves are measured by `shaper`, so a host passes the same one its
     /// frames flush with: a style tree measured by a second shaper would give
@@ -1853,11 +1852,10 @@ impl ContainerPlan {
 /// through [`used_flow_direction`], which is `unwrap_or(Column)`. So `None` and
 /// `Some(Column)` are the same layout, and `Some(Row)` is not.
 ///
-/// That distinction is not academic. Three writers disagree about how to spell
-/// a default column: `MessageBridge::register` seeds `direction` from the
-/// widget kind, the CSS cascade republishes a style that leaves it `None`, and
+/// That distinction is not academic. Writers can disagree about how to spell
+/// a default column: a cascade that republishes a style leaves it `None`, and
 /// the Runtime's own `Stack` projection writes `Some(Column)` back. On a
-/// 2,000-row Vue list all three run every pointer event, so a plain `==`
+/// 2,000-row list where both run every pointer event, a plain `==`
 /// retires the cached plan on every frame while nothing about the layout has
 /// changed. That was the whole of the measure plan's benefit: on that
 /// benchmark, `==` left settle at 0.786 ms and the container re-measuring

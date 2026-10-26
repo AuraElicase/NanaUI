@@ -9965,7 +9965,7 @@ fn builtin_and_plugin_components_share_one_registry() {
     );
 }
 
-/// Documented containers and chrome must carry a type identity, or Vue tag
+/// Documented containers and chrome must carry a type identity, or tag
 /// resolution and devtools cannot name the node.
 #[test]
 #[cfg(feature = "charts")]

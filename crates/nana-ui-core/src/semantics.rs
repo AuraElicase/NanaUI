@@ -1,7 +1,7 @@
 //! Control / overlay / chrome **semantics** — Style Model Semantics slice.
 //!
-//! Shared by L2 Vue props and L3 Rust builders. L1 maps known classes/roles here
-//! via `nana-ui-vue::widget_map`; it does not invent ThemeTokens from paint CSS.
+//! Shared by L3 Rust builders and the view compilers; it does not invent
+//! ThemeTokens from paint CSS.
 
 use crate::theme::{ThemeMetrics, UI_METRICS, space, type_scale};
 

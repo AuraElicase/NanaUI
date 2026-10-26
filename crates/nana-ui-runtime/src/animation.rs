@@ -386,8 +386,7 @@ impl AnimationSample {
     }
 }
 
-/// Runtime-side finished / cancelled hook. Vue JS `transitionend` /
-/// `animationend` stay on Workstream F / #63.
+/// Runtime-side finished / cancelled hook.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationEventKind {
     Finished,

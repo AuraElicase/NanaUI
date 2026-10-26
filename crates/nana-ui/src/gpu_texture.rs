@@ -604,7 +604,7 @@ impl HostTextureAlphaMode {
     }
 }
 
-/// JS-visible metadata plus the host-owned WGPU view used by `<nana-gpu>`.
+/// Slot metadata plus the host-owned WGPU view used by `<nana-gpu>`.
 #[derive(Debug, Clone)]
 pub struct HostTextureBinding {
     pub slot: TextureSlotName,
@@ -1036,7 +1036,7 @@ impl HostTextureRegistry {
         Some(version)
     }
 
-    /// Device-loss boundary: every prior JS texture handle becomes unresolved.
+    /// Device-loss boundary: every prior texture handle becomes unresolved.
     pub fn invalidate_all(&self) -> usize {
         let Ok(mut bindings) = self.bindings.write() else {
             return 0;

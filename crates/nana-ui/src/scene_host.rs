@@ -2566,7 +2566,7 @@ fn invalidate_program_host_textures(
 }
 
 /// Always invoke the program input hook. Runtime `prevent_default` still
-/// requests a window redraw; it does not drop Gallery/Vue delivery. A failed
+/// requests a window redraw; it does not drop Gallery delivery. A failed
 /// handler degrades to an empty update (the caller reports it via
 /// `host_failure`) instead of panicking.
 fn scene_runtime_input_update(
@@ -3467,7 +3467,7 @@ impl<Program: RuntimeProgram> EmbeddedRuntime<Program> {
     pub fn notify_device_lost(&mut self) {
         // Embedded devices never raise the hosted device-lost flag; the
         // embedder tells us here instead. Recording it on the context lets
-        // everything holding it (producer threads, the JS runtime) see the
+        // everything holding it (producer threads) see the
         // loss; taking the report right away keeps the fault below the only
         // one.
         let graphics = &self.manager.graphics;

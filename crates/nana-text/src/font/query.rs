@@ -1,7 +1,7 @@
 //! What text asks the font system for. Not a face, and not a CSS cascade.
 //!
-//! CSS `font-family` / `font-weight` / `font-stretch` / `font-style`, a Rust
-//! [`TextStyle`], and NanaVue props all end as one [`FontQuery`]. It is `Eq +
+//! CSS `font-family` / `font-weight` / `font-stretch` / `font-style` and a Rust
+//! [`TextStyle`] both end as one [`FontQuery`]. It is `Eq +
 //! Hash` so the font system can cache selections on it directly.
 
 use crate::style::TextStyle;

@@ -7,7 +7,6 @@
 //! [`docs/reference/start.md`](../../../docs/reference/start.md),
 //! [`docs/reference/application-api.md`](../../../docs/reference/application-api.md).
 //! Runtime owns the widget surface; the crate root exposes host adapters only.
-//! Vue + JS (`nana-ui-vue`, `nanavue-*`) map into the same model.
 //!
 //! [`WorkspaceController`] is a host adapter (Instant→Duration, pointer →
 //! [`WorkspaceMutation`]). Product region state is [`WorkspaceModel`].

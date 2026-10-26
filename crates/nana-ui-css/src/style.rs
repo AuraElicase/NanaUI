@@ -1,18 +1,18 @@
-//! L1 CSS paint parsing at the Vue adapter boundary.
+//! CSS paint parsing for the build-time compilers (`.vue`, `view!`, `css!`).
 //!
 //! Layout declarations go through [`crate::css_map::LayoutStyleCss`]. This
 //! module only resolves paint values used by the Style Model and SVG adapter;
 //! it does not own layout, hit-testing, or a second paint path.
 //!
-//! ## L1 色值策略
+//! ## CSS 色值策略
 //!
 //! | 来源 | 行为 |
 //! |------|------|
 //! | 已知 token / class（`accent`、`muted`、`var(--nana-*)`） | → [`SemanticColorRole`](nana_ui_core::SemanticColorRole) / 调色板字段 |
-//! | 未知 `#hex` / `rgb()` | **不**写入正式 ThemeTokens；仅可作为 L1 paint hint |
+//! | 未知 `#hex` / `rgb()` | **不**写入正式 ThemeTokens；仅可作为 CSS paint hint |
 //!
 //! [`map_css_color_for_tokens`] 是正式 Tokens 路径的唯一入口；[`parse_css_color`]
-//! 仅服务 L1 paint 解析。
+//! 仅服务 CSS paint 解析。
 
 use nana_ui_core::{SemanticColor, SemanticColorRole, ThemeAppearance};
 use std::cell::RefCell;
@@ -171,7 +171,7 @@ pub fn resolve_css_paint_color(input: &str) -> Option<CssPaintColor> {
 
 /// Parse `#rgb` / `#rrggbb` / `#rrggbbaa` / `rgb()` / `rgba()` / named colors.
 ///
-/// **L1 paint only** — does not create formal ThemeTokens.
+/// **CSS paint only** — does not create formal ThemeTokens.
 /// Prefer [`map_css_color_for_tokens`] on the Tokens path.
 pub fn parse_css_color(input: &str) -> Option<[f32; 4]> {
     let s = input.trim();
@@ -224,7 +224,7 @@ pub fn parse_css_color(input: &str) -> Option<[f32; 4]> {
     None
 }
 
-/// CSS2 / CSS Color 3 named keywords used by L1 paint, tests, and UI.
+/// CSS2 / CSS Color 3 named keywords used by CSS paint, tests, and UI.
 ///
 /// Single table for [`parse_css_color`] and shadow-token classification.
 pub fn parse_css_named_color(input: &str) -> Option<[f32; 4]> {
@@ -248,7 +248,7 @@ pub fn parse_css_named_color(input: &str) -> Option<[f32; 4]> {
         "teal" => Some([0.0, 0.5, 0.5, 1.0]),
         "white" => Some([1.0, 1.0, 1.0, 1.0]),
         "yellow" => Some([1.0, 1.0, 0.0, 1.0]),
-        // CSS Color 3 names already used by L1 paint.
+        // CSS Color 3 names already used by CSS paint.
         "coral" => Some([1.0, 0.5, 0.31, 1.0]),
         "dodgerblue" => Some([0.12, 0.56, 1.0, 1.0]),
         _ => None,
@@ -638,7 +638,7 @@ pub fn map_css_color_for_tokens(
 ) -> Option<(SemanticColorRole, SemanticColor)> {
     let role = SemanticColorRole::from_css_token_name(raw)?;
     // The built-in theme for `mode`, not a bare palette: the soft warning and
-    // danger roles resolve through its state-layer alphas. An L1 adapter maps a
+    // danger roles resolve through its state-layer alphas. The CSS mapping maps a
     // CSS token name onto a role; it does not get to pick the alpha.
     let color = nana_ui_core::builtin_theme(mode).style_model().color(role);
     Some((role, color))

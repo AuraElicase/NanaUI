@@ -1,4 +1,4 @@
-//! Standard Rust application owner. Custom and JS hosts may still implement
+//! Standard Rust application owner. Custom hosts may still implement
 //! `RuntimeProgram` directly; application business state stays in `State`.
 use crate::{
     FrameDemand, HostTextureRegistry, RoutedInput, RuntimeProgram, RuntimeProgramContext,

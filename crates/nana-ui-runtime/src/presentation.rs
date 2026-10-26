@@ -2,7 +2,7 @@
 //!
 //! Intent ([`HighlightRequest`]) and derived spans ([`TextPresentation`]) are
 //! retained node fields. Algorithms live on [`UiWorld`] as named
-//! [`TextPresenter`] values so Vue flush and `AppContext` share one registry.
+//! [`TextPresenter`] values so every host and `AppContext` share one registry.
 //! Presenters color committed text only; IME preedit stays solid.
 
 use std::hash::{Hash, Hasher};

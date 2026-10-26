@@ -1,6 +1,5 @@
 //! CSS motion values: time lists, timing functions and the `transition`
-//! shorthand, as strings and Style Model easings. Shared by the Vue path,
-//! which compiles them into animation tracks at run time, and the `.vue`
+//! shorthand, as strings and Style Model easings. Used by the `.vue`
 //! compiler, which compiles `transition` into implicit animations.
 
 use std::time::Duration;

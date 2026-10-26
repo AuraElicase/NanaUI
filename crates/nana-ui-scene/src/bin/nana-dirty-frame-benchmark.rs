@@ -2,7 +2,7 @@
 //! with the number of DIRTY nodes and, independently, with the number of TOTAL
 //! nodes in the document.
 //!
-//! `docs/reference/input-cost.md` established that a Vue frame touching 2 widgets in a
+//! `docs/reference/input-cost.md` established that a frame touching 2 widgets in a
 //! 2,000-node document spends 1.51 ms inside this flush, while an idle flush on
 //! the same tree is 0.0001 ms. One dirty-set size is not enough to say which
 //! system pipeline charges by total size, so this sweeps the grid and reports
@@ -14,9 +14,7 @@
 //!   A bare
 //!   background-role swap dirties style and render but schedules no layout; a
 //!   height change also schedules layout, and layout invalidation propagates to
-//!   ancestors. They scale completely differently. (A Vue hover is NOT the
-//!   first one: its CSS cascade emits a whole new `NodeStyle`, which lands in
-//!   the second.) The `nested*` shapes edit a LABEL inside a row instead, so
+//!   ancestors. They scale completely differently. The `nested*` shapes edit a LABEL inside a row instead, so
 //!   the row's own size cannot move; the `*-auto` shapes make the list
 //!   container content-sized, which is what takes it off the definite-size
 //!   short circuit in `intrinsic_size_scoped`. `layout-rtl` is `layout` in an

@@ -1,4 +1,4 @@
-//! L1 at-rule helpers: `@import`, `@media`, `@font-face`, `@supports`, `@layer`.
+//! At-rule helpers: `@import`, `@media`, `@font-face`, `@supports`, `@layer`.
 //!
 //! Parse stays in [`crate::css_cascade`]; this module owns query evaluation,
 //! href resolution, and `@font-face` descriptors.
@@ -26,7 +26,7 @@ pub const MAX_FONT_FACE_BYTES: u64 = nana_ui_core::MAX_LOCAL_URL_BYTES;
 /// Host-side cap on successfully registered `@font-face` bytes.
 pub const MAX_REGISTERED_FONT_BYTES: u64 = 16 * 1024 * 1024;
 
-/// Viewport + color-scheme facts used by CSS `@media` (mirrors JS `evaluateMediaQuery`).
+/// Viewport + color-scheme facts used by CSS `@media`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MediaEnvironment {
     pub width: f32,
@@ -36,7 +36,7 @@ pub struct MediaEnvironment {
 
 impl Default for MediaEnvironment {
     fn default() -> Self {
-        // Match web-api `visualViewport` seed (960×640, light).
+        // 960×640, light.
         Self {
             width: 960.0,
             height: 640.0,
@@ -67,7 +67,7 @@ pub enum MediaFeature {
     OrientationPortrait,
     PrefersColorSchemeDark,
     PrefersColorSchemeLight,
-    /// Unknown feature — query fails closed (same as JS `evaluateMediaQuery`).
+    /// Unknown feature — query fails closed.
     Unsupported,
 }
 
@@ -233,7 +233,7 @@ pub fn evaluate_media_query_list(list: &MediaQueryList, env: &MediaEnvironment) 
         .any(|query| evaluate_media_query(query, env))
 }
 
-/// Evaluate one query. Unknown features fail closed, matching JS `evaluateMediaQuery`.
+/// Evaluate one query. Unknown features fail closed.
 pub fn evaluate_media_query(query: &MediaQuery, env: &MediaEnvironment) -> bool {
     let type_ok = match query.media_type {
         MediaType::All | MediaType::Screen => true,
@@ -270,7 +270,7 @@ pub fn parse_import_prelude(prelude: &str) -> Option<ImportPrelude> {
 
 /// Evaluate an `@supports` condition. `None` = unknown predicate (fail closed).
 ///
-/// Tiny L1 subset: `(display: flex|grid|block)`, `(color: <parseable>)`,
+/// Tiny subset: `(display: flex|grid|block)`, `(color: <parseable>)`,
 /// `(width: <parseable>)`, plus `not` / `and` / `or` of those. Mixing `and`
 /// and `or` at the same level without wrapping parens is unknown.
 pub fn evaluate_supports_condition(prelude: &str) -> Option<bool> {
@@ -295,7 +295,7 @@ pub fn parse_layer_prelude(prelude: &str) -> Option<LayerPrelude> {
     Some(LayerPrelude { names })
 }
 
-/// Remote / data / protocol-relative / UNC hrefs are never fetched for L1
+/// Remote / data / protocol-relative / UNC hrefs are never fetched for
 /// `@import` / `@font-face`. Checked before any filesystem canonicalize.
 pub fn is_blocked_href(href: &str) -> bool {
     nana_ui_core::is_remote_or_data_href(href)

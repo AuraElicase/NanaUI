@@ -1,9 +1,9 @@
-//! Backend-neutral NanaUI contracts shared by Runtime and Vue adapters.
+//! Backend-neutral NanaUI contracts shared by Runtime and the build-time compilers.
 //!
-//! ## Style Model (L1 / L2 / L3)
+//! ## Style Model
 //!
 //! All styling paths converge on one model — see [`style_model`]:
-//! **Tokens + Semantics + Layout**. L1 CSS adapters and L2 Vue props map *into*
+//! **Tokens + Semantics + Layout**. The CSS engine maps *into*
 //! this model; L3 Rust APIs are the native entry. Drawing stays in Runtime /
 //! UiScene. This crate must **not** depend on CSS parsers, JS engines, WebView,
 //! or window backends.

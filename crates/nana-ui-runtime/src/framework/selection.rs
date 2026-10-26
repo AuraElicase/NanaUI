@@ -133,7 +133,7 @@ impl AppContext {
         self.commit_mutations(queue).map(|_| ())
     }
 
-    /// Register a drop target by node id. Vue and other hosts that do not hold
+    /// Register a drop target by node id. Hosts that do not hold
     /// a typed [`Entity`] use this; dropping the node still releases it.
     pub fn set_drop_target_node(
         &mut self,
