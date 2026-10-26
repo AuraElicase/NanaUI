@@ -1929,10 +1929,11 @@ pub struct SelectMenuScroll {
     pub drag: Option<SelectMenuDrag>,
 }
 
-/// The span of a select field's own layout y its open menu can be seen in:
-/// the window, cut by every clip above the field, through the scroll
-/// offsets between them. The menu opens down or up into it and is capped to
-/// it.
+/// The box, in a select field's own layout coordinates, its open menu can be
+/// seen in: the window, cut by every clip above the field, through the
+/// scroll offsets between them. The menu opens down or up into it and is
+/// capped to it; a menu wider than its field (see
+/// [`crate::Select::fit_options`]) stays between `left` and `right`.
 ///
 /// It is taken when the field projects. A page scrolled under an open menu
 /// carries the menu with its field until the menu next changes, so what is
@@ -1941,6 +1942,8 @@ pub struct SelectMenuScroll {
 pub struct SelectMenuRoom {
     pub top: f32,
     pub bottom: f32,
+    pub left: f32,
+    pub right: f32,
 }
 
 /// A drag of an open menu's scrollbar thumb.

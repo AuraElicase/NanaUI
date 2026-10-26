@@ -101,6 +101,8 @@ select().fit_options(true).options(repos).model(repo)
 
 `fit_options` 只决定下拉框自己的内容宽，宽度由内容决定时才用得上：样式里写 `width: max-content`（函数 API 是 `.css(css! { width: max-content; })`），直接改 `Select` 的样式时是 `LengthSpec::Shrink`。默认的宽度照旧占满一行，写了确定的宽度时照旧按那个宽度；`min_width`、`max_width` 照常生效，例如再写 `min_width` 保住一个最小宽度。不写 `fit_options` 时和原来一样，内容宽只看当前显示的那一项，也不给箭头留位。
 
+框比最长的选项窄时（写了确定的宽度，或被 `max_width` 截住），打开的菜单仍按最长的一项展开，选项不被截断。菜单从框的左边开始；右边超出菜单看得见的范围（见下文“菜单”）时向左移，刚好收在右边界上；比整个范围还宽时截成范围的宽度。菜单永远不比框窄。不写 `fit_options` 时菜单和框一样宽。
+
 ```rust
 let mut select = Select::new(Some(current)).options(options).fit_options(true);
 let layout = Arc::make_mut(&mut select.style.layout);
@@ -143,7 +145,7 @@ layout.min_width = Some(LengthSpec::Px(122.0));
 | `placeholder` | `Option<Arc<str>>` | 不写就是 `None` |
 | `disabled` | `bool` | 常量、信号或闭包 |
 | `loading` | `bool` | 常量、信号或闭包 |
-| `fit_options` | `bool` | `true` 时内容宽取最长的选项再加箭头位，像原生 `<select>`。配合内容决定的宽度（`Shrink`）用。默认 `false` |
+| `fit_options` | `bool` | `true` 时内容宽取最长的选项再加箭头位，像原生 `<select>`。配合内容决定的宽度（`Shrink`）用。框更窄时菜单仍按最长的选项展开，收在看得见的范围内。默认 `false` |
 
 ## 事件
 
