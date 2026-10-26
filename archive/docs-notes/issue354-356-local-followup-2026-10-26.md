@@ -1,5 +1,7 @@
 # Issue #354 / #356 本机跟进（2026-10-26）
 
+> 最终状态：#354 已以触发条件调查和测量归因修正完成，见 [执行上下文证据](issue354-execution-context-2026-10-26.md)；#356 按用户决定以 `NOT_PLANNED` 关闭，未完成的实机矩阵仍是已知限制。父项与各阶段的当前交付范围见 [最终收尾](presentation-output-final-closeout-2026-10-26.md)。下文保留此前各时点的 OPEN 判断、失败和未执行项，不将它们倒填为通过。
+
 基于 `main` 的 `1f91962c744d7c0f3d8c99cf2ae10b94ad0a60dc`，继续前一份 [#242 本机收尾](issue242-closeout-2026-10-26.md)。本机验证结束时改动尚未提交；随后经用户授权使用 CI，已提交并推送到当前 `main`，见下文专项验收跟进。Runtime / Scene 的同期 sticky、layout 及其 fixture 改动不属于本报告的验收输入。
 
 ## 本次修复与观察边界

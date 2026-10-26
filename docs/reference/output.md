@@ -110,7 +110,7 @@ fn window_output(&self, id: WindowId) -> Option<WindowOutputConfig> {
 | Window | 真实 `presentation-output-probe`，覆盖 direct、共享、独立分组、detach、resize 和隐藏静态输出。 |
 | Nested | `EmbeddedSurfaceNode` 与真实 child → parent 像素测试，包括 120/240 次父提交。 |
 | Headless | `PresentationDriver::render_document`，没有 Window 或 event loop。 |
-| Native host | `PresentationDriver::present_to` 实现同设备目标 transfer；Windows `window-output-probe` / `native_export` 包含真实 D3D11 shared-handle import、GPU wait/copy/release 参考代码。后者需 Windows 实测。 |
+| Native host | `PresentationDriver::present_to` 实现同设备目标 transfer；Windows `window-output-probe` / `native_export` 包含真实 D3D11 shared-handle import、GPU wait/copy/release。Windows WARP CI 已通过 native-export 及 240 次 native-host 消费子集，完整硬件/跨进程矩阵未验收。 |
 | OpenVR / SteamVR | `openvr-output-probe` 通过 DX12 ready/release fence、同适配器 D3D11 共享纹理与 `IVROverlay_028` 提交到 SteamVR。默认采用官方 `DXGISharedHandle` 的持久纹理原子 `CopyResource` 更新；本机仅编译与协议检查，未执行 Windows/SteamVR。 |
 | Web bridge | [Electron 44.9.1 参考宿主](../../examples/web-output-bridge/README.md) + `web-output-producer`：跨进程 NT handle → managed `sharedTexture` → `VideoFrame` → WebGPU 绘制。本机覆盖真实 main 使用的协议模块；未执行 Windows/Electron GPU 路径。普通 Web API 无法导入任意 native GPU handle，必须由具体宿主安装并检测专用 bridge；通用 GPU transport 不代表 Electron bridge 已安装。 |
 
@@ -175,7 +175,7 @@ python3 perf/contract.py --evaluate-invariants target/performance/output/direct.
 
 额外六个 `transport-{overlay-static,overlay-changing,overlay-multi,overlay-slow,web-static,web-changing}` 用真实本地 GPU transfer 验证独立 consumer 池与退休，foreign retirement 明确为 mock。通过 `--transport-only` 独立执行，避免改变原七场景负载。三个 `transport-{native-host,openvr-native,web-native}` 只接收对应真实参考报告：30 次实际预热后，240 次测量，严格核对 fixture、平台路径、设备、尺寸、生产/消费工作量与 CPU 计时。缺指标、空负载或 mock 报告不能判为平台通过。
 
-具体参考与九个 transport 门禁现已进入代码；Windows/SteamVR/Electron 运行证据、真实设备丢失、GPU execution time/VRAM 仍是平台或测量证据缺口。macOS 的同设备/mock 通过不能填补这些缺口。
+具体参考与九个 transport 门禁现已进入代码。Windows WARP 的 native-export、同适配器 D3D11 消费及受控 `device.destroy()` 通知已有实际运行证据；这不等于硬件 driver reset。SteamVR live、Electron 实际 GPU import/消费/双凭据释放、完整硬件与跨进程矩阵、缺失的 GPU execution time/VRAM 仍未验收。Electron hosted runner 能力探测因无 WebGPU adapter 未通过，未用 mock 或零帧代替消费成功。当前交付范围及原始证据见 [最终收尾记录](../../archive/docs-notes/presentation-output-final-closeout-2026-10-26.md)；Issue 关闭不改变这些能力边界。
 
 
 ### 按 producer / consumer 追踪
