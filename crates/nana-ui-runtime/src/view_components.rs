@@ -309,6 +309,15 @@ pub trait ComponentView: Clone + PartialEq + Send + 'static {
     #[doc(hidden)]
     fn keep_framework_state(&mut self, _previous: &Self) {}
 
+    /// Emit what the change from `previous` means, whichever write made it:
+    /// the runtime's own input, an application's update, or a refresh
+    /// through [`Self::reconcile`]. An event that reports state this way
+    /// fires once per change and never for a write that kept the state.
+    /// Runs after every update, before it is found to be a no-op. Defaults
+    /// to nothing.
+    #[doc(hidden)]
+    fn announce_change(&self, _previous: &Self, _cx: &mut crate::ViewContext<'_, Self>) {}
+
     fn node_kind(&self) -> NodeKind;
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue);
 

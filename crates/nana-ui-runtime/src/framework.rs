@@ -2589,7 +2589,8 @@ impl AppContext {
     }
 
     /// Tell the focus-within listeners focus entered or left them, in every
-    /// document whose focus moved since they last heard.
+    /// document whose focus moved since they last heard, and close the menu
+    /// of a select focus left.
     fn sync_focus_within_listeners(&mut self) -> Result<(), FrameworkError> {
         let mut moved = self
             .focus_within
@@ -2602,6 +2603,7 @@ impl AppContext {
                 .focused_documents()
                 .filter(|document| !self.focus_within.contains_key(document)),
         );
+        let mut blurred = Vec::new();
         for document in moved {
             let focused = self.world.focused(document);
             let mut entered = Vec::new();
@@ -2616,12 +2618,16 @@ impl AppContext {
                 }
                 current = self.world.parent_id(id);
             }
-            let left = match focused {
+            let previous = match focused {
                 Some(node) => self.focus_within.insert(document, (node, entered.clone())),
                 None => self.focus_within.remove(&document),
-            }
-            .map(|(_, listeners)| listeners)
-            .unwrap_or_default();
+            };
+            let left = previous
+                .map(|(node, listeners)| {
+                    blurred.push(node);
+                    listeners
+                })
+                .unwrap_or_default();
             self.pending_focus_within.extend(
                 left.iter()
                     .filter(|id| !entered.contains(id))
@@ -2633,6 +2639,13 @@ impl AppContext {
                     .filter(|id| !left.contains(id))
                     .map(|&id| (id, true)),
             );
+        }
+        // A select's menu goes with its focus, as a native one's does. One
+        // out being updated is closing itself or keeps what that update says.
+        for id in blurred {
+            if self.views.get(&id).is_some_and(|view| view.is::<Select>()) {
+                self.set_select_opened(Entity::<Select>::from_stable_id(id), false)?;
+            }
         }
         self.drain_focus_within()
     }
@@ -3756,6 +3769,17 @@ impl AppContext {
         );
         staged.keep_framework_state(component);
         self.inherit_segmented_option_surface(entity.id, &mut staged);
+        staged.announce_change(
+            component,
+            &mut ViewContext {
+                entity,
+                mutations: &mut mutations,
+                events: &mut events,
+                program_messages: &mut program_messages,
+                now: self.component_lifecycle.now,
+                reassemble: false,
+            },
+        );
         let mut projected = false;
         if projection == Projection::IfChanged
             && events.is_empty()

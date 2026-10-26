@@ -65,6 +65,15 @@ pub struct SelectChanged {
     pub value: Arc<str>,
 }
 
+/// The menu opened or closed, however that happened: the field activated,
+/// an option chosen, Escape, a press elsewhere, or a refresh that changed the
+/// options or disabled the field. A write that leaves it as it was sends
+/// nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectToggled {
+    pub open: bool,
+}
+
 /// Single-value field. Disabled options stay visible in the opened menu.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Select {
@@ -183,6 +192,11 @@ impl Select {
 
     pub fn inactive(&self) -> bool {
         self.disabled || self.loading
+    }
+
+    /// Whether the menu is shown: open, and the field not disabled or loading.
+    fn menu_open(&self) -> bool {
+        self.opened && !self.inactive()
     }
 
     pub fn selected_index(&self) -> Option<usize> {
@@ -387,6 +401,13 @@ impl crate::ComponentView for Select {
         *self = next;
     }
 
+    fn announce_change(&self, previous: &Self, cx: &mut crate::ViewContext<'_, Self>) {
+        let open = self.menu_open();
+        if open != previous.menu_open() {
+            cx.emit(SelectToggled { open });
+        }
+    }
+
     fn node_kind(&self) -> NodeKind {
         NodeKind::Element {
             tag: "select".into(),
@@ -401,7 +422,7 @@ impl crate::ComponentView for Select {
             hint: hint.clone(),
             placeholder,
             size: self.size,
-            opened: self.opened && !self.inactive(),
+            opened: self.menu_open(),
             invalid: self.invalid,
             loading: self.loading,
             options: self
@@ -420,7 +441,7 @@ impl crate::ComponentView for Select {
                 .collect(),
             highlighted: self.highlighted,
             menu_scroll: self.menu_scroll,
-            menu_room: menu_room(self.opened && !self.inactive(), id, world),
+            menu_room: menu_room(self.menu_open(), id, world),
             checkable: false,
             fit_options: self.fit_options,
         };
@@ -459,7 +480,7 @@ impl crate::ComponentView for Select {
                 disabled: self.inactive(),
                 busy: self.loading,
                 invalid: self.invalid,
-                selected: Some(self.opened && !self.inactive()),
+                selected: Some(self.menu_open()),
                 ..AccessibilityState::default()
             },
         );
@@ -1812,6 +1833,152 @@ mod tests {
             resolve_menu_horizontal(field, Some(250.0), None),
             (300.0, 250.0)
         );
+    }
+
+    /// Every [`SelectToggled`] `select` sends from now on, as `open`.
+    fn heard_toggles(
+        context: &mut AppContext,
+        select: crate::Entity<Select>,
+    ) -> Arc<std::sync::Mutex<Vec<bool>>> {
+        let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = Arc::clone(&heard);
+        context
+            .on(select, move |_, event: &SelectToggled, _| {
+                sink.lock().unwrap().push(event.open);
+            })
+            .unwrap();
+        heard
+    }
+
+    fn key(context: &mut AppContext, key: &'static str) {
+        use nana_ui_input::{KeyInput, KeyState};
+        let mut input = crate::HeadlessInput::bind(context, document());
+        input
+            .press(
+                context,
+                KeyInput::named(key, key, KeyState::Pressed, Default::default()),
+                None,
+                None,
+            )
+            .unwrap();
+    }
+
+    fn click(context: &mut AppContext, (x, y): (f32, f32)) {
+        use nana_ui_input::{InputPayload, PointerInput, PointerPhase};
+        let mut input = crate::HeadlessInput::bind(context, document());
+        for phase in [PointerPhase::Down, PointerPhase::Up] {
+            input
+                .route(
+                    context,
+                    InputPayload::Pointer(PointerInput::mouse(phase, x, y)),
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn the_menu_reports_each_open_and_close_once_whichever_path_closes_it() {
+        let options = || {
+            [
+                SelectOption::new("a", "Alpha"),
+                SelectOption::new("b", "Beta"),
+                SelectOption::new("c", "Gamma"),
+            ]
+        };
+        let (mut context, selects, mut shaper) = stacked(vec![
+            Select::new(Some("a")).options(options()),
+            Select::new(Some("a")).options(options()),
+        ]);
+        let (select, id) = (selects[0], selects[0].stable_id());
+        let heard = heard_toggles(&mut context, select);
+        let take = || std::mem::take(&mut *heard.lock().unwrap());
+        let open = |context: &mut AppContext, shaper: &mut crate::MeasureTextShaper| {
+            context.focus_node(document(), id).unwrap();
+            assert!(context.toggle_select(select).unwrap());
+            frame(context, shaper);
+        };
+        let opened = |context: &AppContext| context.read(select, |select| select.opened).unwrap();
+
+        // The field opens and closes it; asking again for what it is sends
+        // nothing.
+        open(&mut context, &mut shaper);
+        assert!(!context.set_select_opened(select, true).unwrap());
+        assert!(context.toggle_select(select).unwrap());
+        assert!(!context.set_select_opened(select, false).unwrap());
+        assert_eq!(take(), [true, false]);
+
+        // Choosing an option, then the one the field already shows: both close
+        // it and are the press handled.
+        for _ in 0..2 {
+            open(&mut context, &mut shaper);
+            let (x, y) = centre(open_menu(&context, select).options[1].bounds);
+            assert!(context.activate_select_at(select, x, y).unwrap());
+            assert_eq!(take(), [true, false]);
+        }
+        // Enter commits the highlighted option, the one shown.
+        open(&mut context, &mut shaper);
+        assert!(context.commit_focused_select(document()).unwrap());
+        assert_eq!(take(), [true, false]);
+
+        // Escape, from the keyboard; once closed it has nothing to close.
+        open(&mut context, &mut shaper);
+        key(&mut context, "Escape");
+        assert!(!opened(&context));
+        assert!(!context.dismiss_focused_field_options(document()).unwrap());
+        assert_eq!(take(), [true, false]);
+
+        // A press elsewhere in the window.
+        open(&mut context, &mut shaper);
+        click(&mut context, (580.0, 380.0));
+        assert!(!opened(&context));
+        assert_eq!(take(), [true, false]);
+
+        // Focus leaving the field, by Tab or by the application.
+        open(&mut context, &mut shaper);
+        key(&mut context, "Tab");
+        assert_eq!(
+            context.world().focused(document()),
+            Some(selects[1].stable_id())
+        );
+        assert!(!opened(&context));
+        open(&mut context, &mut shaper);
+        context
+            .focus_node(document(), selects[1].stable_id())
+            .unwrap();
+        assert!(!opened(&context));
+        assert_eq!(take(), [true, false, true, false]);
+
+        // A refresh with the same props keeps it open and sends nothing; one
+        // that removes an option, or disables the field, closes it. The
+        // application builds its props afresh, closed.
+        open(&mut context, &mut shaper);
+        let value = context.read(select, |select| select.value.clone()).unwrap();
+        let props = Select::new(value).options(options());
+        context.set_component(select, props.clone()).unwrap();
+        assert!(opened(&context));
+        assert_eq!(take(), [true]);
+        let mut fewer = props.clone();
+        fewer.options.pop();
+        context.set_component(select, fewer.clone()).unwrap();
+        assert!(!opened(&context));
+        assert_eq!(take(), [false]);
+        open(&mut context, &mut shaper);
+        context
+            .set_component(select, fewer.clone().disabled(true))
+            .unwrap();
+        context.set_component(select, fewer.clone()).unwrap();
+        assert_eq!(take(), [true, false], "re-enabled, it stays closed");
+
+        // An application write that disables it hides the menu; enabling it
+        // again shows the menu it left open.
+        open(&mut context, &mut shaper);
+        context
+            .update_component(select, |select, _| select.loading = true)
+            .unwrap();
+        context
+            .update_component(select, |select, _| select.loading = false)
+            .unwrap();
+        assert_eq!(take(), [true, false, true]);
     }
 
     fn long_options(count: usize) -> Vec<SelectOption> {

@@ -98,13 +98,13 @@ impl AppContext {
             if let Some(menu) = self.open_select_menu(entity.id)
                 && let Some(index) = crate::select::select_option_at(&menu, x, y)
             {
+                // Choosing the option the field already shows still closes
+                // the menu, and that is the press handled.
                 return self.update_component(entity, |select, cx| {
                     if let Some(changed) = select.select_index(index) {
                         cx.emit(changed);
-                        true
-                    } else {
-                        false
                     }
+                    !select.opened
                 });
             }
             let Some(field) = self.world.component_layout_box(entity.id) else {
@@ -237,12 +237,11 @@ impl AppContext {
             return Ok(false);
         }
         self.update_component(Entity::<Select>::from_stable_id(target), |select, cx| {
+            let opened = select.opened;
             if let Some(changed) = select.commit_highlighted() {
                 cx.emit(changed);
-                true
-            } else {
-                false
             }
+            opened && !select.opened
         })
     }
 

@@ -135,6 +135,14 @@ layout.min_width = Some(LengthSpec::Px(122.0));
 
 `@change={save}` 在 `save` 是函数时原样传入，参数必须是 `&SelectChanged`。其它表达式展开成 `move |_| { … }`，事件被忽略。
 
+## 菜单开关
+
+菜单每打开一次、每收起一次，都各发一次 `SelectToggled { open }`。不管是怎么收起的都会发：点框、选中一项（包括再选一次已显示的那一项）、回车、Escape、点到别处、焦点离开（Tab 或应用改了焦点），或者应用刷新时删了选项、禁用了控件、置为加载中。写入的状态和原来一样时不发，比如对开着的菜单再要求打开一次，或者刷新时值和选项都没变。同一次操作里先发 `SelectChanged`，再发 `SelectToggled`。
+
+`open` 说的是菜单有没有显示出来：控件禁用或加载中时菜单不显示，算收起。应用直接把 `disabled` 或 `loading` 写回 `false` 而 `opened` 还是 `true` 时，菜单重新显示，也会发一次 `open: true`。
+
+焦点离开时菜单随之收起，和浏览器原生的 `<select>` 一样。
+
 ## 属性
 
 | 属性 | 类型 | 说明 |
@@ -152,6 +160,7 @@ layout.min_width = Some(LengthSpec::Px(122.0));
 | 事件 | 载荷 | 说明 |
 | --- | --- | --- |
 | `on_change`，模板 `on:SelectChanged` 或 `@change` | `&SelectChanged` | 指针、键盘或无障碍提交。函数必须接收这个引用；其它表达式会忽略事件 |
+| 模板 `on:SelectToggled` | `&SelectToggled` | 菜单打开或收起，`open` 是之后的状态。每次变化发一次，见上文“菜单开关” |
 
 ## 插槽
 
