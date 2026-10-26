@@ -17,7 +17,7 @@ pub struct SvgFont<'a> {
     pub family: &'a str,
 }
 
-/// Vue generic `<svg>`: stretch independently to `width`×`height`.
+/// Generic `<svg>`: stretch independently to `width`×`height`.
 pub fn rasterize_stretch(
     markup: &str,
     width: u32,

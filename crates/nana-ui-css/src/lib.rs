@@ -5,14 +5,12 @@
 //! `@font-face`, `@keyframes` and the interactive pseudo-classes, mapped onto
 //! the one Style Model ([`nana_ui_core::LayoutStyle`]). `@container` is
 //! compiled into data the runtime evaluates ([`css_container`]): this crate
-//! never measures a container. Two consumers share
-//! it: the Vue path parses and cascades at run time (`nana-ui-vue`), and the
-//! `.vue` compiler parses and matches at build time (`nana-ui-sfc`), so an
-//! L3 view carries its styles as data and parses nothing while it runs.
+//! never measures a container. The `.vue` compiler (`nana-ui-sfc`), `view!`
+//! and `css!` parse and match at build time, so an L3 view carries its styles
+//! as data and parses nothing while it runs.
 //!
 //! CSS parsing stays out of `nana-ui-core`, `nana-ui-runtime`,
 //! `nana-ui-scene` and `nana-ui`.
-// Carried over with the code from nana-ui-vue.
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]

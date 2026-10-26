@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn bounds_carrying_float_noise_keep_their_displayed_ends() {
-        // Bounds and steps that arrived through f32, as a Vue binding's do.
+        // Bounds and steps that arrived through f32.
         let f32_spec = |minimum: f32, maximum: f32, step: f32, precision| NumberFieldSpec {
             minimum: Some(f64::from(minimum)),
             maximum: Some(f64::from(maximum)),

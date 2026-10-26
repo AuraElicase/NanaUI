@@ -36,7 +36,7 @@ pub struct Args {
     pub stdio: bool,
     pub gpu_probe: bool,
     pub help: bool,
-    /// Everything the caller's own binary interprets (`--js`, `--fixture`, …).
+    /// Everything the caller's own binary interprets (`--fixture`, …).
     pub rest: Vec<String>,
 }
 

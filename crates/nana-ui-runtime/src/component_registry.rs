@@ -1,10 +1,9 @@
 //! Unified Runtime component ABI for builtins and plugins.
 //!
-//! L3 `create_component`, Vue tags, and `UiExtension` all resolve through
+//! L3 `create_component`, component tags, and `UiExtension` all resolve through
 //! [`ComponentRegistry`]. Application business state stays in `AppContext`
 //! views; this table only names types and projects generic UI into `UiWorld`.
 //!
-//! This is **not** the Vue JS host factory table (`nana_ui_vue::NativeComponentRegistry`).
 //! Register layout/hit/Scene components here via [`crate::ExtensionRegistrar::register_component`].
 
 use std::{
@@ -60,7 +59,7 @@ pub struct SemanticOption<'a> {
     pub disabled: bool,
 }
 
-/// Narrow L1/L2 property bag. Not application business state.
+/// Narrow semantic property bag. Not application business state.
 #[derive(Debug, Clone)]
 pub struct SemanticSpec<'a> {
     pub type_id: &'a ComponentTypeId,
@@ -84,7 +83,7 @@ pub struct SemanticSpec<'a> {
     pub step: f32,
     pub number: f32,
     pub options: &'a [SemanticOption<'a>],
-    /// Extra Vue/host attributes. Plugins read these instead of extending this struct.
+    /// Extra host attributes. Plugins read these instead of extending this struct.
     pub attrs: &'a [(&'a str, &'a str)],
     /// Named child slots (`leading`, `body`, `control`, …). Not HostValue.
     pub slots: &'a [(&'a str, StableNodeId)],
@@ -177,9 +176,9 @@ impl PreparedSemanticBinding {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ComponentBindKind {
-    /// `from_semantic` projected a real control; skip generic Vue style.
+    /// `from_semantic` projected a real control; skip generic style.
     Projected,
-    /// Tag-only / layout primitive; keep Vue generic style/a11y.
+    /// Tag-only / layout primitive; keep generic style/a11y.
     Layout,
 }
 
@@ -212,7 +211,7 @@ pub(crate) struct RegisteredComponentType {
 pub trait RegisterableComponent: ComponentView {
     const TYPE_ID: &'static str;
     const TAGS: &'static [&'static str];
-    /// Layout primitives keep Vue generic style writeback (`Layout`).
+    /// Layout primitives keep generic style writeback (`Layout`).
     const BIND_KIND: ComponentBindKind = ComponentBindKind::Projected;
     fn from_semantic(spec: &SemanticSpec<'_>) -> Self;
     /// Opt in when interaction uses typed component state rather than only

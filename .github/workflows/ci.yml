@@ -37,19 +37,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - name: Enable Git symlinks for V8
-        if: runner.os == 'Windows'
-        run: git config --global core.symlinks true
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      # libvulkan1 + mesa-vulkan-drivers give lavapipe: the runner has no GPU
-      # and the WebGPU behaviour tests do not skip without an adapter, they
-      # panic on request_adapter. libasound2-dev is for alsa-sys, which
-      # nana-ui-web-api pulls through cpal for Web Audio.
+      # libvulkan1 + mesa-vulkan-drivers give lavapipe: the runner has no GPU,
+      # and the offscreen pixel tests need an adapter to execute.
       - name: Install Linux window dependencies
         if: runner.os == 'Linux'
         run: |
@@ -57,15 +52,9 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             libx11-dev libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev \
             libwayland-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-            libvulkan1 mesa-vulkan-drivers libasound2-dev
+            libvulkan1 mesa-vulkan-drivers
       - name: Check formatting
         run: cargo fmt --all -- --check
-      - name: Rebuild Vue SFC compatibility fixture
-        working-directory: crates/nana-js-engine/fixtures/vue-sfc-compat
-        run: |
-          npm ci
-          npm run build
-          git diff --exit-code -- dist
       - name: Check minimal feature set
         run: cargo check -p nana-ui --lib --no-default-features --locked
       - name: Check isolated component families
@@ -166,8 +155,6 @@ jobs:
       - name: Run Scene tests under the layout guard
         if: runner.os == 'Linux'
         run: cargo test -p nana-ui-scene --lib --features nana-ui-runtime/layout-verify --locked
-      - name: Run V8 engine tests
-        run: cargo test -p nana-js-v8 --features engine --locked -- --test-threads=1
       # The headless Agent surface is gated behind non-default features, so the
       # default-feature run above compiles all of it out. Linux has lavapipe, so
       # the offscreen pixel tests genuinely execute there; elsewhere they skip
@@ -214,18 +201,6 @@ jobs:
       # `docs/hot-reload.md` tells L3 authors to use could rot unnoticed.
       - name: Check the L3 dev entry's headless branch
         run: cargo check -p nana-ui-dev --example l3-dev-entry --features headless --locked
-      - name: Check the Vue-free Agent tier pulls no JS engine
-        shell: bash
-        run: |
-          if [ "$(cargo tree -p nana-ui-devtools --features runtime-agent --locked | grep -ci v8)" != "0" ]; then
-            echo "runtime-agent must not depend on V8" >&2
-            exit 1
-          fi
-      - name: Run nanavue JS tests
-        shell: bash
-        run: |
-          (cd packages/nanavue-runtime && npm test)
-          (cd packages/nanavue-components && npm test)
       - name: Check default-feature targets
         run: cargo check --workspace --all-targets --locked
       - name: Check legal feature combinations
@@ -235,8 +210,6 @@ jobs:
           # Issue #226: the pack mount without the hosted window stack.
           cargo check -p nana-ui --all-targets --features packaged-resources --locked
           cargo check -p component-gallery --all-targets --all-features --locked
-          cargo check -p vue-counter --all-targets --features windowed --locked
-          cargo check -p vue-counter --all-targets --all-features --locked
           # `required-features` hides the dirty-frame benchmark from every
           # workspace-wide check, so without this line it can rot or be deleted
           # with CI still green. It is the Issue #33 / #89 migration baseline.
@@ -253,11 +226,8 @@ jobs:
         run: cargo clippy -p nana-ui -p component-gallery -p nana-diagnostics --all-targets --all-features --locked --no-deps -- -D warnings
 
   android-arm64-cross:
-    # `scripts/check-android-arm64.sh` was only reachable from the
-    # workflow_dispatch-only Package V8 workflow, so a break in the Android
-    # ARM64 cross-compile stayed invisible until someone ran it by hand.
-    # Check-only and without RUSTY_V8_ARCHIVE: the script then takes its
-    # V8-stub branch, which needs no multi-hour GN build.
+    # Check-only: a break in the Android ARM64 cross-compile is otherwise
+    # invisible until someone builds the host by hand.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -300,8 +270,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             libx11-dev libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-            libasound2-dev
+            libwayland-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
       - name: Check the workspace on the declared minimum toolchain
         run: cargo check --workspace --all-targets --locked
 
@@ -312,14 +281,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      # nana-ui-vue pulls nana-ui-web-api, which pulls cpal for Web Audio, and
-      # alsa-sys needs the ALSA headers to build. Without this the job dies in
-      # its first cargo command and every invariant below it silently never
-      # runs -- which is how it stayed red from 7e1f1d5aa onwards.
-      - name: Install ALSA headers
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libasound2-dev
       - name: Work-counter and virtualization invariants
         run: |
           # libtest is substring match; `|` is not a regex and `--exact` needs
@@ -382,10 +343,6 @@ jobs:
           # Issue #211 Gate D: the CJK line decision stays near linear, the
           # pretty beam within K·C per line, and a resize never reshapes.
           cargo test -p nana-text --locked --test line_decision_gate
-          # Same class of invariant, different crate: the Vue bridge must not
-          # walk the whole tree to discover it has no sidebar.
-          cargo test -p nana-ui-vue --lib --locked \
-            the_sidebar_footer_sync_still_runs_when_there_is_a_frame
           # Issue #89 keeps the Issue #33 head-layout sweep as the text
           # migration baseline; this asserts the 2k/4k/8k cells are still in it.
           cargo test -p nana-ui-scene --features benchmark --locked \
@@ -499,9 +456,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - name: Enable Git symlinks for V8
-        if: runner.os == 'Windows'
-        run: git config --global core.symlinks true
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux window dependencies
         if: runner.os == 'Linux'

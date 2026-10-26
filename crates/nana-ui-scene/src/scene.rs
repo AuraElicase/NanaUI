@@ -571,7 +571,7 @@ pub struct StrokePattern {
     /// non-finite is unset (use geometric length). Dashes are in these units:
     /// geometric `s` maps to `s * (path_length / geometric_length)` before
     /// phase. Ignored when `dash` is empty (solid). Scene Stroke callers set
-    /// this field; Vue/CSS does not extract it (generic SVG is resvg).
+    /// this field; CSS does not extract it (generic SVG is resvg).
     pub path_length: f32,
     /// Per-point colors. Used only when `len` matches the stroke point count;
     /// each segment takes the color of its start vertex.
@@ -2336,7 +2336,7 @@ impl UiScene {
         true
     }
 
-    /// Skip duplicate Vue `#text` children when the host already paints that
+    /// Skip duplicate `#text` children when the host already paints that
     /// string. Independent element children, such as list rows inside a Card,
     /// keep their own labels.
     fn parent_already_paints_text(&self, node: &ExtractedNode) -> bool {
@@ -4272,7 +4272,7 @@ fn visual_stroke(
     width: f32,
     color: [f32; 4],
 ) -> ScenePrimitive {
-    // Graph/TimeSeries keep `pattern: None`. Vue pathLength stays in SVG markup (resvg).
+    // Graph/TimeSeries keep `pattern: None`. SVG pathLength stays in SVG markup (resvg).
     ScenePrimitive {
         id: PrimitiveId {
             node: context.node,

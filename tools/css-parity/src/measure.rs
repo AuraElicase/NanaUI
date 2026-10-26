@@ -1714,7 +1714,7 @@ mod tests {
 
     #[test]
     fn unspecified_flex_shrink_does_not_crush_definite_row() {
-        // Issue #22: Vue CSS that omits flex-shrink stays 0, not CSS initial 1.
+        // Issue #22: a style that omits flex-shrink stays 0, not CSS initial 1.
         let mut root_s = LayoutStyle::default();
         root_s.apply_css_text(
             "display:flex;flex-direction:row;align-items:flex-start;width:200px;height:80px;gap:0",

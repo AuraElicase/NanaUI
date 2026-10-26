@@ -156,7 +156,7 @@ impl fmt::Display for FetchError {
 
 impl std::error::Error for FetchError {}
 
-/// Cooperative cancellation shared by the JS request, worker, and host
+/// Cooperative cancellation shared by the request, worker, and host
 /// transport. Hosts with an interruptible backend should observe it while
 /// connecting, following redirects, and reading the response body.
 #[derive(Debug, Default)]
@@ -219,8 +219,8 @@ impl FetchCancellation {
 
 /// Security and resource limits applied by the host before every network hop.
 ///
-/// One policy covers all HTTP(S) egress: the JS `fetch()` path and the engine's
-/// own resource loads (`url(...)` images) share this host.
+/// One policy covers all HTTP(S) egress, including the engine's own resource
+/// loads (`url(...)` images).
 ///
 /// Origins use URL origin serialization (`scheme://host[:port]`) and are
 /// matched exactly. The default policy authorizes nothing.
@@ -318,7 +318,7 @@ pub trait FetchHost: Send + Sync + fmt::Debug {
     ///
     /// The response cap still applies, taken from [`Self::policy`] — the host's
     /// own declared limit, not somebody else's. Without this a host that
-    /// implements only `fetch` would hand JS an unbounded body while its own
+    /// implements only `fetch` would hand the caller an unbounded body while its own
     /// `FetchPolicy` says otherwise.
     fn fetch_streaming(
         &self,
@@ -613,8 +613,8 @@ impl Transport for CancellableTcpTransport {
     }
 }
 
-/// Blocking `ureq` implementation. Callers must execute it away from UI/JS
-/// threads; `nana-ui-web-api` supplies that worker boundary.
+/// Blocking `ureq` implementation. Callers must execute it away from the UI
+/// thread.
 #[derive(Clone)]
 pub struct NativeFetchHost {
     policy: FetchPolicy,

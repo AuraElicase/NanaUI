@@ -99,7 +99,6 @@ def find_case(cases: list[dict[str, Any]], nodes: int, kind: str) -> dict[str, A
 def validate_cpu(args: argparse.Namespace, failures: list[str]) -> None:
     runtime = load(args.runtime)
     framework = load(args.framework)
-    vue = load(args.vue)
     scene = load(args.scene)
 
     runtime_cases = runtime["cases"]
@@ -210,43 +209,6 @@ def validate_cpu(args: argparse.Namespace, failures: list[str]) -> None:
             failures,
         )
     validate_virtual_scales(framework, failures)
-
-    vue_cases = vue["cases"]
-    require(
-        find_case(vue_cases, 5_000, "full") is not None,
-        "vue report must include a 5k full case",
-        failures,
-    )
-    require(
-        find_case(vue_cases, 10_000, "full") is not None,
-        "vue report must include a 10k full case",
-        failures,
-    )
-    require(
-        find_case(vue_cases, 50_000, "construction") is not None,
-        "vue report must include a 50k construction case",
-        failures,
-    )
-    vue_5k = find_case(vue_cases, 5_000, "full")
-    if vue_5k is not None:
-        idle = require_distribution(vue_5k.get("idle_semantic_ms"), "vue 5000 idle_semantic_ms", failures)
-        construction = require_distribution(
-            vue_5k.get("construction_ms"),
-            "vue 5000 construction_ms",
-            failures,
-        )
-        if idle is not None:
-            require(
-                p95(idle) <= 0.01,
-                "Vue 5000-node idle semantic P95 exceeds 0.01 ms",
-                failures,
-            )
-        if construction is not None:
-            require(
-                p95(construction) <= 40.0,
-                "Vue 5000-node construction P95 exceeds 40 ms",
-                failures,
-            )
 
     scene_rows = scene["rows"]
     require(
@@ -454,25 +416,22 @@ def _ok_scale(kind: str, rows: int, columns: int | None = None) -> dict[str, Any
     return payload
 
 
-def _cpu_args(runtime: dict[str, Any], framework: dict[str, Any], vue: dict[str, Any], scene: dict[str, Any]) -> argparse.Namespace:
+def _cpu_args(runtime: dict[str, Any], framework: dict[str, Any], scene: dict[str, Any]) -> argparse.Namespace:
     directory = Path(tempfile.mkdtemp())
     paths = {
         "runtime": directory / "runtime.json",
         "framework": directory / "framework.json",
-        "vue": directory / "vue.json",
         "scene": directory / "scene.json",
     }
     for name, payload in (
         ("runtime", runtime),
         ("framework", framework),
-        ("vue", vue),
         ("scene", scene),
     ):
         paths[name].write_text(json.dumps(payload), encoding="utf-8")
     return argparse.Namespace(
         runtime=paths["runtime"],
         framework=paths["framework"],
-        vue=paths["vue"],
         scene=paths["scene"],
         gpu=None,
     )
@@ -535,18 +494,6 @@ def _sample_reports() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], d
             },
         ],
     }
-    vue = {
-        "cases": [
-            {
-                "nodes": nodes,
-                "kind": "full",
-                "construction_ms": _distribution(10.0 if nodes == 5_000 else 1.0),
-                "idle_semantic_ms": _distribution(0.0),
-            }
-            for nodes in (100, 500, 1_000, 5_000, 10_000)
-        ]
-        + [{"nodes": 50_000, "kind": "construction", "construction_ms": _distribution(20.0)}]
-    }
     scene = {
         "rows": [
             {
@@ -560,18 +507,18 @@ def _sample_reports() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], d
         ]
         + [{"nodes": 50_000, "kind": "construction"}]
     }
-    return runtime, framework, vue, scene
+    return runtime, framework, scene
 
 
 def self_test() -> int:
     failures: list[str] = []
-    runtime, framework, vue, scene = _sample_reports()
-    validate_cpu(_cpu_args(runtime, framework, vue, scene), failures)
+    runtime, framework, scene = _sample_reports()
+    validate_cpu(_cpu_args(runtime, framework, scene), failures)
 
     missing_5k = dict(runtime)
     missing_5k["cases"] = [case for case in runtime["cases"] if int(case["nodes"]) != 5_000]
     missing_5k_failures: list[str] = []
-    validate_cpu(_cpu_args(missing_5k, framework, vue, scene), missing_5k_failures)
+    validate_cpu(_cpu_args(missing_5k, framework, scene), missing_5k_failures)
     require(
         any("5k full case" in failure for failure in missing_5k_failures),
         "self-test must reject a runtime report that omits the 5k full case",
@@ -584,7 +531,7 @@ def self_test() -> int:
         if int(case["nodes"]) == 5_000:
             case["initial_systems_ms"] = _distribution(9.0)
     slow_failures: list[str] = []
-    validate_cpu(_cpu_args(slow_5k, framework, vue, scene), slow_failures)
+    validate_cpu(_cpu_args(slow_5k, framework, scene), slow_failures)
     require(
         any("exceeds 8 ms" in failure for failure in slow_failures),
         "self-test must reject 5k initial_systems p95 above the in-force 8 ms gate",
@@ -598,7 +545,7 @@ def self_test() -> int:
         if scale.get("kind") != "tree"
     ]
     tree_failures: list[str] = []
-    validate_cpu(_cpu_args(runtime, no_tree, vue, scene), tree_failures)
+    validate_cpu(_cpu_args(runtime, no_tree, scene), tree_failures)
     require(
         any("100k tree" in failure for failure in tree_failures),
         "self-test must reject a report that omits the 100k tree scale",
@@ -622,7 +569,7 @@ def self_test() -> int:
         if scale.get("kind") == "list" and int(scale.get("logical_rows", 0)) == 100_000:
             scale["live_ui_entities"] = list_live_entity_bound() + 1
     bound_failures: list[str] = []
-    validate_cpu(_cpu_args(runtime, over_bound, vue, scene), bound_failures)
+    validate_cpu(_cpu_args(runtime, over_bound, scene), bound_failures)
     require(
         any("geometric bound" in failure for failure in bound_failures),
         "self-test must reject live_ui_entities above the geometric bound",
@@ -635,7 +582,7 @@ def self_test() -> int:
         if scale.get("kind") == "list" and int(scale.get("logical_rows", 0)) == 10_000:
             scale["live_ui_entities_bound"] = 62
     leftover_failures: list[str] = []
-    validate_cpu(_cpu_args(runtime, leftover_200, vue, scene), leftover_failures)
+    validate_cpu(_cpu_args(runtime, leftover_200, scene), leftover_failures)
     require(
         any("geometric cap" in failure for failure in leftover_failures),
         "self-test must reject leftover 200px live_ui_entities_bound=62",
@@ -649,7 +596,7 @@ def self_test() -> int:
             scale["materialize_ms"] = None
             scale["live_ui_entities"] = None
     empty_failures: list[str] = []
-    validate_cpu(_cpu_args(runtime, empty_ok, vue, scene), empty_failures)
+    validate_cpu(_cpu_args(runtime, empty_ok, scene), empty_failures)
     require(
         any("fake empty ok" in failure for failure in empty_failures),
         "self-test must reject tree status=ok without materialize_ms/live_ui_entities",
@@ -669,7 +616,6 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime", type=Path)
     parser.add_argument("--framework", type=Path)
-    parser.add_argument("--vue", type=Path)
     parser.add_argument("--scene", type=Path)
     parser.add_argument("--gpu", type=Path)
     parser.add_argument("--self-test", action="store_true")
@@ -677,10 +623,10 @@ def main() -> int:
     if args.self_test:
         return self_test()
     failures: list[str] = []
-    cpu_paths = [args.runtime, args.framework, args.vue, args.scene]
+    cpu_paths = [args.runtime, args.framework, args.scene]
     if any(cpu_paths):
         if not all(cpu_paths):
-            parser.error("CPU validation requires runtime, framework, vue, and scene reports")
+            parser.error("CPU validation requires runtime, framework, and scene reports")
         validate_cpu(args, failures)
     if args.gpu:
         validate_gpu(args.gpu, failures)

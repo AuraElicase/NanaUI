@@ -122,7 +122,7 @@ fn is_absolute_local_url(url: &str) -> bool {
 /// `url` is the reference as written, `resolved` what
 /// [`resolve_background_image_url`] made of it. `data:` and packaged
 /// (`nana://res/`) pass. `http(s):` does not: `@font-face` has no remote
-/// transport, matching the Vue stylesheet path. Filesystem paths must stay
+/// transport. Filesystem paths must stay
 /// under the URL base (relative references) or the host base / working
 /// directory (absolute ones), so `file:` / `..` cannot escape.
 pub fn resolved_resource_is_allowed(url: &str, resolved: &str) -> bool {

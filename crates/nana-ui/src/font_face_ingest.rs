@@ -57,7 +57,7 @@ fn mark_loaded(key: String) {
 ///
 /// Already-loaded keys are skipped. Failed srcs drop that face (no system-font
 /// stand-in). Remote `http(s)` srcs are refused — `@font-face` has no network
-/// transport, matching the Vue stylesheet path. `data:` and jailed filesystem
+/// transport. `data:` and jailed filesystem
 /// srcs read up to 8 MiB.
 pub fn ingest_host_font_faces(specs: &[HostFontFaceSpec]) -> usize {
     let mut loaded = 0usize;

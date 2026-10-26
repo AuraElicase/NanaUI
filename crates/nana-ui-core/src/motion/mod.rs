@@ -3,7 +3,7 @@
 //! This module is the **only** Motion timeline authority. Runtime
 //! `AnimationSpec` is the timing / playback subset (id, target, start,
 //! duration, frame interval, easing, iteration, direction, fill, pause) and
-//! samples unit progress through [`evaluate_progress`]. Vue/CSS compilers
+//! samples unit progress through [`evaluate_progress`]. CSS compilers
 //! must emit [`MotionTrack`] / [`MotionGraph`], not a second clock.
 //!
 //! [`PresentationStore`] is a transient overlay over these tracks, not a second

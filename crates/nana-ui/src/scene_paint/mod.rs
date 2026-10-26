@@ -905,8 +905,8 @@ impl SceneWgpuPainter {
     }
 
     /// Policy-gated egress for the `http(s)` `url(...)` images of the scenes
-    /// painted next: the host behind the document's JS `fetch()`. `None`
-    /// refuses remote images; `data:`, `file:` and jailed paths are unaffected.
+    /// painted next. `None` refuses remote images; `data:`, `file:` and jailed
+    /// paths are unaffected.
     ///
     /// A shared painter is given each document's host before painting it, and
     /// caches results per host, so no document sees an image another

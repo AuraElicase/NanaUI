@@ -1188,7 +1188,7 @@ impl AppContext {
     /// Leading and trailing columns fill leftover width; the center column is a
     /// fixed title slot. Custom Minimize / Maximize / Close buttons live in the
     /// trailing column; the native window-button placeholder leads the leading
-    /// column. Host-mounted slots and Vue extras are reparented, not recreated.
+    /// column. Host-mounted slots and extra children are reparented, not recreated.
     pub fn assemble_app_title_bar(
         &mut self,
         bar: Entity<AppTitleBar>,

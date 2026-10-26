@@ -317,7 +317,7 @@ pub struct GraphNode {
     pub size: GraphSize,
     pub ports: Vec<GraphPort>,
     /// Optional host identity for this node's interior (`nana.host-texture`
-    /// registry slot or Vue `data-nana-gpu`). Empty / omitted keeps the
+    /// registry slot or template `data-nana-gpu`). Empty / omitted keeps the
     /// default frame; Runtime never paints mermaid/math/formula pixels.
     #[serde(
         default,

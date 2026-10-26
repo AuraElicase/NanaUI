@@ -614,7 +614,7 @@ pub trait RuntimeProgram: Sized + 'static {
     }
 
     /// Borrow one document for a synchronous operation. References cannot escape
-    /// the callback; release the scope before invoking application or JS code.
+    /// the callback; release the scope before invoking application code.
     fn with_document<R>(
         &self,
         id: WindowId,
@@ -707,9 +707,7 @@ pub trait RuntimeProgram: Sized + 'static {
     }
 
     /// Policy-gated egress for this window's `http(s)` `url(...)` images.
-    ///
-    /// Return the same host that governs the window's JS `fetch()`, so one
-    /// policy covers both paths. `None` refuses every remote image.
+    /// `None` refuses every remote image.
     ///
     /// Called every frame. Return a clone of a host the application keeps, not
     /// one built per call: a new `Arc` is a new egress, so its images would be
@@ -987,7 +985,7 @@ pub(crate) fn take_pending_startup() -> crate::StartupOptions {
 }
 
 /// Runs `run` with `startup` as the options the next host started on this
-/// thread picks up (`run_runtime(..)` inside it shows the Early Splash). Front ends that wrap [`run_runtime`] (the Vue host, a
+/// thread picks up (`run_runtime(..)` inside it shows the Early Splash). Front ends that wrap [`run_runtime`] (a
 /// builder) pass their startup through here instead of growing a parameter
 /// for every entry point.
 pub fn with_startup<R>(startup: crate::StartupOptions, run: impl FnOnce() -> R) -> R {

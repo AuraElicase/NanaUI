@@ -7,7 +7,7 @@ description = "Template element tree to nana-ui-runtime view calls, shared by vi
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-# Styles are parsed and matched with the engine the Vue path runs.
+# Styles are parsed and matched with the one CSS engine.
 nana-ui-css.workspace = true
 nana-ui-core.workspace = true
 serde_json.workspace = true

@@ -413,7 +413,7 @@ impl AppContext {
 
     /// Route a logical-pixel scroll delta to the nearest hit scroll container.
     ///
-    /// L2 [`ScrollView`] and L1 `overflow: auto|scroll` share [`ScrollOffset`].
+    /// [`ScrollView`] and CSS `overflow: auto|scroll` share [`ScrollOffset`].
     /// At a clamped edge the event bubbles to an enclosing container.
     /// Scrollbar chrome stays on [`ScrollView`] only.
     pub fn scroll_at(
@@ -453,15 +453,15 @@ impl AppContext {
         Ok(None)
     }
 
-    /// Whether a node is an L2 [`ScrollView`]. Scrollbar drag and hover chrome
-    /// key off this; wheel also routes to L1 `overflow: auto|scroll` boxes.
+    /// Whether a node is a [`ScrollView`]. Scrollbar drag and hover chrome
+    /// key off this; wheel also routes to CSS `overflow: auto|scroll` boxes.
     pub fn is_scroll_view(&self, id: StableNodeId) -> bool {
         self.views
             .get(&id)
             .is_some_and(|view| view.is::<ScrollView>())
     }
 
-    /// Whether L1 `overflow: auto|scroll` applies on either axis.
+    /// Whether CSS `overflow: auto|scroll` applies on either axis.
     pub fn overflow_scrolls(&self, id: StableNodeId) -> bool {
         self.world.node_style(id).is_some_and(|style| {
             style.layout.overflow_x.scrolls() || style.layout.overflow_y.scrolls()
@@ -475,7 +475,7 @@ impl AppContext {
         (x || y).then_some((x, y))
     }
 
-    /// Move a [`ScrollView`] or L1 overflow scroller by `delta`. Returns
+    /// Move a [`ScrollView`] or CSS overflow scroller by `delta`. Returns
     /// `false` at a clamped edge so the caller can bubble.
     pub(crate) fn scroll_node_by(
         &mut self,

@@ -86,8 +86,8 @@ pub struct StartupTicket {
 }
 
 impl StartupTicket {
-    /// The ticket's number, for front ends that pass it through a boundary
-    /// (the Vue host hands it to JavaScript). Tickets compare by it.
+    /// The ticket's number, for front ends that pass it through a boundary.
+    /// Tickets compare by it.
     pub const fn generation(self) -> u64 {
         self.generation
     }

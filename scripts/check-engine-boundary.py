@@ -118,8 +118,8 @@ GPU_BACKEND_PACKAGES = {
 }
 
 
-# The CSS engine runs in the Vue adapter and in the view compilers; the
-# product path below them carries Style Model data, never CSS parsing.
+# The CSS engine runs in the view compilers; the product path below them
+# carries Style Model data, never CSS parsing.
 CSS_FREE_PACKAGES = {"nana-ui-core", "nana-ui-runtime", "nana-ui-scene", "nana-ui"}
 CSS_ENGINE_PACKAGES = {"nana-ui-css"}
 
@@ -265,16 +265,15 @@ GPU_CONTRACT_PACKAGES = {
     "nana-gpu",
     "nana-frame-exchange",
     "nana-ui",
-    "nana-ui-vue",
     "nana-ui-devtools",
 }
 # Files that are the escape hatch or the framework's own backend access.
 GPU_CONTRACT_EXEMPT_FILES = {"wgpu_interop.rs", "__framework.rs", "test_gpu.rs", "tests.rs"}
 # The only crates whose `src/` may call `nana_gpu::__framework`: it is how the
 # framework reaches WGPU without turning `wgpu-interop` on for every consumer
-# (the Vue JS WebGPU facade and devtools snapshot readback included). Their
+# (devtools snapshot readback included). Their
 # examples and tests are consumers like any other. nana-gpu owns it.
-GPU_FRAMEWORK_PACKAGES = {"nana-frame-exchange", "nana-ui", "nana-ui-vue", "nana-ui-devtools"}
+GPU_FRAMEWORK_PACKAGES = {"nana-frame-exchange", "nana-ui", "nana-ui-devtools"}
 GPU_FRAMEWORK_OWNER = "nana-gpu"
 
 

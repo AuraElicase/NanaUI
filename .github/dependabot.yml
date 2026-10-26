@@ -43,12 +43,9 @@ updates:
       - dependency-name: fancy-regex
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
-  # A vue-sfc-compat bump also needs `npm run build` and the rebuilt dist/
-  # committed; CI fails the PR until then.
   - package-ecosystem: npm
     directories:
       - /docs
-      - /crates/nana-js-engine/fixtures/vue-sfc-compat
     schedule:
       interval: monthly
     groups:

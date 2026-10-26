@@ -1,16 +1,16 @@
 //! The bundled Noto Sans SC faces, as a single source of truth.
 //!
-//! These constants live here rather than in `nana-ui` because three separate
-//! crates need the regular face: the theme (`nana-ui`), the SVG rasterizer
-//! (`nana-ui-vue`) and Canvas2D text (`nana-ui-web-api`). Each used to
-//! `include_bytes!` the file itself, and the linker does not merge identical
-//! constant data across crates — desktop binaries carried two copies of the
-//! 2.5 MB regular face on top of the three other weights.
+//! These constants live here rather than in `nana-ui` because more than one
+//! crate needs the regular face (the theme in `nana-ui`, `nana-ui-scene`, and
+//! `nana-text`'s tests). Each used to `include_bytes!` the file itself, and the
+//! linker does not merge identical constant data across crates — desktop
+//! binaries carried two copies of the 2.5 MB regular face on top of the three
+//! other weights.
 //!
 //! Two features, so a host pays only for what it draws with:
 //!
-//! - `bundled-font-regular` — the regular face alone. On by default for every
-//!   consumer, because the SVG and Canvas2D paths have no other fallback.
+//! - `bundled-font-regular` — the regular face alone, for crates that draw
+//!   text without a system-font fallback.
 //! - `bundled-fonts` — all four UI weights. Implies the above. Desktop hosts
 //!   that render the full theme want this; the Android host does not.
 //!

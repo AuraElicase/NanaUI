@@ -1482,7 +1482,7 @@ fn measure_node(
     // sort per container across the whole tree -- 1.79 -> 2.55 ms on the
     // 5,000-node canonical layout, measured. It buys one frame: the next
     // scoped pass would have found a plan waiting. `layout_document`
-    // (css-parity, `layout_style_tree`, Vue `measure_layout`) throws the map
+    // (css-parity, `layout_style_tree`) throws the map
     // away entirely, and `force_full` has just cleared the retained cache, so
     // in both cases the plans would be built for nobody.
     if unforced && scope.is_some() {

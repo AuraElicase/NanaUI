@@ -245,8 +245,8 @@ impl AppContext {
     }
 
     /// Replace the selection of a focused text input with no editor
-    /// component: a field a host projects as text-input state alone, as
-    /// Vue's are. Typed text and IME commits reach it the same way.
+    /// component: a field a host projects as text-input state alone.
+    /// Typed text and IME commits reach it the same way.
     /// Set a text input's value and selections. An editor component holds
     /// the state its next projection writes, so its state is set through it;
     /// a field with no component (a host's projection) is written directly.

@@ -117,8 +117,7 @@ impl AppearanceSettings {
     pub const MAX_BACKDROP_OPACITY: f32 = 0.92;
     /// Default cover opacity when native material is active.
     ///
-    /// Matches Lilia / `nanavue-components` `BACKDROP_OPACITY_DEFAULT` (0.64) and
-    /// `--lilia-backdrop-opacity`. Do not silent-regress to older UI mix factors
+    /// Matches Lilia's `--lilia-backdrop-opacity` (0.64). Do not silent-regress to older UI mix factors
     /// such as 0.78 (hover blending in widgets, not Appearance).
     pub const DEFAULT_BACKDROP_OPACITY: f32 = 0.64;
     /// Theme restored by [`AppearanceEvent::Reset`], matching Lilia
@@ -694,7 +693,7 @@ impl SettingsState {
 
 /// Appearance settings events shared by backend-neutral hosts.
 ///
-/// Kept next to settings data so Vue and Runtime can share the same contract
+/// Kept next to settings data so hosts and Runtime can share the same contract
 /// without depending on settings-section widgets.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppearanceEvent {
@@ -707,7 +706,7 @@ pub enum AppearanceEvent {
     TitlebarFollowsSidebar(bool),
     /// Restore appearance defaults **and** theme.
     ///
-    /// Matches Lilia / `nanavue-components` `resetAppearanceDefaults`: hosts must
+    /// Matches Lilia's `resetAppearanceDefaults`: hosts must
     /// call [`AppearanceSettings::reset`] and set theme to
     /// The built-in Light theme (`nana.light`).
     /// `AppearanceSettings` itself does not store theme; theme lives on the host.

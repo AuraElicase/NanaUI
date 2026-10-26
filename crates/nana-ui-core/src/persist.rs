@@ -2,7 +2,6 @@
 //!
 //! The default implementation is in-memory. Hosts that want a session to
 //! survive process exit inject a platform store (see `nana-ui-platform`).
-//! Isolated Vue windows get a private map, not this handle.
 
 use std::collections::BTreeMap;
 use std::fmt;

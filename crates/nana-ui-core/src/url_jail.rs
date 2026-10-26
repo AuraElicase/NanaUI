@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// Same cap as `@font-face` file reads (`nana-ui-vue::MAX_FONT_FACE_BYTES`).
+/// Cap for one local `url(...)` / `@font-face` file read.
 pub const MAX_LOCAL_URL_BYTES: u64 = 8 * 1024 * 1024;
 
 /// `path` must exist and canonicalize under `jail`.
@@ -79,7 +79,7 @@ pub fn read_bytes_within_jail(href: &str, jail: &Path, max_bytes: u64) -> Option
     read_file_within_jail(href, None, jail, max_bytes).map(|(bytes, _)| bytes)
 }
 
-/// Local directory jail for a Vue document / SFC / stylesheet href.
+/// Local directory jail for an SFC / stylesheet href.
 ///
 /// Remote schemes, protocol-relative `//`, UNC `\\`, `nana:` / `blob:`, bare
 /// filenames, and `.` return `None` so relative `@import` skips instead of

@@ -24,7 +24,7 @@ fn style(layout: nana_ui_core::LayoutStyle) -> NodeStyle {
     }
 }
 
-/// A 200x100 L1 `overflow: auto` scroller (id 1) holding `count` fixed
+/// A 200x100 CSS `overflow: auto` scroller (id 1) holding `count` fixed
 /// items (ids 2..), each `item` wide by `item` high, laid out for real.
 fn scroller(container: nana_ui_core::LayoutStyle, count: u64, item: f32) -> AppContext {
     let mut context = AppContext::new();

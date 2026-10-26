@@ -1,8 +1,8 @@
 //! Host-owned, policy-gated WebSocket transport boundary.
 //!
-//! The framework reserves the interface: origin policy, host ops, and the JS
-//! `WebSocket` shim. Desktop builds include [`NativeWebSocketHost`]; applications
-//! may replace it with another [`WebSocketHost`] implementation.
+//! The framework reserves the interface: origin policy and host ops. Desktop
+//! builds include [`NativeWebSocketHost`]; applications may replace it with
+//! another [`WebSocketHost`] implementation.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -53,7 +53,7 @@ pub enum WsEvent {
 
 /// Framework-owned receiving side of one connection. The framework binds a
 /// sink to a connection id before [`WebSocketHost::open`] runs; transports
-/// only push events, delivery to JS happens on the next host frame pump.
+/// only push events, delivery happens on the next host frame pump.
 pub trait WsSink: Send + Sync {
     fn emit(&self, event: WsEvent);
 }
@@ -172,7 +172,7 @@ fn exact_socket_origin(url: &Url) -> Result<String, WsError> {
 /// Application-owned WebSocket transport.
 ///
 /// The framework assigns connection ids and supplies a per-connection sink.
-/// [`open`](Self::open) must not block the calling (UI/JS) thread: transports
+/// [`open`](Self::open) must not block the calling (UI) thread: transports
 /// spawn their own I/O and report progress through the sink. Implementations
 /// enforce [`policy`](Self::policy) limits on inbound traffic and emit
 /// [`WsEvent::Closed`] exactly once per connection.

@@ -136,7 +136,7 @@ MOTION = re.compile(r"\bfrom_millis\s*\(\s*\d+|\bEasing::\w+")
 # `ComponentElevation::from_shadow` is the opposite of picking an elevation:
 # it consumes an `ElevationRole` the theme resolved. Counting it here would
 # make the number climb as the migration succeeds. `from_box_shadow` stays
-# counted — a CSS shadow arriving from L1 is still a shadow nobody tokenized.
+# counted — a CSS shadow arriving from a stylesheet is still a shadow nobody tokenized.
 ELEVATION = re.compile(r"\bComponentElevation::(?!from_shadow\b)\w+")
 STATE_FIELD = re.compile(
     r"\b(?:interaction|InteractionStyle)\b[^;\n]*?\b(" + "|".join(INTERACTION_STATES) + r")\b"

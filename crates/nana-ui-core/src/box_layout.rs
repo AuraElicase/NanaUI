@@ -1,14 +1,13 @@
 //! Style Model **Layout** — box flex intent (not a CSSOM, not workspace regions).
 //!
-//! Pure data consumed by L3 draw (`nana-ui` Scene painter) and L1/L2 adapters.
-//! CSS declaration / class parsing stays in `nana-ui-vue::css_map` /
-//! `nana-ui-vue::shell_contract`.
+//! Pure data consumed by L3 draw (`nana-ui` Scene painter) and the view
+//! compilers. CSS declaration / class parsing stays in `nana-ui-css`.
 //! Workspace region layout lives in [`crate::layout`].
 //!
 //! Shared geometry helpers used by `measure` (pre-paint / parity) and Runtime
 //! layout: [`LayoutStyle::resolve_content_box`], [`LayoutStyle::resolve_inset`],
 //! `resolved_padding_against` / `resolved_margin_against` / gap helpers.
-//! Prefer extending these over duplicating box math in vue adapters.
+//! Prefer extending these over duplicating box math in adapters.
 
 use serde::{Deserialize, Serialize};
 
@@ -680,7 +679,7 @@ impl GridTemplateAreas {
 /// - `Fixed`：视口 containing block + inset 子集（脱流；根层绘制）
 /// - `Sticky`：流内布局；滚动投影按 nearest scrollport + inset 钳制
 ///
-/// **与 Nana Overlay 分工**：L2 Dialog/Popover/Drawer/ContextMenu 剥离 CSS
+/// **与 Nana Overlay 分工**：Dialog/Popover/Drawer/ContextMenu 剥离 CSS
 /// `fixed`/`sticky`，走 Overlay 合同；普通节点的 `position:fixed` 走本视口子集。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum PositionSpec {
@@ -749,7 +748,7 @@ pub enum FlexWrap {
     WrapReverse,
 }
 
-/// 网格轨道（轻量；由 L1 解析填入）。
+/// 网格轨道（轻量；由 CSS 解析填入）。
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum GridTrack {
     Px(f32),
@@ -1563,7 +1562,7 @@ pub enum PointerEventsSpec {
 /// CSS `cursor` keyword subset used by the desktop host.
 ///
 /// The value is inherited. Custom `url(...)` cursors and unknown keywords are
-/// intentionally rejected by the L1 parser.
+/// intentionally rejected by the CSS parser.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CursorSpec {
     #[default]
@@ -2640,7 +2639,7 @@ pub struct PaintStyle {
     /// `<img src>` replaced content, painted above background layers.
     #[serde(default)]
     pub content_image: Option<BackgroundImage>,
-    /// Replaced media that L1 will not pretend to execute (`iframe`, `video`
+    /// Replaced media that the CSS path will not pretend to execute (`iframe`, `video`
     /// without a poster, `<canvas>` without a HostTexture slot). Empty means
     /// the node is not an explicit skip.
     #[serde(default)]
@@ -3630,11 +3629,11 @@ pub struct LayoutStyle {
     #[serde(default)]
     pub paint: crate::shared::Shared<PaintStyle>,
     /// CSS `opacity` (0..=1). `None` = unset / inherit (treated as 1.0 at paint).
-    /// Parsed with other declarations so L1 adapters need not re-scan the style
+    /// Parsed with other declarations so CSS adapters need not re-scan the style
     /// string.
     #[serde(default)]
     pub opacity: Option<f32>,
-    /// Instance surface paint from L1 style/class (not ThemeTokens).
+    /// Instance surface paint from CSS style/class (not ThemeTokens).
     /// RGBA 0..=1; applied by Scene paint.
     #[serde(default)]
     pub background: Option<[f32; 4]>,
@@ -4749,7 +4748,7 @@ impl LayoutStyle {
         self.resolve_logical_box_edges();
     }
 
-    /// Vue/CSS explicit width/height/min-*/border-radius overlay ControlSize tokens.
+    /// CSS explicit width/height/min-*/border-radius overlay ControlSize tokens.
     pub fn overlay_css_size_overrides(&mut self, css: &Self) {
         if css.width.is_some() {
             self.width = css.width;

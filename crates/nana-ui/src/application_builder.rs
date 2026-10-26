@@ -136,7 +136,7 @@ impl NanaApplicationBuilder {
     }
 
     /// Resolve and publish the paths and start diagnostics. For hosts that
-    /// run their own loop (Vue, embedded); [`Self::run`] calls this.
+    /// run their own loop (embedded); [`Self::run`] calls this.
     ///
     /// Never fails the application: when the platform directories cannot be
     /// resolved it logs to stderr, the session has no paths, and diagnostics

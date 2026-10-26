@@ -1,6 +1,6 @@
 //! 数据驱动的节点自绘（Issue #217）：把一份 JSON 命令列表当作 [`Painter`]。
 //!
-//! 给拿不到 Rust trait 的消费方用，比如 Vue / JS：命令与 [`PaintContext`] 的方法
+//! 给拿不到 Rust trait 的消费方用：命令与 [`PaintContext`] 的方法
 //! 一一对应，录制时按节点当前尺寸和交互状态回放。格式见
 //! [`PaintScript::from_json`]。
 

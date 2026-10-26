@@ -25,7 +25,6 @@ SOURCE_ROOTS = (
     "crates/nana-ui-core/src",
     "crates/nana-ui-runtime/src",
     "crates/nana-ui-scene/src",
-    "crates/nana-ui-vue/src",
     "crates/nana-ui/src",
 )
 

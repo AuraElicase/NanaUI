@@ -2,7 +2,7 @@
 //!
 //! Distinct from box flex layout ([`crate::LayoutStyle`] in `box_layout`).
 //! Both are Layout-slice inputs to Nana drawing; neither is a CSSOM.
-//! CSS parse for `LayoutStyle` stays in `nana-ui-vue::css_map`.
+//! CSS parse for `LayoutStyle` stays in `nana-ui-css::css_map`.
 
 use std::collections::HashSet;
 use std::fmt;

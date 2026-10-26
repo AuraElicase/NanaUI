@@ -616,7 +616,7 @@ impl UiWorld {
     /// A finished app or component run holds its value over the logical
     /// style only until the property is written again with another value:
     /// the later write is what the author means now. Writing the same value
-    /// back — a component re-projecting its style, a Vue cascade sync — keeps
+    /// back — a component re-projecting its style, a cascade sync — keeps
     /// the hold. CSS animation holds are the cascade's to end
     /// (`animation-name`), as in CSS.
     pub(super) fn release_rewritten_holds(

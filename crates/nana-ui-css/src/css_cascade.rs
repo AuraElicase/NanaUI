@@ -1,4 +1,4 @@
-//! Stylesheet → matched nodes → [`LayoutStyle`] cascade (L1 subset).
+//! Stylesheet → matched nodes → [`LayoutStyle`] cascade (CSS subset).
 //!
 //! **Adapter internals.** Application hosts should use [`crate::prelude`], not this
 //! parser surface.
@@ -31,7 +31,7 @@
 //! already walk preceding siblings. `:empty` / `:not(:empty)`: no element
 //! children, no host `label`/`value` with a non-whitespace Unicode scalar
 //! (`char::is_whitespace`), and no child text of that kind. Text nodes are
-//! `#text` / `createText` / `nana-text` only — L2 `p` / `span` / `label` /
+//! `#text` / `nana-text` only — `p` / `span` / `label` /
 //! headings are elements even when their kind is `WidgetKind::Text`.
 //! Generated `::before`/`::after` boxes and whitespace-only text do not count.
 //! `:first-child` / `:last-child` / `:only-child` / `:nth-*` sibling
@@ -474,7 +474,7 @@ impl<'a> MatchContext<'a> {
     }
 }
 
-/// Skipped-content counters for one stylesheet parse. Lets L1 hosts surface
+/// Skipped-content counters for one stylesheet parse. Lets callers surface
 /// how much of a sheet was dropped (malformed blocks, unsupported selectors,
 /// at-rules) instead of styles silently going missing.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1597,7 +1597,7 @@ fn compound_is_document_var_scope(c: &CompoundSelector) -> bool {
 /// inline style → class hints → stylesheet **important** only → prop
 /// **important** → inline **important**.
 /// Re-applying class hints after prop/inline keeps documented `nana-*` shell
-/// contracts from being wiped by Vue layout props or SFC `style` declarations.
+/// contracts from being wiped by prop style or SFC `style` declarations.
 /// Inline (style attribute) wins over stylesheet **normal**. Stylesheet
 /// `!important` beats prop/inline normals. Prop / inline `!important` is
 /// author-important on this same path: the flag is stripped so the value

@@ -12,8 +12,8 @@
 
 use std::sync::{Arc, OnceLock};
 
-/// Scheme and authority of packaged resource URLs. (`nana://app` is the
-/// Vue/JS document origin and is unrelated.)
+/// Scheme and authority of packaged resource URLs. (`nana://app` is not a
+/// packaged URL.)
 pub const PACKAGED_URL_PREFIX: &str = "nana://res/";
 
 /// Why a packaged read failed. Callers treat every variant as "resource not

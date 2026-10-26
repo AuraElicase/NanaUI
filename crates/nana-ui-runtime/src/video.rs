@@ -18,8 +18,8 @@ use crate::{
     MutationQueue, NodeKind, NodeStyle, StableNodeId, UiWorld,
 };
 
-/// Builds the video host-texture slot for a numeric surface id. The Vue side
-/// (`tree::video_host_texture_slot`) and the frame bridge must agree on it.
+/// Builds the video host-texture slot for a numeric surface id. The frame
+/// bridge must agree on it.
 fn video_slot(id: u64) -> Option<String> {
     (id > 0).then(|| format!("video:{id}"))
 }

@@ -559,7 +559,7 @@ fn batch_validation_cost_tracks_the_batch_not_the_retained_world() {
     assert_eq!(large_world.len(), large as usize + 2);
 
     // A multi-mutation batch skips the single-mutation fast path, so this is
-    // the ValidationPlan route Vue takes on every flush.
+    // the ValidationPlan route.
     let batch = |target: StableNodeId| {
         let mut queue = MutationQueue::new();
         queue.set_text(
