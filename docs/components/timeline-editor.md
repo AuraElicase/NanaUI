@@ -106,6 +106,7 @@ widget(
 | `.snap(bool)` | `bool` | 拖动吸附到整帧（片段还吸附到其他片段边缘和播放头），默认开 |
 | `.selected_clips(ids)` | `Arc<str>` | 选中的片段 |
 | `.min_clip_length(秒)` | `f64` | 修剪后片段的最短长度，默认 0.05 |
+| `.clips_editable(bool)` | `bool` | 默认开。关掉后片段仍能选中、播放头照常拖动，但片段不能移动、修剪，也不发删除请求；用于只读的编辑器 |
 | `.header_width(px)` | `f32` | 轨道标题列宽，默认 140 |
 | `.label(文字)` | `Arc<str>` | 读屏名称 |
 

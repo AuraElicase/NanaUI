@@ -424,6 +424,9 @@ pub struct TimelineEditor {
     pub selected_clips: Vec<Arc<str>>,
     /// Shortest a trim leaves a clip, seconds (default 0.05).
     pub min_clip_length: f64,
+    /// Clips move, trim and ask to be deleted (default). Off, they still
+    /// select and the playhead still moves, but nothing changes them.
+    pub clips_editable: bool,
     /// Drags and the playhead land on whole frames; clips also snap to
     /// other clips' edges and the playhead.
     pub snap: bool,
@@ -457,6 +460,7 @@ impl TimelineEditor {
             selection: Vec::new(),
             selected_clips: Vec::new(),
             min_clip_length: 0.05,
+            clips_editable: true,
             snap: true,
             header_width: 140.0,
             label: None,
@@ -498,6 +502,11 @@ impl TimelineEditor {
 
     pub fn min_clip_length(mut self, seconds: f64) -> Self {
         self.min_clip_length = seconds.max(0.0);
+        self
+    }
+
+    pub fn clips_editable(mut self, editable: bool) -> Self {
+        self.clips_editable = editable;
         self
     }
 
@@ -1137,6 +1146,7 @@ impl TimelineEditor {
         self.selection.hash(&mut h);
         self.selected_clips.hash(&mut h);
         self.hover_edge.hash(&mut h);
+        self.clips_editable.hash(&mut h);
         self.header_width.to_bits().hash(&mut h);
         format!("{:?}", self.gesture).hash(&mut h);
         h.finish()
@@ -1330,6 +1340,8 @@ fn timeline_pressed(
                 });
             }
             t.gesture = match edge {
+                // Fixed clips select, but nothing drags them.
+                _ if !t.clips_editable => None,
                 Some(edge) => Some(Gesture::ClipTrim {
                     track,
                     clip,
@@ -1393,7 +1405,7 @@ fn timeline_moved(
                     track,
                     clip,
                     edge: Some(edge),
-                } if t.gesture.is_none() => Some((track, clip, edge)),
+                } if t.gesture.is_none() && t.clips_editable => Some((track, clip, edge)),
                 _ => None,
             };
             (t.hover_edge, hover)
@@ -1681,7 +1693,7 @@ impl AppContext {
             return Ok(false);
         };
         self.update_component(timeline, |t, view| {
-            if t.selected_clips.is_empty() || t.gesture.is_some() {
+            if t.selected_clips.is_empty() || t.gesture.is_some() || !t.clips_editable {
                 return false;
             }
             view.emit(TimelineClipsDeleteRequested {
