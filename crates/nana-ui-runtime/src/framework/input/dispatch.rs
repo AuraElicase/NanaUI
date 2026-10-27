@@ -1121,7 +1121,7 @@ impl AppContext {
     }
 
     /// Keys a focused range, pad, graph, split, number field, palette,
-    /// select, dropdown, tree or activatable control acts on. `primary` is
+    /// select, dropdown, tree, timeline or activatable control acts on. `primary` is
     /// Ctrl or Cmd held; none of these take it.
     fn focused_control_key(
         &mut self,
@@ -1133,6 +1133,11 @@ impl AppContext {
             return Ok(false);
         }
         if key == "F2" && self.focused_tree_key(document, key, false)? {
+            return Ok(true);
+        }
+        if matches!(key, "Delete" | "Backspace")
+            && self.request_focused_timeline_clip_delete(document)?
+        {
             return Ok(true);
         }
         let range_adjustment = match key {

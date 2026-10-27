@@ -9,21 +9,31 @@
 //!   selection (snapped to frames);
 //! - a curve view: each visible track's keys joined by cubic Bézier
 //!   segments, with the selected keys' tangent handles, which drag aligned
-//!   (the opposite handle turns with it) or broken (Alt, or a broken key).
+//!   (the opposite handle turns with it) or broken (Alt, or a broken key);
+//! - clips: spans on the track rows, under the keys. A press selects one
+//!   (Shift toggles it), a drag moves the selected clips (one alone can
+//!   change track), a drag on an edge trims it. Moves and trims snap to the
+//!   other clips' edges and the playhead, else to frames, and stop at the
+//!   neighbouring clips and at time 0. Delete or Backspace on the focused
+//!   timeline asks the application to delete the selected clips.
 //!
 //! The application owns the content: it fills [`TimelineEditor::tracks`] and
 //! applies the edits the events report. Drags report previews
 //! (`committed: false`) and one commit on release; the timeline shows the
 //! dragged state itself meanwhile. A wheel zooms time about the pointer
 //! (Shift scrolls the tracks, Ctrl pans time); a middle drag pans. Keys such
-//! as Delete or fitting the view belong to the application's keymap, which
-//! reads [`TimelineEditor::selection`] and calls [`AppContext::fit_timeline`].
+//! as deleting keys or fitting the view belong to the application's keymap,
+//! which reads [`TimelineEditor::selection`] and calls
+//! [`AppContext::fit_timeline`].
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use nana_ui_core::{LengthSpec, SemanticColorRole};
+use nana_ui_core::{
+    CursorSpec, LengthSpec, RadiusTier, SemanticColorMix, SemanticColorRole, StatusRecipe,
+    StatusTone,
+};
 
 use crate::view_components::project_common;
 use crate::{
@@ -82,6 +92,8 @@ pub struct TimelineTrack {
     /// `Some(open)` for a track with children; `None` for a leaf.
     pub expanded: Option<bool>,
     pub keys: Vec<TimelineKey>,
+    /// Spans on this track's row, in any order; they do not overlap.
+    pub clips: Vec<TimelineClip>,
 }
 
 impl TimelineTrack {
@@ -96,7 +108,13 @@ impl TimelineTrack {
             depth: 0,
             expanded: None,
             keys: keys.into_iter().collect(),
+            clips: Vec::new(),
         }
+    }
+
+    pub fn clips(mut self, clips: impl IntoIterator<Item = TimelineClip>) -> Self {
+        self.clips = clips.into_iter().collect();
+        self
     }
 
     pub fn depth(mut self, depth: u8) -> Self {
@@ -109,6 +127,86 @@ impl TimelineTrack {
         self.expanded = Some(open);
         self
     }
+}
+
+/// A span on a track: from `start` for `length` seconds.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimelineClip {
+    /// Unique across the whole timeline.
+    pub id: Arc<str>,
+    pub start: f64,
+    pub length: f64,
+    pub label: Arc<str>,
+    pub tone: TimelineClipTone,
+    /// Its edges drag to trim it.
+    pub resizable: bool,
+}
+
+impl TimelineClip {
+    /// An accent clip whose edges trim.
+    pub fn new(
+        id: impl Into<Arc<str>>,
+        start: f64,
+        length: f64,
+        label: impl Into<Arc<str>>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            start,
+            length,
+            label: label.into(),
+            tone: TimelineClipTone::Accent,
+            resizable: true,
+        }
+    }
+
+    pub fn tone(mut self, tone: TimelineClipTone) -> Self {
+        self.tone = tone;
+        self
+    }
+
+    pub fn resizable(mut self, resizable: bool) -> Self {
+        self.resizable = resizable;
+        self
+    }
+
+    fn end(&self) -> f64 {
+        self.start + self.length
+    }
+}
+
+/// Which family of semantic colours a clip is drawn in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum TimelineClipTone {
+    #[default]
+    Accent,
+    Info,
+    Success,
+    Warning,
+    Neutral,
+}
+
+impl TimelineClipTone {
+    /// The role the clip's border and handles take; its fill is a tint of
+    /// it. Info, Success, Warning and Neutral follow the theme's status
+    /// colours.
+    pub fn role(self) -> SemanticColorRole {
+        let status = StatusRecipe::DEFAULT;
+        match self {
+            Self::Accent => SemanticColorRole::Accent,
+            Self::Info => status.role(StatusTone::Info),
+            Self::Success => status.role(StatusTone::Success),
+            Self::Warning => status.role(StatusTone::Warning),
+            Self::Neutral => status.role(StatusTone::Neutral),
+        }
+    }
+}
+
+/// A clip's edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TimelineClipEdge {
+    Start,
+    End,
 }
 
 /// A key by track and position in it.
@@ -207,6 +305,39 @@ pub struct TimelineViewChanged {
     pub view: TimelineView,
 }
 
+/// The selected clips changed: a press on a clip selects it, Shift toggles
+/// it, a press on the empty key area clears them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineClipSelectionChanged {
+    pub clips: Vec<Arc<str>>,
+}
+
+/// The selected clips were dragged by `dt` seconds and, when the pointer
+/// moved to another track row, to `track` (an index into
+/// [`TimelineEditor::tracks`], a leaf row; only a single clip changes track).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimelineClipsMoved {
+    pub clips: Vec<Arc<str>>,
+    pub dt: f64,
+    pub track: Option<usize>,
+    pub committed: bool,
+}
+
+/// One clip's edge was dragged: it now starts at `start` and lasts `length`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimelineClipTrimmed {
+    pub clip: Arc<str>,
+    pub start: f64,
+    pub length: f64,
+    pub committed: bool,
+}
+
+/// Delete or Backspace with clips selected and the timeline focused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineClipsDeleteRequested {
+    pub clips: Vec<Arc<str>>,
+}
+
 /// A tick on the ruler: its x in the key area and a label on major ticks.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimelineTick {
@@ -224,6 +355,13 @@ pub enum TimelineHit {
         toggle: bool,
     },
     Key(TimelineKeyRef),
+    /// A clip (dope sheet): `clip` indexes its track's
+    /// [`TimelineTrack::clips`]; `edge` when near a resizable clip's edge.
+    Clip {
+        track: usize,
+        clip: usize,
+        edge: Option<TimelineClipEdge>,
+    },
     /// A selected key's handle (curve view).
     Handle {
         key: TimelineKeyRef,
@@ -254,6 +392,21 @@ pub(crate) enum Gesture {
         handle: [f64; 2],
         broken: bool,
     },
+    /// The selected clips, pressed on `anchor` (track, clip).
+    ClipMove {
+        from: [f32; 2],
+        anchor: (usize, usize),
+        dt: f64,
+        track: Option<usize>,
+    },
+    ClipTrim {
+        track: usize,
+        clip: usize,
+        edge: TimelineClipEdge,
+        from: [f32; 2],
+        start: f64,
+        length: f64,
+    },
 }
 
 /// The timeline; see the module docs.
@@ -267,7 +420,12 @@ pub struct TimelineEditor {
     pub playhead: f64,
     /// Selected keys, sorted.
     pub selection: Vec<TimelineKeyRef>,
-    /// Drags and the playhead land on whole frames.
+    /// Selected clips, by id.
+    pub selected_clips: Vec<Arc<str>>,
+    /// Shortest a trim leaves a clip, seconds (default 0.05).
+    pub min_clip_length: f64,
+    /// Drags and the playhead land on whole frames; clips also snap to
+    /// other clips' edges and the playhead.
     pub snap: bool,
     /// The track header column's width, px.
     pub header_width: f32,
@@ -275,6 +433,8 @@ pub struct TimelineEditor {
     pub label: Option<Arc<str>>,
     pub style: NodeStyle,
     pub(crate) gesture: Option<Gesture>,
+    /// The clip edge under the pointer: (track, clip, edge).
+    pub(crate) hover_edge: Option<(usize, usize, TimelineClipEdge)>,
 }
 
 impl TimelineEditor {
@@ -295,11 +455,14 @@ impl TimelineEditor {
             view: TimelineView::default(),
             playhead: 0.0,
             selection: Vec::new(),
+            selected_clips: Vec::new(),
+            min_clip_length: 0.05,
             snap: true,
             header_width: 140.0,
             label: None,
             style,
             gesture: None,
+            hover_edge: None,
         }
     }
 
@@ -325,6 +488,16 @@ impl TimelineEditor {
 
     pub fn playhead(mut self, time: f64) -> Self {
         self.playhead = time;
+        self
+    }
+
+    pub fn selected_clips(mut self, ids: impl IntoIterator<Item = Arc<str>>) -> Self {
+        self.selected_clips = ids.into_iter().collect();
+        self
+    }
+
+    pub fn min_clip_length(mut self, seconds: f64) -> Self {
+        self.min_clip_length = seconds.max(0.0);
         self
     }
 
@@ -566,11 +739,297 @@ impl TimelineEditor {
             }
         }
         // the topmost: the last drawn
-        self.shown_keys()
+        if let Some(key) = self
+            .shown_keys()
             .into_iter()
             .rev()
             .find(|&r| self.key_point(r, size[1]).is_some_and(near))
-            .map_or(TimelineHit::Empty, TimelineHit::Key)
+        {
+            return TimelineHit::Key(key);
+        }
+        // clips lie under the keys
+        self.hit_clip(p).unwrap_or(TimelineHit::Empty)
+    }
+
+    /// The visible track whose row is at `y` (dope sheet).
+    fn row_track_at(&self, y: f32) -> Option<usize> {
+        if self.mode != TimelineMode::DopeSheet || y < TIMELINE_RULER {
+            return None;
+        }
+        let n = ((y - TIMELINE_RULER + self.view.scroll) / TIMELINE_ROW).floor();
+        if n < 0.0 {
+            return None;
+        }
+        self.visible_tracks().get(n as usize).copied()
+    }
+
+    /// The clip at `p`: inside a clip, its edge when near one (a third of a
+    /// narrow clip at most) else its body; just outside, the nearest
+    /// resizable edge within reach.
+    fn hit_clip(&self, p: [f32; 2]) -> Option<TimelineHit> {
+        let track = self.row_track_at(p[1])?;
+        let clips = &self.tracks[track].clips;
+        let span = |c: &TimelineClip| (self.time_to_x(c.start), self.time_to_x(c.end()));
+        // the topmost: the last drawn
+        if let Some(clip) = (0..clips.len()).rev().find(|&i| {
+            let (a, b) = span(&clips[i]);
+            p[0] >= a && p[0] <= b
+        }) {
+            let (a, b) = span(&clips[clip]);
+            let reach = HIT.min((b - a) / 3.0);
+            let edge = if !clips[clip].resizable {
+                None
+            } else if p[0] - a <= reach && p[0] - a <= b - p[0] {
+                Some(TimelineClipEdge::Start)
+            } else if b - p[0] <= reach {
+                Some(TimelineClipEdge::End)
+            } else {
+                None
+            };
+            return Some(TimelineHit::Clip { track, clip, edge });
+        }
+        clips
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.resizable)
+            .flat_map(|(i, c)| {
+                let (a, b) = span(c);
+                [
+                    (a - p[0], i, TimelineClipEdge::Start),
+                    (p[0] - b, i, TimelineClipEdge::End),
+                ]
+            })
+            .filter(|&(d, ..)| (0.0..=HIT).contains(&d))
+            .min_by(|x, y| x.0.total_cmp(&y.0))
+            .map(|(_, clip, edge)| TimelineHit::Clip {
+                track,
+                clip,
+                edge: Some(edge),
+            })
+    }
+
+    /// The clip with id `id`, as (track, position in it).
+    pub fn clip_ref(&self, id: &str) -> Option<(usize, usize)> {
+        self.tracks.iter().enumerate().find_map(|(t, track)| {
+            track
+                .clips
+                .iter()
+                .position(|c| &*c.id == id)
+                .map(|i| (t, i))
+        })
+    }
+
+    fn clip_selected(&self, id: &str) -> bool {
+        self.selected_clips.iter().any(|s| &**s == id)
+    }
+
+    /// Where a clip shows now, as (the track whose row it is on, start,
+    /// length): moved or trimmed by a drag in progress.
+    fn shown_clip(&self, track: usize, clip: usize) -> Option<(usize, f64, f64)> {
+        let c = self.tracks.get(track)?.clips.get(clip)?;
+        Some(match self.gesture {
+            Some(Gesture::ClipMove { dt, track: to, .. }) if self.clip_selected(&c.id) => {
+                (to.unwrap_or(track), c.start + dt, c.length)
+            }
+            Some(Gesture::ClipTrim {
+                track: t,
+                clip: i,
+                start,
+                length,
+                ..
+            }) if (t, i) == (track, clip) => (track, start, length),
+            _ => (track, c.start, c.length),
+        })
+    }
+
+    /// The node-local rectangle a clip shows in (dope sheet); `None` when
+    /// its row is folded away or in the curve view.
+    pub fn clip_rect(&self, track: usize, clip: usize) -> Option<LayoutBox> {
+        self.clip_rect_in(&self.visible_tracks(), track, clip)
+    }
+
+    fn clip_rect_in(&self, rows: &[usize], track: usize, clip: usize) -> Option<LayoutBox> {
+        if self.mode != TimelineMode::DopeSheet {
+            return None;
+        }
+        let (on, start, length) = self.shown_clip(track, clip)?;
+        let n = rows.iter().position(|&t| t == on)?;
+        let (x0, x1) = (self.time_to_x(start), self.time_to_x(start + length));
+        Some(LayoutBox {
+            x: x0,
+            y: self.row_top(n) + 2.0,
+            width: (x1 - x0).max(0.0),
+            height: TIMELINE_ROW - 4.0,
+        })
+    }
+
+    /// Select clip `id` as a press does: Shift toggles it; a press on an
+    /// unselected clip selects it alone and one on a selected clip keeps the
+    /// selection (to drag it together). Answers whether it changed.
+    fn press_clip(&mut self, id: &Arc<str>, shift: bool) -> bool {
+        let at = self.selected_clips.iter().position(|s| s == id);
+        match (shift, at) {
+            (true, Some(i)) => {
+                self.selected_clips.remove(i);
+            }
+            (true, None) => self.selected_clips.push(id.clone()),
+            (false, Some(_)) => return false,
+            (false, None) => self.selected_clips = vec![id.clone()],
+        }
+        true
+    }
+
+    /// The nearest edge of a clip not in `exclude`, or the playhead, within
+    /// snapping reach of `time`.
+    fn snap_target(&self, time: f64, exclude: &[(usize, usize)]) -> Option<f64> {
+        let reach = f64::from(HIT) / self.view.pixels_per_second;
+        let edges = self.tracks.iter().enumerate().flat_map(|(t, track)| {
+            track
+                .clips
+                .iter()
+                .enumerate()
+                .filter(move |&(i, _)| !exclude.contains(&(t, i)))
+                .flat_map(|(_, c)| [c.start, c.end()])
+        });
+        std::iter::once(self.playhead)
+            .chain(edges)
+            .filter(|e| (e - time).abs() <= reach)
+            .min_by(|a, b| (a - time).abs().total_cmp(&(b - time).abs()))
+    }
+
+    /// `time` snapped as a trimmed edge lands: on an edge of another clip or
+    /// the playhead within reach, else on a frame.
+    fn snapped_edge(&self, time: f64, exclude: &[(usize, usize)]) -> f64 {
+        if !self.snap {
+            return time;
+        }
+        self.snap_target(time, exclude)
+            .unwrap_or_else(|| self.snapped(time))
+    }
+
+    /// The selected clips dragged `raw` seconds, the pointer over `to`'s
+    /// row: how the move lands, as (dt, the track it changes to). It snaps
+    /// any moving edge onto another clip's edge or the playhead, else the
+    /// pressed clip's start onto a frame; it stops at time 0 and at the
+    /// clips beside it. Only a single clip changes track, onto a leaf row
+    /// with room for it.
+    fn clip_move(
+        &self,
+        anchor: (usize, usize),
+        raw: f64,
+        to: Option<usize>,
+    ) -> (f64, Option<usize>) {
+        let moving: Vec<(usize, usize)> = self
+            .selected_clips
+            .iter()
+            .filter_map(|id| self.clip_ref(id))
+            .collect();
+        if moving.is_empty() {
+            return (0.0, None);
+        }
+        let mut dt = raw;
+        if self.snap {
+            let mut best: Option<f64> = None;
+            for &(t, i) in &moving {
+                let c = &self.tracks[t].clips[i];
+                for at in [c.start, c.end()] {
+                    if let Some(target) = self.snap_target(at + raw, &moving)
+                        && best.is_none_or(|b| (target - at - raw).abs() < (b - raw).abs())
+                    {
+                        best = Some(target - at);
+                    }
+                }
+            }
+            dt = best.unwrap_or_else(|| {
+                let start = self
+                    .tracks
+                    .get(anchor.0)
+                    .and_then(|t| t.clips.get(anchor.1))
+                    .map_or(0.0, |c| c.start);
+                self.snapped(start + raw) - start
+            });
+        }
+        let target = to.filter(|&t| {
+            moving.len() == 1
+                && t != moving[0].0
+                && self.tracks.get(t).is_some_and(|t| t.expanded.is_none())
+        });
+        if let Some(t) = target
+            && let Some(dt) = self.fit_move(&moving, Some(t), dt)
+        {
+            return (dt, Some(t));
+        }
+        (self.fit_move(&moving, None, dt).unwrap_or(0.0), None)
+    }
+
+    /// `dt` kept off time 0 and the clips the moving ones would land beside
+    /// (on `to`, or each on its own track); `None` when they do not fit.
+    fn fit_move(&self, moving: &[(usize, usize)], to: Option<usize>, dt: f64) -> Option<f64> {
+        let (mut lo, mut hi) = (f64::MIN, f64::MAX);
+        for &(t, i) in moving {
+            let c = &self.tracks[t].clips[i];
+            lo = lo.max(-c.start);
+            let dest = to.unwrap_or(t);
+            // beside its own track's clips it keeps its side of each; on
+            // another track, the side where it lands
+            let centre = c.start + c.length / 2.0 + if to.is_some() { dt } else { 0.0 };
+            for (j, n) in self.tracks[dest].clips.iter().enumerate() {
+                if moving.contains(&(dest, j)) {
+                    continue;
+                }
+                if n.start + n.length / 2.0 < centre {
+                    lo = lo.max(n.end() - c.start);
+                } else {
+                    hi = hi.min(n.start - c.end());
+                }
+            }
+        }
+        (lo <= hi + 1e-9).then(|| dt.clamp(lo, hi.max(lo)))
+    }
+
+    /// Clip `clip` of `track` with `edge` dragged to `time`: how it lands,
+    /// as (start, length). The edge snaps like a moved one, stops at the
+    /// clip beside it and at time 0, and leaves at least
+    /// [`Self::min_clip_length`].
+    fn clip_trim(
+        &self,
+        track: usize,
+        clip: usize,
+        edge: TimelineClipEdge,
+        time: f64,
+    ) -> (f64, f64) {
+        let Some(c) = self.tracks.get(track).and_then(|t| t.clips.get(clip)) else {
+            return (0.0, 0.0);
+        };
+        let (start, end) = (c.start, c.end());
+        let others = || {
+            self.tracks[track]
+                .clips
+                .iter()
+                .enumerate()
+                .filter(move |&(i, _)| i != clip)
+                .map(|(_, n)| n)
+        };
+        let time = self.snapped_edge(time, &[(track, clip)]);
+        let min = self.min_clip_length.max(0.0);
+        match edge {
+            TimelineClipEdge::Start => {
+                let lo = others()
+                    .filter(|n| n.start + n.length / 2.0 < start + c.length / 2.0)
+                    .map(TimelineClip::end)
+                    .fold(0.0, f64::max);
+                let s = time.min(end - min).max(lo);
+                (s, end - s)
+            }
+            TimelineClipEdge::End => {
+                let hi = others()
+                    .filter(|n| n.start + n.length / 2.0 >= start + c.length / 2.0)
+                    .map(|n| n.start)
+                    .fold(f64::MAX, f64::min);
+                let e = time.max(start + min).min(hi);
+                (start, e - start)
+            }
+        }
     }
 
     /// The keys shown inside the node-local rectangle between two corners.
@@ -653,6 +1112,14 @@ impl TimelineEditor {
                 }
                 k.broken.hash(&mut h);
             }
+            for c in &t.clips {
+                c.id.hash(&mut h);
+                c.label.hash(&mut h);
+                c.start.to_bits().hash(&mut h);
+                c.length.to_bits().hash(&mut h);
+                c.tone.hash(&mut h);
+                c.resizable.hash(&mut h);
+            }
         }
         for v in [
             self.fps,
@@ -668,9 +1135,32 @@ impl TimelineEditor {
         self.unit.hash(&mut h);
         self.mode.hash(&mut h);
         self.selection.hash(&mut h);
+        self.selected_clips.hash(&mut h);
+        self.hover_edge.hash(&mut h);
         self.header_width.to_bits().hash(&mut h);
         format!("{:?}", self.gesture).hash(&mut h);
         h.finish()
+    }
+}
+
+impl TimelineEditor {
+    /// What assistive technology reads as the timeline's value.
+    fn accessible_value(&self) -> String {
+        let mut value = format!(
+            "{} tracks, {} keys selected",
+            self.tracks.len(),
+            self.selection.len()
+        );
+        let clips: usize = self.tracks.iter().map(|t| t.clips.len()).sum();
+        if clips > 0 {
+            let selected = self
+                .selected_clips
+                .iter()
+                .filter(|id| self.clip_ref(id).is_some())
+                .count();
+            value.push_str(&format!(", {clips} clips, {selected} clips selected"));
+        }
+        value
     }
 }
 
@@ -699,6 +1189,7 @@ impl ComponentView for TimelineEditor {
         // the view and a drag in progress are the user's
         next.view = self.view;
         next.gesture = self.gesture;
+        next.hover_edge = self.hover_edge;
         *self = next;
     }
 
@@ -710,6 +1201,10 @@ impl ComponentView for TimelineEditor {
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
         let mut style = self.style.clone();
+        // a clip's edge trims
+        if self.hover_edge.is_some() || matches!(self.gesture, Some(Gesture::ClipTrim { .. })) {
+            Arc::make_mut(&mut style.layout).cursor = Some(CursorSpec::EwResize);
+        }
         style.painter = Some(crate::NodePainter::new(TimelinePainter {
             timeline: Arc::new(self.clone()),
             key: self.digest(),
@@ -726,14 +1221,7 @@ impl ComponentView for TimelineEditor {
             AccessibilityState {
                 role: AccessibilityRole::Generic,
                 label: self.label.clone(),
-                value: Some(
-                    format!(
-                        "{} tracks, {} keys selected",
-                        self.tracks.len(),
-                        self.selection.len()
-                    )
-                    .into(),
-                ),
+                value: Some(self.accessible_value().into()),
                 ..AccessibilityState::default()
             },
         );
@@ -742,7 +1230,7 @@ impl ComponentView for TimelineEditor {
 
 const TIMELINE_POINTER: NodePointerHooks<TimelineEditor> = NodePointerHooks {
     moved: timeline_moved,
-    left: |_, _| Ok(()),
+    left: timeline_left,
     pressed: timeline_pressed,
     released: timeline_released,
     wheel: timeline_wheel,
@@ -770,6 +1258,7 @@ fn timeline_pressed(
         return Ok(false);
     }
     let alt = pointer.modifiers.alt;
+    let shift = pointer.shift;
     cx.update_component(timeline, |t, view| match t.hit(p, size) {
         TimelineHit::Ruler => {
             t.playhead = t.snapped(t.x_to_time(p[0]));
@@ -823,15 +1312,65 @@ fn timeline_pressed(
                 });
             }
         }
+        TimelineHit::Clip { track, clip, edge } => {
+            let c = &t.tracks[track].clips[clip];
+            let (id, start, length) = (c.id.clone(), c.start, c.length);
+            let changed = match edge {
+                // a trim takes the clip alone unless it is selected
+                Some(_) if t.clip_selected(&id) => false,
+                Some(_) => {
+                    t.selected_clips = vec![id.clone()];
+                    true
+                }
+                None => t.press_clip(&id, shift),
+            };
+            if changed {
+                view.emit(TimelineClipSelectionChanged {
+                    clips: t.selected_clips.clone(),
+                });
+            }
+            t.gesture = match edge {
+                Some(edge) => Some(Gesture::ClipTrim {
+                    track,
+                    clip,
+                    edge,
+                    from: p,
+                    start,
+                    length,
+                }),
+                None if t.clip_selected(&id) => Some(Gesture::ClipMove {
+                    from: p,
+                    anchor: (track, clip),
+                    dt: 0.0,
+                    track: None,
+                }),
+                None => None,
+            };
+        }
         TimelineHit::Empty => {
+            // a press on the empty key area clears the clips
+            if !shift && p[0] >= t.header_width && !t.selected_clips.is_empty() {
+                t.selected_clips.clear();
+                view.emit(TimelineClipSelectionChanged { clips: Vec::new() });
+            }
             t.gesture = Some(Gesture::Box {
                 from: p,
                 to: p,
-                add: pointer.shift,
+                add: shift,
             });
         }
     })?;
     Ok(true)
+}
+
+fn timeline_left(
+    cx: &mut AppContext,
+    timeline: Entity<TimelineEditor>,
+) -> Result<(), FrameworkError> {
+    if cx.read(timeline, |t| t.hover_edge.is_some())? {
+        cx.update_component(timeline, |t, _| t.hover_edge = None)?;
+    }
+    Ok(())
 }
 
 fn timeline_moved(
@@ -839,13 +1378,31 @@ fn timeline_moved(
     timeline: Entity<TimelineEditor>,
     pointer: NodePointer,
 ) -> Result<bool, FrameworkError> {
-    if !pointer.captured {
-        return Ok(false);
-    }
     let Some(size) = node_size(cx, timeline) else {
         return Ok(false);
     };
     let p = [pointer.x, pointer.y];
+    if !pointer.captured {
+        // the clip edge under the pointer shows its trim handle
+        let (now, hover) = cx.read(timeline, |t| {
+            if t.tracks.iter().all(|tr| tr.clips.is_empty()) {
+                return (t.hover_edge, None);
+            }
+            let hover = match t.hit(p, size) {
+                TimelineHit::Clip {
+                    track,
+                    clip,
+                    edge: Some(edge),
+                } if t.gesture.is_none() => Some((track, clip, edge)),
+                _ => None,
+            };
+            (t.hover_edge, hover)
+        })?;
+        if now != hover {
+            cx.update_component(timeline, |t, _| t.hover_edge = hover)?;
+        }
+        return Ok(false);
+    }
     cx.update_component(timeline, |t, view| match t.gesture {
         Some(Gesture::Scrub) => {
             let time = t.snapped(t.x_to_time(p[0]));
@@ -935,6 +1492,60 @@ fn timeline_moved(
                 });
             }
         }
+        Some(Gesture::ClipMove { from, anchor, .. }) => {
+            let raw = f64::from(p[0] - from[0]) / t.view.pixels_per_second;
+            let (dt, track) = t.clip_move(anchor, raw, t.row_track_at(p[1]));
+            let next = Some(Gesture::ClipMove {
+                from,
+                anchor,
+                dt,
+                track,
+            });
+            if t.gesture != next {
+                t.gesture = next;
+                view.emit(TimelineClipsMoved {
+                    clips: t.selected_clips.clone(),
+                    dt,
+                    track,
+                    committed: false,
+                });
+            }
+        }
+        Some(Gesture::ClipTrim {
+            track,
+            clip,
+            edge,
+            from,
+            ..
+        }) => {
+            let Some(c) = t.tracks.get(track).and_then(|tr| tr.clips.get(clip)) else {
+                return;
+            };
+            let at = match edge {
+                TimelineClipEdge::Start => c.start,
+                TimelineClipEdge::End => c.end(),
+            };
+            let id = c.id.clone();
+            let raw = at + f64::from(p[0] - from[0]) / t.view.pixels_per_second;
+            let (start, length) = t.clip_trim(track, clip, edge, raw);
+            let next = Some(Gesture::ClipTrim {
+                track,
+                clip,
+                edge,
+                from,
+                start,
+                length,
+            });
+            if t.gesture != next {
+                t.gesture = next;
+                view.emit(TimelineClipTrimmed {
+                    clip: id,
+                    start,
+                    length,
+                    committed: false,
+                });
+            }
+        }
         None => {}
     })?;
     Ok(true)
@@ -991,6 +1602,34 @@ fn timeline_released(
             broken,
             committed: true,
         }),
+        Some(Gesture::ClipMove { dt, track, .. }) => {
+            if dt != 0.0 || track.is_some() {
+                view.emit(TimelineClipsMoved {
+                    clips: t.selected_clips.clone(),
+                    dt,
+                    track,
+                    committed: true,
+                });
+            }
+        }
+        Some(Gesture::ClipTrim {
+            track,
+            clip,
+            start,
+            length,
+            ..
+        }) => {
+            if let Some(c) = t.tracks.get(track).and_then(|tr| tr.clips.get(clip))
+                && (c.start, c.length) != (start, length)
+            {
+                view.emit(TimelineClipTrimmed {
+                    clip: c.id.clone(),
+                    start,
+                    length,
+                    committed: true,
+                });
+            }
+        }
         Some(Gesture::Pan { .. }) | None => {}
     })?;
     Ok(true)
@@ -1028,6 +1667,30 @@ fn timeline_wheel(
 }
 
 impl AppContext {
+    /// Delete or Backspace on a focused timeline with clips selected (and no
+    /// drag under way): emits [`TimelineClipsDeleteRequested`].
+    pub(crate) fn request_focused_timeline_clip_delete(
+        &mut self,
+        document: crate::DocumentId,
+    ) -> Result<bool, FrameworkError> {
+        let Some(timeline) = self
+            .world()
+            .focused(document)
+            .and_then(|id| self.view_entity::<TimelineEditor>(id))
+        else {
+            return Ok(false);
+        };
+        self.update_component(timeline, |t, view| {
+            if t.selected_clips.is_empty() || t.gesture.is_some() {
+                return false;
+            }
+            view.emit(TimelineClipsDeleteRequested {
+                clips: t.selected_clips.clone(),
+            });
+            true
+        })
+    }
+
     /// Frame `timeline`'s selected keys (every key when none is selected) in
     /// its laid-out size; see [`TimelineEditor::fit`].
     pub fn fit_timeline(&mut self, timeline: Entity<TimelineEditor>) -> Result<(), FrameworkError> {
@@ -1111,6 +1774,70 @@ impl Painter for TimelinePainter {
                 SemanticColorRole::BorderSoft
             };
             fill(cx, rect(header + tick.x, TIMELINE_RULER, 1.0, height), role);
+        }
+        // clips, under the keys
+        if t.mode == TimelineMode::DopeSheet {
+            let radius = cx.radius(RadiusTier::Xs);
+            let trimming = match t.gesture {
+                Some(Gesture::ClipTrim {
+                    track, clip, edge, ..
+                }) => Some((track, clip, edge)),
+                _ => t.hover_edge,
+            };
+            for (track, tr) in t.tracks.iter().enumerate() {
+                for (i, c) in tr.clips.iter().enumerate() {
+                    let Some(r) = t.clip_rect_in(&rows, track, i) else {
+                        continue;
+                    };
+                    if r.x > width
+                        || r.x + r.width < header
+                        || r.y > height
+                        || r.y + r.height < TIMELINE_RULER
+                    {
+                        continue;
+                    }
+                    // kept to the key area's reach so far zooms stay finite
+                    let x0 = r.x.max(header - 2.0 * radius);
+                    let x1 = (r.x + r.width).min(width + 2.0 * radius);
+                    let r = rect(x0, r.y, x1 - x0, r.height);
+                    let role = c.tone.role();
+                    let selected = t.clip_selected(&c.id);
+                    let (tint, border, line) = if selected {
+                        (0.42, SemanticColorMix::alpha(role, 1.0), 1.5)
+                    } else {
+                        (0.24, SemanticColorMix::alpha(role, 0.55), 1.0)
+                    };
+                    cx.rounded_rect(
+                        r,
+                        radius,
+                        BoxPaint::fill(SemanticColorMix::alpha(role, tint)).border(border, line),
+                    );
+                    // the label, from the visible start, ellipsized
+                    let left = r.x.max(header) + 6.0;
+                    let room = r.x + r.width - 6.0 - left;
+                    if room >= 12.0 {
+                        cx.text(
+                            rect(left, r.y, room, r.height),
+                            label(&c.label, 11.0, SemanticColorRole::Text),
+                        );
+                    }
+                    // the trim handle on the edge under the pointer
+                    if let Some((_, _, edge)) =
+                        trimming.filter(|&(a, b, _)| c.resizable && (a, b) == (track, i))
+                    {
+                        let w = 3.0;
+                        let x = match edge {
+                            TimelineClipEdge::Start => r.x + 1.0,
+                            TimelineClipEdge::End => r.x + r.width - 1.0 - w,
+                        };
+                        cx.rounded_rect(
+                            rect(x, r.y + 2.0, w, r.height - 4.0),
+                            radius,
+                            BoxPaint::fill(role),
+                        );
+                    }
+                }
+            }
         }
         // curves
         if t.mode == TimelineMode::Curves {
@@ -1437,5 +2164,186 @@ mod tests {
         assert!(t.time_to_x(0.0) >= 100.0 && t.time_to_x(0.0) < 140.0);
         assert!(t.time_to_x(1.0) <= 500.0 && t.time_to_x(1.0) > 460.0);
         assert!(t.view.value_min < 0.0 && t.view.value_max > 30.0);
+    }
+
+    /// Two tracks of clips at 100 px/s from 0 s, the key area from x 100.
+    fn clips() -> TimelineEditor {
+        let mut t = TimelineEditor::new([
+            TimelineTrack::new("a", "A", []).clips([
+                TimelineClip::new("a1", 1.0, 1.0, "One"),
+                TimelineClip::new("a2", 3.0, 1.0, "Two"),
+                TimelineClip::new("a3", 5.0, 0.5, "Fixed").resizable(false),
+            ]),
+            TimelineTrack::new("b", "B", []).clips([TimelineClip::new("b1", 1.5, 1.0, "Three")]),
+            TimelineTrack::new("group", "Group", []).expanded(true),
+            TimelineTrack::new("c", "C", []).depth(1),
+        ])
+        .header_width(100.0);
+        t.view.pixels_per_second = 100.0;
+        t.snap = false;
+        t
+    }
+
+    const ROW_A: f32 = TIMELINE_RULER + TIMELINE_ROW / 2.0;
+
+    #[test]
+    fn clip_hits_prefer_a_resizable_edge_over_the_body() {
+        let t = clips();
+        let size = [1000.0, 200.0];
+        let clip = |clip, edge| TimelineHit::Clip {
+            track: 0,
+            clip,
+            edge,
+        };
+        // a1 spans x 200..300
+        assert_eq!(t.hit([250.0, ROW_A], size), clip(0, None));
+        assert_eq!(
+            t.hit([203.0, ROW_A], size),
+            clip(0, Some(TimelineClipEdge::Start))
+        );
+        assert_eq!(
+            t.hit([298.0, ROW_A], size),
+            clip(0, Some(TimelineClipEdge::End))
+        );
+        // just outside reaches the edge too, farther does not
+        assert_eq!(
+            t.hit([304.0, ROW_A], size),
+            clip(0, Some(TimelineClipEdge::End))
+        );
+        assert_eq!(t.hit([320.0, ROW_A], size), TimelineHit::Empty);
+        // a clip that does not resize has no edges
+        assert_eq!(t.hit([601.0, ROW_A], size), clip(2, None));
+        assert_eq!(t.hit([598.0, ROW_A], size), TimelineHit::Empty);
+        // the next row's clip; clips are not hit in the curve view
+        let row_b = ROW_A + TIMELINE_ROW;
+        assert_eq!(
+            t.hit([300.0, row_b], size),
+            TimelineHit::Clip {
+                track: 1,
+                clip: 0,
+                edge: None
+            }
+        );
+        let mut curves = t.clone();
+        curves.mode = TimelineMode::Curves;
+        assert_eq!(curves.hit([250.0, ROW_A], size), TimelineHit::Empty);
+        assert_eq!(curves.clip_rect(0, 0), None);
+        // a key over a clip wins
+        let mut keyed = t.clone();
+        keyed.tracks[0].keys = vec![TimelineKey::new(1.5, 0.0)];
+        assert_eq!(
+            keyed.hit([250.0, ROW_A], size),
+            TimelineHit::Key(TimelineKeyRef { track: 0, key: 0 })
+        );
+    }
+
+    #[test]
+    fn a_folded_row_hides_its_clips() {
+        let mut t = clips();
+        t.tracks[3].clips = vec![TimelineClip::new("c1", 0.0, 1.0, "Four")];
+        assert!(t.clip_rect(3, 0).is_some());
+        t.tracks[2].expanded = Some(false);
+        assert_eq!(t.clip_rect(3, 0), None);
+        let r = t.clip_rect(0, 0).unwrap();
+        assert_eq!((r.x, r.width), (200.0, 100.0));
+        assert_eq!((r.y, r.height), (TIMELINE_RULER + 2.0, TIMELINE_ROW - 4.0));
+    }
+
+    #[test]
+    fn a_press_selects_clips_and_shift_toggles() {
+        let mut t = clips();
+        let id = |s: &str| Arc::<str>::from(s);
+        assert!(t.press_clip(&id("a1"), false));
+        assert_eq!(t.selected_clips, [id("a1")]);
+        assert!(t.press_clip(&id("b1"), true));
+        assert_eq!(t.selected_clips, [id("a1"), id("b1")]);
+        // a press on a selected clip keeps the group to drag it
+        assert!(!t.press_clip(&id("a1"), false));
+        assert_eq!(t.selected_clips.len(), 2);
+        assert!(t.press_clip(&id("a1"), true));
+        assert_eq!(t.selected_clips, [id("b1")]);
+        assert!(t.press_clip(&id("a2"), false));
+        assert_eq!(t.selected_clips, [id("a2")]);
+    }
+
+    #[test]
+    fn a_move_stops_at_its_neighbour_and_at_zero() {
+        let mut t = clips();
+        t.selected_clips = vec!["a1".into()];
+        // a1 (1..2) meets a2 at 3: at most +1 s
+        assert_eq!(t.clip_move((0, 0), 1.6, None), (1.0, None));
+        assert_eq!(t.clip_move((0, 0), 0.4, None), (0.4, None));
+        // and no earlier than 0
+        assert_eq!(t.clip_move((0, 0), -3.0, None), (-1.0, None));
+        // a2 between a1 (ends 2) and a3 (starts 5)
+        t.selected_clips = vec!["a2".into()];
+        assert_eq!(t.clip_move((0, 1), -2.0, None), (-1.0, None));
+        assert_eq!(t.clip_move((0, 1), 2.0, None), (1.0, None));
+        // a1 and a2 together: a2 meets a3 first, a1 meets 0
+        t.selected_clips = vec!["a1".into(), "a2".into()];
+        assert_eq!(t.clip_move((0, 0), 3.0, None), (1.0, None));
+        assert_eq!(t.clip_move((0, 0), -5.0, None), (-1.0, None));
+    }
+
+    #[test]
+    fn only_a_single_clip_changes_track_onto_a_leaf_with_room() {
+        let mut t = clips();
+        t.selected_clips = vec!["a1".into()];
+        // onto B, landing right of b1 (1.5..2.5): pushed to its end
+        assert_eq!(t.clip_move((0, 0), 1.2, Some(1)), (1.5, Some(1)));
+        // onto C (empty)
+        assert_eq!(t.clip_move((0, 0), 0.5, Some(3)), (0.5, Some(3)));
+        // not onto a branch, nor its own row
+        assert_eq!(t.clip_move((0, 0), 0.5, Some(2)), (0.5, None));
+        assert_eq!(t.clip_move((0, 0), 0.5, Some(0)), (0.5, None));
+        // two clips stay on their tracks
+        t.selected_clips = vec!["a1".into(), "b1".into()];
+        assert_eq!(t.clip_move((0, 0), 0.5, Some(3)), (0.5, None));
+        // no room: B filled from 0 to 10
+        t.selected_clips = vec!["a1".into()];
+        t.tracks[1].clips = vec![TimelineClip::new("b1", 0.0, 10.0, "Long")];
+        assert_eq!(t.clip_move((0, 0), 0.5, Some(1)), (0.5, None));
+    }
+
+    #[test]
+    fn a_trim_keeps_its_least_length_and_stops_at_its_neighbour() {
+        let mut t = clips();
+        let start = TimelineClipEdge::Start;
+        let end = TimelineClipEdge::End;
+        // a2 (3..4): the start edge keeps the end
+        assert_eq!(t.clip_trim(0, 1, start, 3.5), (3.5, 0.5));
+        let (s, l) = t.clip_trim(0, 1, start, 3.99);
+        assert!(
+            (s - 3.95).abs() < 1e-9 && (l - 0.05).abs() < 1e-9,
+            "{s} {l}"
+        );
+        assert_eq!(t.clip_trim(0, 1, start, 1.0), (2.0, 2.0));
+        // the end edge
+        assert_eq!(t.clip_trim(0, 1, end, 4.5), (3.0, 1.5));
+        assert_eq!(t.clip_trim(0, 1, end, 6.0), (3.0, 2.0));
+        assert!((t.clip_trim(0, 1, end, 2.0).1 - 0.05).abs() < 1e-9);
+        // a1's start stops at 0
+        assert_eq!(t.clip_trim(0, 0, start, -2.0), (0.0, 2.0));
+        t.min_clip_length = 0.5;
+        assert_eq!(t.clip_trim(0, 1, end, 3.1), (3.0, 0.5));
+    }
+
+    #[test]
+    fn clips_snap_to_edges_and_the_playhead_before_frames() {
+        let mut t = clips();
+        t.snap = true;
+        t.playhead = 4.52;
+        t.selected_clips = vec!["b1".into()];
+        // b1 (1.5..2.5) by 0.47: its end at 2.97 is 3 px from a2's start (3)
+        assert_eq!(t.clip_move((1, 0), 0.47, None), (0.5, None));
+        // by 1.98: its end at 4.48 is 4 px from the playhead
+        let (dt, _) = t.clip_move((1, 0), 1.98, None);
+        assert!((dt - 2.02).abs() < 1e-9, "{dt}");
+        // far from any edge: the start lands on a frame (30 fps)
+        let (dt, _) = t.clip_move((1, 0), 0.2512, None);
+        assert!(((1.5 + dt) * 30.0 - 53.0).abs() < 1e-9, "{dt}");
+        // a trimmed edge snaps to another clip's edge, not its own
+        assert_eq!(t.clip_trim(0, 0, TimelineClipEdge::End, 1.47).1, 0.5);
+        assert_eq!(t.clip_trim(0, 0, TimelineClipEdge::End, 2.52), (1.0, 1.5));
     }
 }

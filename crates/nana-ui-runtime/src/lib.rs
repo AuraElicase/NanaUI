@@ -453,10 +453,12 @@ pub use text_node::{
 };
 pub use thumbnail::{DEFAULT_ASPECT as THUMBNAIL_DEFAULT_ASPECT, Thumbnail, ThumbnailState};
 pub use timeline::{
-    TIMELINE_ROW, TIMELINE_RULER, TimelineEditor, TimelineHandleMoved, TimelineHit, TimelineKey,
-    TimelineKeyRef, TimelineKeysMoved, TimelineMode, TimelinePlayheadChanged,
-    TimelineSelectionChanged, TimelineTick, TimelineTrack, TimelineTrackToggled, TimelineUnit,
-    TimelineView, TimelineViewChanged,
+    TIMELINE_ROW, TIMELINE_RULER, TimelineClip, TimelineClipEdge, TimelineClipSelectionChanged,
+    TimelineClipTone, TimelineClipTrimmed, TimelineClipsDeleteRequested, TimelineClipsMoved,
+    TimelineEditor, TimelineHandleMoved, TimelineHit, TimelineKey, TimelineKeyRef,
+    TimelineKeysMoved, TimelineMode, TimelinePlayheadChanged, TimelineSelectionChanged,
+    TimelineTick, TimelineTrack, TimelineTrackToggled, TimelineUnit, TimelineView,
+    TimelineViewChanged,
 };
 pub use toast::{Toast, ToastAction, ToastDismissed, ToastProgress, ToastTone};
 pub use toast_stack::ToastStack;
