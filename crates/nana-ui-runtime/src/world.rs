@@ -6036,6 +6036,8 @@ mod issue201;
 #[cfg(test)]
 mod issue202;
 #[cfg(test)]
+mod issue204;
+#[cfg(test)]
 mod issue205;
 #[cfg(test)]
 mod issue211;

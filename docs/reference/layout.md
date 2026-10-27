@@ -67,7 +67,8 @@ transform、hover 和 accessibility 更新不会 bump。
   不是组件，也不另存一棵树。
 - **建立的 context**（`FormattingContextKind`）：这个节点怎么排自己的子项。布局记下它
   实际跑的那一种：`Flow`（`display: block` 或不写）、`Flex`、`Grid`、`Inline`（在流
-  子项里有行内级盒子）、`Overlay`（模态框按槽位放子项）。有文字的叶子为自己的文字建立
+  子项里有行内级盒子）、`Layers`（`display: layers`，叠层）、`Overlay`（模态框按槽位放
+  子项）。有文字的叶子为自己的文字建立
   `Inline`，字形归 nana-text，不变成布局节点；空叶子不建立 context。
 
 measure 和 placement 用同一个函数选 context，两趟不会对同一个节点选出不同的算法。
@@ -80,6 +81,7 @@ measure 和 placement 用同一个函数选 context，两趟不会对同一个�
 | `Grid` | `GridItem` |
 | `Flow` | `FlowItem`；浮动的是 `Float`；被块拆开的行内元素是 `InlineSpan` |
 | `Inline` | 行内文字是 `NativeText`，有子项的行内元素是 `InlineSpan`，`inline-block`、控件和替换内容是 `AtomicInline`，块级盒子是 `FlowItem`（断行） |
+| `Layers` | `LayerItem` |
 | `Overlay` | `OverlayItem` |
 
 `Absolute` / `Fixed`、`display: contents`（`Contents`）和不生成盒子的节点（`NoBox`）
@@ -92,7 +94,20 @@ measure 和 placement 用同一个函数选 context，两趟不会对同一个�
 context、父级 context、参与方式、context generation 和结果 generation。父级还没布局时
 参与方式是 `None`，不猜。`LayoutResult::formatting_context` 记下结果是在哪个 context 里
 排出来的，子项 fragment 的种类也由它决定（`Flex` → `FlexChildPlacement`，
-`Grid` → `GridChildPlacement`，`Inline` → `InlineAtomic`，其余 → `ChildPlacement`）。
+`Grid` 和 `Layers` → `GridChildPlacement`，`Inline` → `InlineAtomic`，其余 →
+`ChildPlacement`）。
+
+`Layers` 是叠层，和 SwiftUI `ZStack`、Compose `Box`、Flutter `Stack` 同义：在流子项共用
+同一块区域，按 `justify-items` / `align-items`（子项的 `justify-self` / `align-self`
+优先）对齐，默认起点；容器随最大的子项，脱流子项照常定位、不撑大容器；命中和绘制按文档
+顺序，后写的在上面。它跑的是网格算法：一行一列 `auto` 轨，所有子项都放进这一格，子项自己
+的网格位置和容器上的轨道声明都不起作用；measure 用随内容的轨道，所以容器随最大的子项，
+placement 再把这一格撑满容器的内容盒，对齐因此以整个容器为参照。Row/Column 预设仍是
+`Flex`，`Stack::layers()` / `Stack::overlay_layer()` 才是叠层，flex 与叠层不再共用一种
+context。门禁在 `world/issue204.rs`（共用区域、随最大子项、九个锚点、RTL、`stretch`、
+子项覆盖、后写的那层接住指针、与冷布局相同）和 `tests/view_macro.rs` 的
+`issue204_layers_css_and_rust_share_one_overlay_context`；`world/issue199.rs` 的千组件
+切换序列也经过 `Layers`。
 
 context 切换（同一组子项 Flex → Grid → Inline）只换 context 记录、它的 generation、
 子项的参与方式和布局结果；按样式指针比对的计划自然失效。子项的 id、组件、状态、焦点、
@@ -692,6 +707,8 @@ grid 的列是 inline 轴上的轨道。行是 block 轴上的轨道。这是 CS
 把 `subgrid` 当作轨道列表里的单个 token 来写，例如 `subgrid 80px`，仍记 [`GridTrackListUnsupported::Subgrid`](../../crates/nana-ui-core/src/box_layout.rs)。
 
 直接构造 `LayoutStyle { display: Grid }`、不经 css_map 时，`align-items` 默认 `start`。手写测试依赖此项。Default 无法按 display 区分「未写」和显式 `start`。经 `display:grid` 解析，会写成 `stretch`。
+
+`display: layers` 是 NanaUI 的扩展值，见上文 `Layers`。它不写入 `stretch`：叠层的子项默认按起点对齐，和 ZStack / Box 一样；`justify-items` 没写时也按起点，不按网格的 `stretch`。
 
 **行内子集。** 块容器里的 `display: inline` 和 `inline-block` 走一行内格式化上下文，也就是 IFC。
 

@@ -5680,6 +5680,7 @@ impl ComponentView for List {
 /// - [`Stack::column`]：竖直排列，高度随内容（页面纵向结构）。
 /// - [`Stack::fill_column`]：竖直排列并占满父容器剩余高度（主内容区）。
 /// - [`Stack::bar`]：水平排列占满整行但不伸展（顶栏、底栏）。
+/// - [`Stack::layers`]：叠层，子项共用同一块区域、各自对齐（ZStack / Box）。
 ///
 /// CSS 路径用 [`Stack::from_layout`] 写入已解析的 [`nana_ui_core::LayoutStyle`]。
 /// grid / position / overflow / paint 用 [`Self::with_layout`]，不要另造布局控件。
@@ -5827,10 +5828,30 @@ impl Stack {
         })
     }
 
-    /// 舞台叠层：铺满已定位的父级、脱流、不命中、裁剪。弹幕/HUD 容器用这个，
-    /// 节点池与每帧内容仍由应用挂。
+    /// 叠层：子项共用同一块区域，后写的盖在先写的上面。每个子项按
+    /// [`Self::align`]（竖直）和 [`Self::justify`]（水平）在这块区域里对齐，
+    /// 默认左上；容器随最大的子项。等同 SwiftUI `ZStack`、Compose `Box`、
+    /// Flutter `Stack`，CSS 写作 `display: layers`。脱流的子项照常按包含块定位，
+    /// 不撑大容器。
+    pub fn layers() -> Self {
+        let mut style = NodeStyle::default();
+        let layout = Arc::make_mut(&mut style.layout);
+        layout.display = Some(nana_ui_core::DisplaySpec::Layers);
+        layout.direction = Some(nana_ui_core::FlexDirection::Row);
+        layout.align_items = nana_ui_core::AlignSpec::Start;
+        layout.justify_items = Some(nana_ui_core::AlignSpec::Start);
+        Self {
+            style,
+            hittable: false,
+            structural: false,
+        }
+        .width(nana_ui_core::LengthSpec::Shrink)
+    }
+
+    /// 舞台叠层：一个铺满已定位父级的 [`Self::layers`]，脱流、不命中、裁剪。
+    /// 弹幕/HUD 容器用这个，节点池与每帧内容仍由应用挂。
     pub fn overlay_layer() -> Self {
-        Self::row(0.0).with_layout(|layout| {
+        Self::layers().with_layout(|layout| {
             layout.position = nana_ui_core::PositionSpec::Absolute;
             layout.offset_top = Some(nana_ui_core::LengthSpec::Px(0.0));
             layout.offset_left = Some(nana_ui_core::LengthSpec::Px(0.0));
@@ -5879,8 +5900,26 @@ impl Stack {
         self
     }
 
+    /// 主轴分布。[`Self::layers`] 没有主轴，这里改为子项的水平对齐
+    /// （`justify-items`）；`Space*` 在一格里没有意义，按起点对齐。
     pub fn justify(mut self, justify: nana_ui_core::JustifySpec) -> Self {
-        Arc::make_mut(&mut self.style.layout).justify_content = justify;
+        use nana_ui_core::{AlignSpec, JustifySpec};
+        let layout = Arc::make_mut(&mut self.style.layout);
+        layout.justify_content = justify;
+        if layout
+            .display
+            .is_some_and(nana_ui_core::DisplaySpec::is_layers)
+        {
+            layout.justify_items = Some(match justify {
+                JustifySpec::Center => AlignSpec::Center,
+                JustifySpec::End => AlignSpec::End,
+                JustifySpec::Stretch => AlignSpec::Stretch,
+                JustifySpec::Start
+                | JustifySpec::SpaceBetween
+                | JustifySpec::SpaceAround
+                | JustifySpec::SpaceEvenly => AlignSpec::Start,
+            });
+        }
         self
     }
 

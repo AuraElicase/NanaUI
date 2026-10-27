@@ -87,6 +87,11 @@ fn issue199_a_thousand_components_keep_state_focus_and_resource_identity() {
             FormattingContextKind::Grid,
         ),
         (
+            DisplaySpec::Layers,
+            FlexDirection::Row,
+            FormattingContextKind::Layers,
+        ),
+        (
             DisplaySpec::Block,
             FlexDirection::Row,
             FormattingContextKind::Inline,

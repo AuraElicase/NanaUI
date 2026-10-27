@@ -40,6 +40,10 @@ pub enum FormattingContextKind {
     /// Modal slot placement: the children are placed by the overlay's slot
     /// contract, not by flow.
     Overlay,
+    /// `display: layers`: every in-flow child shares one area, each aligned
+    /// in it, later ones above earlier ones (SwiftUI `ZStack`, Compose `Box`).
+    /// It runs the grid algorithm over a single `1fr` cell.
+    Layers,
 }
 
 impl FormattingContextKind {
@@ -50,6 +54,7 @@ impl FormattingContextKind {
             Self::Grid => 2,
             Self::Inline => 3,
             Self::Overlay => 4,
+            Self::Layers => 5,
         })
     }
     /// The context a style alone selects, before layout has run. Layout
@@ -58,6 +63,7 @@ impl FormattingContextKind {
     #[must_use]
     pub fn from_display(style: &LayoutStyle) -> Self {
         match style.display {
+            Some(DisplaySpec::Layers) => Self::Layers,
             Some(display) if display.is_grid_container() => Self::Grid,
             Some(display) if display.is_flex_container() => Self::Flex,
             _ => Self::Flow,
@@ -69,7 +75,7 @@ impl FormattingContextKind {
     pub const fn child_fragment_kind(self) -> LayoutFragmentKind {
         match self {
             Self::Flex => LayoutFragmentKind::FlexChildPlacement,
-            Self::Grid => LayoutFragmentKind::GridChildPlacement,
+            Self::Grid | Self::Layers => LayoutFragmentKind::GridChildPlacement,
             Self::Inline => LayoutFragmentKind::InlineAtomic,
             Self::Flow | Self::Overlay => LayoutFragmentKind::ChildPlacement,
         }
@@ -87,6 +93,8 @@ pub enum ParticipationKind {
     FlowItem,
     FlexItem,
     GridItem,
+    /// An in-flow child of a `display: layers` container: one layer.
+    LayerItem,
     /// Inline-level text in an inline context: its glyph runs join the
     /// parent's lines directly.
     NativeText,
@@ -135,6 +143,7 @@ impl ParticipationKind {
             FormattingContextKind::Overlay => Self::OverlayItem,
             FormattingContextKind::Flex => Self::FlexItem,
             FormattingContextKind::Grid => Self::GridItem,
+            FormattingContextKind::Layers => Self::LayerItem,
             FormattingContextKind::Flow => {
                 if child.is_floated() {
                     Self::Float
@@ -248,6 +257,14 @@ mod tests {
             (Ctx::Grid, &block, Content::Children, Part::GridItem),
             (Ctx::Grid, &inline, Content::Text, Part::GridItem),
             (Ctx::Grid, &inline_block, Content::Replaced, Part::GridItem),
+            (Ctx::Layers, &block, Content::Children, Part::LayerItem),
+            (Ctx::Layers, &inline, Content::Text, Part::LayerItem),
+            (
+                Ctx::Layers,
+                &inline_block,
+                Content::Replaced,
+                Part::LayerItem,
+            ),
             (Ctx::Flow, &block, Content::Text, Part::FlowItem),
             (Ctx::Flow, &floated, Content::Empty, Part::Float),
             (Ctx::Flow, &inline, Content::Children, Part::InlineSpan),
@@ -292,7 +309,7 @@ mod tests {
         let contents = display(DisplaySpec::Contents);
         let absolute = positioned(PositionSpec::Absolute);
         let fixed = positioned(PositionSpec::Fixed);
-        for parent in [Ctx::Flow, Ctx::Flex, Ctx::Grid, Ctx::Inline] {
+        for parent in [Ctx::Flow, Ctx::Flex, Ctx::Grid, Ctx::Layers, Ctx::Inline] {
             assert_eq!(Part::classify(parent, &none, Content::Text), Part::NoBox);
             assert_eq!(
                 Part::classify(parent, &contents, Content::Children),

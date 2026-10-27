@@ -42,7 +42,7 @@
 - [RichTextEditor](rich-text-editor.md) — 就地编辑一份 `RichText`，和 RichTextView 断出同样的行。工具栏经 `cx.rich_edit` 发命令。
 - [Column](column.md) — 纵向排列。间距是 `.gap`，单位是逻辑像素。
 - [Row](row.md) — 横向排列。宽度随内容收缩，子项在交叉轴上居中。
-- [Stack](stack.md) — `row` / `column` / `bar` / `spacer` / `overlay_layer` 的容器。预设只覆盖常用的 flex。
+- [Stack](stack.md) — `row` / `column` / `bar` / `spacer` / `layers` / `overlay_layer` 的容器。行列是 flex，`layers` 是叠层。
 - [Divider](divider.md) — 分隔线。不带标签，也不参与操作。
 - [IconGlyph](icon-glyph.md) — 装饰图标。不接收指针，也不能聚焦。
 - [ScrollView](scroll-view.md) — 滚动。位置在 `ScrollOffset`，尺寸在 `ScrollMetrics`。

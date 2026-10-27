@@ -3,7 +3,8 @@
 //! Measure and placement both ask this one function which context a
 //! container establishes, so the two passes cannot pick different
 //! algorithms for the same node. The Flex, Grid, Inline and Overlay modules
-//! keep their specialized algorithms and retained plans. Child membership is
+//! keep their specialized algorithms and retained plans; Layers is the grid
+//! algorithm over one cell that every child shares. Child membership is
 //! classified by the same Participation contract used by LayoutNode queries.
 
 use super::*;
@@ -33,6 +34,7 @@ pub(super) fn establish_context(
     nodes: &LayoutInputMap<'_>,
 ) -> EstablishedContext {
     let kind = match style.display {
+        Some(DisplaySpec::Layers) => FormattingContextKind::Layers,
         Some(display) if display.is_grid_container() => FormattingContextKind::Grid,
         Some(display) if display.is_flex_container() => FormattingContextKind::Flex,
         _ if flow
@@ -45,6 +47,9 @@ pub(super) fn establish_context(
     };
     EstablishedContext {
         kind,
-        grid_2d: kind == FormattingContextKind::Grid && uses_2d_grid(style, flow, nodes),
+        grid_2d: matches!(
+            kind,
+            FormattingContextKind::Grid | FormattingContextKind::Layers
+        ) && uses_2d_grid(style, flow, nodes),
     }
 }

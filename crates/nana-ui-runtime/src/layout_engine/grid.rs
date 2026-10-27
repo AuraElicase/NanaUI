@@ -28,6 +28,30 @@ pub(super) struct Grid2DLayout {
     pub(super) items: Vec<GridPlacedItem>,
 }
 
+impl Grid2DLayout {
+    /// A layers container's one cell is its whole content box once that box
+    /// is known: every child aligns against the container, not against the
+    /// largest child. Placement calls this; measure keeps the content-sized
+    /// tracks so the container still sizes to its largest child.
+    pub(super) fn fill_layer_cell(
+        &mut self,
+        style: &LayoutStyle,
+        writing: nana_ui_core::WritingContext,
+        content: Size,
+    ) {
+        if !style.display.is_some_and(DisplaySpec::is_layers) {
+            return;
+        }
+        let (inline, block) = writing.logical_size(content.width, content.height);
+        if let Some(column) = self.col_sizes.first_mut() {
+            *column = column.max(inline);
+        }
+        if let Some(row) = self.row_sizes.first_mut() {
+            *row = row.max(block);
+        }
+    }
+}
+
 pub(super) fn grid_axis_extent(sizes: &[f32], gap: f32) -> f32 {
     sizes.iter().copied().sum::<f32>() + gap * sizes.len().saturating_sub(1) as f32
 }
@@ -38,7 +62,10 @@ pub(super) fn explicit_column_tracks(
     col_gap: f32,
 ) -> Vec<GridTrack> {
     explicit_tracks(
-        style.grid_columns_repeat.as_ref(),
+        style
+            .grid_columns_repeat
+            .as_ref()
+            .filter(|_| !style.display.is_some_and(DisplaySpec::is_layers)),
         style.active_grid_columns(),
         style
             .grid_template_areas
@@ -57,7 +84,10 @@ pub(super) fn explicit_row_tracks(
     row_gap: f32,
 ) -> Vec<GridTrack> {
     explicit_tracks(
-        style.grid_rows_repeat.as_ref(),
+        style
+            .grid_rows_repeat
+            .as_ref()
+            .filter(|_| !style.display.is_some_and(DisplaySpec::is_layers)),
         style.active_grid_rows(),
         style
             .grid_template_areas
@@ -166,6 +196,10 @@ pub(super) fn resolve_item_grid_placement(
     col_names: Option<&[Vec<String>]>,
     row_names: Option<&[Vec<String>]>,
 ) -> (Option<i32>, usize, Option<i32>, usize) {
+    // Layers: every item shares the one cell.
+    if container.display.is_some_and(DisplaySpec::is_layers) {
+        return (Some(0), 1, Some(0), 1);
+    }
     if let Some(name) = placement.area.as_deref()
         && let Some(areas) = container.grid_template_areas.as_ref()
         && let Some((col, row, col_span, row_span)) = areas.lookup(name)
@@ -965,7 +999,13 @@ pub(super) fn place_grid_2d_items(
             (cell_inline_size - inline_lead - margin_at(margin, writing.inline_end())).max(0.0);
         let inner_block =
             (cell_block_size - block_lead - margin_at(margin, writing.block_end())).max(0.0);
-        let justify = child_style.resolved_justify_self(style.justify_items);
+        // Layers align at the start, like ZStack / Box, unless asked otherwise.
+        let justify = child_style.resolved_justify_self(style.justify_items.or_else(|| {
+            style
+                .display
+                .is_some_and(DisplaySpec::is_layers)
+                .then_some(AlignSpec::Start)
+        }));
         let align = child_style.resolved_align_self(style.align_items);
         let (inline_spec, block_spec) = if writing.is_vertical() {
             (child_style.height, child_style.width)

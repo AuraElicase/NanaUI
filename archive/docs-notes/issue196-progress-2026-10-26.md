@@ -258,3 +258,17 @@ FormField 的 label、support 和错误指示器现在由 shared Flex parts 发�
 GPU pixels 来自 macOS。Windows/Linux 真机与外部 consumer 完整构建/运行未执行；这代表没有相应证据，不据此推断失败。packaging 的原生 splash/handoff、installer、StaticAppPlan 明确 not-executed，属于相应窗口/打包工作流边界，不将这些无关功能一概列为 #196 的新增功能阻塞。
 
 当前结论：已继续完成 InlineContent 核心及 Button/Chip/ActionMenuItem、ListItem/SidebarRow/FileTab、LabeledValue、Card 的本批内容/部件收口，并补上真实混排、pixels、冷重算和成本观察；#196 仍保持开放。剩余工作由尚未完成的迁移与未覆盖的性能、平台证据决定，不以远端 OPEN 状态本身推断功能缺失。
+
+## 2026-10-27 追加：叠层 Stack 与 flex 拆开（#204 / #199）
+
+逐条核对 #199/#200/#204/#206 后发现，`Stack::overlay_layer()` 实际是绝对定位的 flex 行，叠层与行列共用 Flex context。按 SwiftUI `ZStack`、Compose `Box`、Flutter `Stack` 的语义补上叠层：
+
+- `DisplaySpec::Layers`（CSS `display: layers`，NanaUI 扩展），对应 `FormattingContextKind::Layers` / `ParticipationKind::LayerItem`。在流子项共用一块区域，按 `justify-items` / `align-items`（子项 `*-self` 优先）对齐，默认起点；容器随最大子项；脱流子项照常定位；按文档顺序命中，后写的在上面。
+- 实现复用网格算法：一行一列 `auto` 轨，子项都放进这一格；placement 用 `Grid2DLayout::fill_layer_cell` 把这一格撑满内容盒。最初用的 `1fr` 轨会在高度不定时吃满可用高度，所以改成了这种做法。
+- `Stack::layers()` 新增；`overlay_layer()` 改为铺满父级的叠层；`.justify()` 在叠层上改写 `justify-items`，因此 NanaType 的 `anchor_layer` 写法不变。
+- 门禁：
+  - `world/issue204.rs` 三项：共用区域与尺寸加冷对照；九锚点、RTL、`stretch`、子项覆盖；后写的那层接住指针。
+  - `view_macro` 的 `issue204_layers_css_and_rust_share_one_overlay_context`。
+  - `issue199` 千组件切换序列加入 `Layers`。
+  - CSS 解析单测。
+  - 变异检查：关掉撑满格子后对齐测试失败，关掉同格放置后三项全部失败。

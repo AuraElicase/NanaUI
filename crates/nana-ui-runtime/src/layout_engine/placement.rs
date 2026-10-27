@@ -1110,7 +1110,7 @@ fn replay_grid(
     }
     sort_ids_with_sizes(&mut flow, &mut sizes, nodes);
     let fonts = fonts_of(style, plan.parent_font_px);
-    let solved = layout_grid_2d(
+    let mut solved = layout_grid_2d(
         style,
         plan.writing,
         &flow,
@@ -1123,6 +1123,7 @@ fn replay_grid(
         intrinsic,
         Some(scope),
     )?;
+    solved.fill_layer_cell(style, plan.writing, content);
     let previous_items: HashMap<StableNodeId, &GridItemPlan> = old_grid
         .items
         .iter()
@@ -1842,7 +1843,7 @@ pub(super) fn place_node_scoped(
 
     let mut recorded_grid = None;
     if grid_2d {
-        let grid = layout_grid_2d(
+        let mut grid = layout_grid_2d(
             style,
             writing,
             &flow,
@@ -1855,6 +1856,7 @@ pub(super) fn place_node_scoped(
             intrinsic,
             scope,
         )?;
+        grid.fill_layer_cell(style, writing, content);
         if grid_recordable {
             recorded_grid = Some(GridTrackPlan::from_layout(&grid));
         }

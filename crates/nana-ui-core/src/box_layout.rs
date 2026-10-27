@@ -190,12 +190,29 @@ pub enum DisplaySpec {
     Inline,
     /// `display: inline-block`：行内级盒子，可有独立宽高。
     InlineBlock,
+    /// `display: layers`（NanaUI 扩展）：叠层。所有在流子项共用同一块区域，
+    /// 后写的盖在先写的上面；子项按 `justify-items` / `align-items`（或自身的
+    /// `justify-self` / `align-self`）对齐，容器尺寸随最大的子项。对应 SwiftUI
+    /// `ZStack`、Compose `Box`、Flutter `Stack`，也就是 CSS 里把每个子项都放进
+    /// 同一格的单格网格。它按网格排版：轨道固定为一行一列 `auto`，放置时这一格
+    /// 撑满容器内容盒；子项自己的网格位置不起作用。
+    Layers,
 }
 
+/// The one track each axis of a [`DisplaySpec::Layers`] container has: as
+/// large as its largest item, so the container sizes to it. Placement then
+/// widens the cell to the container's content box.
+const LAYER_TRACKS: &[GridTrack] = &[GridTrack::Auto];
+
 impl DisplaySpec {
-    /// `display: grid` 或 `inline-grid`。
+    /// `display: grid`、`inline-grid`，以及按单格网格排版的 `layers`。
     pub fn is_grid_container(self) -> bool {
-        matches!(self, Self::Grid | Self::InlineGrid)
+        matches!(self, Self::Grid | Self::InlineGrid | Self::Layers)
+    }
+
+    /// `display: layers`：每个在流子项都占同一格。
+    pub fn is_layers(self) -> bool {
+        matches!(self, Self::Layers)
     }
 
     /// `display: flex` 或 `inline-flex`（网格轨在此惰性）。
@@ -4884,6 +4901,9 @@ impl LayoutStyle {
         if self.display.is_some_and(DisplaySpec::is_flex_container) {
             return None;
         }
+        if self.display.is_some_and(DisplaySpec::is_layers) {
+            return Some(LAYER_TRACKS);
+        }
         self.grid_columns.as_deref().filter(|t| !t.is_empty())
     }
 
@@ -4894,17 +4914,26 @@ impl LayoutStyle {
         if self.display.is_some_and(DisplaySpec::is_flex_container) {
             return None;
         }
+        if self.display.is_some_and(DisplaySpec::is_layers) {
+            return Some(LAYER_TRACKS);
+        }
         self.grid_rows.as_deref().filter(|t| !t.is_empty())
     }
 
     /// `grid-template-columns: subgrid` on a non-flex grid container.
     pub fn is_subgrid_columns(&self) -> bool {
-        self.grid_columns_subgrid && !self.display.is_some_and(DisplaySpec::is_flex_container)
+        self.grid_columns_subgrid
+            && !self
+                .display
+                .is_some_and(|d| d.is_flex_container() || d.is_layers())
     }
 
     /// `grid-template-rows: subgrid` on a non-flex grid container.
     pub fn is_subgrid_rows(&self) -> bool {
-        self.grid_rows_subgrid && !self.display.is_some_and(DisplaySpec::is_flex_container)
+        self.grid_rows_subgrid
+            && !self
+                .display
+                .is_some_and(|d| d.is_flex_container() || d.is_layers())
     }
 
     /// Author wrote `grid-auto-*` / `grid-auto-flow` (consumed by 2D placement).
