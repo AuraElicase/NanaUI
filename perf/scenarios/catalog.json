@@ -260,6 +260,12 @@
       ]
     },
     {
+      "id": "component-memory",
+      "source": "crates/nana-ui-runtime/tests/node_memory.rs",
+      "filter": "laid_out_nodes_keep_bounded_live_memory",
+      "counters": []
+    },
+    {
       "id": "authoring-parity",
       "source": "crates/nana-ui-runtime/tests/view_macro.rs",
       "filter": "issue204",

@@ -180,3 +180,162 @@ fn issue199_a_thousand_components_keep_state_focus_and_resource_identity() {
         "1k context transitions: cross-context intrinsic hits={cross_hits}, misses={cross_misses}"
     );
 }
+
+/// The same container through Flex → Grid → Layers → Inline → Flex many
+/// times. What the retained cache holds settles after the first round: a
+/// context it left keeps no grid tracks or line plans, and the cache matches
+/// one that only ever laid the container out as Flex.
+#[test]
+fn issue199_repeated_context_switches_keep_the_retained_cache_flat() {
+    use crate::layout_engine::RetainedLayoutFootprint;
+    let document = DocumentId::new(1).unwrap();
+    let viewport = LayoutViewport::new(800.0, 600.0);
+    let mount = |cx: &mut AppContext| {
+        let root = cx
+            .create_component(
+                document,
+                Stack::from_layout(container(DisplaySpec::Flex, FlexDirection::Row)),
+            )
+            .unwrap();
+        let mut queue = MutationQueue::new();
+        for _ in 0..100 {
+            let child = cx
+                .create_detached_component(
+                    document,
+                    Button::new("Save").layout(Arc::new(item(PositionSpec::Static))),
+                )
+                .unwrap();
+            queue.insert(root.stable_id(), child.stable_id(), None);
+        }
+        cx.commit_mutations(queue).unwrap();
+        root.stable_id()
+    };
+    let mut cx = AppContext::new();
+    let mut shaper = bundled_face_shaper();
+    let root = mount(&mut cx);
+    product_frame(&mut cx, document, viewport, &mut shaper);
+    let nodes = cx.world().len();
+    // Intrinsic facts are the cross-context cache: kept on purpose, held to
+    // their budget below instead of compared.
+    let flat = |footprint: RetainedLayoutFootprint| RetainedLayoutFootprint {
+        intrinsics: 0,
+        intrinsic_metrics: 0,
+        last_frontier: 0,
+        ..footprint
+    };
+    let round = [
+        DisplaySpec::Grid,
+        DisplaySpec::Layers,
+        DisplaySpec::Block,
+        DisplaySpec::Flex,
+    ];
+    let mut settled = None;
+    let mut in_grid = None;
+    for _ in 0..20 {
+        for display in round {
+            let mut q = MutationQueue::new();
+            q.set_style(root, styled(container(display, FlexDirection::Row)));
+            cx.commit_mutations(q).unwrap();
+            let work = product_frame(&mut cx, document, viewport, &mut shaper);
+            assert_eq!(work.layout_context_transitions, 1, "{display:?}");
+            if display == DisplaySpec::Grid {
+                in_grid.get_or_insert(flat(cx.retained_layout_footprint(document)));
+            }
+        }
+        let footprint = cx.retained_layout_footprint(document);
+        assert_eq!(footprint.full_snapshots, 0);
+        assert!(footprint.intrinsics <= 2 * nodes, "{footprint:?}");
+        assert!(footprint.intrinsic_metrics <= 4 * nodes, "{footprint:?}");
+        match settled {
+            None => settled = Some(flat(footprint)),
+            Some(settled) => assert_eq!(flat(footprint), settled),
+        }
+    }
+    let mut cold = AppContext::new();
+    mount(&mut cold);
+    product_frame(&mut cold, document, viewport, &mut shaper);
+    assert_eq!(
+        settled.unwrap(),
+        flat(cold.retained_layout_footprint(document)),
+        "back in Flex, nothing from Grid, Layers or Inline is left"
+    );
+    // The comparison sees context state: while in Grid the cache held more.
+    let (grid, flex) = (in_grid.unwrap(), settled.unwrap());
+    assert!(
+        grid.plan_entries > flex.plan_entries,
+        "{grid:?} vs {flex:?}"
+    );
+}
+
+/// A modal frame establishes the Overlay context through the same
+/// participation contract as Flex and Grid: its slots are `OverlayItem`s,
+/// placed by the slot contract, and an incremental change to a slot matches a
+/// cold layout of the same dialog.
+#[test]
+fn issue199_a_modal_frame_places_its_slots_as_overlay_items() {
+    use super::reflow_oracle::assert_matches_cold;
+    use crate::{Dialog, ModalSlots, OverlayHost};
+    let document = DocumentId::new(1).unwrap();
+    let viewport = LayoutViewport::new(800.0, 600.0);
+    let body_layout = |height: f32| LayoutStyle {
+        width: Some(LengthSpec::Px(240.0)),
+        height: Some(LengthSpec::Px(height)),
+        ..Default::default()
+    };
+    let build = |cx: &mut AppContext| {
+        let host = cx.create_component(document, OverlayHost::new()).unwrap();
+        let dialog = cx
+            .create_component(document, Dialog::new("Settings"))
+            .unwrap();
+        let body = cx
+            .create_detached_component(document, Stack::from_layout(body_layout(80.0)))
+            .unwrap();
+        let action = cx
+            .create_detached_component(document, Button::new("Save"))
+            .unwrap();
+        cx.append_child(host, dialog).unwrap();
+        cx.set_modal_slots(
+            dialog,
+            ModalSlots {
+                body: Some(body.stable_id()),
+                actions: vec![action.stable_id()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        cx.activate_overlay(host, dialog).unwrap();
+        (dialog.stable_id(), body.stable_id(), action.stable_id())
+    };
+    let mut shaper = bundled_face_shaper();
+    let mut cx = AppContext::new();
+    let (dialog, body, action) = build(&mut cx);
+    product_frame(&mut cx, document, viewport, &mut shaper);
+    let world = cx.world();
+    assert_eq!(
+        world.layout_node(dialog).unwrap().established,
+        Some(FormattingContextKind::Overlay)
+    );
+    for slot in [body, action] {
+        assert_eq!(
+            world.layout_node(slot).unwrap().participation,
+            Some(ParticipationKind::OverlayItem)
+        );
+    }
+    assert!((world.layout_box(body).unwrap().height - 80.0).abs() < 0.01);
+
+    // A taller body grows the surface around it.
+    let mut q = MutationQueue::new();
+    q.set_style(body, styled(body_layout(120.0)));
+    cx.commit_mutations(q).unwrap();
+    product_frame(&mut cx, document, viewport, &mut shaper);
+    // The slot contract measures through the surface's float chrome.
+    assert!((cx.world().layout_box(body).unwrap().height - 120.0).abs() < 0.01);
+
+    let mut cold = AppContext::new();
+    let (_, cold_body, _) = build(&mut cold);
+    let mut q = MutationQueue::new();
+    q.set_style(cold_body, styled(body_layout(120.0)));
+    cold.commit_mutations(q).unwrap();
+    product_frame(&mut cold, document, viewport, &mut shaper);
+    assert_matches_cold(&mut cx, &mut cold, document);
+}

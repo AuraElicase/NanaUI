@@ -9,7 +9,10 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use nana_ui_runtime::view::{column, widget};
-use nana_ui_runtime::{AppContext, Button, ComponentView, DocumentId, Stack, Text, TextInput};
+use nana_ui_runtime::{
+    AppContext, Button, ComponentView, DocumentId, LayoutViewport, ListItem, MeasureTextShaper,
+    Stack, Text, TextInput,
+};
 
 struct Counting;
 
@@ -82,4 +85,72 @@ fn equal_nodes_share_their_layouts() {
     assert!(stack < 2_400.0, "{stack:.0} B per stack");
     assert!(button < 3_000.0, "{button:.0} B per button");
     assert!(input < 4_400.0, "{input:.0} B per text input");
+}
+
+/// Run frames until style, text and layout work settle, so every node holds
+/// its resolved style, shaped text and published layout result and parts.
+fn settle(cx: &mut AppContext, document: DocumentId) {
+    for _ in 0..4 {
+        let work = cx.take_system_work();
+        cx.resolve_styles(&work.style).unwrap();
+        cx.shape_text(&work.text, &mut MeasureTextShaper).unwrap();
+        cx.layout_document(document, LayoutViewport::new(1280.0, 800.0))
+            .unwrap();
+    }
+}
+
+/// Live bytes per node after building `n` nodes from `make` and laying
+/// them out: mounting plus everything layout keeps for them.
+fn live_per_laid_out_node<C: ComponentView>(
+    n: usize,
+    make: impl Fn(usize) -> C + Copy + 'static,
+) -> f64 {
+    let document = DocumentId::new(1).unwrap();
+    let mut cx = AppContext::new();
+    cx.mount_view_root(document, || {
+        column().children((0..8).map(|i| widget(make(i))).collect::<Vec<_>>())
+    })
+    .unwrap();
+    settle(&mut cx, document);
+    let before = LIVE.with(Cell::get);
+    cx.mount_view_root(document, || {
+        column().children((0..n).map(|i| widget(make(i))).collect::<Vec<_>>())
+    })
+    .unwrap();
+    settle(&mut cx, document);
+    let per_node = (LIVE.with(Cell::get) - before) as f64 / n as f64;
+    drop(cx);
+    per_node
+}
+
+/// Issue #206: what migrated components keep once laid out (resolved
+/// style, shaped text, `LayoutResult` and its parts) stays bounded per node
+/// and does not grow per node with the document.
+#[test]
+fn laid_out_nodes_keep_bounded_live_memory() {
+    let mut per_size = Vec::new();
+    for n in [1_000, 10_000] {
+        let text = live_per_laid_out_node(n, |i| Text::new(format!("行 {i}")));
+        let button = live_per_laid_out_node(n, |i| Button::new(format!("按钮 {i}")));
+        let item = live_per_laid_out_node(n, |i| ListItem::new(format!("条目 {i}")));
+        eprintln!(
+            "{n} laid-out nodes, live bytes per node: text {text:.0}, button {button:.0}, \
+             list item {item:.0}"
+        );
+        // About a quarter above what they hold today (3.4 / 4.6 / 5.1 KB at
+        // 1k): a second retained copy of a layout or of the parts per node
+        // crosses these.
+        assert!(text < 4_200.0, "{text:.0} B per laid-out text");
+        assert!(button < 5_800.0, "{button:.0} B per laid-out button");
+        assert!(item < 6_400.0, "{item:.0} B per laid-out list item");
+        per_size.push([text, button, item]);
+    }
+    // Per-node cost does not rise with the document: no per-node table that
+    // grows with every other node.
+    for (small, large) in per_size[0].iter().zip(per_size[1]) {
+        assert!(
+            large < small * 1.15,
+            "{large:.0} B at 10k vs {small:.0} B at 1k"
+        );
+    }
 }

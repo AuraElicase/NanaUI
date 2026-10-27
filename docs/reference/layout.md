@@ -121,8 +121,15 @@ context、参与方式，以及 metrics、context 和结果三个 generation。
 参与方式随父级变化，并与冷布局逐项相同；静态、只改绘制和等价写入不记切换。
 `framework/tests.rs` 里的组件版本确认 TextInput 的内容、焦点和 Button 的处理函数都保留。
 
-还没做的：Flex、Grid、Inline 算法还没拆成独立模块（#199）；脱流定位的 containing block
-（#200）和滚动作为正交行为（#201）也还没接进这套参与方式。
+Flex、Grid、Inline、Overlay 的算法各在 `layout_engine/` 下自己的模块里（`flex.rs`、
+`grid.rs`、`inline.rs`、`overlay.rs`），`Layers` 复用 `grid.rs`；`context.rs` 是两趟共用的
+分派。模态框的 `Overlay` 由 placement 按槽位契约记录，门禁是 `world/issue199.rs` 的
+`issue199_a_modal_frame_places_its_slots_as_overlay_items`（槽位是 `OverlayItem`，增量与
+冷布局相同）。同一容器在 Flex → Grid → Layers → Inline 之间来回切换 20 轮，保留缓存在第
+一轮后不再变化，回到 Flex 时与只排过 Flex 的冷缓存相同（`issue199_repeated_context_switches_keep_the_retained_cache_flat`）。
+
+还没做的：脱流定位的 containing block 仍取直接父级的内容盒，没有按最近定位祖先解析
+（#200）；clip 链没有接进 Scene/Hit/A11y 共用的结果（#201）。
 
 ## Incremental reflow frontier
 

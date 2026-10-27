@@ -378,6 +378,9 @@ jobs:
           # Rust/template/CSS authoring agrees on structured layout output.
           cargo test -p nana-ui-scene --locked --test issue200_sticky
           cargo test -p nana-ui-runtime --features view-macro --locked --test view_macro issue204
+          # Issue #206: laid-out Text/Button/ListItem keep bounded live memory
+          # per node at 1k and 10k, and equal nodes share one layout.
+          cargo test -p nana-ui-runtime --locked --test node_memory
           # Issue #250: steady pointer moves allocate nothing on the routing
           # path, an uncaptured move costs one hit query and a captured one
           # none. Counted, so it holds on a loaded runner.

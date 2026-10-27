@@ -181,7 +181,11 @@ impl AppContext {
     /// Compute and atomically publish canonical Runtime layout for one window.
     ///
     /// Full pass: recomputes every box and rebuilds the retained layout cache.
-    /// Used when viewport semantics changed or a complete layout is required.
+    /// The product frame never calls it: edits go through
+    /// [`Self::layout_document_with_frontier`] and viewport changes through
+    /// [`Self::layout_document_for_viewport`]. It is for a layout outside the
+    /// frame driver (tests, tools, a first layout) and counts as a
+    /// `layout_full_invocations`, not as a `layout_full_document_fallbacks`.
     pub fn layout_document(
         &mut self,
         document: DocumentId,
