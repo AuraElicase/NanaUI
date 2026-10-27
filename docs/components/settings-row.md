@@ -45,6 +45,36 @@ settings_row("静音").control(switch("").checked(false))
 
 `.control(view)` 把控件放在文案后面。控件自己有非空名字时用它自己的，例如 `switch("静音")`；名字是空的，例如 `switch("")`、分段、滑块、下拉，就用行标签。装配通过 `set_labelled_by` 关联两者。行标签改了，控件的无障碍节点跟着重新投影。
 
+## 标签旁的附件
+
+`.label_accessory(view)` 把一个小东西放在标签后面、和标签同一行，例如状态胶囊：「水印去除 [尚未购买]」。
+
+```rust
+settings_row("水印去除")
+    .label_accessory(status_badge("尚未购买"))
+    .control(button("购买"))
+```
+
+附件紧跟在标签后面，隔一个 `space::XS`，和标签上下居中。行变窄时标签先让：它收窄并省略，附件保持自己的宽度。横排和上下排都一样。行的无障碍名字还是标签，附件按它自己的内容读。
+
+没有附件的行和以前一样：标签直接在文案里，不多一层节点。附件只在有的时候才给标签套一条行。附件的根换成 `when(..)` 就能随状态显隐；手工建的行把 `label_accessory` 写成 `None` 再 `assemble_settings_row`，标签回到文案里，那条行一起拿掉。
+
+## 闪一下
+
+用户从别处跳来看某一行时，应用把页面滚到这一行，再 `AppContext::flash_settings_row(row)` 让它闪一下：行下面出现一块强调色淡底，停一会儿再淡出，结束后什么都不留。
+
+```rust
+let row = entity_ref::<SettingsRow>();
+// 视图里：settings_row("水印去除").entity_ref(row)
+if let Some(row) = row.get() {
+    cx.flash_settings_row(row)?;
+}
+```
+
+淡底用主题的 `Selected`（选中项的不透明浅色底）和 `Sm` 圆角；`AccentSoft` 在半透明的主题里叠在分组浅底上几乎看不出来。行自己没有左右内边距，所以淡底左右各外扩一个列表项的内边距（`ControlPadding::ListItem`），和选中的列表行一样不贴着字；上下盖满这一行。它是行里一个不参与排版、不接指针、读屏看不见的节点，不改行的布局和命中。
+
+动画在表现层上改它的不透明度，从调用之后的下一帧开始（滚过去的那一帧也就是它出现的那一帧）。总时长读安装主题的 `MotionRole::Attention`（默认 1.5 秒）：前五分之一保持全色，之后按主题的标准缓动淡出。减少动态效果（`reduced_motion`）时不淡出，全色停留同样的时长后直接拿掉。还在闪时再调一次就从头开始。行先被移除时淡底和它的时间线一起走。
+
 ## 装配
 
 `assemble_settings_row` 是 `slot_assembler`。视图提交时会跑，视图里不要再调。手工放好控件槽之后要自己调一次。
@@ -69,6 +99,7 @@ settings_row("静音").control(switch("").checked(false))
 | `.first_in_group` | — | 标出组的一端 |
 | `.last_in_group` | — | 标出组的一端 |
 | `.loose` | — | 加大间距 |
+| `label_accessory` | — | 标签后面同一行的附件。视图里用 `.label_accessory(view)` 插槽 |
 
 ## 事件
 
@@ -81,6 +112,13 @@ settings_row("静音").control(switch("").checked(false))
 | 插槽 | 说明 |
 | --- | --- |
 | `.control` | 把控件放在文案后面。`mount_settings_leaf_row` 保留标签、提示和控件槽 |
+| `.label_accessory` | 放在标签后面、同一行。标签先省略，附件保持宽度 |
+
+## 方法
+
+| 方法 | 说明 |
+| --- | --- |
+| `AppContext::flash_settings_row(row)` | 让这一行闪一下：强调色淡底停留后淡出，结束后不留痕迹。再调一次从头开始 |
 
 ## 参见
 

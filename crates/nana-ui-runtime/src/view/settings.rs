@@ -120,6 +120,13 @@ impl<K> El<SettingsRow, K> {
     pub fn control(self, view: impl IntoView) -> Self {
         self.slot(view, SettingsRow::control_child)
     }
+
+    /// Something after the label, on its line, such as a status pill: it
+    /// keeps its width and the label elides first. The row's name is still
+    /// its label; the accessory is read as itself.
+    pub fn label_accessory(self, view: impl IntoView) -> Self {
+        self.slot(view, SettingsRow::label_accessory)
+    }
 }
 
 #[cfg(test)]
@@ -318,5 +325,387 @@ mod tests {
             .unwrap()
         };
         assert_eq!(fields(&built, built_row), fields(&viewed, viewed_row));
+    }
+
+    fn row_parts(
+        cx: &AppContext,
+        row: StableNodeId,
+    ) -> (
+        StableNodeId,
+        StableNodeId,
+        StableNodeId,
+        Option<StableNodeId>,
+    ) {
+        cx.read(Entity::<SettingsRow>::from_stable_id(row), |row| {
+            (
+                row.copy_slot.unwrap(),
+                row.label_slot.unwrap(),
+                row.hint_slot.unwrap(),
+                row.label_line_slot,
+            )
+        })
+        .unwrap()
+    }
+
+    /// Lay `document` out with its text shaped, as a frame does.
+    fn lay_out(cx: &mut AppContext, document: DocumentId, width: f32) {
+        let viewport = crate::LayoutViewport::new(width, 600.0);
+        cx.layout_document(document, viewport).unwrap();
+        cx.shape_text_for_layout(document, &mut crate::MeasureTextShaper)
+            .unwrap();
+        cx.layout_document(document, viewport).unwrap();
+    }
+
+    fn bounds(cx: &AppContext, id: StableNodeId) -> crate::LayoutBox {
+        cx.world().canonical_layout_box(id).unwrap()
+    }
+
+    /// The accessory goes on the label's line, right after the label and
+    /// centred on it, in a row inline or stacked; the row is still named by
+    /// its label, and the accessory is read as itself.
+    #[test]
+    fn a_label_accessory_sits_after_the_label_on_its_line() {
+        use crate::view::{IntoView, column, text as pill};
+        let document = DocumentId::new(1).unwrap();
+        let mut cx = AppContext::new();
+        let view = cx
+            .mount_view_root(document, || {
+                column()
+                    .children((
+                        settings_row("水印去除")
+                            .hint("去掉输出画面角落的标记")
+                            .label_accessory(pill("尚未购买"))
+                            .control(switch("")),
+                        settings_row("水印去除")
+                            .stacked(true)
+                            .label_accessory(crate::view::status_badge("尚未购买"))
+                            .control(switch("")),
+                    ))
+                    .into_any()
+            })
+            .unwrap();
+        lay_out(&mut cx, document, 800.0);
+        for row in children(&cx, view.roots()[0]) {
+            let (copy, label, hint, line) = row_parts(&cx, row);
+            let line = line.expect("a row with an accessory has a label line");
+            let accessory = cx
+                .read(Entity::<SettingsRow>::from_stable_id(row), |row| {
+                    row.label_accessory.unwrap()
+                })
+                .unwrap();
+            assert_eq!(children(&cx, copy), [line, hint]);
+            assert_eq!(children(&cx, line), [label, accessory]);
+            let (label_box, accessory_box) = (bounds(&cx, label), bounds(&cx, accessory));
+            assert!(accessory_box.width > 0.0);
+            let gap = accessory_box.x - (label_box.x + label_box.width);
+            assert!(
+                (gap - nana_ui_core::space::XS).abs() < 0.5,
+                "the accessory follows the label at the small gap, not the line's end: {gap}"
+            );
+            let centre = |b: crate::LayoutBox| b.y + b.height / 2.0;
+            assert!((centre(label_box) - centre(accessory_box)).abs() < 0.5);
+
+            let named = cx
+                .world()
+                .project_accessibility(document)
+                .into_iter()
+                .find(|node| node.id == row)
+                .and_then(|node| node.label.map(|label| label.to_string()));
+            assert_eq!(named.as_deref(), Some("水印去除"));
+        }
+    }
+
+    /// A label too long for its line gives way: it elides, and the accessory
+    /// keeps the width it has beside a short one.
+    #[test]
+    fn a_long_label_elides_before_its_accessory_shrinks() {
+        use crate::view::{IntoView, column, text as pill};
+        let document = DocumentId::new(1).unwrap();
+        let mut cx = AppContext::new();
+        let view = cx
+            .mount_view_root(document, || {
+                column()
+                    .children((
+                        settings_row("短").label_accessory(pill("尚未购买")),
+                        settings_row("一个长到这一行放不下的设置项名字，后面还跟着更多的字")
+                            .label_accessory(pill("尚未购买")),
+                    ))
+                    .into_any()
+            })
+            .unwrap();
+        lay_out(&mut cx, document, 240.0);
+        let rows = children(&cx, view.roots()[0]);
+        let accessory = |cx: &AppContext, row: StableNodeId| {
+            cx.read(Entity::<SettingsRow>::from_stable_id(row), |row| {
+                row.label_accessory.unwrap()
+            })
+            .unwrap()
+        };
+        let natural = bounds(&cx, accessory(&cx, rows[0])).width;
+        let (_, label, _, line) = row_parts(&cx, rows[1]);
+        let line = bounds(&cx, line.unwrap());
+        let squeezed = bounds(&cx, accessory(&cx, rows[1]));
+        assert!(natural > 0.0);
+        assert!((squeezed.width - natural).abs() < 0.5);
+        assert!(squeezed.x + squeezed.width <= line.x + line.width + 0.5);
+        assert!(bounds(&cx, label).width < line.width - natural);
+    }
+
+    /// A row without an accessory keeps its label in the copy itself; an
+    /// accessory taken away hands the label back and its line goes, and one
+    /// hidden by its own `when` leaves the label where it was.
+    #[test]
+    fn a_label_accessory_comes_and_goes() {
+        use crate::view::{text as pill, when};
+        let document = DocumentId::new(1).unwrap();
+        let mut cx = AppContext::new();
+        let root = cx.create_component(document, Stack::column(0.0)).unwrap();
+        let shown = signal(true);
+        cx.mount_view(root.stable_id(), move || {
+            settings_row("水印去除")
+                .label_accessory(when(shown, || pill("尚未购买")))
+                .control(switch(""))
+        })
+        .unwrap();
+        cx.flush_reactive().unwrap();
+        let row = children(&cx, root.stable_id())[0];
+        let entity = Entity::<SettingsRow>::from_stable_id(row);
+        let (copy, label, hint, line) = row_parts(&cx, row);
+        let line = line.unwrap();
+        let slot = cx.read(entity, |row| row.label_accessory.unwrap()).unwrap();
+        assert_eq!(children(&cx, line), [label, slot]);
+        assert_eq!(children(&cx, slot).len(), 1);
+
+        shown.set(false);
+        cx.flush_reactive().unwrap();
+        assert_eq!(children(&cx, line), [label, slot]);
+        assert!(children(&cx, slot).is_empty(), "the pill is gone");
+
+        cx.update_component(entity, |row, _| row.label_accessory = None)
+            .unwrap();
+        assert!(cx.assemble_settings_row(entity).unwrap());
+        assert_eq!(children(&cx, copy), [label, hint]);
+        assert!(
+            !cx.world().contains(line),
+            "the line went with the accessory"
+        );
+        assert_eq!(cx.read(entity, |row| row.label_line_slot).unwrap(), None);
+        let style = cx.world().node_style(label).unwrap();
+        assert_eq!(style.layout.width, Some(nana_ui_core::LengthSpec::Fill));
+        assert_eq!(style.layout.flex_grow, Some(1.0));
+        assert!(
+            !cx.assemble_settings_row(entity).unwrap(),
+            "and it stays put"
+        );
+    }
+
+    /// A row with no accessory is built as it was: no line, the label in the
+    /// copy and filling it.
+    #[test]
+    fn a_row_without_an_accessory_has_no_label_line() {
+        let document = DocumentId::new(1).unwrap();
+        let mut cx = AppContext::new();
+        let root = cx.create_component(document, Stack::column(0.0)).unwrap();
+        cx.mount_view(root.stable_id(), || settings_row("HDR").control(switch("")))
+            .unwrap();
+        cx.flush_reactive().unwrap();
+        let row = children(&cx, root.stable_id())[0];
+        let (copy, label, hint, line) = row_parts(&cx, row);
+        assert_eq!(line, None);
+        assert_eq!(children(&cx, copy), [label, hint]);
+        let style = cx.world().node_style(label).unwrap();
+        assert_eq!(style.layout.width, Some(nana_ui_core::LengthSpec::Fill));
+    }
+
+    mod flash {
+        use super::*;
+        use crate::{AnimatableProperty, MotionValue};
+        use std::time::Duration;
+
+        const FRAME: Duration = Duration::from_millis(16);
+
+        fn flash_of(cx: &AppContext, row: StableNodeId) -> Option<StableNodeId> {
+            cx.read(Entity::<SettingsRow>::from_stable_id(row), |row| {
+                row.flash_slot
+            })
+            .unwrap()
+        }
+
+        fn opacity(cx: &AppContext, id: StableNodeId, at: Duration) -> Option<f32> {
+            match cx
+                .world()
+                .presentation_applied_value(id, AnimatableProperty::Opacity, at)
+            {
+                Some(MotionValue::Scalar(value)) => Some(value),
+                _ => None,
+            }
+        }
+
+        fn mounted() -> (AppContext, DocumentId, StableNodeId, StableNodeId) {
+            let document = DocumentId::new(1).unwrap();
+            let mut cx = AppContext::new();
+            let root = cx.create_component(document, Stack::column(0.0)).unwrap();
+            cx.mount_view(root.stable_id(), || {
+                (
+                    settings_row("HDR").divided(true).control(switch("")),
+                    settings_row("Mipmap").control(switch("")),
+                )
+            })
+            .unwrap();
+            cx.flush_reactive().unwrap();
+            lay_out(&mut cx, document, 480.0);
+            let row = children(&cx, root.stable_id())[0];
+            (cx, document, root.stable_id(), row)
+        }
+
+        fn length(cx: &AppContext) -> Duration {
+            cx.world()
+                .theme()
+                .duration(nana_ui_core::MotionRole::Attention)
+        }
+
+        /// The tint shows at once, holds, fades on the presentation layer
+        /// from the next frame, and is gone at the end; the row's own
+        /// background and layout never change, and pointers go through it.
+        #[test]
+        fn a_flash_tints_the_row_then_leaves_nothing() {
+            let (mut cx, document, _, row) = mounted();
+            let entity = Entity::<SettingsRow>::from_stable_id(row);
+            let before = children(&cx, row);
+            let boxes =
+                |cx: &AppContext| before.iter().map(|id| bounds(cx, *id)).collect::<Vec<_>>();
+            let laid_out = boxes(&cx);
+            let row_box = bounds(&cx, row);
+            let control = cx.read(entity, |row| row.control.unwrap()).unwrap();
+            let control_box = bounds(&cx, control);
+            let hit = cx.world().hit_test(
+                document,
+                control_box.x + control_box.width / 2.0,
+                control_box.y + control_box.height / 2.0,
+            );
+
+            cx.flash_settings_row(entity).unwrap();
+            let flash = flash_of(&cx, row).expect("the row paints a tint");
+            assert_eq!(children(&cx, row)[0], flash, "under everything else");
+            let style = cx.world().node_style(flash).unwrap();
+            assert_eq!(
+                style.background,
+                Some(nana_ui_core::SemanticColorRole::Selected)
+            );
+            assert_eq!(cx.world().node_style(row).unwrap().background, None);
+            assert_eq!(opacity(&cx, flash, Duration::ZERO), None, "shown in full");
+
+            lay_out(&mut cx, document, 480.0);
+            assert_eq!(boxes(&cx), laid_out, "out of flow");
+            assert_eq!(bounds(&cx, row), row_box);
+            let tint = bounds(&cx, flash);
+            let inset = nana_ui_core::ControlPadding::ListItem.resolve(cx.world().theme_metrics());
+            assert!((tint.x - (row_box.x - inset)).abs() < 0.5);
+            assert!((tint.width - (row_box.width + inset * 2.0)).abs() < 0.5);
+            assert!((tint.y - row_box.y).abs() < 0.5);
+            // The divider is the row's border, under its padding box.
+            assert!(tint.height <= row_box.height && tint.height > row_box.height - 2.0);
+            assert_eq!(
+                cx.world().hit_test(
+                    document,
+                    control_box.x + control_box.width / 2.0,
+                    control_box.y + control_box.height / 2.0,
+                ),
+                hit
+            );
+            assert_ne!(
+                cx.world().hit_test(document, tint.x + 1.0, tint.y + 1.0),
+                Some(flash)
+            );
+
+            // The next frame starts it.
+            let start = FRAME;
+            cx.advance_animations(start);
+            let length = length(&cx);
+            assert_eq!(opacity(&cx, flash, start + length / 10), Some(1.0), "held");
+            let fading = opacity(&cx, flash, start + length / 2).unwrap();
+            assert!(fading > 0.0 && fading < 1.0, "{fading}");
+            assert!(opacity(&cx, flash, start + length * 9 / 10).unwrap() < fading);
+
+            cx.advance_animations(start + length / 2);
+            assert!(cx.world().contains(flash));
+            cx.advance_animations(start + length);
+            assert!(!cx.world().contains(flash), "nothing is left of it");
+            assert_eq!(flash_of(&cx, row), None);
+            assert_eq!(children(&cx, row), before);
+            assert_eq!(cx.world().node_style(row).unwrap().background, None);
+            let id =
+                crate::component_animation_id(crate::component_animation_kinds::ATTENTION, flash)
+                    .unwrap();
+            assert!(!cx.world().animation_is_live(id));
+
+            // A view commit after it reassembles the row as it was.
+            assert!(!cx.assemble_settings_row(entity).unwrap());
+        }
+
+        /// Reduced motion keeps the tint still for the same time, then takes
+        /// it away at once.
+        #[test]
+        fn reduced_motion_holds_the_tint_without_fading() {
+            let (mut cx, _, _, row) = mounted();
+            cx.set_reduced_motion(true);
+            cx.flash_settings_row(Entity::from_stable_id(row)).unwrap();
+            let flash = flash_of(&cx, row).unwrap();
+            let start = FRAME;
+            cx.advance_animations(start);
+            let length = length(&cx);
+            for share in [1, 5, 9] {
+                assert_eq!(opacity(&cx, flash, start + length * share / 10), Some(1.0));
+            }
+            cx.advance_animations(start + length / 2);
+            assert!(cx.world().contains(flash));
+            cx.advance_animations(start + length);
+            assert!(!cx.world().contains(flash));
+        }
+
+        /// Flashing again while it fades shows it in full and runs it over
+        /// from the next frame, on the same tint.
+        #[test]
+        fn flashing_again_starts_over() {
+            let (mut cx, _, _, row) = mounted();
+            let entity = Entity::<SettingsRow>::from_stable_id(row);
+            cx.flash_settings_row(entity).unwrap();
+            let flash = flash_of(&cx, row).unwrap();
+            let first = FRAME;
+            cx.advance_animations(first);
+            let length = length(&cx);
+            let later = first + length * 7 / 10;
+            cx.advance_animations(later);
+            assert!(opacity(&cx, flash, later).unwrap() < 1.0);
+
+            cx.flash_settings_row(entity).unwrap();
+            assert_eq!(flash_of(&cx, row), Some(flash), "the same tint");
+            assert_eq!(opacity(&cx, flash, later), None, "full again");
+            let again = later + FRAME;
+            cx.advance_animations(again);
+            assert_eq!(opacity(&cx, flash, again + length / 10), Some(1.0));
+            cx.advance_animations(first + length);
+            assert!(cx.world().contains(flash), "the first run's end is past");
+            cx.advance_animations(again + length);
+            assert!(!cx.world().contains(flash));
+        }
+
+        /// A row taken away mid-flash takes its tint and timeline with it.
+        #[test]
+        fn a_row_removed_mid_flash_takes_the_flash_with_it() {
+            let (mut cx, _, _, row) = mounted();
+            let entity = Entity::<SettingsRow>::from_stable_id(row);
+            cx.flash_settings_row(entity).unwrap();
+            let flash = flash_of(&cx, row).unwrap();
+            cx.advance_animations(FRAME);
+            let id =
+                crate::component_animation_id(crate::component_animation_kinds::ATTENTION, flash)
+                    .unwrap();
+            assert!(cx.world().animation_is_live(id));
+            cx.remove_view(entity).unwrap();
+            assert!(!cx.world().contains(flash));
+            assert!(!cx.world().animation_is_live(id));
+            cx.advance_animations(FRAME + length(&cx));
+        }
     }
 }

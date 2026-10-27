@@ -480,7 +480,7 @@ impl Default for OpacityTokens {
 /// `motion_standard_ms` as dead fields: nothing read them, and the eight real
 /// durations were `const`s a theme could not move. Wiring them was never a
 /// rename — it was deciding which duration each token owns. This enum is that
-/// decision: the roles *are* the eight durations, named by what they animate.
+/// decision: the roles *are* the durations, named by what they animate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MotionRole {
     /// Hover / pressed colour cross-fade on a control.
@@ -499,6 +499,10 @@ pub enum MotionRole {
     SpinnerRotation,
     /// Button / switch / card loading indicator cycle.
     LoadingSpin,
+    /// A row flashing to draw the eye after the application brought it into
+    /// view: the whole flash, held at full tint for its first fifth and
+    /// fading out over the rest.
+    Attention,
 }
 
 /// Which easing a transition follows.
@@ -531,6 +535,7 @@ pub struct MotionTokens {
     pub skeleton_pulse_ms: u16,
     pub spinner_rotation_ms: u16,
     pub loading_spin_ms: u16,
+    pub attention_ms: u16,
     pub standard_easing: Easing,
     pub expand_easing: Easing,
     pub emphasized_easing: Easing,
@@ -547,6 +552,7 @@ impl MotionTokens {
         skeleton_pulse_ms: 1400,
         spinner_rotation_ms: 900,
         loading_spin_ms: 800,
+        attention_ms: 1500,
         standard_easing: Easing::EaseOutCubic,
         expand_easing: Easing::EaseInOutCubic,
         emphasized_easing: Easing::MENU_POP,
@@ -562,6 +568,7 @@ impl MotionTokens {
             MotionRole::SkeletonPulse => self.skeleton_pulse_ms,
             MotionRole::SpinnerRotation => self.spinner_rotation_ms,
             MotionRole::LoadingSpin => self.loading_spin_ms,
+            MotionRole::Attention => self.attention_ms,
         }
     }
 
@@ -577,7 +584,7 @@ impl MotionTokens {
         }
     }
 
-    pub(super) const fn durations(self) -> [u16; 8] {
+    pub(super) const fn durations(self) -> [u16; 9] {
         [
             self.hover_color_ms,
             self.overlay_fade_ms,
@@ -587,6 +594,7 @@ impl MotionTokens {
             self.skeleton_pulse_ms,
             self.spinner_rotation_ms,
             self.loading_spin_ms,
+            self.attention_ms,
         ]
     }
 }

@@ -28,6 +28,7 @@ const ROW_STACK_GAP_LOOSE: f32 = nana_ui_core::space::LG;
 const ROW_INLINE_GAP: f32 = nana_ui_core::space::MD;
 const ROW_INLINE_GAP_LOOSE: f32 = nana_ui_core::space::XXL;
 const ROW_COPY_GAP: f32 = nana_ui_core::space::XXS;
+const ROW_LABEL_ACCESSORY_GAP: f32 = nana_ui_core::space::XS;
 /// Rows the framework assembles (appearance, about) put their control under
 /// the copy below this width: beside a segmented picker, a narrower row
 /// leaves the label and hint a column a few characters wide.
@@ -48,9 +49,18 @@ pub struct SettingsRow {
     pub first_in_group: bool,
     pub last_in_group: bool,
     pub control: Option<StableNodeId>,
+    /// The application's node after the label, on the label's line: a status
+    /// pill, a badge. It keeps its width; the label gives way and elides.
+    pub label_accessory: Option<StableNodeId>,
     pub label_slot: Option<StableNodeId>,
     pub hint_slot: Option<StableNodeId>,
     pub(crate) copy_slot: Option<StableNodeId>,
+    /// The line holding the label and its accessory, only while there is an
+    /// accessory: without one the label sits in the copy itself.
+    pub(crate) label_line_slot: Option<StableNodeId>,
+    /// The tint [`AppContext::flash_settings_row`] paints under the row, only
+    /// while it flashes.
+    pub(crate) flash_slot: Option<StableNodeId>,
     pub style: NodeStyle,
 }
 
@@ -67,9 +77,12 @@ impl SettingsRow {
             first_in_group: false,
             last_in_group: false,
             control: None,
+            label_accessory: None,
             label_slot: None,
             hint_slot: None,
             copy_slot: None,
+            label_line_slot: None,
+            flash_slot: None,
             style: NodeStyle::default(),
         }
     }
@@ -121,6 +134,13 @@ impl SettingsRow {
 
     pub fn control_child(mut self, control: StableNodeId) -> Self {
         self.control = Some(control);
+        self
+    }
+
+    /// Put `accessory` right after the label, on its line. Assembled by
+    /// [`AppContext::assemble_settings_row`], like the control.
+    pub fn label_accessory(mut self, accessory: StableNodeId) -> Self {
+        self.label_accessory = Some(accessory);
         self
     }
 
@@ -268,7 +288,8 @@ impl ComponentView for SettingsRow {
         let has_slots = self.label_slot.is_some()
             || self.hint_slot.is_some()
             || self.control.is_some()
-            || self.copy_slot.is_some();
+            || self.copy_slot.is_some()
+            || self.label_accessory.is_some();
         let has_children = world.node(id).is_some_and(|node| !node.children.is_empty());
         let visible_label = if has_slots || has_children {
             ""
@@ -311,10 +332,20 @@ impl SettingsRow {
         if let Some(copy) = self.copy_slot {
             SettingsRowCopy { stacked }.project(copy, world, mutations);
         }
+        if let Some(line) = self.label_line_slot {
+            SettingsRowLabelLine.project(line, world, mutations);
+        }
         if let Some(label) = self.label_slot {
             let mut text = Text::new(self.label.as_ref());
-            text.style = label_slot_style(self.label.is_empty());
+            text.style = label_slot_style(self.label.is_empty(), self.label_line_slot.is_some());
             text.project(label, world, mutations);
+        }
+        if let Some(flash) = self.flash_slot {
+            SettingsRowFlash {
+                first_in_group: self.first_in_group,
+                last_in_group: self.last_in_group,
+            }
+            .project(flash, world, mutations);
         }
         if let Some(hint) = self.hint_slot {
             let value = self.hint.as_deref().unwrap_or("");
@@ -334,7 +365,11 @@ impl SettingsRow {
 
 /// A row without a label (a control that names itself, such as a segmented
 /// picker) keeps no empty line above or beside its control.
-fn label_slot_style(hidden: bool) -> NodeStyle {
+///
+/// On a line with an accessory the label is as wide as it reads, so the
+/// accessory sits right after it, and it is the one that gives way when the
+/// line is short: it shrinks and elides, the accessory keeps its width.
+fn label_slot_style(hidden: bool, on_line: bool) -> NodeStyle {
     let mut style = NodeStyle::default();
     style.foreground = Some(SemanticColorRole::Text);
     style.text_vertical_alignment = crate::TextVerticalAlignment::Center;
@@ -346,8 +381,10 @@ fn label_slot_style(hidden: bool) -> NodeStyle {
         Some(nana_ui_core::ThemeToken::Type(nana_ui_core::TypeRole::Body).into());
     layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
     crate::theme_intent::weight(layout, nana_ui_core::TextWeight::Medium);
-    layout.width = Some(LengthSpec::Fill);
-    layout.flex_grow = Some(1.0);
+    if !on_line {
+        layout.width = Some(LengthSpec::Fill);
+        layout.flex_grow = Some(1.0);
+    }
     layout.flex_shrink = Some(1.0);
     layout.min_width = Some(LengthSpec::Px(0.0));
     layout.white_space_nowrap = true;
@@ -422,6 +459,183 @@ impl ComponentView for SettingsRowCopy {
             },
         );
     }
+}
+
+/// The label's line when the row has a label accessory: the label, then the
+/// accessory, centred on each other.
+#[derive(Debug, Clone, PartialEq)]
+struct SettingsRowLabelLine;
+
+impl SettingsRowLabelLine {
+    fn style() -> NodeStyle {
+        let mut style = NodeStyle::default();
+        let layout = Arc::make_mut(&mut style.layout);
+        layout.direction = Some(FlexDirection::Row);
+        layout.align_items = AlignSpec::Center;
+        layout.justify_content = JustifySpec::Start;
+        layout.flex_wrap = FlexWrap::NoWrap;
+        layout.gap = Some(LengthSpec::Px(ROW_LABEL_ACCESSORY_GAP));
+        layout.theme.gap = Some(crate::theme_intent::space(nana_ui_core::SpacingStep::Xs));
+        layout.width = Some(LengthSpec::Fill);
+        layout.flex_shrink = Some(1.0);
+        layout.min_width = Some(LengthSpec::Px(0.0));
+        style
+    }
+}
+
+impl ComponentView for SettingsRowLabelLine {
+    fn node_kind(&self) -> NodeKind {
+        NodeKind::Element {
+            tag: "settings-row-label-line".into(),
+        }
+    }
+
+    fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
+        project_common(
+            id,
+            world,
+            mutations,
+            &Self::style(),
+            InteractionState {
+                pointer_events: false,
+                focusable: false,
+            },
+            AccessibilityState {
+                role: AccessibilityRole::Generic,
+                ..AccessibilityState::default()
+            },
+        );
+    }
+}
+
+/// The tint a flashing row paints under itself. It is out of flow, so the
+/// row lays out as it would without it; it covers the row's box top to
+/// bottom (an absolute box is placed in its parent's content box, so it
+/// reaches back over the row's padding) and reaches past the copy and the
+/// control by a list item's inset on either side, as a selected list row's
+/// pill does past its text. Pointers go through it and assistive technology
+/// does not see it. Its opacity is the flash: see
+/// [`AppContext::flash_settings_row`].
+#[derive(Debug, Clone, PartialEq)]
+struct SettingsRowFlash {
+    first_in_group: bool,
+    last_in_group: bool,
+}
+
+impl SettingsRowFlash {
+    fn style(&self) -> NodeStyle {
+        let mut style = NodeStyle::default();
+        style.background = Some(SemanticColorRole::Selected);
+        style.radius = Some(nana_ui_core::RadiusTier::Sm);
+        let layout = Arc::make_mut(&mut style.layout);
+        layout.position = nana_ui_core::PositionSpec::Absolute;
+        layout.pointer_events = Some(nana_ui_core::PointerEventsSpec::None);
+        let bleed = nana_ui_core::ControlPadding::ListItem;
+        let bleed_px = bleed.resolve(nana_ui_core::UI_METRICS);
+        let bleed = nana_ui_core::ThemeExpr::from(nana_ui_core::ThemeToken::ControlPadding(bleed))
+            .scaled(-1.0);
+        layout.offset_left = Some(LengthSpec::Px(-bleed_px));
+        layout.offset_right = Some(LengthSpec::Px(-bleed_px));
+        layout.theme.offset_left = Some(bleed.clone());
+        layout.theme.offset_right = Some(bleed);
+        // The row's own vertical padding, as `SettingsRow::effective_style`
+        // picks it.
+        let (top, top_px) = if self.first_in_group {
+            (nana_ui_core::SpacingStep::Xs, ROW_GROUP_PADDING_Y)
+        } else {
+            (nana_ui_core::SpacingStep::Lg, ROW_PADDING_Y)
+        };
+        let (bottom, bottom_px) = if self.last_in_group {
+            (nana_ui_core::SpacingStep::Xs, ROW_GROUP_PADDING_Y)
+        } else {
+            (nana_ui_core::SpacingStep::Lg, ROW_PADDING_Y)
+        };
+        layout.offset_top = Some(LengthSpec::Px(-top_px));
+        layout.offset_bottom = Some(LengthSpec::Px(-bottom_px));
+        layout.theme.offset_top = Some(crate::theme_intent::space(top).scaled(-1.0));
+        layout.theme.offset_bottom = Some(crate::theme_intent::space(bottom).scaled(-1.0));
+        style
+    }
+}
+
+impl ComponentView for SettingsRowFlash {
+    fn node_kind(&self) -> NodeKind {
+        NodeKind::Element {
+            tag: "settings-row-flash".into(),
+        }
+    }
+
+    fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
+        project_common(
+            id,
+            world,
+            mutations,
+            &self.style(),
+            InteractionState {
+                pointer_events: false,
+                focusable: false,
+            },
+            AccessibilityState {
+                role: AccessibilityRole::Generic,
+                hidden: true,
+                ..AccessibilityState::default()
+            },
+        );
+    }
+}
+
+/// The share of a flash it holds at full tint before it fades.
+const FLASH_HOLD: f32 = 0.2;
+
+/// A flash's tint, from `start` for `length`: held, then faded on `easing`,
+/// or held throughout while motion is `reduced`. It fills forwards: a frame
+/// painted between its end and the tint being taken away shows where it
+/// ended, not the tint at full.
+fn settings_row_flash_animation(
+    flash: StableNodeId,
+    start: std::time::Duration,
+    length: std::time::Duration,
+    easing: crate::Easing,
+    reduced: bool,
+) -> Option<crate::AnimationSpec> {
+    let id = crate::component_animation_id(crate::component_animation_kinds::ATTENTION, flash)?;
+    let shown = crate::MotionValue::Scalar(1.0);
+    let to = if reduced {
+        crate::MotionTo::Value(shown)
+    } else {
+        // The stops name no easing of their own: the fade, from the hold's
+        // end, runs on the track's.
+        crate::MotionTo::Keyframes(vec![
+            crate::Keyframe {
+                offset: FLASH_HOLD,
+                value: shown,
+                easing: None,
+            },
+            crate::Keyframe {
+                offset: 1.0,
+                value: crate::MotionValue::Scalar(0.0),
+                easing: None,
+            },
+        ])
+    };
+    Some(
+        // A theme's durations are never zero.
+        crate::AnimationSpec::new(
+            id,
+            flash,
+            start,
+            length,
+            crate::framework::COMPONENT_FRAME_INTERVAL,
+            easing,
+        )
+        .with_property(crate::AnimatableProperty::Opacity)
+        .with_range(shown, to)
+        .with_playback(crate::AnimationPlayback::running(
+            crate::AnimationIteration::ONCE,
+            crate::AnimationDirection::Normal,
+            crate::AnimationFillMode::Forwards,
+        )),
+    )
 }
 
 /// Surface grouping for settings rows.
@@ -1830,7 +2044,7 @@ fn styled_text(value: impl Into<String>, color: SemanticColorRole, size: f32, we
 }
 
 fn row_label_text(label: &str) -> Text {
-    Text::new(label).style(label_slot_style(label.is_empty()))
+    Text::new(label).style(label_slot_style(label.is_empty(), false))
 }
 
 fn row_hint_text(hint: &str, hidden: bool) -> Text {
@@ -1961,7 +2175,14 @@ fn mount_settings_row(
         .node(row.stable_id())
         .map(|node| node.children.to_vec())
         .unwrap_or_default();
-    reconcile_children(context, row, &[copy.stable_id(), control])?;
+    let flash = context
+        .read(row, |row| row.flash_slot)?
+        .filter(|id| context.world().contains(*id));
+    let children: Vec<_> = flash
+        .into_iter()
+        .chain([copy.stable_id(), control])
+        .collect();
+    reconcile_children(context, row, &children)?;
     label_row_control(context, label_text.stable_id(), Some(control), &previous)?;
     Ok(row)
 }
@@ -2233,12 +2454,14 @@ impl AppContext {
     }
 
     /// Give a row its label, hint and copy nodes and put its children in
-    /// order: the copy (label over hint), then the control. What the label
-    /// and hint say is the row's own `label` / `hint`; its projection writes
-    /// them. The view layer runs this after it builds a row
-    /// (`TypeBehavior::slot_assembler`); a row made with
-    /// [`Self::mount_settings_leaf_row`] is already assembled. Returns whether
-    /// anything changed.
+    /// order: the copy (label over hint), then the control. A row with a
+    /// [`SettingsRow::label_accessory`] puts the label and the accessory on
+    /// one line in the copy; without one the label is the copy's own child,
+    /// as it always was. What the label and hint say is the row's own
+    /// `label` / `hint`; its projection writes them. The view layer runs
+    /// this after it builds a row (`TypeBehavior::slot_assembler`); a row
+    /// made with [`Self::mount_settings_leaf_row`] is already assembled.
+    /// Returns whether anything changed.
     pub fn assemble_settings_row(
         &mut self,
         row: Entity<SettingsRow>,
@@ -2256,6 +2479,9 @@ impl AppContext {
             )
         })?;
         let (label, hint, hint_is_path, control, label_slot, mut hint_slot, copy_slot) = snapshot;
+        let (accessory, line_slot, flash_slot) = self.read(row, |row| {
+            (row.label_accessory, row.label_line_slot, row.flash_slot)
+        })?;
         let live = |context: &Self, slot: Option<StableNodeId>| {
             slot.filter(|id| context.world().contains(*id))
         };
@@ -2326,9 +2552,45 @@ impl AppContext {
             )?;
         }
         let copy = Entity::<SettingsRowCopy>::from_stable_id(copy_slot);
-        let mut changed = reconcile_children(self, copy, &[label_slot, hint_slot])?;
+        let accessory = live(self, accessory);
+        let live_line = live(self, line_slot);
+        let line = match (accessory, live_line) {
+            (Some(_), Some(line)) => Some(line),
+            (Some(_), None) => Some(
+                self.create_detached_component(document, SettingsRowLabelLine)?
+                    .stable_id(),
+            ),
+            (None, _) => None,
+        };
+        let line_changed = line != line_slot;
+        let mut changed = false;
+        if let (Some(line), Some(accessory)) = (line, accessory) {
+            changed |= self.reconcile_children(line, &[label_slot, accessory])?;
+        }
+        changed |= reconcile_children(self, copy, &[line.unwrap_or(label_slot), hint_slot])?;
+        if line_changed {
+            // The label's width rule follows where it sits; the row's
+            // projection writes it too, from the slot written here.
+            self.update_component(row, |row, _| row.label_line_slot = line)?;
+            let text = Entity::<Text>::from_stable_id(label_slot);
+            if self.read(text, |_| ()).is_ok() {
+                self.update_component(text, |text, _| {
+                    text.style = label_slot_style(label.is_empty(), line.is_some());
+                })?;
+            }
+            if let Some(old) = live_line.filter(|old| Some(*old) != line) {
+                // The accessory left with its slot: hand back whatever is
+                // still on the line before the line goes.
+                self.reconcile_children(old, &[])?;
+                self.remove_view(Entity::<SettingsRowLabelLine>::from_stable_id(old))?;
+            }
+        }
         let control = live(self, control);
-        let children: Vec<_> = std::iter::once(copy_slot).chain(control).collect();
+        let children: Vec<_> = live(self, flash_slot)
+            .into_iter()
+            .chain(std::iter::once(copy_slot))
+            .chain(control)
+            .collect();
         let previous = self
             .world()
             .node(row.stable_id())
@@ -2336,7 +2598,96 @@ impl AppContext {
             .unwrap_or_default();
         changed |= reconcile_children(self, row, &children)?;
         label_row_control(self, label_slot, control, &previous)?;
-        Ok(created || changed)
+        Ok(created || changed || line_changed)
+    }
+
+    /// Flash `row` to draw the eye to it, for a row the application has just
+    /// brought into view because the user came to see it: an accent tint
+    /// shows under the row, holds, and fades out, and then nothing of it
+    /// remains. Flashing a row that is still flashing starts it over.
+    ///
+    /// The tint is a node of the row's own, out of flow and not hit, so the
+    /// row lays out and takes pointers as it would without it; it reaches
+    /// past the row's copy and control by a list item's inset on either side
+    /// and covers the row top to bottom. The flash is its opacity on the
+    /// presentation layer, on a timeline from the frame after this call
+    /// (the frame the row first shows in, when the call also scrolled it
+    /// there) for the installed theme's [`nana_ui_core::MotionRole::Attention`]:
+    /// full for the first fifth, then out on the theme's standard easing.
+    /// Under reduced motion ([`Self::reduced_motion`]) the tint stays full
+    /// for that whole time instead of fading, then goes at once. The tint
+    /// leaves with the row, should the row go first.
+    pub fn flash_settings_row(&mut self, row: Entity<SettingsRow>) -> Result<(), FrameworkError> {
+        let document = document_of(self, row.stable_id())?;
+        let (flash, first_in_group, last_in_group) = self.read(row, |row| {
+            (row.flash_slot, row.first_in_group, row.last_in_group)
+        })?;
+        let flash = match flash.filter(|id| self.world().contains(*id)) {
+            Some(id) => id,
+            None => {
+                let id = self
+                    .create_detached_component(
+                        document,
+                        SettingsRowFlash {
+                            first_in_group,
+                            last_in_group,
+                        },
+                    )?
+                    .stable_id();
+                self.update_component(row, |row, _| row.flash_slot = Some(id))?;
+                // First, so it paints under everything else in the row.
+                let children: Vec<_> = std::iter::once(id)
+                    .chain(
+                        self.world()
+                            .node(row.stable_id())
+                            .map(|node| node.children.to_vec())
+                            .unwrap_or_default(),
+                    )
+                    .collect();
+                self.reconcile_children(row.stable_id(), &children)?;
+                id
+            }
+        };
+        self.arm_attention(flash)
+    }
+
+    /// One of a flash's timelines ended at `now`: the frame-long one
+    /// [`Self::flash_settings_row`] armed starts the flash from this frame;
+    /// the flash itself takes its tint away.
+    pub(crate) fn advance_settings_row_flash(
+        &mut self,
+        flash: StableNodeId,
+        property: crate::AnimatableProperty,
+        now: std::time::Duration,
+    ) -> Result<(), FrameworkError> {
+        let entity = Entity::<SettingsRowFlash>::from_stable_id(flash);
+        if self.read(entity, |_| ()).is_err() {
+            return Ok(());
+        }
+        if property == crate::AnimatableProperty::Progress {
+            let theme = self.world().theme();
+            let length = theme.duration(nana_ui_core::MotionRole::Attention);
+            let easing = theme.motion().easing(nana_ui_core::EasingRole::Standard);
+            if let Some(spec) =
+                settings_row_flash_animation(flash, now, length, easing, self.reduced_motion())
+            {
+                let mut mutations = MutationQueue::new();
+                mutations.start_animation(spec);
+                self.commit_mutations(mutations)?;
+            }
+            return Ok(());
+        }
+        if let Some(parent) = self.world().parent_id(flash) {
+            let row = Entity::<SettingsRow>::from_stable_id(parent);
+            if self
+                .read(row, |row| row.flash_slot == Some(flash))
+                .unwrap_or(false)
+            {
+                self.update_component(row, |row, _| row.flash_slot = None)?;
+            }
+        }
+        self.remove_view(entity)?;
+        Ok(())
     }
 
     /// Mount or refresh the appearance row/control contract from the

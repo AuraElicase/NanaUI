@@ -103,3 +103,5 @@ pub const SPINNER_ROTATION: Duration =
     DEFAULT_MOTION.duration(crate::theme::MotionRole::SpinnerRotation);
 /// Button / switch / card loading indicator cycle.
 pub const LOADING_SPIN: Duration = DEFAULT_MOTION.duration(crate::theme::MotionRole::LoadingSpin);
+/// A row's attention flash, hold and fade together.
+pub const ATTENTION: Duration = DEFAULT_MOTION.duration(crate::theme::MotionRole::Attention);
