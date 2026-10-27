@@ -1,6 +1,6 @@
 # Stack
 
-`Stack` 负责把若干子节点排成一行、一列，或铺成一层叠层。尺寸、对齐和溢出的完整字段在 `LayoutStyle` 上，预设只覆盖常用的 flex。
+`Stack` 负责把若干子节点排成一行、一列，或叠成几层。行和列是 flex，叠层是自己的排版方式。尺寸、对齐和溢出的完整字段在 `LayoutStyle` 上。
 
 ## 基本用法
 
@@ -50,7 +50,16 @@ widget(Stack::row(8.0)).children((
 
 ## 叠层
 
-`Stack::overlay_layer()` 绝对定位，铺满已经定位的父级，溢出裁剪，指针事件关掉。舞台上的 HUD 和弹幕用它当容器，节点池仍由你挂。Rust 预设默认不参与命中。空白处的按下也要落在这个容器上时，接 `.hittable()`。
+`Stack::layers()` 让所有子项共用同一块区域，后写的盖在先写的上面，和 SwiftUI 的 `ZStack`、Compose 的 `Box`、Flutter 的 `Stack` 一样。
+
+- 容器随最大的子项。给了宽高时，这块区域就是容器的内容盒。
+- 每个子项在这块区域里对齐：`.align` 管竖直，`.justify` 管水平，默认左上。子项自己的 `align-self` / `justify-self` 优先，`stretch` 铺满整块区域。水平方向的起点跟随书写方向，RTL 下是右边。
+- 绝对定位的子项照常按包含块定位，不撑大容器。
+- 命中和绘制都按文档顺序，重叠处由后写的那层接住指针。
+
+CSS 写作 `display: layers`，这是 NanaUI 的扩展值，对齐用 `justify-items` / `align-items` / `place-items`。它按网格排版：一行一列、所有子项都放进这一格，子项自己的网格位置不起作用。
+
+`Stack::overlay_layer()` 是一个铺满已经定位的父级的叠层：绝对定位，溢出裁剪，指针事件关掉。舞台上的 HUD 和弹幕用它当容器，节点池仍由你挂。Rust 预设默认不参与命中。空白处的按下也要落在这个容器上时，接 `.hittable()`。
 
 ## 布局字段
 
@@ -78,12 +87,13 @@ widget(Stack::row(8.0)).children((
 | `Stack::fill_column(gap)` | — | 竖直占满剩余高度 |
 | `Stack::bar(gap)` | — | 水平占满整行，自己不伸展 |
 | `Stack::spacer()` | — | 零宽 flex-grow。基准宽度是 0，否则会把兄弟挤出去 |
-| `Stack::overlay_layer()` | — | 绝对定位，铺满已经定位的父级，溢出裁剪，指针事件关掉。Rust 预设默认不参与命中 |
+| `Stack::layers()` | — | 叠层：子项共用同一块区域，各自对齐，容器随最大的子项。CSS 写作 `display: layers` |
+| `Stack::overlay_layer()` | — | 铺满已经定位的父级的叠层：绝对定位，溢出裁剪，指针事件关掉。Rust 预设默认不参与命中 |
 | `Stack::from_layout` | `LayoutStyle` | 已经解析好的布局。默认可点 |
 | `.with_layout` | — | 就地改布局字段 |
 | `.gap` | — | 改预设上的对应项。间距不为 0 时直接构造 |
 | `.align` | — | 改预设上的对应项 |
-| `.justify` | — | 改预设上的对应项 |
+| `.justify` | — | 改预设上的对应项。叠层没有主轴，这里改子项的水平对齐 |
 | `.width` | — | 改预设上的对应项 |
 | `.height` | — | 改预设上的对应项 |
 | `.grow` | — | 改预设上的对应项 |

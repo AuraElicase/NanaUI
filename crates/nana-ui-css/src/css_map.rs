@@ -1980,6 +1980,15 @@ impl LayoutStyleCss for LayoutStyle {
                     self.align_items = AlignSpec::Stretch;
                 }
             }
+            // NanaUI extension: one cell every child shares (ZStack / Box).
+            // Children align at the start unless `place-items` says otherwise.
+            "display" if val.eq_ignore_ascii_case("layers") => {
+                self.display = Some(DisplaySpec::Layers);
+                self.hidden = false;
+                if self.direction.is_none() {
+                    self.direction = Some(FlexDirection::Row);
+                }
+            }
             "display" if val.eq_ignore_ascii_case("inline") => {
                 self.display = Some(DisplaySpec::Inline);
                 self.hidden = false;
@@ -7473,6 +7482,23 @@ html[data-theme="dark"], [data-theme="dark"] { --bg: #181818; }
                 max_px: None,
             }
         ));
+    }
+
+    #[test]
+    fn display_layers_is_one_shared_cell_aligned_at_the_start() {
+        let mut layout = LayoutStyle::default();
+        layout.apply_css_text(
+            "display:layers;grid-template-columns:100px 1fr;grid-template-rows:repeat(3,20px)",
+            Some(400.0),
+            None,
+        );
+        assert_eq!(layout.display, Some(DisplaySpec::Layers));
+        assert!(layout.display.unwrap().is_grid_container());
+        // Its one cell wins over any tracks the rule names.
+        assert_eq!(layout.active_grid_columns(), Some(&[GridTrack::Auto][..]));
+        assert_eq!(layout.active_grid_rows(), Some(&[GridTrack::Auto][..]));
+        // Unlike grid it does not seed `align-items: stretch`.
+        assert_eq!(layout.align_items, AlignSpec::Start);
     }
 
     #[test]

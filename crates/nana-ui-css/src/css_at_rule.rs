@@ -942,6 +942,7 @@ fn l1_supports_property_value(property: &str, value: &str) -> Option<bool> {
                 | "inline-flex"
                 | "inline-grid"
                 | "flow-root"
+                | "layers"
         )),
         "color" => Some(crate::style::parse_css_color(value).is_some()),
         "width" => Some(LengthSpec::parse(value).is_some()),

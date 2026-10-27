@@ -2279,6 +2279,75 @@ fn issue204_grid_css_and_rust_share_tracks_participation_and_fragments() {
 }
 
 #[test]
+fn issue204_layers_css_and_rust_share_one_overlay_context() {
+    use nana_ui_core::{AlignSpec, JustifySpec, LengthSpec};
+    use nana_ui_runtime::{
+        FormattingContextKind, LayoutStyle, LayoutViewport, MeasureTextShaper, ParticipationKind,
+        css,
+    };
+    let document = DocumentId::new(1).unwrap();
+    let mut outputs = Vec::new();
+    for css_path in [false, true] {
+        let mut cx = AppContext::new();
+        let _view = cx
+            .mount_view_root(document, || {
+                let layers = if css_path {
+                    widget(Stack::from_layout(LayoutStyle::default())).css(
+                        css! {display:layers;width:240px;justify-items:center;align-items:end;},
+                    )
+                } else {
+                    widget(
+                        Stack::layers()
+                            .width(LengthSpec::Px(240.0))
+                            .justify(JustifySpec::Center)
+                            .align(AlignSpec::End),
+                    )
+                };
+                layers
+                    .children((text("first"), text("a longer second layer")))
+                    .into_any()
+            })
+            .unwrap();
+        for _ in 0..4 {
+            let work = cx.take_system_work();
+            cx.resolve_styles(&work.style).unwrap();
+            cx.shape_text(&work.text, &mut MeasureTextShaper).unwrap();
+            cx.layout_document(document, LayoutViewport::new(800.0, 600.0))
+                .unwrap();
+        }
+        let world = cx.world();
+        let snapshot: Vec<_> = world
+            .document_order(document)
+            .into_iter()
+            .map(|id| {
+                let node = world.layout_node(id).unwrap();
+                let result = world.layout_result(id).unwrap();
+                (
+                    node.established,
+                    node.participation,
+                    result.bounds,
+                    result.overflow,
+                    result.fragments.clone(),
+                )
+            })
+            .collect();
+        assert_eq!(snapshot[0].0, Some(FormattingContextKind::Layers));
+        assert_eq!(snapshot[1].1, Some(ParticipationKind::LayerItem));
+        assert_eq!(snapshot[2].1, Some(ParticipationKind::LayerItem));
+        // Both layers share the stack's area, each centred across it.
+        let (stack, first, second) = (snapshot[0].2, snapshot[1].2, snapshot[2].2);
+        assert_eq!(stack.width, 240.0);
+        assert!(first.width < second.width);
+        for layer in [first, second] {
+            assert!((layer.x + layer.width / 2.0 - (stack.x + 120.0)).abs() < 0.01);
+            assert!((layer.y + layer.height - (stack.y + stack.height)).abs() < 0.01);
+        }
+        outputs.push(snapshot);
+    }
+    assert_eq!(outputs[0], outputs[1], "Rust/CSS parity");
+}
+
+#[test]
 fn inline_template_and_rust_project_one_paragraph_without_text_wrappers() {
     fn mount(template: bool) -> (AppContext, nana_ui_runtime::MountedView, Signal<String>) {
         let mut cx = AppContext::new();
