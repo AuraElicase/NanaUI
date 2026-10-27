@@ -257,3 +257,94 @@ fn issue204_the_later_layer_takes_the_pointer() {
         Some(below.stable_id())
     );
 }
+
+/// A facade is only spelling. The preset constructor, the view function and
+/// `Stack::from_layout` with the preset's intent mount the same component
+/// over the same nodes, with the same intent. Their first frame, a local edit
+/// and an idle frame cost the same layout work. (CSS lowers at build time to
+/// `Stack::from_layout` plus style data, so it takes the third path; its
+/// structural parity is in `tests/view_macro.rs`.)
+#[test]
+fn issue204_facades_share_identity_and_layout_work() {
+    use crate::view::{IntoView, button, row, widget};
+    use nana_ui_core::{AlignSpec, DisplaySpec, FlexDirection};
+
+    struct Run {
+        nodes: usize,
+        kinds: Vec<crate::NodeKind>,
+        intent: Arc<LayoutStyle>,
+        work: [(usize, usize, usize, usize); 3],
+    }
+    let document = DocumentId::new(1).unwrap();
+    let preset_intent = LayoutStyle {
+        display: Some(DisplaySpec::Flex),
+        direction: Some(FlexDirection::Row),
+        gap: Some(LengthSpec::Px(0.0)),
+        align_items: AlignSpec::Center,
+        width: Some(LengthSpec::Shrink),
+        ..LayoutStyle::default()
+    };
+    let cost = |work: WorkCounters| {
+        (
+            work.entities_spawned,
+            work.layout_measure_nodes,
+            work.layout_placement_nodes,
+            work.layout_context_transitions,
+        )
+    };
+    let runs: Vec<Run> = (0..3)
+        .map(|facade| {
+            let mut cx = AppContext::new();
+            let mut shaper = bundled_face_shaper();
+            let intent = preset_intent.clone();
+            let _view = cx
+                .mount_view_root(document, move || {
+                    let buttons = (0..50).map(|_| button("Save")).collect::<Vec<_>>();
+                    match facade {
+                        0 => widget(Stack::row(0.0)).children(buttons).into_any(),
+                        1 => row().children(buttons).into_any(),
+                        _ => widget(Stack::from_layout(intent))
+                            .children(buttons)
+                            .into_any(),
+                    }
+                })
+                .unwrap();
+            let first = product_frame(&mut cx, document, viewport(), &mut shaper);
+            let order = cx.world().document_order(document);
+            let root = order[0];
+            let child = cx.world().child_ids(root)[7];
+            let mut queue = MutationQueue::new();
+            queue.set_style(child, styled(sized(90.0, 30.0)));
+            cx.commit_mutations(queue).unwrap();
+            let edit = product_frame(&mut cx, document, viewport(), &mut shaper);
+            // The next frame is idle: nothing is left to do, and its own
+            // counters (not the last non-empty snapshot) are all zero.
+            product_frame(&mut cx, document, viewport(), &mut shaper);
+            assert!(cx.take_system_work().is_empty(), "facade {facade}");
+            let idle = cx.world().frame_counters;
+            let world = cx.world();
+            Run {
+                nodes: world.len(),
+                kinds: order
+                    .iter()
+                    .map(|id| world.node(*id).unwrap().kind.clone())
+                    .collect(),
+                intent: world.layout_node(root).unwrap().intent,
+                work: [cost(first), cost(edit), cost(idle)],
+            }
+        })
+        .collect();
+    let preset = &runs[0];
+    assert!(preset.work[0].1 > 0 && preset.work[1].1 > 0);
+    assert_eq!(preset.work[2], (0, 0, 0, 0), "an idle frame does nothing");
+    for (facade, run) in runs.iter().enumerate().skip(1) {
+        assert_eq!(run.nodes, preset.nodes, "facade {facade}");
+        assert_eq!(run.kinds, preset.kinds, "facade {facade}");
+        assert!(
+            preset.intent.changed_fields(&run.intent).is_empty(),
+            "facade {facade}: {:?}",
+            preset.intent.changed_fields(&run.intent)
+        );
+        assert_eq!(run.work, preset.work, "facade {facade}");
+    }
+}
