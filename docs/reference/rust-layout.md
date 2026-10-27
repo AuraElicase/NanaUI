@@ -8,12 +8,10 @@
 
 Row/Column 预设直接写入 `display: flex` 与方向，进入同一个 Flex formatting context；它们不建立另一种布局身份。`from_layout` 保留传入的 display，Grid 也只通过同一份布局意图表达。Rust、`view!` 和构建期 `.vue` 方言共用这条 Runtime 路径；比较等价 CSS 时，需同时写明预设的尺寸与对齐默认值。
 
-写法只是拼法。表达同一份意图的写法得到同一个 context、参与方式和布局结果，宽松与窄于内容的两种可用宽度都一样（`tests/view_macro.rs` 的 `issue204_row_column_and_css_share_structured_layout_results`）。具体分两组：
+写法只是拼法。预设构造器、`view!` 的 `<Row>` / `<Column>`、带预设意图的 `from_layout`，以及从空布局起写的 CSS，表达的是同一份意图，得到同一个 context、参与方式和布局结果；宽松与窄于内容的两种可用宽度都一样（`tests/view_macro.rs` 的 `issue204_row_column_and_css_share_structured_layout_results`）。
 
-- 预设构造器、`view!` 的 `<Row>` / `<Column>`，以及带预设意图的 `from_layout`；
-- 从空布局起写的 CSS，以及带同一份 CSS 意图的 `from_layout`。
-
-两组意图不完全相同：Row/Column 预设用 `LengthSpec::Shrink` 定尺寸，CSS 没有对应写法。`fit-content` 解析为 `FitContent`，可用宽度比内容窄时会夹到可用宽度，预设不会，所以两组只在不受约束时结果相同。
+- Row/Column 预设用 `LengthSpec::Shrink` 定尺寸，CSS 写作 `width: shrink` / `height: shrink`（NanaUI 扩展，与 `fill` 对称）。`fit-content` 是另一种长度：可用宽度比内容窄时，它会夹到可用宽度，`shrink` 不会。
+- `Stack::min_width(0)` 和 CSS 的 `min-width: 0` 一样，会记下 `allow_shrink`。这样同一个声明不论怎么写，得到的都是同一份意图。
 
 预设构造器、视图函数 `row()` 和带预设意图的 `from_layout` 挂上同一种组件、同样的节点和意图，首帧、局部修改和空闲帧的布局工作量相同（`world/issue204.rs` 的 `issue204_facades_share_identity_and_layout_work`）。CSS 在构建期降为 `from_layout` 加样式数据，走同一条路径。写法之间唯一有意的差别在命中：Rust 预设默认不参与命中，`from_layout` 和 CSS 布局盒默认可点。
 
