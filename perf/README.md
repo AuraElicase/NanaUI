@@ -18,7 +18,7 @@ perf/
 
 ## NanaUI 内部优化行
 
-Layout Foundation 的结构门禁登记在 `catalog.json.nana_layout_gates`，引用 Runtime / Scene 的真实 cargo fixtures。它们复用 `WorkCounters`，由 `--check-schema` 检查源测试和 counter 名称；CI 运行对应测试。#199 的 1k context 切换、#200 的 scroll/sticky、#205 的组件实体/parts，以及既有 #214/#259/#261/#262/#263 共用此目录。它们不冒充跨框架 timing scenario。
+Layout Foundation 的结构门禁登记在 `catalog.json.nana_layout_gates`，引用 Runtime / Scene 的真实 cargo fixtures。它们复用 `WorkCounters`，由 `--check-schema` 检查源测试和 counter 名称；CI 运行对应测试。#199 的 1k context 切换、#200 的 scroll/sticky、#205 的组件实体/parts，#206 的组件常驻内存（`node_memory.rs`：布局后的 Text/Button/ListItem 在 1k 与 10k 下每节点常驻字节有上限且不随规模上涨；它量的是分配减释放，没有 WorkCounters 字段），以及既有 #214/#259/#261/#262/#263 共用此目录。它们不冒充跨框架 timing scenario。
 
 Runtime 和 framework benchmark 报告同时导出 `layout_context_transitions`、intrinsic cache hits/misses、`intrinsic_generation_bumps`、`baseline_queries`、`cross_context_measure_hits/misses`。报告未测量的字段继续缺省，不填成 0。状态和资源身份、实体/parts 数量由真实组件测试直接断言；这与固定机器的 CPU / RSS 前后比例证据分别记录。
 

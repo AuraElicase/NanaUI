@@ -272,3 +272,14 @@ GPU pixels 来自 macOS。Windows/Linux 真机与外部 consumer 完整构建/�
   - `issue199` 千组件切换序列加入 `Layers`。
   - CSS 解析单测。
   - 变异检查：关掉撑满格子后对齐测试失败，关掉同格放置后三项全部失败。
+
+## 2026-10-27 追加：#206 内存门禁与 #199 剩余测试
+
+| 改动 | 证据 |
+|---|---|
+| #206：布局后组件常驻内存门禁 | `tests/node_memory.rs` 的 `laid_out_nodes_keep_bounded_live_memory`：Text/Button/ListItem 各 1k、10k 个，挂载后跑满样式、文本、布局，量分配减释放。实测 1k 时 3.4/4.6/5.1 KB，10k 时 3.1/4.2/4.2 KB，上限约高 25%，且 10k 每节点不得超过 1k 的 1.15 倍。原测试只量挂载，没有计入 `LayoutResult` 和 parts。已进 CI 和 catalog（`component-memory`）。 |
+| #199：模态框的 Overlay context | `issue199_a_modal_frame_places_its_slots_as_overlay_items`：Dialog 建立 `Overlay`，body/action 是 `OverlayItem`，body 变高后与冷布局一致 |
+| #199：反复切换不增长 | `issue199_repeated_context_switches_keep_the_retained_cache_flat`：100 个子项在 Grid→Layers→Inline→Flex 之间切换 20 轮，每步一次切换。保留缓存（不计 intrinsic）在第一轮后不变，回到 Flex 时等于只排过 Flex 的冷缓存；在 Grid 期间 `plan_entries` 更多，可见比较能区分不同 context |
+| 文档 | `layout.md` 去掉"算法还没拆成独立模块"这句过时说明，改写剩余缺口；`layout_document` 注释改为说明产品帧不走全量 |
+
+仍未做：modal 的 Overlay 由 placement 单独记录，不走 `establish_context`，measure 侧不认识它；`#200` 的 containing block 与 overlay 锚点求解，`#201` 的 clip 链，`#202` 的 fit 统一，`#204` 的跨 facade 工作量对照。
