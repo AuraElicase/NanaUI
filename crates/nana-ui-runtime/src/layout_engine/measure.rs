@@ -1158,7 +1158,7 @@ fn measure_node(
             grid_2d: false,
         }
     } else {
-        establish_context(style, &flow_children, nodes)
+        establish_context(id, style, &flow_children, nodes)
     };
     nodes.contexts.insert(id, context.kind);
     let grid_measure = context.grid_2d;

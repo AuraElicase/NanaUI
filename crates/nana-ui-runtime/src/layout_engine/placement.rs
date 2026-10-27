@@ -1301,9 +1301,9 @@ pub(super) fn place_node_scoped(
     nodes.used_padding.insert(id, padding);
 
     if let Some(modal) = modal.as_ref() {
-        nodes
-            .contexts
-            .insert(id, crate::FormattingContextKind::Overlay);
+        let context = establish_context(id, style, &child_ids, nodes);
+        debug_assert_eq!(context.kind, crate::FormattingContextKind::Overlay);
+        nodes.contexts.insert(id, context.kind);
         place_modal_children(
             id,
             origin,
@@ -1709,7 +1709,7 @@ pub(super) fn place_node_scoped(
     };
     let float_left_bottom = packed_floats.left_bottom;
     let float_right_bottom = packed_floats.right_bottom;
-    let context = establish_context(style, &flow, nodes);
+    let context = establish_context(id, style, &flow, nodes);
     nodes.contexts.insert(id, context.kind);
     let grid_2d = context.grid_2d;
     let ifc = context.inline();

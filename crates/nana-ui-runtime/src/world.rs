@@ -3442,6 +3442,16 @@ impl UiWorld {
         ids.iter().map(|&id| self.layout_input(id)).collect()
     }
 
+    /// Whether `id` is a modal frame, whose children are placed by the modal
+    /// slot contract (the Overlay formatting context).
+    pub(crate) fn places_modal_slots(&self, id: StableNodeId) -> bool {
+        self.nodes.has_visuals()
+            && matches!(
+                self.nodes.visual(id),
+                Some(StandardVisual::ModalFrame { .. })
+            )
+    }
+
     /// Project a single layout input without allocating a batch container.
     pub(crate) fn layout_input(&self, id: StableNodeId) -> Result<LayoutInput, UiWorldError> {
         let plain_world = self.layout_length_tracks.is_empty()
