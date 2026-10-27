@@ -5460,6 +5460,7 @@ fn overflow_parent(
     transform: Option<PaintTransform>,
 ) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: nana_ui_core::ChromeRadii::default(),
         id: StableNodeId::new(value).unwrap(),
@@ -5521,6 +5522,7 @@ fn translucent_parent(
     opacity: f32,
 ) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: nana_ui_core::ChromeRadii::default(),
         id: StableNodeId::new(value).unwrap(),
@@ -5580,6 +5582,7 @@ fn overflowing_text_child(
     color: [f32; 4],
 ) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: nana_ui_core::ChromeRadii::default(),
         id: StableNodeId::new(value).unwrap(),
@@ -5647,6 +5650,7 @@ fn host_texture_child(
     resource: &str,
 ) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: nana_ui_core::ChromeRadii::default(),
         id: StableNodeId::new(value).unwrap(),
@@ -5709,6 +5713,7 @@ fn extracted_div(
     background: Option<[f32; 4]>,
 ) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: nana_ui_core::ChromeRadii::default(),
         id: StableNodeId::new(value).unwrap(),
@@ -11210,6 +11215,9 @@ mod corner_shape_tests;
 
 #[path = "natural_size_tests.rs"]
 mod natural_size_tests;
+
+#[path = "replaced_context_tests.rs"]
+mod replaced_context_tests;
 
 #[path = "opacity_motion_tests.rs"]
 mod opacity_motion_tests;

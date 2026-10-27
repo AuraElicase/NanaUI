@@ -698,6 +698,7 @@ pub(super) fn form_field_geometry(
     hint: Option<&Arc<str>>,
     error: Option<&Arc<str>>,
     control: Option<crate::StableNodeId>,
+    parts: &crate::layout_engine::parts::ContentParts,
     layout_box: &dyn Fn(crate::StableNodeId) -> Option<LayoutBox>,
     model: nana_ui_core::StyleModelRef,
 ) -> Option<crate::ComponentGeometry> {
@@ -710,46 +711,48 @@ pub(super) fn form_field_geometry(
     } else {
         SemanticColorRole::Muted
     };
-    let support_height = nana_ui_core::type_scale::META.min(bounds.height);
-    let support_y = (bounds.y + bounds.height - support_height).max(bounds.y);
-    let (indicator, support_x) = if error.is_some() {
-        let slot = nana_ui_core::space::XL;
-        let diameter = slot * 10.0 / 24.0;
-        (
-            Some((
-                LayoutBox {
-                    x: bounds.x + (slot - diameter) / 2.0,
-                    y: support_y + (support_height - diameter) / 2.0,
-                    width: diameter,
-                    height: diameter,
-                },
-                model.color(support_role).as_rgba_array(),
-            )),
-            bounds.x + slot + nana_ui_core::space::XS,
-        )
-    } else {
-        (None, bounds.x)
-    };
-    Some(crate::ComponentGeometry::FormField {
-        label: crate::ComponentTextRegion {
-            bounds: LayoutBox {
+    let label_bounds =
+        crate::layout_engine::parts::part_bounds(parts, crate::LayoutPartKind::Label).unwrap_or(
+            LayoutBox {
                 x: bounds.x,
                 y: bounds.y,
                 width: bounds.width,
                 height: label_height.min(bounds.height),
             },
+        );
+    let support_bounds =
+        crate::layout_engine::parts::part_bounds(parts, crate::LayoutPartKind::Hint);
+    let support_height = nana_ui_core::type_scale::META.min(bounds.height);
+    let support_y = (bounds.y + bounds.height - support_height).max(bounds.y);
+    let indicator_lane =
+        crate::layout_engine::parts::part_bounds(parts, crate::LayoutPartKind::LeadingContent);
+    let indicator = error.and(indicator_lane).map(|lane| {
+        let diameter = (lane.width * 10.0 / 24.0).min(lane.height).max(0.0);
+        (
+            LayoutBox {
+                x: lane.x + (lane.width - diameter) / 2.0,
+                y: lane.y + (lane.height - diameter) / 2.0,
+                width: diameter,
+                height: diameter,
+            },
+            model.color(support_role).as_rgba_array(),
+        )
+    });
+    Some(crate::ComponentGeometry::FormField {
+        label: crate::ComponentTextRegion {
+            bounds: label_bounds,
             content: Arc::clone(label).into(),
             color: Some(model.color(label_role).as_rgba_array()),
             font_size: label_size,
             font_weight: Some(label_weight),
         },
         support: support.map(|message| crate::ComponentTextRegion {
-            bounds: LayoutBox {
-                x: support_x,
+            bounds: support_bounds.unwrap_or(LayoutBox {
+                x: bounds.x,
                 y: support_y,
-                width: (bounds.x + bounds.width - support_x).max(0.0),
+                width: bounds.width,
                 height: support_height,
-            },
+            }),
             content: Arc::clone(message).into(),
             color: Some(model.color(support_role).as_rgba_array()),
             font_size: nana_ui_core::type_scale::HINT,
@@ -3436,17 +3439,27 @@ impl UiWorld {
             editor_multiline.unwrap_or(false) || self.nodes.rich_editor_marks(id).is_some();
         let is_text_input =
             editor_multiline.is_some() || self.nodes.rich_editor_marks(id).is_some();
-        let wrap = if is_text_input {
+        let card_title = matches!(
+            self.standard_visual_ref(id),
+            Some(StandardVisual::Card { .. })
+        );
+        let wrap = if card_title {
+            false
+        } else if is_text_input {
             text_input_multiline && source.layout.text_wraps()
         } else {
             source.layout.text_wraps()
         };
-        let preserve_lines = Self::preserves_lines(source, text_input_multiline);
+        let preserve_lines = !card_title && Self::preserves_lines(source, text_input_multiline);
         let wrap_break = source.layout.text_wrap_break();
-        let ellipsis = !is_text_input && source.layout.uses_text_ellipsis();
-        let max_lines = (!is_text_input)
-            .then(|| source.layout.resolved_line_clamp())
-            .flatten();
+        let ellipsis = card_title || (!is_text_input && source.layout.uses_text_ellipsis());
+        let max_lines = if card_title {
+            Some(1)
+        } else {
+            (!is_text_input)
+                .then(|| source.layout.resolved_line_clamp())
+                .flatten()
+        };
         let measured = layout.width > 0.0 || layout.height > 0.0;
         let vertical = self
             .nodes
@@ -3490,35 +3503,66 @@ impl UiWorld {
             max_width: if is_text_input && !text_input_multiline {
                 None
             } else {
-                Some(
-                    (layout.width
-                        - padding.left
-                        - padding.right
-                        - border.left
-                        - border.right
-                        - leading_visual
-                        - counter_reserved)
-                        .max(0.0),
-                )
+                let available = (layout.width
+                    - padding.left
+                    - padding.right
+                    - border.left
+                    - border.right
+                    - leading_visual
+                    - counter_reserved)
+                    .max(0.0);
+                Some(match self.standard_visual_ref(id) {
+                    Some(visual @ StandardVisual::Button { .. }) => {
+                        crate::layout_engine::parts::button_text_budget(
+                            visual,
+                            crate::layout_engine::Size::new(
+                                available,
+                                (layout.height
+                                    - padding.top
+                                    - padding.bottom
+                                    - border.top
+                                    - border.bottom)
+                                    .max(0.0),
+                            ),
+                        )
+                        .unwrap_or(available)
+                    }
+                    Some(StandardVisual::Card { .. }) => self
+                        .content_part_box(id, crate::LayoutPartKind::Header)
+                        .map_or(available, |part| part.width.max(0.0)),
+                    Some(
+                        StandardVisual::ActionMenuItem { .. }
+                        | StandardVisual::ListItem { content: None, .. },
+                    ) => self
+                        .content_part_box(id, crate::LayoutPartKind::TextContent)
+                        .map_or(available, |part| part.width.max(0.0)),
+                    _ => available,
+                })
             },
             // A vertical paragraph's lines run down the box, so its height is
             // the line budget the way a horizontal one's width is: always
             // given once the box is measured. A vertical editor wraps down its
             // height when it wraps at all — a multiline one, as a horizontal
             // editor wraps across its width (#59).
-            max_height: ((vertical && (!is_text_input || text_input_multiline))
-                || (!is_text_input
-                    && (source
-                        .layout
-                        .height
-                        .is_some_and(nana_ui_core::LengthSpec::is_definite_declared)
-                        || source
+            max_height: if card_title {
+                self.content_part_box(id, crate::LayoutPartKind::Header)
+                    .map(|part| part.height.max(0.0))
+            } else {
+                ((vertical && (!is_text_input || text_input_multiline))
+                    || (!is_text_input
+                        && (source
                             .layout
-                            .max_height
-                            .is_some_and(nana_ui_core::LengthSpec::is_definite_declared))))
-            .then(|| {
-                (layout.height - padding.top - padding.bottom - border.top - border.bottom).max(0.0)
-            }),
+                            .height
+                            .is_some_and(nana_ui_core::LengthSpec::is_definite_declared)
+                            || source
+                                .layout
+                                .max_height
+                                .is_some_and(nana_ui_core::LengthSpec::is_definite_declared))))
+                .then(|| {
+                    (layout.height - padding.top - padding.bottom - border.top - border.bottom)
+                        .max(0.0)
+                })
+            },
             wrap,
             ellipsis,
             max_lines,
@@ -4128,15 +4172,17 @@ impl UiWorld {
             return outcome.map(|()| false);
         }
         self.text_input_adaptive_updates.extend(adaptive_updates);
-        let (mut scaled, mut unbreakable_moved) =
+        let (mut scaled, mut unbreakable_moved, inline_placement_changed) =
             self.apply_plain_resolutions(resolved, backend.epoch, &mut work);
         // Text whose widest line was found not to break, or to break after
         // all, asks layout for another width with the metrics it held: it
         // did not stop at itself, and reaches layout below.
         unbreakable_moved.retain(|id| !shaped.iter().any(|(shaped, ..)| shaped == id));
         self.note_text_propagations_stopped(stopped.saturating_sub(unbreakable_moved.len()));
-        let mut changed =
-            !shaped.is_empty() || !modal_shaped.is_empty() || !unbreakable_moved.is_empty();
+        let mut changed = !shaped.is_empty()
+            || !modal_shaped.is_empty()
+            || !unbreakable_moved.is_empty()
+            || inline_placement_changed;
         let mut scale_parent_reflows = 0usize;
         for id in unbreakable_moved {
             self.note_layout_source_change();
@@ -4290,7 +4336,23 @@ impl UiWorld {
         shaper: &mut CountingShaper<'_, S>,
         work: &mut nana_text::TextWorkCounters,
     ) -> PlainText {
-        let style = Arc::clone(&self.record(id).resolved.0);
+        let base_style = Arc::clone(&self.record(id).resolved.0);
+        // The title has component-owned typography, while the Card's base
+        // style continues to inherit normally into its body children.
+        let title_style = matches!(
+            self.standard_visual_ref(id),
+            Some(StandardVisual::Card { .. })
+        )
+        .then(|| {
+            let mut style = base_style.as_ref().clone();
+            style.font_size = crate::view_components::CARD_TITLE_SIZE;
+            style.font_weight = Some(crate::view_components::CARD_TITLE_WEIGHT);
+            style.line_height = Some(nana_ui_core::LineHeightSpec::Absolute(
+                crate::view_components::CARD_TITLE_LINE,
+            ));
+            style
+        });
+        let style = title_style.as_ref().unwrap_or(base_style.as_ref());
         let text_bytes = self.record(id).text.value.len();
         // A box without text that a scheduled pass still measures is not a
         // text node: its measurement is counted, but not as a node.
@@ -4304,7 +4366,7 @@ impl UiWorld {
                 let alignment = self.record(id).style.text_horizontal_alignment;
                 let (source, copied) = self
                     .nodes
-                    .text_source(id, &style)
+                    .text_source(id, style)
                     .expect("a resolved node exists");
                 // Locked per resolution, never across the pass: the same pass
                 // measures component text through the host's `shape`, which
@@ -4313,8 +4375,8 @@ impl UiWorld {
                 let layout = nana_text::lock_text_engine(engine).layout(
                     kind,
                     source,
-                    &crate::text_node::nana_text_style(&style),
-                    &crate::text_node::nana_text_constraints(&style, &constraints, alignment),
+                    &crate::text_node::nana_text_style(style),
+                    &crate::text_node::nana_text_constraints(style, &constraints, alignment),
                     &mut node_work,
                 );
                 let mut metrics = crate::text_node::text_metrics_of_layout(&layout);
@@ -4335,9 +4397,9 @@ impl UiWorld {
                     let natural = nana_text::lock_text_engine(engine).layout(
                         kind,
                         source,
-                        &crate::text_node::nana_text_style(&style),
+                        &crate::text_node::nana_text_style(style),
                         &crate::text_node::nana_text_constraints(
-                            &style,
+                            style,
                             &unbounded(constraints),
                             alignment,
                         ),
@@ -4384,20 +4446,34 @@ impl UiWorld {
                 let constraint_only = self.nodes.text_node(id).is_some_and(
                     crate::text_node::TextNodeState::constraint_moved_without_reshaping,
                 );
-                let mut metrics = shaper.shape(id, &self.record(id).text, &style, constraints);
-                let lines_tall = crate::components::resolved_text_line_height(&style) * 1.5;
+                let mut metrics = shaper.shape(id, &self.record(id).text, style, constraints);
+                let lines_tall = crate::components::resolved_text_line_height(style) * 1.5;
                 // Host-only shapers expose no overflow flags. A clamped run
                 // can end short of its budget because the ellipsis has width.
-                let needs_natural = (cut_to_its_box(&constraints)
-                    && (constraints.max_lines.is_some()
-                        || constraints
-                            .max_width
-                            .is_some_and(|max| metrics.width >= max - 0.5)))
+                // Some size-only host shapers cap even a no-wrap run. When
+                // chrome takes space from a control's old box, preserve the
+                // label's intrinsic width so auto sizing can grow that box.
+                let control_capped = !constraints.wrap
+                    && matches!(
+                        self.standard_visual_ref(id),
+                        Some(
+                            StandardVisual::Button { .. }
+                                | StandardVisual::ActionMenuItem { .. }
+                                | StandardVisual::ListItem { .. }
+                        )
+                    )
+                    && constraints
+                        .max_width
+                        .is_some_and(|max| metrics.width >= max - 0.5);
+                let needs_natural = control_capped
+                    || (cut_to_its_box(&constraints)
+                        && (constraints.max_lines.is_some()
+                            || constraints
+                                .max_width
+                                .is_some_and(|max| metrics.width >= max - 0.5)))
                     || (wraps_to_its_box(&constraints) && metrics.height > lines_tall);
                 let unwrapped = needs_natural
-                    .then(|| {
-                        shaper.shape(id, &self.record(id).text, &style, unbounded(constraints))
-                    })
+                    .then(|| shaper.shape(id, &self.record(id).text, style, unbounded(constraints)))
                     .filter(|natural| !constraints.wrap || natural.width > metrics.width);
                 let unwrapped = if !constraints.wrap {
                     if let Some(natural) = unwrapped {
@@ -4428,7 +4504,7 @@ impl UiWorld {
         };
         // A select that sizes to its options asks layout for the widest one,
         // whichever it shows.
-        if let Some(widest) = self.widest_fitted_option(id, &style, constraints, shaper)
+        if let Some(widest) = self.widest_fitted_option(id, style, constraints, shaper)
             && widest > resolved.metrics.width
         {
             resolved.natural = Some(
@@ -4524,10 +4600,13 @@ impl UiWorld {
         resolutions: Vec<PlainResolution>,
         backend: TextBackendEpoch,
         work: &mut nana_text::TextWorkCounters,
-    ) -> (HashSet<StableNodeId>, HashSet<StableNodeId>) {
+    ) -> (HashSet<StableNodeId>, HashSet<StableNodeId>, bool) {
         let mut scaled = HashSet::new();
         let mut unbreakable_moved = HashSet::new();
+        let mut fragments_changed = Vec::new();
+        let mut inline_placement_changed = false;
         for resolution in resolutions {
+            fragments_changed.push(resolution.id);
             // What the metrics this resolution wrote were wrapped against:
             // the box width, or none yet. Layout reads it to know whether the
             // width of those lines is one this node keeps in a given box. A
@@ -4553,6 +4632,24 @@ impl UiWorld {
                 });
             if unbreakable(previous) != unbreakable(wrap_limit) {
                 unbreakable_moved.insert(resolution.id);
+            }
+            let objects_moved = self.inline_record(resolution.id).is_some()
+                && self
+                    .text_layout(resolution.id)
+                    .zip(resolution.layout.as_ref())
+                    .is_some_and(|((_, old), new)| old.objects != new.objects);
+            if objects_moved {
+                self.record_layout_invalidation(
+                    resolution.id,
+                    nana_ui_core::LayoutInvalidation::new(
+                        nana_ui_core::LayoutInvalidationSource::Text,
+                        nana_ui_core::InvalidationReason::TEXT,
+                        nana_ui_core::InvalidationKind::PLACEMENT,
+                        nana_ui_core::LayoutFieldMask::FLOW,
+                        nana_ui_core::LayoutDependencyFootprint::NONE,
+                    ),
+                );
+                inline_placement_changed = true;
             }
             match resolution.layout {
                 Some(layout) => {
@@ -4580,7 +4677,8 @@ impl UiWorld {
                 scaled.insert(resolution.id);
             }
         }
-        (scaled, unbreakable_moved)
+        self.publish_layout_results(&fragments_changed, crate::LayoutResultSource::RuntimeLayout);
+        (scaled, unbreakable_moved, inline_placement_changed)
     }
 
     /// Whether the widest line `id` was just laid out to cannot break, so the
@@ -5120,7 +5218,7 @@ impl UiWorld {
             return outcome;
         }
         self.text_input_adaptive_updates.extend(adaptive_updates);
-        let (mut scaled, unbreakable_moved) =
+        let (mut scaled, unbreakable_moved, _) =
             self.apply_plain_resolutions(resolved, backend.epoch, &mut work);
         let mut stopped = 0usize;
         let mut scale_parent_reflows = 0usize;

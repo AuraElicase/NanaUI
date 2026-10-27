@@ -80,6 +80,15 @@ impl SharedText {
         self.buffer.as_str()
     }
 
+    /// Shares a label's existing Arc without copying. Editor buffers use an
+    /// Arc<String>; converting those explicitly takes a string snapshot.
+    pub fn to_shared_str(&self) -> Arc<str> {
+        match &self.buffer {
+            Buffer::Str(text) => Arc::clone(text),
+            Buffer::Owned(text) => Arc::from(text.as_str()),
+        }
+    }
+
     /// The stamp naming these bytes; `None` for an anonymous value.
     pub fn stamp(&self) -> Option<TextStamp> {
         self.stamp

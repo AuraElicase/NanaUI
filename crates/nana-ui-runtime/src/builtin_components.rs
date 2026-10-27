@@ -113,6 +113,7 @@ fn install_builtins<const BIND: bool>(
     alias::<Stack, BIND>(registrar, "nana.drop-target", &["drop-target"])?;
     component::<Text, BIND>(registrar)?;
     component::<RichTextView, BIND>(registrar)?;
+    component::<crate::InlineFlow, BIND>(registrar)?;
     component::<crate::RichTextEditor, BIND>(registrar)?;
     component::<Button, BIND>(registrar)?;
     component::<IconButton, BIND>(registrar)?;
@@ -4323,5 +4324,16 @@ mod stack_direction_tests {
             laid_out(Some(FlexDirection::Row)),
             "the nana.row seed has to stay"
         );
+    }
+}
+
+impl RegisterableComponent for crate::InlineFlow {
+    const TYPE_ID: &'static str = crate::component_descriptors::INLINE_FLOW.type_id;
+    const TAGS: &'static [&'static str] = crate::component_descriptors::INLINE_FLOW.tags;
+    fn from_semantic(spec: &SemanticSpec<'_>) -> Self {
+        crate::InlineFlow::new(spec.display_label().to_owned()).style(crate::NodeStyle {
+            layout: Arc::clone(spec.layout),
+            ..Default::default()
+        })
     }
 }

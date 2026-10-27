@@ -18,6 +18,10 @@ perf/
 
 ## NanaUI 内部优化行
 
+Layout Foundation 的结构门禁登记在 `catalog.json.nana_layout_gates`，引用 Runtime / Scene 的真实 cargo fixtures。它们复用 `WorkCounters`，由 `--check-schema` 检查源测试和 counter 名称；CI 运行对应测试。#199 的 1k context 切换、#200 的 scroll/sticky、#205 的组件实体/parts，以及既有 #214/#259/#261/#262/#263 共用此目录。它们不冒充跨框架 timing scenario。
+
+Runtime 和 framework benchmark 报告同时导出 `layout_context_transitions`、intrinsic cache hits/misses、`intrinsic_generation_bumps`、`baseline_queries`、`cross_context_measure_hits/misses`。报告未测量的字段继续缺省，不填成 0。状态和资源身份、实体/parts 数量由真实组件测试直接断言；这与固定机器的 CPU / RSS 前后比例证据分别记录。
+
 `catalog.json` 的 `nana_gpu_scale_ids` 列出四个 `GpuScene` / `UiOnly` 场景，量的是 GPU
 节点规模与框架层 draw call：`gpu-scene-shader-nodes-256`、
 `gpu-scene-shader-nodes-256-independent`、`gpu-scene-ui-dense-2k`、
@@ -365,3 +369,9 @@ CARGO_INCREMENTAL=0 RUSTC_WRAPPER= CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_DEV_
 比较时必须使用同机、同构建配置和相同采样数，交替运行两个版本；调试构建绝对时间不能代表发布构建性能。该探针不能证明原生窗口帧率、输入延迟或耗电改善，真实长列表和订阅回调的业务开销需另测。
 
 本轮改动的同机交替测量和边界见 [2026-10-16 采样开销记录](../archive/docs-notes/smooth-scroll-cost-2026-10-16.md)。
+
+Inline plain-label 固定机器成本使用 `crates/nana-ui-scene/tests/inline_cost.rs`。保留前后 executable，交错运行各至少三次；`NANA_INLINE_COST_OUTPUT` 写原始报告。manifest 的 `machine` 标明固定机器，`before` / `after` 是互不重复的报告相对路径数组。`python3 perf/contract.py --evaluate-inline-cost <manifest>` 复用现有 contract CLI，执行 idle p95 ≤1.05、retained live bytes ≤1.08、无新增 idle 分配及单实体门禁。它不推断 dirty-frame 成本，也不把进程 RSS 当作 live allocator bytes。
+
+同一 fixture 的 `list_item_fixed_machine_cost` 单独覆盖 1k/10k label/note/detail 行，默认 ignored，使用 `--exact list_item_fixed_machine_cost --ignored --nocapture` 运行。它与 plain-label fixture 不并发执行，避免同一进程的全局 allocator 计数互相污染。对应 manifest 设置 `workload_family: "list_item"`；默认 `plain_label` 仍要求原有四项，行系列要求两项完整 workload，均沿用同一组比例门槛。
+
+`labeled_value_fixed_machine_cost` 和 `card_fixed_machine_cost` 也以 `--ignored --exact <name> --nocapture` 单独运行，manifest 的 `workload_family` 分别为 `labeled_value` / `card`，各要求 1k/10k 两项。Card workload 保留 title/spinner 部件并冻结动画时钟，测量的是 idle-flush 和 retained bytes，不能代表 spinner 活动帧成本。

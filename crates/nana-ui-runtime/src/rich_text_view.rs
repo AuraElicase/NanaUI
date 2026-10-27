@@ -191,7 +191,9 @@ impl ComponentView for RichTextView {
     }
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
-        if world.rich_text(id) != Some(&self.value) {
+        if world.inline_content(id).as_ref()
+            != Some(&crate::InlineContent::from(self.value.clone()))
+        {
             mutations.set_rich_text(id, self.value.clone());
         }
         if let Some(wanted) = &self.presentation {

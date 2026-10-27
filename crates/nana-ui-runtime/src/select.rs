@@ -23,10 +23,11 @@ const MENU_CHECK_RESERVE: f32 = nana_ui_core::type_scale::LINE;
 pub(crate) const HINT_GAP: f32 = nana_ui_core::space::MD;
 
 /// Option identity stays application-owned. Disabled options remain visible.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SelectOption {
     pub value: Arc<str>,
     pub label: Arc<str>,
+    pub content: Option<Arc<crate::InlineContent>>,
     /// Quieter text that goes with the label — the original beside a
     /// translated name. See [`Self::hint`].
     pub hint: Option<Arc<str>>,
@@ -38,6 +39,7 @@ impl SelectOption {
         Self {
             value: value.into(),
             label: label.into(),
+            content: None,
             hint: None,
             disabled: false,
         }
@@ -50,6 +52,12 @@ impl SelectOption {
     pub fn hint(mut self, hint: impl Into<Arc<str>>) -> Self {
         let hint = hint.into();
         self.hint = (!hint.is_empty()).then_some(hint);
+        self
+    }
+
+    /// Fill-colour spans over the label; see [`crate::SelectOptionData::content`].
+    pub fn content(mut self, content: impl Into<crate::InlineContent>) -> Self {
+        (self.label, self.content) = crate::select::option_content(content.into());
         self
     }
 
@@ -431,6 +439,7 @@ impl crate::ComponentView for Select {
                 .map(|option| SelectOptionData {
                     key: None,
                     label: Arc::clone(&option.label),
+                    content: option.content.clone(),
                     hint: option.hint.clone(),
                     disabled: option.disabled,
                     checked: false,
@@ -512,20 +521,12 @@ pub(crate) fn select_geometry(
     scrollbars: &nana_ui_core::ScrollbarRecipe,
     viewport: Option<crate::LayoutViewport>,
     checkable: bool,
-    padding: nana_ui_core::PaddingSpec,
+    parts: &crate::layout_engine::parts::ContentParts,
     measure: crate::text_width::ChromeTextMeasure<'_>,
     fitted_options: Option<f32>,
 ) -> ComponentGeometry {
     let palette = &model.palette;
     let border = source.layout.resolved_border_width();
-    let content = LayoutBox {
-        x: bounds.x + border + padding.left,
-        y: bounds.y + border + padding.top,
-        width: (bounds.width - border * 2.0 - padding.left - padding.right).max(0.0),
-        height: (bounds.height - border * 2.0 - padding.top - padding.bottom).max(0.0),
-    };
-    let handle_width = HANDLE_WIDTH.min(content.width);
-    let label_width = (content.width - handle_width).max(0.0);
     let text_color = if placeholder || matches!(style.foreground, SemanticColorRole::Faint) {
         palette.faint.as_rgba_array()
     } else {
@@ -547,45 +548,32 @@ pub(crate) fn select_geometry(
             fitted_options,
         )
     });
-    let mut label_box = LayoutBox {
-        x: content.x,
-        y: content.y,
-        width: label_width,
-        height: content.height,
-    };
     // The shown option's hint follows its label, as quiet as a menu row's,
     // and gives way first: it takes only what the label leaves.
+    let label_box =
+        crate::layout_engine::parts::part_bounds(parts, crate::LayoutPartKind::TextContent)
+            .unwrap_or_default();
     let hint = hint
         .filter(|hint| !placeholder && !hint.is_empty())
         .and_then(|hint| {
-            let hint_size = size.caption_size();
-            let label_natural = measure.width(label, size.text_size(), None);
-            let hint_natural = measure.width(hint, hint_size, None);
-            let label_width = label_natural.min(label_box.width);
-            let x = label_box.x + label_width + HINT_GAP;
-            let room = label_box.x + label_box.width - x;
-            if room < hint_natural.min(nana_ui_core::space::XXXL) {
-                return None;
-            }
-            label_box.width = label_width;
-            Some(ComponentTextRegion {
-                bounds: LayoutBox {
-                    x,
-                    y: content.y,
-                    width: hint_natural.min(room),
-                    height: content.height,
+            crate::layout_engine::parts::part_bounds(parts, crate::LayoutPartKind::Hint).map(
+                |bounds| ComponentTextRegion {
+                    bounds,
+                    content: Arc::clone(hint).into(),
+                    // A field that has gone faint takes its hint with it.
+                    color: Some(if text_color == palette.faint.as_rgba_array() {
+                        text_color
+                    } else {
+                        palette.muted.as_rgba_array()
+                    }),
+                    font_size: size.caption_size(),
+                    font_weight: None,
                 },
-                content: Arc::clone(hint).into(),
-                // A field that has gone faint takes its hint with it.
-                color: Some(if text_color == palette.faint.as_rgba_array() {
-                    text_color
-                } else {
-                    palette.muted.as_rgba_array()
-                }),
-                font_size: hint_size,
-                font_weight: None,
-            })
+            )
         });
+    let handle =
+        crate::layout_engine::parts::part_bounds(parts, crate::LayoutPartKind::TrailingContent)
+            .unwrap_or_default();
     ComponentGeometry::Select {
         label: ComponentTextRegion {
             bounds: label_box,
@@ -595,12 +583,7 @@ pub(crate) fn select_geometry(
             font_weight: None,
         },
         hint,
-        handle: LayoutBox {
-            x: content.x + label_width,
-            y: content.y,
-            width: handle_width,
-            height: content.height,
-        },
+        handle,
         handle_color,
         background: style.background,
         border: style.border_color,
@@ -723,6 +706,7 @@ fn select_menu_geometry(
                     font_size: size.text_size(),
                     font_weight: None,
                 },
+                rich_content: option.content.clone(),
                 hint,
                 selected,
                 checked: option.checked,
@@ -771,22 +755,19 @@ fn menu_option_hint(
 ) -> Option<ComponentTextRegion> {
     let hint = option.hint.as_ref().filter(|hint| !hint.is_empty())?;
     let hint_size = size.caption_size();
-    let label_natural = measure.width(&option.label, size.text_size(), None);
-    let hint_natural = measure.width(hint, hint_size, None);
-    let room = label_box.width - label_natural.min(label_box.width) - HINT_GAP;
-    if room < hint_natural.min(nana_ui_core::space::XXXL) {
-        return None;
-    }
-    let width = hint_natural.min(room);
-    let right = label_box.x + label_box.width;
-    label_box.width = (label_box.width - width - HINT_GAP).max(0.0);
+    let (new_label, hint_bounds) = crate::layout_engine::parts::menu_option_text_boxes(
+        *label_box,
+        &option.label,
+        Some(hint),
+        size.text_size(),
+        hint_size,
+        HINT_GAP,
+        nana_ui_core::space::XXXL,
+        |text, size| measure.width(text, size, None),
+    );
+    *label_box = new_label;
     Some(ComponentTextRegion {
-        bounds: LayoutBox {
-            x: right - width,
-            y: label_box.y,
-            width,
-            height: label_box.height,
-        },
+        bounds: hint_bounds?,
         content: Arc::clone(hint).into(),
         color: Some(if option.disabled {
             palette.faint.as_rgba_array()
@@ -800,6 +781,48 @@ fn menu_option_hint(
 
 /// A label and its hint as one line, where only one text fits: a searchable
 /// field showing its choice.
+/// Splits option content into the label rows lay out and the fill-colour
+/// spans they paint over it. Option rows are data, not retained paragraphs:
+/// atomic children and spans that shape, decorate or mark have nowhere to
+/// live there, so debug builds refuse them and release builds keep the text.
+pub(crate) fn option_content(
+    content: crate::InlineContent,
+) -> (Arc<str>, Option<Arc<crate::InlineContent>>) {
+    let content = content.normalized();
+    debug_assert!(
+        content.atoms().is_empty(),
+        "option rows have no retained children for atomic content"
+    );
+    if !content.atoms().is_empty() {
+        return (Arc::from(content.text().replace('\u{fffc}', "")), None);
+    }
+    let label = Arc::clone(content.shared_text());
+    let Some(rich) = content.rich_text() else {
+        return (label, None);
+    };
+    debug_assert!(
+        rich.objects().is_empty() && rich.rubies().is_empty(),
+        "option rows paint fill colour only"
+    );
+    let mut fills = nana_ui_core::RichText::new(Arc::clone(&label));
+    for (range, span) in rich.spans().iter() {
+        let fill = span
+            .paint
+            .color
+            .map(|color| nana_ui_core::RichSpanStyle::new().color(color));
+        debug_assert!(
+            fill.as_ref().unwrap_or(&nana_ui_core::RichSpanStyle::new()) == span,
+            "option rows paint fill colour only"
+        );
+        if let Some(fill) = fill {
+            fills = fills.with_span(range, fill);
+        }
+    }
+    let fills = crate::InlineContent::from(fills);
+    let content = (!matches!(fills, crate::InlineContent::PlainText(_))).then(|| Arc::new(fills));
+    (label, content)
+}
+
 pub(crate) fn menu_option_label(option: &SelectOptionData) -> Arc<str> {
     match option.hint.as_ref() {
         Some(hint) if !hint.is_empty() => Arc::from(format!("{}  ·  {hint}", option.label)),

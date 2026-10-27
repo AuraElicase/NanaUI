@@ -6,6 +6,8 @@
 
 [`Stack`](../../crates/nana-ui-runtime/src/view_components.rs) 是 Rust 路径的标准布局容器。常用排列直接使用预设构造器（声明式视图中对应 `<Column>` / `<Row>` 或 `column()` / `row()`）；需要 Grid、定位、溢出或绘制属性时，通过 `with_layout` 或 `from_layout` 写入同一份 [`LayoutStyle`](../../crates/nana-ui-core/src/box_layout.rs)，无需另外定义新的布局组件。
 
+Row/Column 预设直接写入 `display: flex` 与方向，进入同一个 Flex formatting context；它们不建立另一种布局身份。`from_layout` 保留传入的 display，Grid 也只通过同一份布局意图表达。Rust、`view!` 和构建期 `.vue` 方言共用这条 Runtime 路径；比较等价 CSS 时，需同时写明预设的尺寸与对齐默认值。
+
 ```rust
 use nana_ui::runtime::{JustifySpec, SemanticColorRole, Stack};
 

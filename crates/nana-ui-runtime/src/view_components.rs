@@ -423,6 +423,7 @@ pub trait ComponentView: Clone + PartialEq + Send + 'static {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Text {
     pub value: String,
+    pub content: Option<Arc<crate::InlineContent>>,
     /// Shown instead of [`Self::value`]: a message resolved in the locale of
     /// the scope the text is in, and again when that locale changes.
     pub localized: Option<crate::LocalizedText>,
@@ -432,9 +433,21 @@ pub struct Text {
 }
 
 impl Text {
+    pub fn content(mut self, content: impl Into<crate::InlineContent>) -> Self {
+        let content = content.into().normalized();
+        self.value = content.text().to_owned();
+        self.localized = None;
+        self.content = if matches!(content, crate::InlineContent::PlainText(_)) {
+            None
+        } else {
+            Some(Arc::new(content))
+        };
+        self
+    }
     pub fn new(value: impl Into<String>) -> Self {
         Self {
             value: value.into(),
+            content: None,
             localized: None,
             decorative: false,
             style: NodeStyle::default(),
@@ -584,22 +597,41 @@ impl ComponentView for Text {
     }
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
-        match &self.localized {
-            Some(localized) => {
-                if world.localized_text(id) != Some(localized) {
-                    mutations.set_localized_text(id, Some(localized.clone()));
+        if let Some(content) = self.content.as_deref() {
+            crate::world::inline_content::project_inline_content(id, world, content, mutations);
+        } else {
+            match &self.localized {
+                Some(localized) => {
+                    if world.inline_record(id).is_some() || world.rich_text(id).is_some() {
+                        crate::world::inline_content::project_inline_content(
+                            id,
+                            world,
+                            &crate::InlineContent::default(),
+                            mutations,
+                        );
+                    }
+                    if world.localized_text(id) != Some(localized) {
+                        mutations.set_localized_text(id, Some(localized.clone()));
+                    }
                 }
-            }
-            // Written text is literal; writing it ends a localization.
-            None => {
-                if world.text(id) != Some(self.value.as_str()) || world.localized_text(id).is_some()
-                {
-                    mutations.set_text(
+                // Written text is literal; writing it ends a localization.
+                None => {
+                    if !crate::world::inline_content::project_control_content(
                         id,
-                        TextContent {
-                            value: self.value.clone().into(),
-                        },
-                    );
+                        world,
+                        &self.value,
+                        self.content.as_deref(),
+                        mutations,
+                    ) && (world.text(id) != Some(self.value.as_str())
+                        || world.localized_text(id).is_some())
+                    {
+                        mutations.set_text(
+                            id,
+                            TextContent {
+                                value: self.value.clone().into(),
+                            },
+                        );
+                    }
                 }
             }
         }
@@ -624,6 +656,8 @@ impl ComponentView for Text {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Button {
     pub label: String,
+    /// Canonical styled or mixed content. `None` uses the plain label.
+    pub content: Option<Arc<crate::InlineContent>>,
     /// Spoken name when it must differ from [`Self::label`]. Empty keeps the
     /// visible label as the accessible name.
     pub accessible_name: String,
@@ -668,6 +702,18 @@ pub(crate) const CARD_LOADING_RESERVE: f32 =
     nana_ui_core::space::PAGE_TIGHT + nana_ui_core::space::XXS;
 
 impl Button {
+    /// Text, spans and retained children share the label's content box.
+    /// A plain value returns to the allocation-light string representation.
+    pub fn content(mut self, content: impl Into<crate::InlineContent>) -> Self {
+        let content = content.into().normalized();
+        self.label = content.text().to_owned();
+        self.content = if matches!(content, crate::InlineContent::PlainText(_)) {
+            None
+        } else {
+            Some(Arc::new(content))
+        };
+        self
+    }
     pub fn new(label: impl Into<String>) -> Self {
         let mut layout = (*control_layout()).clone();
         layout.font_weight = Some(nana_ui_core::type_scale::MEDIUM);
@@ -679,6 +725,7 @@ impl Button {
         layout.adaptation = Some(nana_ui_core::dynamic_layout::AdaptationProfile::control());
         Self {
             label: label.into(),
+            content: None,
             accessible_name: String::new(),
             icon: None,
             trailing_icon: None,
@@ -869,9 +916,23 @@ impl ComponentView for Button {
         // The label goes to the text, the visual and the accessible name.
         // Compare each against the world first and copy the label once,
         // only if one of them changed.
-        let mut shared = None;
-        if world.text(id) != Some(self.label.as_str()) {
-            let label = shared_label(&mut shared, &self.label);
+        let label_text = self
+            .content
+            .as_deref()
+            .map_or(self.label.as_str(), crate::InlineContent::text);
+        let mut shared = self
+            .content
+            .as_deref()
+            .map(|content| Arc::clone(content.shared_text()));
+        if !crate::world::inline_content::project_control_content(
+            id,
+            world,
+            label_text,
+            self.content.as_deref(),
+            mutations,
+        ) && world.text(id) != Some(label_text)
+        {
+            let label = shared_label(&mut shared, label_text);
             mutations.set_text(
                 id,
                 TextContent {
@@ -904,7 +965,7 @@ impl ComponentView for Button {
                 loading_phase,
                 invalid,
                 content_align,
-            }) if **label == *self.label
+            }) if label.as_ref() == label_text
                 && *icon == self.icon
                 && *trailing_icon == self.trailing_icon
                 && *current_size == icon_size
@@ -917,7 +978,7 @@ impl ComponentView for Button {
                 && *content_align == self.content_align
         );
         if !visual_current {
-            let label = shared_label(&mut shared, &self.label);
+            let label = shared_label(&mut shared, label_text);
             mutations.set_standard_visual(
                 id,
                 Some(StandardVisual::Button {
@@ -963,7 +1024,7 @@ impl ComponentView for Button {
         // the same, so an unchanged button allocates nothing here. A separate
         // spoken name must not reuse the visible label's arc.
         let spoken = if self.accessible_name.is_empty() {
-            self.label.as_str()
+            label_text
         } else {
             self.accessible_name.as_str()
         };
@@ -983,7 +1044,11 @@ impl ComponentView for Button {
             },
             AccessibilityState {
                 role: AccessibilityRole::Button,
-                label: Some(label),
+                label: if self.content.is_some() && self.accessible_name.is_empty() {
+                    None
+                } else {
+                    Some(label)
+                },
                 disabled: self.disabled || self.loading,
                 busy: self.loading,
                 invalid: self.invalid,
@@ -1555,6 +1620,7 @@ impl ComponentView for Card {
             mutations.set_standard_visual(id, Some(visual));
         }
         let mut effective_style = self.style.clone();
+        effective_style.text_vertical_alignment = TextVerticalAlignment::Center;
         let (kind_background, kind_border, kind_border_width) = match self.kind {
             nana_ui_core::CardKind::Surface | nana_ui_core::CardKind::Raised => {
                 (Some(nana_ui_core::SemanticColorRole::Surface), None, 0.0)
@@ -1993,8 +2059,8 @@ impl ComponentView for ListItem {
     }
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
-        // 行文本只承载 label；note 与 detail 由几何端生成小字号 muted
-        // 文本区（note 紧跟 label，detail 右对齐），与 label 同行但不挤占
+        // 行文本只承载 label；Foundation 发布 note 与 detail 的布局部件
+        // （note 紧跟 label，detail 位于行尾），与 label 同行但不挤占
         // 同一文本。挂了 content 槽的行由槽内容自绘，三者都不渲染。
         let has_note = self.slots.content.is_none() && !self.note.is_empty();
         let has_detail = self.slots.content.is_none() && !self.detail.is_empty();
@@ -5638,6 +5704,7 @@ impl Stack {
     ) -> Self {
         let mut style = NodeStyle::default();
         let layout = Arc::make_mut(&mut style.layout);
+        layout.display = Some(nana_ui_core::DisplaySpec::Flex);
         layout.direction = Some(direction);
         layout.gap = Some(nana_ui_core::LengthSpec::Px(gap.max(0.0)));
         layout.align_items = align;

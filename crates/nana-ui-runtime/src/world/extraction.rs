@@ -126,6 +126,11 @@ impl UiWorld {
                 style.border_color = border_color;
             }
         }
+        if !self.inline_presentation_visible_memo(id, memo) {
+            let style = Arc::make_mut(&mut style);
+            style.visible = false;
+            style.box_visible = false;
+        }
         let mut standard_visual = if self.nodes.has_visuals() {
             self.nodes.visual(id).cloned()
         } else {
@@ -250,6 +255,10 @@ impl UiWorld {
             })
             .cloned();
         Some(ExtractedNode {
+            layout_result: self
+                .layout_result(id)
+                .and_then(|_| self.layout_results.get(&id))
+                .cloned(),
             id,
             kind,
             parent: hierarchy_parent,

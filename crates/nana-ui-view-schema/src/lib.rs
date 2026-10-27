@@ -50,10 +50,12 @@ macro_rules! for_each_control {
     ($callback:path) => {
         $callback! {
             Text => text(value: text) for Text {
+                content: InlineContent = inline,
                 value: String = set,
                 decorative: bool = set,
             };
             Button => button(label: text) for Button {
+                content: InlineContent = inline,
                 label: String = set,
                 accessible_name: String = set,
                 disabled: bool = set,
@@ -188,6 +190,7 @@ macro_rules! for_each_control {
             }
             on { on_activate: Activate };
             Chip => chip(label: text) for Chip {
+                content: InlineContent = inline,
                 label: Arc<str> = set,
                 selected: bool = set,
                 disabled: bool = set,
@@ -240,6 +243,7 @@ macro_rules! for_each_control {
             }
             with { on_change: ColorChanged };
             ActionMenuItem => action_menu_item(label: text) for ActionMenuItem {
+                content: InlineContent = inline,
                 label: Arc<str> = set,
                 accessible_name: Arc<str> = set,
                 disabled: bool = set,

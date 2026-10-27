@@ -462,7 +462,13 @@ fn replay_sequential_run(
             child_fonts,
         );
         let mut child_size = child_intrinsic;
-        if align == AlignSpec::Stretch && !cross_axis_is_definite(child_style, direction) {
+        if align == AlignSpec::Stretch
+            && !cross_axis_is_definite(
+                child_style,
+                direction,
+                has_natural_ratio(nodes.world, child),
+            )
+        {
             let cross_available = container_cross - cross_margin(margin, direction);
             set_cross_extent(&mut child_size, direction, cross_available.max(0.0));
         }
@@ -1228,9 +1234,9 @@ pub(super) fn place_node_scoped(
     // its ancestors when it declares none of its own, and its parent's.
     let (writing, containing_writing) = (node.writing, node.containing_writing);
     let modal = node.modal.clone();
-    // Only explicit boundaries need a saved placement for independent reflow.
+    // Explicit boundaries and native atomic entries need a saved placement for independent reflow.
     // Ordinary nodes must not allocate another per-node cache on full layout.
-    if style_arc.layout_isolation {
+    if style_arc.layout_isolation || nodes.world.inline_parent(id).is_some() {
         nodes
             .placements
             .insert(id, (origin, containing, parent_font_px));
@@ -1327,6 +1333,25 @@ pub(super) fn place_node_scoped(
         size.width - padding.left - padding.right - border.left - border.right,
         size.height - padding.top - padding.bottom - border.top - border.bottom,
     );
+    if nodes.world.inline_record(id).is_some() {
+        nodes
+            .contexts
+            .insert(id, crate::FormattingContextKind::Inline);
+        nodes.container_plans.insert(id, None);
+        nodes.measure_plans.insert(id, MeasurePlanSlots::default());
+        return place_native_inline(
+            id,
+            &child_ids,
+            content_origin,
+            content,
+            viewport,
+            child_font_px,
+            nodes,
+            intrinsic,
+            output,
+            scope,
+        );
+    }
     // A container that only moved: its plan holds where the box stood, and
     // nothing in it is on the frontier. Every box under it moves with it --
     // the output -- and none is measured, nor a plan recorded again, to place
@@ -1644,7 +1669,7 @@ pub(super) fn place_node_scoped(
         intrinsic.note_plan_miss();
     }
     let (mut flow, descendant_dependent_flow) =
-        collect_flow_children_reporting(&child_ids, nodes, style.display)?;
+        collect_flow_children_reporting(&child_ids, nodes, style)?;
     if let Some(scope) = scope {
         retire_omitted_children(&child_ids, nodes, output, scope);
     }
@@ -2232,7 +2257,13 @@ pub(super) fn place_node_scoped(
                 );
                 let align = child_style.resolved_align_self(style.align_items);
                 let cross_available = line_box_cross - cross_margin(margin, direction);
-                if align == AlignSpec::Stretch && !cross_axis_is_definite(child_style, direction) {
+                if align == AlignSpec::Stretch
+                    && !cross_axis_is_definite(
+                        child_style,
+                        direction,
+                        has_natural_ratio(nodes.world, child),
+                    )
+                {
                     set_cross_extent(&mut child_size, direction, cross_available.max(0.0));
                 }
                 fill_auto_height_from_aspect_ratio(
@@ -2582,7 +2613,7 @@ fn retire_omitted_children(
 /// The full container path and the overlay replay share this so a
 /// containing-block change and a content change cannot drift apart.
 #[allow(clippy::too_many_arguments)]
-fn place_positioned_child(
+pub(super) fn place_positioned_child(
     child: StableNodeId,
     content_origin: Point,
     content: Size,
@@ -3040,249 +3071,4 @@ fn place_triggered_menu_items(
         }
     }
     Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn place_modal_children(
-    _id: StableNodeId,
-    origin: Point,
-    size: Size,
-    modal: &crate::ModalLayoutInput,
-    viewport: LayoutViewport,
-    parent_font_px: f32,
-    nodes: &mut LayoutInputMap<'_>,
-    intrinsic: &mut PassIntrinsicCache,
-    output: &mut HashMap<StableNodeId, LayoutBox>,
-    scope: Option<&ScopeContext<'_>>,
-) -> Result<(), UiWorldError> {
-    let recipe = *nodes.world.theme().recipes().dialog();
-    let chrome = crate::overlay_surfaces::ModalChrome::measure_in(
-        modal.kind,
-        modal.title,
-        modal.description,
-        &modal.slots,
-        &recipe,
-        nodes.world.theme().border().hairline,
-        nodes.world.theme(),
-    );
-    let body_copy = modal.body_text.map_or(0.0, |metrics| metrics.height);
-    let body_gap = if body_copy > 0.0 && modal.slots.body.is_some() {
-        nodes.world.theme().spacing().md
-    } else {
-        0.0
-    };
-    let root = LayoutBox {
-        x: origin.x,
-        y: origin.y,
-        width: size.width,
-        height: size.height,
-    };
-    let surface = match modal.kind {
-        crate::ModalSurfaceKind::Dialog(_) | crate::ModalSurfaceKind::Confirm(_) => {
-            let provisional =
-                crate::overlay_surfaces::modal_surface_bounds(root, modal.kind, None, &recipe);
-            let body_available = Size::new(
-                (provisional.width - chrome.body_x * 2.0).max(0.0),
-                (provisional.height
-                    - chrome.header_height
-                    - chrome.body_pad_top
-                    - chrome.body_pad_bottom
-                    - chrome.footer_height
-                    - body_copy
-                    - body_gap)
-                    .max(0.0),
-            );
-            let body_slot = if let Some(id) = modal.slots.body {
-                if nodes.get(id)?.is_some() {
-                    intrinsic_size_scoped(
-                        id,
-                        body_available,
-                        Some(FlexDirection::Column),
-                        viewport,
-                        parent_font_px,
-                        nodes,
-                        intrinsic,
-                        scope,
-                    )?
-                    .height
-                    .min(body_available.height)
-                } else {
-                    0.0
-                }
-            } else {
-                0.0
-            };
-            crate::overlay_surfaces::modal_surface_bounds(
-                root,
-                modal.kind,
-                Some(chrome.chrome_height(body_copy + body_gap + body_slot)),
-                &recipe,
-            )
-        }
-        _ => crate::overlay_surfaces::modal_surface_bounds(root, modal.kind, None, &recipe),
-    };
-    let body = chrome.body_box(surface);
-    let slot_y = body.y
-        + if body_copy > 0.0 {
-            body_copy + body_gap
-        } else {
-            0.0
-        };
-    let slot_height = (body.y + body.height - slot_y).max(0.0);
-    if let Some(id) = modal.slots.body
-        && nodes.get(id)?.is_some()
-    {
-        place_modal_slot(
-            id,
-            Point {
-                x: body.x,
-                y: slot_y,
-            },
-            Size::new(body.width, slot_height),
-            Size::new(body.width, slot_height),
-            viewport,
-            parent_font_px,
-            nodes,
-            intrinsic,
-            output,
-            scope,
-        )?;
-    }
-    for (id, square) in [
-        (modal.slots.title_icon, chrome.icon_box(surface)),
-        (modal.slots.close_action, chrome.close_box(surface)),
-    ] {
-        let (Some(id), Some(square)) = (id, square) else {
-            continue;
-        };
-        if nodes.get(id)?.is_none() {
-            continue;
-        }
-        place_modal_slot(
-            id,
-            Point {
-                x: square.x,
-                y: square.y,
-            },
-            Size::new(square.width, square.height),
-            Size::new(square.width, square.height),
-            viewport,
-            parent_font_px,
-            nodes,
-            intrinsic,
-            output,
-            scope,
-        )?;
-    }
-    let footer = chrome.footer_box(surface);
-    let action_y = chrome.action_y(surface);
-    let mut action_right = footer.x + footer.width;
-    let mut actions = Vec::new();
-    for id in modal.slots.actions.iter().rev().copied() {
-        if nodes.get(id)?.is_some() {
-            actions.push(id);
-        }
-    }
-    for id in actions {
-        let measured = intrinsic_size_scoped(
-            id,
-            Size::new(
-                footer.width,
-                nana_ui_core::ControlSize::Medium.height_in(nodes.world.theme_metrics()),
-            ),
-            Some(FlexDirection::Row),
-            viewport,
-            parent_font_px,
-            nodes,
-            intrinsic,
-            scope,
-        )?;
-        let action_size = Size::new(
-            measured.width.min(footer.width),
-            measured
-                .height
-                .min(nana_ui_core::ControlSize::Medium.height_in(nodes.world.theme_metrics())),
-        );
-        action_right -= action_size.width;
-        place_modal_slot(
-            id,
-            Point {
-                x: action_right,
-                y: action_y,
-            },
-            action_size,
-            Size::new(footer.width, chrome.footer_height),
-            viewport,
-            parent_font_px,
-            nodes,
-            intrinsic,
-            output,
-            scope,
-        )?;
-        action_right -= chrome.action_gap;
-    }
-    if let Some(id) = modal.slots.footer
-        && nodes.get(id)?.is_some()
-    {
-        let width = (action_right - footer.x).max(0.0);
-        place_modal_slot(
-            id,
-            Point {
-                x: footer.x,
-                y: footer.y,
-            },
-            Size::new(width, footer.height),
-            Size::new(width, footer.height),
-            viewport,
-            parent_font_px,
-            nodes,
-            intrinsic,
-            output,
-            scope,
-        )?;
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn place_modal_slot(
-    id: StableNodeId,
-    origin: Point,
-    size: Size,
-    containing: Size,
-    viewport: LayoutViewport,
-    parent_font_px: f32,
-    nodes: &mut LayoutInputMap<'_>,
-    intrinsic: &mut PassIntrinsicCache,
-    output: &mut HashMap<StableNodeId, LayoutBox>,
-    scope: Option<&ScopeContext<'_>>,
-) -> Result<(), UiWorldError> {
-    let Some(child_style) = nodes.get(id)?.map(|node| node.style.clone()) else {
-        return Ok(());
-    };
-    if subtree_unchanged(
-        id,
-        origin,
-        size,
-        containing,
-        child_style.as_ref(),
-        fonts_of(child_style.as_ref(), parent_font_px),
-        nodes.world.containing_writing(id),
-        scope,
-    ) {
-        return Ok(());
-    }
-    place_node_scoped(
-        id,
-        origin,
-        size,
-        containing,
-        viewport,
-        parent_font_px,
-        nodes,
-        intrinsic,
-        output,
-        scope,
-        None,
-    )
 }

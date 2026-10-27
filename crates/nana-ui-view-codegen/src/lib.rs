@@ -88,6 +88,8 @@ pub fn is_builtin(tag: &str) -> bool {
     matches!(
         tag,
         "T" | "Column"
+            | "Inline"
+            | "Span"
             | "Row"
             | "Widget"
             | "Block"
@@ -109,6 +111,7 @@ pub fn is_argument(tag: &str, attribute: &str) -> bool {
         || match tag {
             "Column" | "Row" => attribute == "gap",
             "Widget" => attribute == "of",
+            "Span" => attribute == "style",
             "Block" | "Virtual" | "Transition" | "TransitionGroup" | "KeepAlive" | "Suspense"
             | "Teleport" => true,
             _ => control(tag).is_some_and(|control| {
@@ -1342,6 +1345,12 @@ impl Gen<'_> {
         let tag = element.name.to_string();
         let span = element.name.span();
         let children = &element.children;
+        if tag == "Span" {
+            return Err(syn::Error::new(
+                span,
+                "Span must be a direct child of Inline",
+            ));
+        }
         if matches!(
             tag.as_str(),
             "Block"
@@ -1361,6 +1370,48 @@ impl Gen<'_> {
             ("T", _) => {
                 let message = self.message(element)?;
                 (quote_spanned!(span=> #krate::view::t(#message)), Vec::new())
+            }
+            ("Inline", _) => {
+                let mut out = quote_spanned!(span=> #krate::view::inline());
+                for child in children {
+                    out = match child {
+                        Node::Text(text) => {
+                            let text = string_prop(text);
+                            quote!(#out.text(#text))
+                        }
+                        Node::Expr(expr) => {
+                            let text = prop(&AttrValue::Expr(expr.clone()));
+                            quote!(#out.text(#text))
+                        }
+                        Node::Mixed(parts, at) => {
+                            let text = mixed_prop(parts, *at);
+                            quote!(#out.text(#text))
+                        }
+                        Node::Verbatim(text, _) => quote!(#out.text(#text)),
+                        Node::Element(element) if element.name == "Span" => {
+                            if element.attrs.iter().any(
+                                |attr| !matches!(&attr.name,AttrName::Plain(name) if name=="style"),
+                            ) {
+                                return Err(syn::Error::new(
+                                    element.name.span(),
+                                    "Inline Span takes only style={RichSpanStyle}",
+                                ));
+                            }
+                            let text = self.string_child(element, "value")?;
+                            let style = element
+                                .plain("style")
+                                .map(|attr| raw(&attr.value, span))
+                                .transpose()?
+                                .unwrap_or_else(|| quote!(::core::default::Default::default()));
+                            quote!(#out.span(#text,#style))
+                        }
+                        _ => {
+                            let child = self.node(child)?;
+                            quote!(#out.child(#child))
+                        }
+                    };
+                }
+                (out, Vec::new())
             }
             ("Column" | "Row", _) => {
                 let make = format_ident!("{}", tag.to_lowercase(), span = span);
@@ -1609,7 +1660,7 @@ impl Gen<'_> {
             }
         }
         let out = slot_calls(self, element, out)?;
-        if !matches!(tag.as_str(), "Column" | "Row" | "Widget") && control.is_none() {
+        if !matches!(tag.as_str(), "Column" | "Row" | "Inline" | "Widget") && control.is_none() {
             return Ok(out);
         }
         let Some(source) = self.source_site(span) else {
@@ -1765,6 +1816,9 @@ impl Gen<'_> {
     /// argument (`<Button></Button>`), or no `label` on a control named only
     /// by it.
     fn check_name(&self, element: &Element, control: &Control) {
+        if element.plain("content").is_some() {
+            return;
+        }
         let tag = control.tag;
         // Another node's text names it.
         if element.plain("labelled_by").is_some() {

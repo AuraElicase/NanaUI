@@ -24,7 +24,8 @@ impl AppContext {
         {
             return None;
         }
-        Some(text[start..end].to_owned())
+        self.world
+            .inline_text_range(selection.node, start..end, false)
     }
 
     pub fn clear_document_text_selection(&mut self, document: DocumentId) {

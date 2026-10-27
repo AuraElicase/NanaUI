@@ -163,6 +163,10 @@ pub struct WorkCounters {
     /// Children a container walk measured, in its measure and its placement.
     /// A plan hit walks none; this is the scan a plan miss pays.
     pub layout_children_measured: usize,
+    /// Native mixed paragraphs placed through nana-text object positions.
+    pub inline_reflows: usize,
+    /// Atomic children requested from the shared intrinsic cache.
+    pub inline_atomic_measure_requests: usize,
     /// Containers that placed their children but could not record a plan,
     /// so a later pass walks them again.
     pub layout_containers_uncacheable: usize,
@@ -628,7 +632,7 @@ accumulate_counters! {
             layout_invalidations_created,
             layout_invalidations_zero_delta, layout_equivalent_mutations_skipped,
             layout_placement_plans_reused, layout_measure_plans_reused, layout_suffixes_replayed,
-            layout_children_measured, layout_containers_uncacheable, layout_plan_misses,
+            layout_children_measured, inline_reflows, inline_atomic_measure_requests, layout_containers_uncacheable, layout_plan_misses,
             layout_plan_rebuilds, layout_retain_sweeps, layout_scratch_entries,
             layout_scratch_bytes, hit_test_candidates, input_targets, accessibility_nodes_updated,
             render_nodes_changed, render_nodes_extracted, extracted_text_spans, allocations,

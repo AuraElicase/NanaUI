@@ -1,7 +1,8 @@
-"""Issue #12 observations; never promotion gates."""
+"""Relative comparisons: Issue #12 observations and Nana fixed-machine gates."""
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 from .extractors import (
@@ -399,3 +400,64 @@ def evaluate_relative_paths(
     ):
         summary["status"] = "ok"
     return summary, EXIT_OK
+
+
+def evaluate_inline_cost_manifest(path: Path) -> tuple[dict, int]:
+    """Judge fixed-machine component fixtures; never infer active-frame cost."""
+    import statistics
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(manifest.get("machine"), str) or not manifest["machine"].strip():
+        raise ValueError("inline cost requires a named fixed machine")
+    family = manifest.get("workload_family", "plain_label")
+    families = {
+        "plain_label": {(kind, nodes) for kind in ("text", "button") for nodes in (1000, 10000)},
+        "list_item": {("list_item", nodes) for nodes in (1000, 10000)},
+        "labeled_value": {("labeled_value", nodes) for nodes in (1000, 10000)},
+        "card": {("card", nodes) for nodes in (1000, 10000)},
+    }
+    if not isinstance(family, str) or family not in families:
+        raise ValueError("unknown component cost workload family")
+    sets = []
+    for version in ("before", "after"):
+        reports = manifest.get(version, [])
+        if not isinstance(reports, list) or len(reports) < 3 or len(set(reports)) != len(reports):
+            raise ValueError(f"inline cost requires at least three {version} reports")
+        samples = {}
+        for report in reports:
+            data = json.loads((path.parent / report).read_text(encoding="utf-8"))
+            if data.get("schema_version") != 1 or data.get("profile") != "release":
+                raise ValueError("inline cost requires release schema 1 reports")
+            cases = data.get("cases", [])
+            seen = set()
+            for case in cases:
+                key = (case.get("kind"), case.get("nodes"))
+                if key in seen:
+                    raise ValueError(f"duplicate inline cost case: {key}")
+                seen.add(key)
+                for field in ("retained_live_bytes", "idle_frame_p95_ns", "idle_allocations", "entities"):
+                    value = case.get(field)
+                    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
+                        raise ValueError(f"invalid inline cost {field}")
+                samples.setdefault(key, []).append(case)
+            if seen != families[family]:
+                raise ValueError(f"component cost report must contain every {family} workload")
+        sets.append(samples)
+    rows = []
+    for key, before in sorted(sets[0].items()):
+        after = sets[1][key]
+        median = lambda cases, field: statistics.median(case[field] for case in cases)
+        cpu_before = median(before, "idle_frame_p95_ns")
+        memory_before = median(before, "retained_live_bytes")
+        if cpu_before <= 0 or memory_before <= 0:
+            raise ValueError("inline cost baseline must be positive")
+        cpu = median(after, "idle_frame_p95_ns") / cpu_before
+        memory = median(after, "retained_live_bytes") / memory_before
+        entities = all(case["entities"] == key[1] + 1 for case in before + after)
+        allocations = median(after, "idle_allocations") <= median(before, "idle_allocations")
+        rows.append({"kind": key[0], "nodes": key[1], "cpu_p95_ratio": cpu, "retained_memory_ratio": memory,
+                     "entity_gate": entities, "allocation_gate": allocations,
+                     "passed": cpu <= 1.05 and memory <= 1.08 and entities and allocations})
+    passed = all(row["passed"] for row in rows)
+    return {"schema_version": 1, "machine": manifest["machine"], "scope": f"{family} idle flush and retained allocator bytes",
+            "rss": "observed by fixture; allocator reuse prevents a live-byte ratio inference from RSS",
+            "passed": passed, "cases": rows}, 0 if passed else 1

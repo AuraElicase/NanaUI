@@ -75,8 +75,7 @@ impl UiScene {
             width: layout.width,
             height: layout.height,
         };
-        let local_transform =
-            node_scene_transform(node.source_style.layout.as_ref(), layout, parent_blocks_3d);
+        let local_transform = self.logical_local_transform(&node, parent_blocks_3d);
         let transform = parent_transform.then(local_transform);
         // The base is the logical projection. While the compositor presents
         // anything, a node may sit under a layer's transform: stamp the base

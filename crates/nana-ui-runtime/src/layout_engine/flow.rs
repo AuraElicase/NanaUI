@@ -1,6 +1,7 @@
 //! Shared Runtime layout flow algorithms.
 
 use super::*;
+use crate::{FormattingContextKind as Context, ParticipationKind as Participation};
 
 /// In-flow children, plus whether the answer depended on anything below
 /// the direct children.
@@ -23,29 +24,24 @@ use super::*;
 pub(super) fn collect_flow_children_reporting(
     children: &[StableNodeId],
     nodes: &mut LayoutInputMap<'_>,
-    parent_display: Option<DisplaySpec>,
+    parent_style: &LayoutStyle,
 ) -> Result<(Vec<StableNodeId>, bool), UiWorldError> {
     let mut out = Vec::new();
     let mut descendant_dependent = false;
     collect_flow_children_into(
         children,
         nodes,
-        parent_display,
+        parent_style,
         &mut out,
         &mut descendant_dependent,
     )?;
     Ok((out, descendant_dependent))
 }
 
-pub(super) fn parent_unboxes_inline(parent_display: Option<DisplaySpec>) -> bool {
-    !parent_display
-        .is_some_and(|display| display.is_flex_container() || display.is_grid_container())
-}
-
 pub(super) fn collect_flow_children_into(
     children: &[StableNodeId],
     nodes: &mut LayoutInputMap<'_>,
-    parent_display: Option<DisplaySpec>,
+    parent_style: &LayoutStyle,
     out: &mut Vec<StableNodeId>,
     descendant_dependent: &mut bool,
 ) -> Result<(), UiWorldError> {
@@ -53,24 +49,28 @@ pub(super) fn collect_flow_children_into(
         let Some(style) = nodes.style(child) else {
             continue;
         };
-        if style.omits_box() {
+        let participation = nodes.participation(child, &style, Context::from_display(parent_style));
+        if participation == Participation::NoBox {
             continue;
         }
-        if style.display.is_some_and(DisplaySpec::is_contents) {
+        if participation == Participation::Contents {
             *descendant_dependent = true;
             let nested = match nodes.get(child)? {
                 Some(node) => (*node.children).clone(),
                 None => continue,
             };
-            collect_flow_children_into(&nested, nodes, parent_display, out, descendant_dependent)?;
+            collect_flow_children_into(&nested, nodes, parent_style, out, descendant_dependent)?;
             continue;
         }
-        if style.position.is_out_of_flow() {
+        if matches!(
+            participation,
+            Participation::Absolute | Participation::Fixed
+        ) {
             continue;
         }
         // `inline-block` is an atomic box. Only a non-atomic `inline` hoists a
         // block descendant into the parent formatting context.
-        if parent_unboxes_inline(parent_display) && style.display == Some(DisplaySpec::Inline) {
+        if participation == Participation::InlineSpan {
             // Whichever way the test goes, the answer came from the child's
             // subtree, so a plan over this container cannot be re-checked from
             // the direct child list alone.
@@ -83,7 +83,7 @@ pub(super) fn collect_flow_children_into(
                 collect_flow_children_into(
                     &nested,
                     nodes,
-                    parent_display,
+                    parent_style,
                     out,
                     descendant_dependent,
                 )?;
@@ -107,18 +107,28 @@ pub(super) fn inline_contains_block(
         let Some(style) = nodes.style(grandchild) else {
             continue;
         };
-        if style.omits_box() || style.position.is_out_of_flow() {
+        let participation = nodes.participation(grandchild, &style, Context::Inline);
+        if matches!(
+            participation,
+            Participation::NoBox
+                | Participation::Absolute
+                | Participation::Fixed
+                | Participation::Float
+        ) {
             continue;
         }
-        if style.display.is_some_and(DisplaySpec::is_contents)
-            || style.display == Some(DisplaySpec::Inline)
-        {
+        if matches!(
+            participation,
+            Participation::Contents | Participation::InlineSpan
+        ) {
             if inline_contains_block(grandchild, nodes)? {
                 return Ok(true);
             }
             continue;
         }
-        return Ok(true);
+        if participation == Participation::FlowItem {
+            return Ok(true);
+        }
     }
     Ok(false)
 }
@@ -141,10 +151,11 @@ pub(super) fn collect_positioned_children_into(
         let Some(style) = nodes.style(child) else {
             continue;
         };
-        if style.omits_box() {
+        let participation = nodes.participation(child, &style, Context::Flow);
+        if participation == Participation::NoBox {
             continue;
         }
-        if style.display.is_some_and(DisplaySpec::is_contents) {
+        if participation == Participation::Contents {
             let nested = match nodes.get(child)? {
                 Some(node) => (*node.children).clone(),
                 None => continue,
@@ -152,7 +163,10 @@ pub(super) fn collect_positioned_children_into(
             collect_positioned_children_into(&nested, nodes, out)?;
             continue;
         }
-        if style.position.is_out_of_flow() {
+        if matches!(
+            participation,
+            Participation::Absolute | Participation::Fixed
+        ) {
             out.push(child);
         }
     }
@@ -177,10 +191,11 @@ pub(super) fn collect_floated_children_into(
         let Some(style) = nodes.style(child) else {
             continue;
         };
-        if style.omits_box() {
+        let participation = nodes.participation(child, &style, Context::Flow);
+        if participation == Participation::NoBox {
             continue;
         }
-        if style.display.is_some_and(DisplaySpec::is_contents) {
+        if participation == Participation::Contents {
             let nested = match nodes.get(child)? {
                 Some(node) => (*node.children).clone(),
                 None => continue,
@@ -188,7 +203,7 @@ pub(super) fn collect_floated_children_into(
             collect_floated_children_into(&nested, nodes, out)?;
             continue;
         }
-        if style.is_floated() && !style.position.is_out_of_flow() {
+        if participation == Participation::Float {
             out.push(child);
         }
     }

@@ -632,16 +632,18 @@ impl UiScene {
         // refusal is made here too, or promoting a layer (an opacity fade is
         // enough) hands back the projection the ancestor walk denied.
         if block_3d && node.source_style.layout.transform_3d.is_some() {
-            return AffineTransform::IDENTITY;
+            return self.with_sticky_translation(node, AffineTransform::IDENTITY);
         }
         // A triggered menu's presentation moves its hanging surface, not its
         // trigger: see `hanging_transform`.
-        self.compositor
+        let transform = self
+            .compositor
             .transform(node.id)
             .filter(|_| !super::is_triggered_menu(node))
             .unwrap_or_else(|| {
                 node_scene_transform(node.source_style.layout.as_ref(), node.layout, block_3d)
-            })
+            });
+        self.with_sticky_translation(node, transform)
     }
 
     /// What a triggered menu's presentation does to its hanging surface and
@@ -1189,6 +1191,7 @@ mod tests {
 
     fn node(value: u64, parent: Option<u64>, children: &[u64]) -> ExtractedNode {
         ExtractedNode {
+            layout_result: None,
             custom_paint: None,
             chrome_radii: nana_ui_core::ChromeRadii::default(),
             id: id(value),

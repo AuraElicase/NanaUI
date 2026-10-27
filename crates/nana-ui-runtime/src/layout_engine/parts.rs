@@ -1,0 +1,592 @@
+//! Lightweight component content uses the same Flex solve as retained children.
+//! Parts have no entity, lifecycle, text engine or independent geometry store.
+
+use super::*;
+use crate::{LayoutPart, LayoutPartKind, StandardVisual, TextHorizontalAlignment};
+
+#[derive(Clone, Copy)]
+pub(crate) struct FlexPart {
+    pub kind: LayoutPartKind,
+    pub preferred: Size,
+    pub grow: f32,
+    pub shrink: f32,
+    pub align: AlignSpec,
+    pub gap_after: f32,
+}
+
+impl FlexPart {
+    pub fn new(kind: LayoutPartKind, preferred: Size) -> Self {
+        Self {
+            kind,
+            preferred,
+            grow: 0.0,
+            shrink: 0.0,
+            align: AlignSpec::Center,
+            gap_after: 0.0,
+        }
+    }
+}
+
+/// A fixed number of semantic slots; absent slots cost no retained allocation.
+pub(crate) type ContentParts = [Option<LayoutPart>; 3];
+
+pub(crate) fn flex_parts<const N: usize>(
+    bounds: LayoutBox,
+    direction: FlexDirection,
+    justify: JustifySpec,
+    reverse: bool,
+    inputs: [Option<FlexPart>; N],
+) -> [Option<LayoutPart>; N] {
+    let main = main_extent(Size::new(bounds.width, bounds.height), direction);
+    let cross = cross_extent(Size::new(bounds.width, bounds.height), direction);
+    let mut sizes =
+        inputs.map(|part| part.map_or(0.0, |part| main_extent(part.preferred, direction)));
+    let mins = [0.0; N];
+    let margins = [0.0; N];
+    let shrinks = inputs.map(|part| part.map_or(0.0, |part| part.shrink));
+    let gap: f32 = inputs
+        .iter()
+        .flatten()
+        .map(|part| part.gap_after.max(0.0))
+        .sum();
+    let grows = inputs.map(|part| part.map_or(0.0, |part| part.grow));
+    if grows.iter().any(|grow| *grow > 0.0) {
+        let fixed =
+            std::array::from_fn::<_, N, _>(|index| (grows[index] == 0.0).then_some(sizes[index]));
+        let solved =
+            resolve_flex_fill_sizes(main, gap, &margins, &fixed, &mins, &[None; N], &grows);
+        sizes.copy_from_slice(&solved);
+    }
+    apply_flex_shrink(main, gap, &margins, &mut sizes, &mins, &shrinks);
+    let occupied = sizes.iter().sum::<f32>() + gap;
+    let (mut cursor, _) = justify_offsets(justify, main, occupied, 0.0, 0);
+    std::array::from_fn(|index| {
+        let input = inputs[index]?;
+        let extent = sizes[index].min((main - cursor).max(0.0));
+        let cross_extent = if input.align == AlignSpec::Stretch {
+            cross
+        } else {
+            cross_extent(input.preferred, direction).min(cross)
+        };
+        let cross_offset = match input.align {
+            AlignSpec::Center => (cross - cross_extent).max(0.0) / 2.0,
+            AlignSpec::End => (cross - cross_extent).max(0.0),
+            _ => 0.0,
+        };
+        let start = if reverse {
+            main - cursor.min(main) - extent
+        } else {
+            cursor.min(main)
+        };
+        cursor += sizes[index] + input.gap_after.max(0.0);
+        let part_bounds = match direction {
+            FlexDirection::Row => LayoutBox {
+                x: bounds.x + start,
+                y: bounds.y + cross_offset,
+                width: extent,
+                height: cross_extent,
+            },
+            FlexDirection::Column => LayoutBox {
+                x: bounds.x + cross_offset,
+                y: bounds.y + start,
+                width: cross_extent,
+                height: extent,
+            },
+        };
+        Some(LayoutPart::new(input.kind, part_bounds))
+    })
+}
+
+pub(crate) fn button_parts(visual: &StandardVisual, text: Size) -> Option<[Option<FlexPart>; 3]> {
+    let StandardVisual::Button {
+        label,
+        loading,
+        icon,
+        trailing_icon,
+        icon_size,
+        icon_gap,
+        ..
+    } = visual
+    else {
+        return None;
+    };
+    let leading = *loading || icon.is_some();
+    let trailing = trailing_icon.is_some();
+    let glyph = Size::new(*icon_size, *icon_size);
+    let mut label_part = FlexPart::new(LayoutPartKind::TextContent, text);
+    label_part.shrink = 1.0;
+    label_part.align = AlignSpec::Stretch;
+    label_part.gap_after = if trailing && !label.is_empty() {
+        *icon_gap
+    } else {
+        0.0
+    };
+    Some([
+        leading.then(|| {
+            let mut part = FlexPart::new(
+                if *loading {
+                    LayoutPartKind::Spinner
+                } else {
+                    LayoutPartKind::LeadingContent
+                },
+                glyph,
+            );
+            part.gap_after = if !label.is_empty() || trailing {
+                *icon_gap
+            } else {
+                0.0
+            };
+            part
+        }),
+        Some(label_part),
+        trailing.then(|| FlexPart::new(LayoutPartKind::TrailingContent, glyph)),
+    ])
+}
+
+/// The paragraph budget excludes fixed chrome, never its own measured advance.
+pub(crate) fn button_text_budget(visual: &StandardVisual, available: Size) -> Option<f32> {
+    let mut parts = button_parts(visual, Size::default())?;
+    fit_button_glyphs(&mut parts, available);
+    let reserved: f32 = parts
+        .iter()
+        .flatten()
+        .map(|part| {
+            part.gap_after.max(0.0)
+                + if part.kind == LayoutPartKind::TextContent {
+                    0.0
+                } else {
+                    part.preferred.width.max(0.0)
+                }
+        })
+        .sum();
+    Some((available.width - reserved).max(0.0))
+}
+
+fn fit_button_glyphs(inputs: &mut [Option<FlexPart>; 3], available: Size) {
+    // A glyph keeps its aspect ratio even in a constrained content box.
+    for part in inputs
+        .iter_mut()
+        .flatten()
+        .filter(|part| part.kind != LayoutPartKind::TextContent)
+    {
+        let extent = part
+            .preferred
+            .width
+            .min(available.width)
+            .min(available.height)
+            .max(0.0);
+        part.preferred = Size::new(extent, extent);
+    }
+}
+
+pub(crate) fn button_content_parts(
+    visual: &StandardVisual,
+    bounds: LayoutBox,
+    text: Size,
+) -> Option<ContentParts> {
+    let StandardVisual::Button { content_align, .. } = visual else {
+        return None;
+    };
+    let mut inputs = button_parts(visual, text)?;
+    fit_button_glyphs(&mut inputs, Size::new(bounds.width, bounds.height));
+    let justify = match content_align {
+        TextHorizontalAlignment::Start => JustifySpec::Start,
+        TextHorizontalAlignment::Center => JustifySpec::Center,
+        TextHorizontalAlignment::End => JustifySpec::End,
+    };
+    Some(flex_parts(
+        bounds,
+        FlexDirection::Row,
+        justify,
+        false,
+        inputs,
+    ))
+}
+
+pub(crate) fn part_bounds(parts: &ContentParts, kind: LayoutPartKind) -> Option<LayoutBox> {
+    parts
+        .iter()
+        .flatten()
+        .find(|part| part.kind == kind)
+        .map(|part| part.bounds)
+}
+
+pub(crate) fn primary_text_box(parts: &ContentParts, fallback: LayoutBox) -> LayoutBox {
+    part_bounds(parts, LayoutPartKind::TextContent)
+        .or_else(|| part_bounds(parts, LayoutPartKind::Header))
+        .unwrap_or(fallback)
+}
+
+pub(crate) fn card_content_parts(
+    header: LayoutBox,
+    has_title: bool,
+    loading: bool,
+    text: Size,
+    reverse: bool,
+) -> ContentParts {
+    if !has_title && !loading {
+        return [None; 3];
+    }
+    let glyph = crate::view_components::CARD_TITLE_SIZE
+        .min(header.width)
+        .min(header.height)
+        .max(0.0);
+    let gap = if loading {
+        (crate::view_components::CARD_LOADING_RESERVE - crate::view_components::CARD_TITLE_SIZE)
+            .min((header.width - glyph).max(0.0))
+            .max(0.0)
+    } else {
+        0.0
+    };
+    let budget = (header.width - if loading { glyph + gap } else { 0.0 }).max(0.0);
+    let mut ink = FlexPart::new(
+        LayoutPartKind::TextContent,
+        Size::new(text.width.min(budget), header.height),
+    );
+    ink.align = AlignSpec::Stretch;
+    ink.gap_after = gap;
+    let spinner = loading.then(|| FlexPart::new(LayoutPartKind::Spinner, Size::new(glyph, glyph)));
+    let mut spacer = FlexPart::new(LayoutPartKind::ComponentContent, Size::default());
+    spacer.grow = 1.0;
+    let solved = flex_parts(
+        header,
+        FlexDirection::Row,
+        JustifySpec::Start,
+        reverse,
+        [Some(ink), spinner, Some(spacer)],
+    );
+    let text = LayoutBox {
+        x: if reverse {
+            header.x + header.width - budget
+        } else {
+            header.x
+        },
+        width: budget,
+        ..header
+    };
+    [
+        has_title.then(|| LayoutPart::new(LayoutPartKind::Header, text)),
+        solved[1],
+        None,
+    ]
+}
+
+pub(crate) struct RowTextMetrics {
+    pub label_width: f32,
+    pub note: Option<Size>,
+    pub detail: Option<Size>,
+    pub note_gap: f32,
+    pub detail_gap: f32,
+    pub min_secondary_width: f32,
+}
+
+pub(crate) fn paired_text_parts(
+    bounds: LayoutBox,
+    label: Size,
+    value: Size,
+    gap: f32,
+    min_value_width: f32,
+    reverse: bool,
+) -> ContentParts {
+    let value_width =
+        priority_secondary_width(bounds.width, label.width, value.width, gap, min_value_width);
+    let label_width = label.width.min((bounds.width - value_width - gap).max(0.0));
+    let mut spacer = FlexPart::new(LayoutPartKind::ComponentContent, Size::default());
+    spacer.grow = 1.0;
+    spacer.gap_after = gap.min((bounds.width - value_width - label_width).max(0.0));
+    let solved = flex_parts(
+        bounds,
+        FlexDirection::Row,
+        JustifySpec::Start,
+        reverse,
+        [
+            Some(FlexPart::new(
+                LayoutPartKind::Label,
+                Size::new(label_width, label.height),
+            )),
+            Some(spacer),
+            Some(FlexPart::new(
+                LayoutPartKind::Value,
+                Size::new(value_width, value.height),
+            )),
+        ],
+    );
+    [solved[0], solved[2], None]
+}
+
+fn priority_secondary_width(
+    available: f32,
+    primary: f32,
+    secondary: f32,
+    gap: f32,
+    minimum: f32,
+) -> f32 {
+    if primary + gap + secondary <= available {
+        secondary
+    } else {
+        (available - primary - gap).max(minimum).min(available)
+    }
+}
+
+/// A row gives the label priority, reserves readable detail, then admits a
+/// note if it fits. The common Flex solve owns allocation and placement.
+pub(crate) fn list_text_parts(
+    bounds: LayoutBox,
+    metrics: RowTextMetrics,
+    reverse: bool,
+) -> ContentParts {
+    let detail = metrics.detail.map(|size| {
+        Size::new(
+            priority_secondary_width(
+                bounds.width,
+                metrics.label_width,
+                size.width,
+                metrics.detail_gap,
+                metrics.min_secondary_width,
+            ),
+            size.height,
+        )
+    });
+    let detail_gap = detail.map_or(0.0, |size| {
+        metrics.detail_gap.min((bounds.width - size.width).max(0.0))
+    });
+    let label_room = (bounds.width - detail.map_or(0.0, |size| size.width) - detail_gap).max(0.0);
+    let note = metrics.note.filter(|size| {
+        label_room - metrics.label_width.min(label_room) - metrics.note_gap
+            >= size.width.min(metrics.min_secondary_width)
+    });
+    let mut label = FlexPart::new(
+        LayoutPartKind::TextContent,
+        Size::new(
+            if note.is_some() {
+                metrics.label_width.min(label_room)
+            } else {
+                0.0
+            },
+            bounds.height,
+        ),
+    );
+    label.align = AlignSpec::Stretch;
+    label.grow = if note.is_some() { 0.0 } else { 1.0 };
+    label.gap_after = if note.is_some() {
+        metrics.note_gap
+    } else {
+        detail_gap
+    };
+    let note = note.map(|size| {
+        let mut part = FlexPart::new(LayoutPartKind::Note, size);
+        part.shrink = 1.0;
+        part
+    });
+    let spacer = note.map(|_| {
+        let mut part = FlexPart::new(LayoutPartKind::ComponentContent, Size::default());
+        part.grow = 1.0;
+        part.gap_after = detail_gap;
+        part
+    });
+    let solved = flex_parts(
+        bounds,
+        FlexDirection::Row,
+        JustifySpec::Start,
+        reverse,
+        [
+            Some(label),
+            note,
+            spacer,
+            detail.map(|size| FlexPart::new(LayoutPartKind::Detail, size)),
+        ],
+    );
+    [solved[0], solved[1], solved[3]]
+}
+
+pub(crate) fn menu_content_parts(
+    bounds: LayoutBox,
+    padding: f32,
+    gap: f32,
+    icon_size: Option<f32>,
+    hint_width: Option<f32>,
+) -> ContentParts {
+    let bounds = crate::layout_result::inset(bounds, 0.0, padding, 0.0, padding);
+    let mut label = FlexPart::new(LayoutPartKind::TextContent, Size::default());
+    label.grow = 1.0;
+    label.align = AlignSpec::Stretch;
+    label.gap_after = if hint_width.is_some() { gap } else { 0.0 };
+    flex_parts(
+        bounds,
+        FlexDirection::Row,
+        JustifySpec::Start,
+        false,
+        [
+            icon_size.map(|size| {
+                let mut part = FlexPart::new(LayoutPartKind::LeadingContent, Size::new(size, size));
+                part.gap_after = gap;
+                part
+            }),
+            Some(label),
+            hint_width.map(|width| {
+                let mut part = FlexPart::new(LayoutPartKind::Hint, Size::new(width, bounds.height));
+                part.align = AlignSpec::Stretch;
+                part
+            }),
+        ],
+    )
+}
+
+/// The label and support bands belong to the field's own visual surface.  They
+/// are retained parts rather than synthetic child nodes; the application-owned
+/// control remains an ordinary child placement in the same result.
+pub(crate) fn form_field_parts(
+    bounds: LayoutBox,
+    size: nana_ui_core::ControlSize,
+    support: Option<&str>,
+    error: bool,
+    support_measure: Option<f32>,
+    reverse: bool,
+) -> ContentParts {
+    let label_height = crate::form_surfaces::form_field_label_line(size).min(bounds.height);
+    let label = LayoutPart::new(
+        LayoutPartKind::Label,
+        LayoutBox {
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: label_height,
+        },
+    );
+    if support.is_none() && !error {
+        return [Some(label), None, None];
+    }
+    let support_height = nana_ui_core::type_scale::META.min(bounds.height);
+    let support_y = (bounds.y + bounds.height - support_height).max(bounds.y);
+    let row = LayoutBox {
+        x: bounds.x,
+        y: support_y,
+        width: bounds.width,
+        height: support_height,
+    };
+    let indicator = error.then(|| {
+        let slot = nana_ui_core::space::XL;
+        let mut part = FlexPart::new(
+            LayoutPartKind::LeadingContent,
+            Size::new(slot, support_height),
+        );
+        part.align = AlignSpec::Stretch;
+        part.gap_after = nana_ui_core::space::XS;
+        part
+    });
+    let mut hint = FlexPart::new(
+        LayoutPartKind::Hint,
+        Size::new(support_measure.unwrap_or(0.0), support_height),
+    );
+    hint.align = AlignSpec::Stretch;
+    hint.shrink = 1.0;
+    let solved = flex_parts(
+        row,
+        FlexDirection::Row,
+        JustifySpec::Start,
+        reverse,
+        [indicator, Some(hint), None],
+    );
+    [Some(label), solved[1], solved[0]]
+}
+
+/// Trigger text, optional hint and the arrow handle share one retained row.
+/// The spacer is solved with the same Flex primitive but is not published as
+/// a semantic part, so a select still has one node and one ordinary text run.
+pub(crate) fn select_trigger_parts(
+    bounds: LayoutBox,
+    size: nana_ui_core::ControlSize,
+    label: &str,
+    hint: Option<&str>,
+    placeholder: bool,
+    measure: impl Fn(&str, f32) -> f32,
+    natural_label: Option<f32>,
+    reverse: bool,
+) -> ContentParts {
+    let handle_width = crate::select::HANDLE_WIDTH.min(bounds.width);
+    let label_area = (bounds.width - handle_width).max(0.0);
+    let label_natural = natural_label.unwrap_or_else(|| measure(label, size.text_size()));
+    let hint_size = size.caption_size();
+    let hint_natural = hint
+        .filter(|hint| !placeholder && !hint.is_empty())
+        .map(|hint| measure(hint, hint_size));
+    let hint_fits = hint_natural.is_some_and(|hint| {
+        let room = (label_area - label_natural.min(label_area) - crate::select::HINT_GAP).max(0.0);
+        room >= hint.min(nana_ui_core::space::XXXL)
+    });
+    let label_width = if hint_fits {
+        label_natural.min(label_area)
+    } else {
+        label_area
+    };
+    let mut label_part = FlexPart::new(
+        LayoutPartKind::TextContent,
+        Size::new(label_width, bounds.height),
+    );
+    label_part.align = AlignSpec::Stretch;
+    label_part.grow = if !hint_fits { 1.0 } else { 0.0 };
+    label_part.gap_after = if hint_fits {
+        crate::select::HINT_GAP
+    } else {
+        0.0
+    };
+    let hint_part = hint_fits.then(|| {
+        let mut part = FlexPart::new(
+            LayoutPartKind::Hint,
+            Size::new(hint_natural.unwrap_or(0.0), bounds.height),
+        );
+        part.align = AlignSpec::Stretch;
+        part.shrink = 1.0;
+        part
+    });
+    let mut spacer = FlexPart::new(LayoutPartKind::ComponentContent, Size::default());
+    spacer.grow = if hint_fits { 1.0 } else { 0.0 };
+    let handle = FlexPart::new(
+        LayoutPartKind::TrailingContent,
+        Size::new(handle_width, bounds.height),
+    );
+    let solved = flex_parts(
+        bounds,
+        FlexDirection::Row,
+        JustifySpec::Start,
+        reverse,
+        [Some(label_part), hint_part, Some(spacer), Some(handle)],
+    );
+    [solved[0], solved[1], solved[3]]
+}
+
+/// Splits an option row's already-reserved text lane into label and hint
+/// boxes. The caller owns colors and text payloads; this helper owns fit and
+/// end-edge arithmetic for every menu surface.
+pub(crate) fn menu_option_text_boxes(
+    mut label: LayoutBox,
+    label_text: &str,
+    hint: Option<&str>,
+    label_size: f32,
+    hint_size: f32,
+    gap: f32,
+    minimum: f32,
+    measure: impl Fn(&str, f32) -> f32,
+) -> (LayoutBox, Option<LayoutBox>) {
+    let Some(hint) = hint.filter(|hint| !hint.is_empty()) else {
+        return (label, None);
+    };
+    let label_natural = measure(label_text, label_size);
+    let hint_natural = measure(hint, hint_size);
+    let room = label.width - label_natural.min(label.width) - gap;
+    if room < hint_natural.min(minimum) {
+        return (label, None);
+    }
+    let width = hint_natural.min(room);
+    let right = label.x + label.width;
+    label.width = (label.width - width - gap).max(0.0);
+    (
+        label,
+        Some(LayoutBox {
+            x: right - width,
+            y: label.y,
+            width,
+            height: label.height,
+        }),
+    )
+}

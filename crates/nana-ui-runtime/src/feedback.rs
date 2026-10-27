@@ -549,7 +549,11 @@ impl LabeledValue {
         let layout = Arc::make_mut(&mut style.layout);
         layout.width = Some(LengthSpec::Percent(100.0));
         layout.direction = Some(FlexDirection::Row);
-        layout.justify_content = JustifySpec::SpaceBetween;
+        layout.justify_content = if self.action.is_some() {
+            JustifySpec::End
+        } else {
+            JustifySpec::SpaceBetween
+        };
         layout.align_items = AlignSpec::Center;
         layout.min_height = Some(LengthSpec::Px(if self.compact { 28.0 } else { 32.0 }));
         layout.gap = Some(LengthSpec::Px(if self.compact { 4.0 } else { 8.0 }));

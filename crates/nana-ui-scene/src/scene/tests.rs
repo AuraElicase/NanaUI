@@ -24,6 +24,7 @@ fn style_mut(node: &mut ExtractedNode) -> &mut ComputedStyle {
 
 fn node(value: u64, parent: Option<u64>, children: &[u64]) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: nana_ui_core::ChromeRadii::default(),
         id: id(value),
@@ -1040,6 +1041,7 @@ fn menu_surface_paints_row_icon_and_iconless_labels() {
             nana_ui_runtime::SelectOptionData {
                 key: None,
                 label: Arc::from("Add"),
+                content: None,
                 hint: None,
                 disabled: false,
                 checked: false,
@@ -1050,6 +1052,7 @@ fn menu_surface_paints_row_icon_and_iconless_labels() {
             nana_ui_runtime::SelectOptionData {
                 key: None,
                 label: Arc::from("Rename"),
+                content: None,
                 hint: None,
                 disabled: false,
                 checked: false,
@@ -1093,6 +1096,7 @@ fn menu_surface_paints_row_icon_and_iconless_labels() {
                     font_size: 12.0,
                     font_weight: Some(500),
                 },
+                rich_content: None,
                 hint: None,
                 selected: false,
                 checked: false,
@@ -1128,6 +1132,7 @@ fn menu_surface_paints_row_icon_and_iconless_labels() {
                     font_size: 12.0,
                     font_weight: Some(500),
                 },
+                rich_content: None,
                 hint: None,
                 selected: false,
                 checked: false,

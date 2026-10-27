@@ -19,7 +19,10 @@ mod replaced;
 mod responsive;
 pub(crate) use block_reads::BlockExtentReads;
 pub use replaced::{ReplacedMetadata, ReplacedResource};
+mod content_parts;
+pub(crate) mod inline_content;
 mod scroll_bounds;
+mod sticky;
 mod style;
 mod text;
 use hit_test::*;
@@ -416,6 +419,7 @@ struct PainterHit {
 struct AncestorMemo {
     live: HashMap<StableNodeId, bool>,
     stacking: HashMap<StableNodeId, i32>,
+    inline_visible: HashMap<StableNodeId, bool>,
     /// Paint color filled this extract pass after a palette epoch change.
     color: HashMap<StableNodeId, [f32; 4]>,
     chain: Vec<StableNodeId>,
@@ -499,6 +503,8 @@ pub enum UiWorldError {
     InvalidCustomRender(StableNodeId),
     InvalidEventListener(StableNodeId),
     InvalidStandardVisual(StableNodeId),
+    InvalidInlineContent(StableNodeId),
+    InlineTextEngineRequired(StableNodeId),
     InvalidOverlayHost(StableNodeId),
     NotFocusable(StableNodeId),
     NotPointerInteractive(StableNodeId),
@@ -569,6 +575,16 @@ impl fmt::Display for UiWorldError {
                 parent.get()
             ),
             Self::InvalidStyle(id) => write!(formatter, "node {} has an invalid style", id.get()),
+            Self::InvalidInlineContent(id) => write!(
+                formatter,
+                "node {} has invalid inline content or atomic children",
+                id.get()
+            ),
+            Self::InlineTextEngineRequired(id) => write!(
+                formatter,
+                "mixed inline node {} requires the nana-text layout engine",
+                id.get()
+            ),
             Self::InvalidText(id) => {
                 write!(formatter, "node {} has invalid text metrics", id.get())
             }
@@ -888,6 +904,7 @@ pub struct UiWorld {
     /// Nodes with an authored `z-index`, or an open triggered menu overlay
     /// whose children inject z-index. Stacking walks skip when this is zero.
     z_index_nodes: usize,
+    sticky_nodes: crate::StickyDependencies,
     /// Live open triggered menus (Popover, ActionMenu, HoverCard). Their
     /// surfaces take the pointer at the content's level, above the page, so
     /// hit testing looks them up here instead of walking the tree.
@@ -1087,6 +1104,7 @@ impl UiWorld {
             confirm_modals: 0,
             clip_visuals: 0,
             z_index_nodes: 0,
+            sticky_nodes: crate::StickyDependencies::default(),
             triggered_overlays: HashSet::default(),
             select_menus: HashSet::default(),
             viewport_basis_nodes: 0,
@@ -1586,6 +1604,7 @@ impl UiWorld {
                 .get(&id)
                 .is_some_and(|previous| previous.geometry_eq(&result))
             {
+                self.nodes.note_text_fragments(id);
                 self.layout_results_suppressed.remove(&id);
                 reused = reused.saturating_add(1);
                 continue;
@@ -1601,6 +1620,33 @@ impl UiWorld {
         self.layout_generation = self.layout_generation.wrapping_add(1);
         let generation = self.layout_generation;
         for (id, mut result) in published {
+            // The menu's growing label slot depends on chrome and its offered
+            // box, not on label advance. A changed slot must reach text even
+            // when the outer box stays fixed (for example a changed hint).
+            let part_budget_changed = matches!(
+                self.standard_visual_ref(id),
+                Some(
+                    StandardVisual::ActionMenuItem { .. }
+                        | StandardVisual::ListItem { content: None, .. }
+                        | StandardVisual::Card { .. }
+                )
+            ) && self.layout_results.get(&id).is_none_or(|previous| {
+                let width = |result: &crate::LayoutResult| {
+                    result.parts.iter().find_map(|part| {
+                        (part.kind == crate::LayoutPartKind::TextContent)
+                            .then_some(part.bounds.width)
+                    })
+                };
+                width(previous) != width(&result)
+            });
+            let sticky_changed = self.sticky_nodes.has_dependents(id)
+                && self.layout_results.get(&id).is_none_or(|previous| {
+                    (
+                        previous.content_box,
+                        previous.padding_box,
+                        previous.scroll_extent,
+                    ) != (result.content_box, result.padding_box, result.scroll_extent)
+                });
             let project = requested.binary_search(&id).is_ok()
                 && self
                     .layout_results
@@ -1610,11 +1656,26 @@ impl UiWorld {
             result.dependency_generation = generation;
             self.layout_results_suppressed.remove(&id);
             self.layout_results.insert(id, Arc::new(result));
+            self.nodes.note_text_fragments(id);
+            if part_budget_changed {
+                self.nodes
+                    .invalidate_text(id, crate::text_node::TextDirty::CONSTRAINT);
+                self.mark(id, DirtyMask::TEXT);
+            }
             if project {
                 self.mark(
                     id,
                     DirtyMask::INPUT | DirtyMask::RENDER | DirtyMask::ACCESSIBILITY,
                 );
+            }
+            if sticky_changed {
+                self.mark(id, DirtyMask::RENDER);
+                for sticky in self.sticky_nodes.affected(id) {
+                    self.mark(
+                        sticky,
+                        DirtyMask::INPUT | DirtyMask::RENDER | DirtyMask::ACCESSIBILITY,
+                    );
+                }
             }
         }
         #[cfg(feature = "benchmark")]
@@ -1631,12 +1692,16 @@ impl UiWorld {
         let padding = self.used_layout_padding(id);
         let border = node.resolved_layout.resolved_border_edges();
         let mut result = crate::LayoutResult::from_box(bounds, padding, border);
+        let component_parts = self.solve_content_parts(id, result.content_box);
+        let text_box =
+            crate::layout_engine::parts::primary_text_box(&component_parts, result.content_box);
         result.source = source;
         result.scroll_offset = node.scroll_offset;
 
         let children = node.hierarchy.children.as_ref();
         let child_kind = child_fragment_kind(node);
         result.formatting_context = established_context(node);
+        result.participation = self.layout_node(id).and_then(|node| node.participation);
         let mut parts = Vec::with_capacity(children.len() + 2);
         let mut overflow = bounds;
         if let Some((placements, fragments)) =
@@ -1659,6 +1724,16 @@ impl UiWorld {
         } else {
             let mut placements = Vec::with_capacity(children.len());
             let mut fragments = Vec::with_capacity(children.len() + 2);
+            let atom_sources: NodeMap<_> = self
+                .inline_record(id)
+                .map(|content| {
+                    content
+                        .atoms
+                        .iter()
+                        .map(|atom| (atom.node, atom.offset..atom.offset + '\u{fffc}'.len_utf8()))
+                        .collect()
+                })
+                .unwrap_or_default();
             for (index, &child) in children.iter().enumerate() {
                 let Some(_child_record) = self.nodes.get(child) else {
                     continue;
@@ -1671,6 +1746,7 @@ impl UiWorld {
                 });
                 let mut fragment = crate::LayoutFragment::for_node(child_kind, child, child_bounds);
                 fragment.index = index;
+                fragment.source = atom_sources.get(&child).cloned();
                 fragments.push(fragment);
                 parts.push(crate::LayoutPart {
                     kind: crate::LayoutPartKind::ChildPlacement,
@@ -1680,30 +1756,35 @@ impl UiWorld {
                 overflow = union_layout_boxes(overflow, child_bounds);
             }
 
-            if matches!(node.kind.as_ref(), NodeKind::Text) || !node.text.value.is_empty() {
-                let baseline = node
-                    .text_metrics
-                    .ascent
-                    .map(|ascent| result.content_box.y + ascent.max(0.0));
-                let mut line = crate::LayoutFragment::new(
-                    crate::LayoutFragmentKind::TextLine,
-                    result.content_box,
-                );
+            if record_has_text(node) && self.needs_native_text_fragments(id) {
+                let (native, first, last) = self.native_text_fragments(id, text_box)?;
+                fragments.extend(native);
+                result.first_baseline = first;
+                result.last_baseline = last;
+                parts.push(crate::LayoutPart::new(
+                    crate::LayoutPartKind::TextContent,
+                    text_box,
+                ));
+            } else if matches!(node.kind.as_ref(), NodeKind::Text) || !node.text.value.is_empty() {
+                let baseline = self.single_text_baseline(id, text_box);
+                let source = self.text_layout(id).map(|_| 0..node.text.value.len());
+                let mut line =
+                    crate::LayoutFragment::new(crate::LayoutFragmentKind::TextLine, text_box);
                 line.first_baseline = baseline;
                 line.last_baseline = baseline;
+                line.source = source.clone();
                 fragments.push(line);
-                let mut run = crate::LayoutFragment::new(
-                    crate::LayoutFragmentKind::TextRun,
-                    result.content_box,
-                );
+                let mut run =
+                    crate::LayoutFragment::new(crate::LayoutFragmentKind::TextRun, text_box);
                 run.first_baseline = baseline;
                 run.last_baseline = baseline;
+                run.source = source;
                 fragments.push(run);
                 result.first_baseline = baseline;
                 result.last_baseline = baseline;
                 parts.push(crate::LayoutPart::new(
                     crate::LayoutPartKind::TextContent,
-                    result.content_box,
+                    text_box,
                 ));
             }
             parts.push(crate::LayoutPart::new(
@@ -1748,6 +1829,12 @@ impl UiWorld {
         }
         dependencies.sort_unstable();
         dependencies.dedup();
+        parts.extend(
+            component_parts
+                .into_iter()
+                .flatten()
+                .filter(|part| part.kind != crate::LayoutPartKind::TextContent),
+        );
         result.parts = parts.into();
         // Only scroll containers need the retained descendant index. Avoid
         // materializing that index for ordinary nodes while still publishing
@@ -1796,6 +1883,12 @@ impl UiWorld {
     /// recorded. Checking the covered children is checking them all, without
     /// a walk of a wide container's children for an edit in one of them.
     fn layout_result_geometry_current(&self, id: StableNodeId, covered: &[StableNodeId]) -> bool {
+        if self.layout_result(id).is_some_and(|result| {
+            result.participation != self.layout_node(id).and_then(|node| node.participation)
+        }) {
+            return false;
+        }
+
         // Provenance is not geometry. A held result whose geometry still
         // holds is kept with its stamp, which is what a rebuild would end in
         // (`geometry_eq` ignores the source), so a different `source` alone
@@ -1854,10 +1947,65 @@ impl UiWorld {
                 return false;
             }
         }
+        let component_parts = self.solve_content_parts(id, content_box);
+        let text_box = crate::layout_engine::parts::primary_text_box(&component_parts, content_box);
+        if facts.text && self.needs_native_text_fragments(id) {
+            let current = self
+                .nodes
+                .text_node(id)
+                .is_some_and(|text| text.fragments_layout == text.layout);
+            let content_current = previous
+                .parts
+                .iter()
+                .find(|part| part.kind == crate::LayoutPartKind::TextContent)
+                .is_some_and(|part| part.bounds == text_box);
+            let extra = component_parts
+                .iter()
+                .flatten()
+                .filter(|part| part.kind != crate::LayoutPartKind::TextContent);
+            let parts_current = previous
+                .parts
+                .iter()
+                .filter(|part| {
+                    matches!(
+                        part.kind,
+                        crate::LayoutPartKind::LeadingContent
+                            | crate::LayoutPartKind::TrailingContent
+                            | crate::LayoutPartKind::Hint
+                            | crate::LayoutPartKind::Spinner
+                            | crate::LayoutPartKind::Note
+                            | crate::LayoutPartKind::Detail
+                            | crate::LayoutPartKind::Label
+                            | crate::LayoutPartKind::Value
+                            | crate::LayoutPartKind::Header
+                    )
+                })
+                .eq(extra);
+            let (clip, containing) = self.layout_anchors(facts.parent);
+            return current
+                && content_current
+                && parts_current
+                && previous.formatting_context == facts.context
+                && previous.clip == clip
+                && previous.containing_block == containing;
+        }
         let baseline = facts
             .text
-            .then(|| facts.ascent.map(|ascent| content_box.y + ascent.max(0.0)));
-        let baseline = baseline.flatten();
+            .then(|| self.single_text_baseline(id, text_box))
+            .flatten();
+        if facts.text {
+            let source = self
+                .text_layout(id)
+                .and_then(|_| self.text(id))
+                .map(|text| 0..text.len());
+            if previous
+                .fragments
+                .get(facts.child_count..facts.child_count + 2)
+                .is_none_or(|fragments| fragments.iter().any(|fragment| fragment.source != source))
+            {
+                return false;
+            }
+        }
         if previous.first_baseline != baseline || previous.last_baseline != baseline {
             return false;
         }
@@ -1867,9 +2015,11 @@ impl UiWorld {
         if !retained_projection_current(
             &previous,
             content_box,
+            text_box,
             baseline,
             facts.text,
             facts.child_kind,
+            &component_parts,
         ) {
             return false;
         }
@@ -1888,7 +2038,6 @@ impl UiWorld {
             clips: node.resolved_layout.clips_overflow(),
             scroll_offset: node.scroll_offset,
             text: record_has_text(node),
-            ascent: node.text_metrics.ascent,
             child_count: node.hierarchy.children.len(),
             parent: node.hierarchy.parent,
             border: node.resolved_layout.resolved_border_edges(),
@@ -1938,6 +2087,11 @@ impl UiWorld {
         Arc<[crate::LayoutChildPlacement]>,
         Arc<[crate::LayoutFragment]>,
     )> {
+        // A held child-only snapshot cannot supply text fragments when a
+        // previously empty component gains a label at the same identity.
+        if self.nodes.get(id).is_some_and(record_has_text) {
+            return None;
+        }
         let previous = self.layout_results.get(&id)?;
         let placements = previous.child_placements.as_ref();
         let fragments = previous.fragments.as_ref();
@@ -2264,6 +2418,8 @@ impl UiWorld {
                 stats.local_context_fallbacks,
                 stats.retain_sweeps,
             );
+            counters.inline_reflows += stats.inline_reflows;
+            counters.inline_atomic_measure_requests += stats.inline_atomic_measure_requests;
             counters.dynamic.accumulate(stats.dynamic);
         });
     }
@@ -3307,6 +3463,17 @@ impl UiWorld {
                 record.mount,
             )
         };
+        // Header block space is already represented by Card's title band.
+        // Its text still contributes preferred inline width, not body height.
+        let text_metrics = text_metrics.map(|mut metrics| {
+            if matches!(
+                self.standard_visual_ref(id),
+                Some(StandardVisual::Card { .. })
+            ) {
+                metrics.height = 0.0;
+            }
+            metrics
+        });
         let style = if plain_world
             && mounted == MountState::Mounted
             && !resolved_layout.omits_box()
@@ -3383,18 +3550,19 @@ impl UiWorld {
         &mut self,
         id: StableNodeId,
         context: crate::FormattingContextKind,
-    ) {
+    ) -> bool {
         let Some(record) = self.nodes.get_mut(id) else {
-            return;
+            return false;
         };
         let previous = record.layout_context.replace(context);
         if previous == Some(context) {
-            return;
+            return false;
         }
         record.layout_context_generation = record.layout_context_generation.wrapping_add(1);
         if previous.is_some() {
             self.bump_last_counters(|counters| counters.record_layout_context_transitions(1));
         }
+        previous.is_some()
     }
 
     /// The layout view of `id` (Issue #197): its resolved intent, content,
@@ -3402,15 +3570,7 @@ impl UiWorld {
     /// Built from the records on each call; nothing is retained for it.
     pub fn layout_node(&self, id: StableNodeId) -> Option<crate::LayoutNode> {
         let node = self.nodes.get(id)?;
-        let content = if !node.hierarchy.children.is_empty() {
-            crate::LayoutContentKind::Children
-        } else if self.shows_replaced_content(id) {
-            crate::LayoutContentKind::Replaced
-        } else if record_has_text(node) {
-            crate::LayoutContentKind::Text
-        } else {
-            crate::LayoutContentKind::Empty
-        };
+        let content = self.layout_content_kind(id)?;
         let parent = node
             .hierarchy
             .parent
@@ -3419,7 +3579,11 @@ impl UiWorld {
         let participation = match parent {
             None => Some(crate::ParticipationKind::Root),
             Some(_) => parent_context.map(|context| {
-                crate::ParticipationKind::classify(context, &node.resolved_layout, content)
+                if self.inline_parent(id).is_some() && !node.resolved_layout.omits_box() {
+                    crate::ParticipationKind::AtomicInline
+                } else {
+                    crate::ParticipationKind::classify(context, &node.resolved_layout, content)
+                }
             }),
         };
         Some(crate::LayoutNode {
@@ -3432,6 +3596,26 @@ impl UiWorld {
             context_generation: node.layout_context_generation,
             result_generation: self.layout_result(id).map(|result| result.generation),
         })
+    }
+
+    pub(crate) fn layout_content_kind(&self, id: StableNodeId) -> Option<crate::LayoutContentKind> {
+        let node = self.nodes.get(id)?;
+        Some(if !node.hierarchy.children.is_empty() {
+            crate::LayoutContentKind::Children
+        } else if self.shows_replaced_content(id) {
+            crate::LayoutContentKind::Replaced
+        } else if record_has_text(node) {
+            crate::LayoutContentKind::Text
+        } else {
+            crate::LayoutContentKind::Empty
+        })
+    }
+
+    pub(crate) fn established_layout_context(
+        &self,
+        id: StableNodeId,
+    ) -> Option<crate::FormattingContextKind> {
+        self.nodes.get(id).and_then(established_context)
     }
 
     /// Padding resolved by the layout pass, including its containing block and font.
@@ -3637,9 +3821,17 @@ impl UiWorld {
                 .union(TextDirty::PAINT)
                 .union(TextDirty::GLYPH_PRESENTATION),
         );
-        self.nodes.set_rich_text(id, rich.cloned());
+        let canonical = rich.cloned().map(crate::InlineContent::from);
+        self.nodes.set_rich_text(
+            id,
+            canonical
+                .as_ref()
+                .and_then(crate::InlineContent::rich_text)
+                .cloned(),
+        );
         let mut marks = 0u16;
         if text_changed {
+            self.mark_inline_text_owners(id);
             let rich = rich.expect("text only changes when a value was given");
             self.record_mut(id).text =
                 crate::TextContent::new(std::sync::Arc::clone(rich.shared_text()));
@@ -5493,7 +5685,6 @@ struct LayoutResultFacts {
     clips: bool,
     scroll_offset: ScrollOffset,
     text: bool,
-    ascent: Option<f32>,
     child_count: usize,
     parent: Option<StableNodeId>,
     border: nana_ui_core::PaddingSpec,
@@ -5531,16 +5722,24 @@ fn record_has_text(node: &NodeRecord) -> bool {
 fn retained_projection_current(
     previous: &crate::LayoutResult,
     content_box: LayoutBox,
+    text_box: LayoutBox,
     baseline: Option<f32>,
     text: bool,
     child_kind: crate::LayoutFragmentKind,
+    component_parts: &crate::layout_engine::parts::ContentParts,
 ) -> bool {
     let child_count = previous.child_placements.len();
     let fragments = previous.fragments.as_ref();
     let parts = previous.parts.as_ref();
     let text_fragments = usize::from(text) * 2;
+    let extra_parts = || {
+        component_parts
+            .iter()
+            .flatten()
+            .filter(|part| part.kind != crate::LayoutPartKind::TextContent)
+    };
     if fragments.len() != child_count + text_fragments
-        || parts.len() != child_count + 1 + usize::from(text)
+        || parts.len() != child_count + 1 + usize::from(text) + extra_parts().count()
     {
         return false;
     }
@@ -5558,15 +5757,15 @@ fn retained_projection_current(
             || run.node.is_some()
             || line.index != 0
             || run.index != 0
-            || line.bounds != content_box
-            || run.bounds != content_box
+            || line.bounds != text_box
+            || run.bounds != text_box
             || line.first_baseline != baseline
             || line.last_baseline != baseline
             || run.first_baseline != baseline
             || run.last_baseline != baseline
             || text_part.kind != crate::LayoutPartKind::TextContent
             || text_part.node.is_some()
-            || text_part.bounds != content_box
+            || text_part.bounds != text_box
         {
             return false;
         }
@@ -5576,6 +5775,7 @@ fn retained_projection_current(
     tail.kind == crate::LayoutPartKind::ComponentContent
         && tail.node.is_none()
         && tail.bounds == content_box
+        && parts[index + 1..].iter().eq(extra_parts())
 }
 
 fn union_layout_boxes(left: LayoutBox, right: LayoutBox) -> LayoutBox {
@@ -5829,6 +6029,14 @@ fn layout_style_invalidation(
 
 #[cfg(test)]
 mod issue197;
+#[cfg(test)]
+mod issue199;
+#[cfg(test)]
+mod issue201;
+#[cfg(test)]
+mod issue202;
+#[cfg(test)]
+mod issue205;
 #[cfg(test)]
 mod issue211;
 #[cfg(test)]

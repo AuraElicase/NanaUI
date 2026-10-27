@@ -2,6 +2,158 @@
 
 use super::*;
 
+/// Line construction, BiDi, clusters and ellipsis belong to nana-text.
+/// This adapter only places the same retained atomic nodes its objects name.
+pub(super) fn place_native_inline(
+    id: StableNodeId,
+    children: &[StableNodeId],
+    origin: Point,
+    content: Size,
+    viewport: LayoutViewport,
+    font: f32,
+    nodes: &mut LayoutInputMap<'_>,
+    cache: &mut PassIntrinsicCache,
+    output: &mut HashMap<StableNodeId, LayoutBox>,
+    scope: Option<&ScopeContext<'_>>,
+) -> Result<(), UiWorldError> {
+    cache.execution_stats.inline_reflows += 1;
+    let layout = nodes
+        .world
+        .text_layout(id)
+        .map(|(_, layout)| Arc::clone(layout))
+        .ok_or(UiWorldError::InlineTextEngineRequired(id))?;
+    let bounds = LayoutBox {
+        x: origin.x,
+        y: origin.y,
+        width: content.width,
+        height: content.height,
+    };
+    let parts =
+        nodes
+            .world
+            .solve_content_parts_at(id, bounds, output.get(&id).copied().unwrap_or(bounds));
+    let text_box =
+        super::parts::part_bounds(&parts, crate::LayoutPartKind::TextContent).unwrap_or(bounds);
+    let anchor = nodes.world.native_text_origin(id, text_box, &layout);
+    let positions: HashMap<_, _> = layout
+        .objects
+        .iter()
+        .map(|object| (object.offset, layout.page_rect(object.rect, text_box.width)))
+        .collect();
+    let atoms = Arc::clone(
+        &nodes
+            .world
+            .inline_record(id)
+            .expect("mixed paragraph")
+            .atoms,
+    );
+    let by_node: HashMap<_, _> = atoms.iter().map(|atom| (atom.node, atom.offset)).collect();
+    let mut measured = HashMap::with_capacity(atoms.len());
+    for &child in children {
+        if nodes
+            .style(child)
+            .is_some_and(|style| style.position.is_out_of_flow())
+        {
+            super::placement::place_positioned_child(
+                child,
+                origin,
+                content,
+                viewport,
+                font,
+                nodes.world.layout_writing(id),
+                nodes,
+                cache,
+                output,
+                scope,
+            )?;
+            continue;
+        }
+        cache.execution_stats.inline_atomic_measure_requests += 1;
+        cache.note_child_measured();
+        let size =
+            intrinsic_size_scoped(child, content, None, viewport, font, nodes, cache, scope)?;
+        let writing = nodes.world.layout_writing(id);
+        let (_, block) = writing.logical_size(size.width, size.height);
+        let baseline = if writing.is_vertical() {
+            block
+        } else {
+            cache
+                .baseline(child, crate::Baseline::First)
+                .or_else(|| {
+                    nodes
+                        .baseline_metrics(child, font, Some(content.width), Some(size))
+                        .first
+                })
+                .unwrap_or(block)
+        }
+        .clamp(0.0, block);
+        let margin = nodes
+            .world
+            .inline_object_margin(child, writing.inline_size(content.width, content.height));
+        measured.insert(
+            child,
+            crate::inline_content::atomic_metrics(
+                writing,
+                size.width,
+                size.height,
+                margin,
+                baseline,
+            ),
+        );
+        let rect = by_node
+            .get(&child)
+            .and_then(|offset| positions.get(offset))
+            .copied();
+        // Omitted objects (line-clamp/ellipsis) keep identity and state but
+        // have no physical box in this formatting result.
+        let size = if rect.is_some() {
+            size
+        } else {
+            Size::default()
+        };
+        let offset = rect.map_or(Point::ZERO, |rect| Point {
+            x: rect.x + margin.left,
+            y: rect.y + margin.top,
+        });
+        place_node_scoped(
+            child,
+            Point {
+                x: anchor[0] + offset.x,
+                y: anchor[1] + offset.y,
+            },
+            size,
+            content,
+            viewport,
+            font,
+            nodes,
+            cache,
+            output,
+            scope,
+            None,
+        )?;
+    }
+    nodes.inline_objects.insert(
+        id,
+        atoms
+            .iter()
+            .map(|atom| nana_text::InlineObject {
+                offset: atom.offset,
+                id: atom.node.get(),
+                metrics: measured.get(&atom.node).copied().unwrap_or(
+                    nana_text::InlineObjectMetrics {
+                        width_px: 0.0,
+                        ascent_px: 0.0,
+                        descent_px: 0.0,
+                        envelope: None,
+                    },
+                ),
+            })
+            .collect::<Vec<_>>()
+            .into(),
+    );
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn pack_wrap_lines(
     children: &[StableNodeId],
@@ -28,7 +180,9 @@ pub(super) fn pack_wrap_lines(
         let Some(style) = nodes.style(*child) else {
             continue;
         };
-        let block_break = break_on_blocks && !style.is_inline_level();
+        let block_break = break_on_blocks
+            && nodes.participation(*child, &style, crate::FormattingContextKind::Inline)
+                == crate::ParticipationKind::FlowItem;
         if block_break && !current.is_empty() {
             lines.push(std::mem::take(&mut current));
             line_main = 0.0;

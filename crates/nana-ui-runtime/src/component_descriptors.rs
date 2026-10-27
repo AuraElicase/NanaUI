@@ -28,6 +28,7 @@ descriptors! {
     ROW => { type_id: "nana.row", tags: &["row"] },
     BOX => { type_id: "nana.box", tags: &["box"] },
     DROP_TARGET => { type_id: "nana.drop-target", tags: &["drop-target"] },
+    INLINE_FLOW => { type_id: "nana.inline-flow", tags: &["inline"] },
     TEXT => { type_id: "nana.text", tags: &["text"] },
     RICH_TEXT_VIEW => { type_id: "nana.rich-text", tags: &["rich-text"] },
     RICH_TEXT_EDITOR => { type_id: "nana.rich-text-editor", tags: &["rich-text-editor"] },

@@ -731,6 +731,15 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                         opacity,
                         node_order,
                     );
+                    if let Some(content) = option.rich_content.as_ref()
+                        && let ScenePrimitiveKind::Text { spans, .. } = &mut label.kind
+                    {
+                        *spans = crate::scene::rich_fill_spans(
+                            option.label.content.as_ref(),
+                            content.rich_text(),
+                            std::mem::take(spans),
+                        );
+                    }
                     label.z_index = menu_z;
                     emit(label);
                     if let Some(hint) = &option.hint {

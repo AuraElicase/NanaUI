@@ -974,7 +974,8 @@ pub(super) fn place_grid_2d_items(
         };
         // An aspect ratio fills the height from a definite width, so a
         // horizontal item with one is not stretched down its block axis.
-        let ratio_filled_height = aspect_ratio_is_usable(child_style)
+        let ratio_filled_height = (aspect_ratio_is_usable(child_style)
+            || has_natural_ratio(nodes.world, item.id))
             && child_style
                 .width
                 .is_some_and(LengthSpec::is_definite_declared);

@@ -429,6 +429,9 @@ pub(crate) struct NodeStore {
     /// Application-owned rich text (spans over the node's text), only for
     /// nodes given one with `SetRichText`.
     rich_texts: HashMap<StableNodeId, nana_ui_core::RichText>,
+    /// Only mixed inline paragraphs pay for atomic participation metadata.
+    inline_contents: HashMap<StableNodeId, crate::inline_content::InlineRecord>,
+    inline_parents: HashMap<StableNodeId, StableNodeId>,
     /// Caret and selection of rich text editors.
     rich_editor_marks: HashMap<StableNodeId, crate::RichEditorMarks>,
     /// Per-glyph presentation of rich text nodes.
@@ -521,6 +524,8 @@ impl NodeStore {
         self.languages.remove(&id);
         self.text_scales.remove(&id);
         self.rich_texts.remove(&id);
+        self.set_inline_atoms(id, Arc::from([]));
+        self.inline_parents.remove(&id);
         self.rich_editor_marks.remove(&id);
         self.glyph_presentations.remove(&id);
         if let Some(text) = self.text_nodes.remove(&id) {
@@ -727,6 +732,11 @@ impl NodeStore {
     pub(crate) fn text_node(&self, id: StableNodeId) -> Option<&crate::text_node::TextNodeState> {
         self.text_nodes.get(&id)
     }
+    pub(crate) fn note_text_fragments(&mut self, id: StableNodeId) {
+        if let Some(text) = self.text_nodes.get_mut(&id) {
+            text.fragments_layout = text.layout;
+        }
+    }
 
     /// Records a change to `id`'s text. See [`crate::text_node::TextDirty`].
     pub(crate) fn invalidate_text(&mut self, id: StableNodeId, dirty: crate::text_node::TextDirty) {
@@ -783,10 +793,112 @@ impl NodeStore {
         let text = &self.nodes.get(id)?.text;
         let rich = self.rich_texts.get(&id);
         Some(
-            self.text_nodes
-                .get_mut(&id)?
-                .source_for(&text.value, rich, style),
+            self.text_nodes.get_mut(&id)?.source_for_objects(
+                &text.value,
+                rich,
+                style,
+                self.inline_contents
+                    .get(&id)
+                    .map_or(&[], |inline| inline.objects.as_ref()),
+            ),
         )
+    }
+
+    pub(crate) fn inline_record(
+        &self,
+        id: StableNodeId,
+    ) -> Option<&crate::inline_content::InlineRecord> {
+        self.inline_contents.get(&id)
+    }
+    pub(crate) fn has_inline_content(&self) -> bool {
+        !self.inline_contents.is_empty()
+    }
+    pub(crate) fn inline_parent(&self, id: StableNodeId) -> Option<StableNodeId> {
+        self.inline_parents.get(&id).copied()
+    }
+    pub(crate) fn set_inline_atoms(
+        &mut self,
+        id: StableNodeId,
+        atoms: Arc<[crate::InlineAtomic]>,
+    ) -> bool {
+        if self
+            .inline_contents
+            .get(&id)
+            .is_some_and(|previous| previous.atoms == atoms)
+            || (atoms.is_empty() && !self.inline_contents.contains_key(&id))
+        {
+            return false;
+        }
+        if let Some(previous) = self.inline_contents.get_mut(&id)
+            && previous.atoms.len() == atoms.len()
+            && previous
+                .atoms
+                .iter()
+                .zip(atoms.iter())
+                .all(|(a, b)| (a.offset, a.node) == (b.offset, b.node))
+        {
+            previous.atoms = atoms;
+            return false;
+        }
+        let previous = self.inline_contents.remove(&id).unwrap_or_default();
+        let old: HashMap<_, _> = previous
+            .atoms
+            .iter()
+            .zip(previous.objects.iter())
+            .map(|(atom, object)| (atom.node, object.metrics))
+            .collect();
+        for atom in previous.atoms.iter() {
+            if self.inline_parents.get(&atom.node) == Some(&id) {
+                self.inline_parents.remove(&atom.node);
+            }
+        }
+        if atoms.is_empty() {
+            if self.inline_contents.is_empty() {
+                self.inline_contents = HashMap::new();
+                // A destination already installed earlier in this batch keeps
+                // its reverse binding when an old owner is cleared.
+                if self.inline_parents.is_empty() {
+                    self.inline_parents = HashMap::new();
+                }
+            }
+            return true;
+        }
+        let objects = atoms
+            .iter()
+            .map(|atom| {
+                self.inline_parents.insert(atom.node, id);
+                nana_text::InlineObject {
+                    offset: atom.offset,
+                    id: atom.node.get(),
+                    metrics: old.get(&atom.node).copied().unwrap_or(
+                        nana_text::InlineObjectMetrics {
+                            width_px: 0.0,
+                            ascent_px: 0.0,
+                            descent_px: 0.0,
+                            envelope: None,
+                        },
+                    ),
+                }
+            })
+            .collect::<Vec<_>>()
+            .into();
+        self.inline_contents
+            .insert(id, crate::inline_content::InlineRecord { atoms, objects });
+        true
+    }
+    pub(crate) fn set_inline_objects(
+        &mut self,
+        id: StableNodeId,
+        objects: Arc<[nana_text::InlineObject]>,
+    ) -> bool {
+        let Some(inline) = self.inline_contents.get_mut(&id) else {
+            return false;
+        };
+        if inline.objects == objects {
+            return false;
+        }
+        inline.objects = objects;
+        true
     }
 
     /// Retains `layout` for `id`, replacing what the node held. A node handed
