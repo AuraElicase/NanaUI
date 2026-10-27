@@ -19,11 +19,14 @@ pub(crate) use measure::{
 };
 mod placement;
 use placement::*;
+mod overlay;
+use overlay::*;
 mod inline;
 use inline::*;
 mod flex;
 #[cfg(test)]
 mod inline_scope;
+pub(crate) mod parts;
 use flex::*;
 // These caches use internal numeric identities/constraint bits, not external text keys.
 use hashbrown::HashMap;
@@ -193,6 +196,7 @@ impl RuntimeLayoutEngine {
         let retained = retained.documents.entry(document).or_default();
         // Reset before the full-layout reuse return, which runs no measure or placement.
         retained.execution_stats = LayoutExecutionStats::default();
+        retained.inline_objects.clear();
         retained.last_frontier = LayoutFrontier::default();
         // A viewport the cache was not laid out against: plant the resize's
         // seeds, whichever entry asked for this pass. Memos and plans of boxes
@@ -255,7 +259,7 @@ impl RuntimeLayoutEngine {
         }
         #[cfg(feature = "benchmark")]
         phase.lap(0);
-        let frontier = if force_full {
+        let mut frontier = if force_full {
             LayoutFrontier::default()
         } else {
             // Typed mutation authority path: use the retained dependency index
@@ -286,6 +290,26 @@ impl RuntimeLayoutEngine {
         } else {
             frontier.nodes().clone()
         };
+        // Facts change at a mutation and its metric-owning ancestors. Nodes
+        // reached only because their parent's context/constraint changed keep
+        // compatible intrinsic facts; their used size is still recomputed.
+        let mut metrics_changed = HashSet::new();
+        let mut metric_edges = 0usize;
+        for seed in typed_seeds.iter().filter(|seed| {
+            frontier.is_seed(seed.node) && frontier.measure_nodes().contains(&seed.node)
+        }) {
+            let mut cursor = Some(seed.node);
+            while let Some(id) = cursor {
+                if !metrics_changed.insert(id) {
+                    break;
+                }
+                cursor = world
+                    .parent_id(id)
+                    .filter(|parent| frontier.measure_nodes().contains(parent));
+                metric_edges += usize::from(cursor.is_some());
+            }
+        }
+        frontier.note_dependency_walk(metric_edges);
         retained.frontier_stats = LayoutFrontierStats::from_frontier(&frontier);
         // Used-size memos on the measure frontier are stale. Intrinsic facts
         // stay until publication so an identical recompute does not bump generation.
@@ -349,6 +373,7 @@ impl RuntimeLayoutEngine {
         let scope = ScopeContext {
             affected: &affected,
             measure: frontier.measure_nodes(),
+            metrics_changed: &metrics_changed,
             retained: &*retained,
             reach: &reach,
         };
@@ -446,6 +471,7 @@ impl RuntimeLayoutEngine {
         retained.used_padding.extend(nodes.used_padding.drain());
         retained.far_start.extend(nodes.far_start.drain());
         retained.contexts.extend(nodes.contexts.drain());
+        retained.inline_objects.extend(nodes.inline_objects.drain());
         retained.placements.extend(nodes.placements.drain());
         for (id, plan) in nodes.container_plans.drain() {
             match plan {
@@ -860,6 +886,28 @@ impl RetainedLayoutCache {
             .max()
     }
 
+    pub(crate) fn intrinsic_baseline(&self, document: DocumentId, id: StableNodeId) -> Option<f32> {
+        self.documents
+            .get(&document)?
+            .intrinsic_metrics
+            .by_content
+            .get(&id.get())?
+            .iter()
+            .max_by_key(|(_, metrics)| metrics.generation)?
+            .1
+            .first_baseline
+    }
+    pub(crate) fn take_inline_objects(
+        &mut self,
+        document: DocumentId,
+    ) -> HashMap<StableNodeId, Arc<[nana_text::InlineObject]>> {
+        self.documents
+            .get_mut(&document)
+            .map_or_else(HashMap::new, |cache| {
+                std::mem::take(&mut cache.inline_objects)
+            })
+    }
+
     pub(crate) fn used_padding(
         &self,
         document: DocumentId,
@@ -903,6 +951,7 @@ impl RetainedIntrinsic {
 
 #[derive(Default)]
 struct DocumentLayoutCache {
+    inline_objects: HashMap<StableNodeId, Arc<[nana_text::InlineObject]>>,
     intrinsics: HashMap<StableNodeId, RetainedIntrinsic>,
     /// Content-derived intrinsic facts, independent from retained used sizes.
     intrinsic_metrics: RetainedIntrinsicMetrics,
@@ -2190,6 +2239,7 @@ impl MeasurePlan {
 
 /// On-demand `LayoutInput` cache. A miss loads exactly that id from `UiWorld`.
 struct LayoutInputMap<'a> {
+    inline_objects: HashMap<StableNodeId, Arc<[nana_text::InlineObject]>>,
     world: &'a UiWorld,
     nodes: HashMap<StableNodeId, LayoutInput>,
     /// Effective styles for nodes this pass never materialized into `nodes`.
@@ -2209,7 +2259,7 @@ struct LayoutInputMap<'a> {
     placements: HashMap<StableNodeId, (Point, Size, f32)>,
     used_padding: HashMap<StableNodeId, nana_ui_core::PaddingSpec>,
     far_start: HashMap<StableNodeId, [bool; 2]>,
-    /// Formatting context each container placed this pass ran.
+    /// Formatting context each container measured or placed this pass ran.
     contexts: HashMap<StableNodeId, crate::FormattingContextKind>,
     /// Container plans rebuilt this pass. Merged into the retained cache at the
     /// end; containers that took the fast path record nothing, so their
@@ -2228,8 +2278,25 @@ struct BaselineMetrics {
 }
 
 impl<'a> LayoutInputMap<'a> {
+    /// Execution and inspection consume the same participation mapping. This
+    /// reads only node content metadata; it does not materialize LayoutInput.
+    fn participation(
+        &self,
+        id: StableNodeId,
+        style: &LayoutStyle,
+        parent: crate::FormattingContextKind,
+    ) -> crate::ParticipationKind {
+        crate::ParticipationKind::classify(
+            parent,
+            style,
+            self.world
+                .layout_content_kind(id)
+                .unwrap_or(crate::LayoutContentKind::Empty),
+        )
+    }
     fn new(world: &'a UiWorld) -> Self {
         Self {
+            inline_objects: HashMap::new(),
             world,
             nodes: HashMap::new(),
             styles: RefCell::new(HashMap::new()),
@@ -2297,6 +2364,29 @@ impl<'a> LayoutInputMap<'a> {
         resolved
     }
 
+    /// Whether `id` aligns by its border-box bottom rather than a text
+    /// baseline: a custom renderer, a content image, a skipped replaced
+    /// element or an image viewer. The one rule every context's baseline
+    /// reads, so inline, flex and grid alignment cannot disagree on it.
+    fn aligns_by_bottom_edge(&self, id: StableNodeId, style: &nana_ui_core::LayoutStyle) -> bool {
+        self.world.custom_render(id).is_some()
+            || style.paint.content_image.is_some()
+            || style.paint.skipped_replaced.is_some()
+            || {
+                #[cfg(feature = "image-viewer")]
+                {
+                    matches!(
+                        self.world.standard_visual_ref(id),
+                        Some(crate::StandardVisual::ImageViewer { .. })
+                    )
+                }
+                #[cfg(not(feature = "image-viewer"))]
+                {
+                    false
+                }
+            }
+    }
+
     /// Shared baseline authority for all formatting contexts. Retained
     /// `nana-text` layouts provide first/last line baselines; host-shaped text
     /// falls back to its first-line ascent. Replaced/custom content has an
@@ -2315,23 +2405,14 @@ impl<'a> LayoutInputMap<'a> {
         let font = fonts_of(&style, fallback_font_px).element_px;
         let chrome_top =
             style.resolved_padding_against(inline_base).top + style.resolved_border_width();
-        let replaced = self.world.custom_render(id).is_some()
-            || style.paint.content_image.is_some()
-            || style.paint.skipped_replaced.is_some()
-            || {
-                #[cfg(feature = "image-viewer")]
-                {
-                    matches!(
-                        self.world.standard_visual_ref(id),
-                        Some(crate::StandardVisual::ImageViewer { .. })
-                    )
-                }
-                #[cfg(not(feature = "image-viewer"))]
-                {
-                    false
-                }
-            };
-        if replaced {
+        if matches!(
+            self.world.standard_visual_ref(id),
+            Some(crate::StandardVisual::Card { .. })
+        ) && self.world.text(id).is_none_or(str::is_empty)
+        {
+            return BaselineMetrics::default();
+        }
+        if self.aligns_by_bottom_edge(id, &style) {
             // Replaced content's baseline is its border-box bottom. The
             // measure caller supplies the used extent when it is available;
             // an absent extent remains an explicit fallback for a later query.
@@ -2347,18 +2428,94 @@ impl<'a> LayoutInputMap<'a> {
                 last: block,
             };
         }
+        if matches!(
+            self.world.standard_visual_ref(id),
+            Some(crate::StandardVisual::Card { .. })
+        ) && let Some(used) = used
+        {
+            let padding = style
+                .resolved_padding_against_fonts(inline_base, fonts_of(&style, fallback_font_px));
+            let border = style.resolved_border_edges();
+            let bounds = LayoutBox {
+                x: 0.0,
+                y: 0.0,
+                width: used.width,
+                height: used.height,
+            };
+            let content = crate::layout_result::inset(
+                crate::layout_result::inset(
+                    bounds,
+                    border.top,
+                    border.right,
+                    border.bottom,
+                    border.left,
+                ),
+                padding.top,
+                padding.right,
+                padding.bottom,
+                padding.left,
+            );
+            let parts = self.world.solve_content_parts_at(id, content, bounds);
+            if let Some(header) = parts::part_bounds(&parts, crate::LayoutPartKind::Header) {
+                if let Some((_, layout)) = self.world.text_layout(id) {
+                    if layout.is_vertical() {
+                        return BaselineMetrics::default();
+                    }
+                    let top = self.world.native_text_origin(id, header, layout)[1];
+                    return BaselineMetrics {
+                        first: layout
+                            .lines
+                            .first()
+                            .map(|line| top + line.metrics.baseline_y_px),
+                        last: layout
+                            .lines
+                            .last()
+                            .map(|line| top + line.metrics.baseline_y_px),
+                    };
+                }
+                let baseline = self.world.single_text_baseline(id, header);
+                return BaselineMetrics {
+                    first: baseline,
+                    last: baseline,
+                };
+            }
+        }
         if let Some((_, layout)) = self.world.text_layout(id)
             && !layout.is_vertical()
             && !layout.lines.is_empty()
         {
+            let content_height = used.map_or(layout.physical_size().1, |used| {
+                let padding = style.resolved_padding_against_fonts(
+                    inline_base,
+                    fonts_of(&style, fallback_font_px),
+                );
+                let border = style.resolved_border_edges();
+                (used.height - padding.top - padding.bottom - border.top - border.bottom).max(0.0)
+            });
+            let alignment = self
+                .world
+                .node_style(id)
+                .map_or(crate::TextVerticalAlignment::Top, |style| {
+                    style.text_vertical_alignment
+                });
+            let top = crate::text_layout_origin(
+                LayoutBox {
+                    x: 0.0,
+                    y: chrome_top,
+                    width: 0.0,
+                    height: content_height,
+                },
+                alignment,
+                layout.physical_size().1,
+            )[1];
             let first = layout
                 .lines
                 .first()
-                .map(|line| chrome_top + line.metrics.baseline_y_px);
+                .map(|line| top + line.metrics.baseline_y_px);
             let last = layout
                 .lines
                 .last()
-                .map(|line| chrome_top + line.metrics.baseline_y_px);
+                .map(|line| top + line.metrics.baseline_y_px);
             return BaselineMetrics { first, last };
         }
         if matches!(
@@ -2405,24 +2562,10 @@ impl<'a> LayoutInputMap<'a> {
             .get(&id)
             .map_or_else(Default::default, |node| node.writing);
         let (_, block_extent) = writing.logical_size(used.width, used.height);
-        let replaced = self.world.custom_render(id).is_some()
-            || self.style(id).is_some_and(|style| {
-                style.paint.content_image.is_some() || style.paint.skipped_replaced.is_some()
-            })
-            || {
-                #[cfg(feature = "image-viewer")]
-                {
-                    matches!(
-                        self.world.standard_visual_ref(id),
-                        Some(crate::StandardVisual::ImageViewer { .. })
-                    )
-                }
-                #[cfg(not(feature = "image-viewer"))]
-                {
-                    false
-                }
-            };
-        if replaced {
+        if self
+            .style(id)
+            .is_some_and(|style| self.aligns_by_bottom_edge(id, &style))
+        {
             // Replaced/custom nodes align to their bottom edge by default.
             return block_extent.max(0.0);
         }
@@ -2478,6 +2621,7 @@ fn collapse_omitted_boxes(
 struct ScopeContext<'a> {
     affected: &'a HashSet<StableNodeId>,
     measure: &'a HashSet<StableNodeId>,
+    metrics_changed: &'a HashSet<StableNodeId>,
     retained: &'a DocumentLayoutCache,
     /// Which boxes lead to an affected node, built once per pass.
     reach: &'a AffectedIndex,
@@ -2627,9 +2771,9 @@ impl Point {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-struct Size {
-    width: f32,
-    height: f32,
+pub(crate) struct Size {
+    pub(crate) width: f32,
+    pub(crate) height: f32,
 }
 
 /// All non-content inputs that can change a used measurement.  The containing
@@ -2725,6 +2869,8 @@ pub(crate) struct LayoutExecutionStats {
     /// Children a container walk measured, in its measure and in its
     /// placement: the scan that makes a dirty frame O(N) when a plan misses.
     pub children_measured: usize,
+    pub inline_reflows: usize,
+    pub inline_atomic_measure_requests: usize,
     /// Containers that placed their children but could not record a plan,
     /// so they walk them again on every later pass.
     pub containers_uncacheable: usize,
@@ -3040,7 +3186,7 @@ impl PassIntrinsicCache {
 }
 
 impl Size {
-    fn new(width: f32, height: f32) -> Self {
+    pub(crate) fn new(width: f32, height: f32) -> Self {
         Self {
             width: finite_extent(width),
             height: finite_extent(height),
@@ -3341,6 +3487,15 @@ fn aspect_ratio_is_usable(style: &nana_ui_core::LayoutStyle) -> bool {
     style.aspect_ratio.is_some_and(|r| r.is_finite() && r > 0.0)
 }
 
+/// Whether `id` shows replaced content whose resource reported a natural
+/// size: a preferred aspect ratio of its own, which stretch alignment keeps
+/// as it keeps a declared `aspect-ratio` (Issue #202).
+fn has_natural_ratio(world: &UiWorld, id: StableNodeId) -> bool {
+    world
+        .replaced_natural_size(id)
+        .is_some_and(|natural| natural.width > 0.0 && natural.height > 0.0)
+}
+
 /// After stretch (or a flexed used width), fill `height:auto` from the used width.
 fn fill_auto_height_from_aspect_ratio(
     style: &nana_ui_core::LayoutStyle,
@@ -3367,11 +3522,19 @@ fn fill_auto_height_from_aspect_ratio(
 /// leaves it: any size it declares but `auto`, which stretches as unset
 /// does (CSS). A content-sized keyword (`Shrink`, `fit-content`) keeps the
 /// content's size.
-fn cross_axis_is_definite(style: &nana_ui_core::LayoutStyle, direction: FlexDirection) -> bool {
+/// `natural_ratio` is [`has_natural_ratio`]: a replaced box's own ratio
+/// transfers its block size as a declared `aspect-ratio` does.
+fn cross_axis_is_definite(
+    style: &nana_ui_core::LayoutStyle,
+    direction: FlexDirection,
+    natural_ratio: bool,
+) -> bool {
     let declared = |spec: Option<LengthSpec>| spec.is_some_and(|spec| spec != LengthSpec::Auto);
     match direction {
         // Transferred block size from a definite used width + `aspect-ratio`.
-        FlexDirection::Row => declared(style.height) || aspect_ratio_is_usable(style),
+        FlexDirection::Row => {
+            declared(style.height) || aspect_ratio_is_usable(style) || natural_ratio
+        }
         FlexDirection::Column => declared(style.width),
     }
 }

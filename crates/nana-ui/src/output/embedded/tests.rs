@@ -24,6 +24,7 @@ fn viewport() -> ScenePaintViewport {
 
 fn node(id: u64, bounds: [f32; 4], background: Option<[f32; 4]>) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: Default::default(),
         id: StableNodeId::new(id).unwrap(),

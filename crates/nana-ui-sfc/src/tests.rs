@@ -915,3 +915,18 @@ let hebrew = Locale::parse("he");
         assert_eq!(error.line, 2, "{template}: {error}");
     }
 }
+
+#[test]
+fn native_inline_interpolation_and_span_lower_without_text_wrapper_components() {
+    let out=compile(&[("InlinePage.vue",r#"<script setup lang="rust">
+let value = signal(String::from("42%"));
+</script>
+<template><Inline>CPU <Button>详情</Button><Span :style="nana_ui_core::RichSpanStyle::new().size(18.0)">{{ value }}</Span></Inline></template>"#)]).unwrap();
+    let code = squash(&out.code);
+    assert!(code.contains("view::inline()"), "{code}");
+    assert!(code.contains(".span("), "{code}");
+    assert!(
+        !code.contains("view::text("),
+        "inline strings never become retained Text children: {code}"
+    );
+}

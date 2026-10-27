@@ -177,6 +177,7 @@ fn build_nodes(nodes: usize) -> Vec<ExtractedNode> {
 
 fn leaf(value: u64, shade: f32) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: nana_ui_core::ChromeRadii::default(),
         id: id(value),

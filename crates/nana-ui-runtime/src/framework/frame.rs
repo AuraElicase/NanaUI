@@ -410,6 +410,7 @@ impl AppContext {
             let mut phase = crate::layout_engine::plan_stats::PhaseClock::start();
             let mut mutations = MutationQueue::new();
             let mut scope = Vec::with_capacity(layouts.len());
+            let mut context_children = Vec::new();
             for (id, layout) in layouts {
                 scope.push(id);
                 let padding_changed = self
@@ -424,8 +425,10 @@ impl AppContext {
                 // A different context places the children differently but can
                 // leave every box where it was; the publish below rebuilds the
                 // fragments under the new kind either way.
-                if let Some(context) = self.layout_cache.formatting_context(document, id) {
-                    self.world.write_formatting_context(id, context);
+                if let Some(context) = self.layout_cache.formatting_context(document, id)
+                    && self.world.write_formatting_context(id, context)
+                {
+                    context_children.extend_from_slice(self.world.child_ids(id));
                 }
                 if padding_changed
                     || far_start_changed
@@ -436,6 +439,16 @@ impl AppContext {
             }
             #[cfg(feature = "benchmark")]
             phase.lap(10);
+            // Participation is published even when a context transition leaves
+            // a fixed child's border box unchanged and placement reuses it.
+            if !context_children.is_empty() {
+                let mut included: crate::NodeSet = scope.iter().copied().collect();
+                for child in context_children {
+                    if included.insert(child) {
+                        scope.push(child);
+                    }
+                }
+            }
             let mut settings_rows = Vec::new();
             let mut terminal_sizes = Vec::new();
             let mut adaptive_editors = Vec::new();
@@ -469,6 +482,12 @@ impl AppContext {
             // RuntimeLayout provenance here.
             self.world
                 .publish_layout_results(&scope, crate::LayoutResultSource::RuntimeLayout);
+            let inline_objects = self.layout_cache.take_inline_objects(document);
+            self.world.sync_inline_metrics(
+                &scope,
+                |id| self.layout_cache.intrinsic_baseline(document, id),
+                inline_objects,
+            );
             #[cfg(feature = "benchmark")]
             phase.lap(13);
             self.last_layout_scope = scope;

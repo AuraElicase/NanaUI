@@ -156,6 +156,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--check-schema", action="store_true")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--evaluate-inline-cost",type=Path,help="Judge a fixed-machine before/after component-cost manifest")
     parser.add_argument(
         "--evaluate-invariants",
         nargs="+",
@@ -182,9 +183,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     args = parser.parse_args(argv)
     root = args.repo_root.resolve()
-    if args.self_test and (args.evaluate_invariants or args.evaluate_relative):
+    if args.self_test and (args.evaluate_invariants or args.evaluate_relative or args.evaluate_inline_cost):
         parser.error("use --self-test or an evaluate flag, not both")
-    if args.evaluate_invariants and args.evaluate_relative:
+    if sum(bool(flag) for flag in (args.evaluate_invariants,args.evaluate_relative,args.evaluate_inline_cost))>1:
         parser.error("use --evaluate-invariants or --evaluate-relative, not both")
     if args.self_test:
         errors = self_test(root)
@@ -194,6 +195,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return EXIT_ERROR
         print("perf contract self-test: OK")
         return EXIT_OK
+    if args.evaluate_inline_cost:
+        from .comparison import evaluate_inline_cost_manifest
+        try:
+            summary, code = evaluate_inline_cost_manifest(args.evaluate_inline_cost.resolve())
+        except (ValueError, OSError, TypeError, KeyError) as exc:
+            print(str(exc),file=sys.stderr)
+            return EXIT_ERROR
+        dump_json(args.output,summary)
+        return code
     if args.evaluate_invariants:
         try:
             summary, code = evaluate_runner_invariant_paths(

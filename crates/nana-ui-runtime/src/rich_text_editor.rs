@@ -985,7 +985,7 @@ impl ComponentView for RichTextEditor {
             mutations.set_scroll_offset(id, self.scroll_offset);
         }
         let (display, marks) = self.display();
-        if world.rich_text(id) != Some(&display) {
+        if world.inline_content(id).as_ref() != Some(&crate::InlineContent::from(display.clone())) {
             mutations.set_rich_text(id, display);
         }
         if world.rich_editor_marks(id) != Some(&marks) {

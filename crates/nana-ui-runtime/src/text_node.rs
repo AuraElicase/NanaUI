@@ -258,6 +258,7 @@ pub(crate) struct TextNodeState {
     stamp: Option<TextStamp>,
     /// The layout this node retains in its world's layout store, or null.
     pub layout: TextLayoutId,
+    pub fragments_layout: TextLayoutId,
     /// The language the node last resolved in, and whether a language change
     /// invalidated it since: together they say whether that change was one
     /// the text depends on.
@@ -398,11 +399,22 @@ impl TextNodeState {
     /// it becomes the source's emphasis ranges; a source holding them is also
     /// rebuilt when the constraint revision moves. Paint and presentation
     /// fields never reach the source.
+    #[cfg(test)]
     pub fn source_for(
         &mut self,
         text: &str,
         rich: Option<&RichText>,
         base: &ComputedStyle,
+    ) -> (&TextSource, bool) {
+        self.source_for_objects(text, rich, base, &[])
+    }
+
+    pub fn source_for_objects(
+        &mut self,
+        text: &str,
+        rich: Option<&RichText>,
+        base: &ComputedStyle,
+        objects: &[nana_text::InlineObject],
     ) -> (&TextSource, bool) {
         let rich = rich.filter(|rich| rich.text() == text);
         let emphasised = !base.text_emphasis.style.is_none()
@@ -423,11 +435,12 @@ impl TextNodeState {
         let revision = self.revisions.content;
         // An object's box and an emphasis mark are layout inputs, so a source
         // holding either is rebuilt when the constraint revision moves too.
-        let layout_inputs = emphasised
+        let layout_inputs = !objects.is_empty()
+            || emphasised
             || shaped.is_some_and(|rich| {
                 !rich.objects().is_empty() || !rich.paragraph_alignments().is_empty()
             });
-        let shape = if shaped.is_none() && !emphasised {
+        let shape = if shaped.is_none() && !emphasised && objects.is_empty() {
             0
         } else if layout_inputs {
             (self.revisions.shape ^ self.revisions.constraint.rotate_left(16)) | 1 << 31
@@ -500,6 +513,11 @@ impl TextNodeState {
                     &base.text_emphasis,
                     base.writing_mode.is_vertical(),
                 ));
+            }
+            if !objects.is_empty() {
+                let mut combined = source.objects().to_vec();
+                combined.extend_from_slice(objects);
+                source.set_objects(combined);
             }
             self.source = Some(Box::new((revision, shape, source)));
         }

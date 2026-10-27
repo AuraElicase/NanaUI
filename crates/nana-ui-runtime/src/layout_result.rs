@@ -36,6 +36,9 @@ pub struct LayoutFragment {
     pub index: usize,
     pub first_baseline: Option<f32>,
     pub last_baseline: Option<f32>,
+    /// Logical source bytes for native text/atomic fragments. Paint-only span
+    /// boundaries do not introduce extra shaping or physical fragments.
+    pub source: Option<std::ops::Range<usize>>,
 }
 
 impl LayoutFragment {
@@ -47,6 +50,7 @@ impl LayoutFragment {
             index: 0,
             first_baseline: None,
             last_baseline: None,
+            source: None,
         }
     }
 
@@ -58,6 +62,7 @@ impl LayoutFragment {
             index: 0,
             first_baseline: None,
             last_baseline: None,
+            source: None,
         }
     }
 }
@@ -73,9 +78,18 @@ pub enum LayoutPartKind {
     ScrollViewport,
     TextContent,
     ChildPlacement,
+    LeadingContent,
+    TrailingContent,
+    Hint,
+    Spinner,
+    Note,
+    Detail,
+    Label,
+    Value,
+    Header,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayoutPart {
     pub kind: LayoutPartKind,
     pub node: Option<StableNodeId>,
@@ -137,6 +151,8 @@ pub struct LayoutResult {
     /// The formatting context the node laid its children (or its own text)
     /// out in (Issue #197). It decides the kind of every child fragment.
     pub formatting_context: Option<FormattingContextKind>,
+    /// This retained node's participation in its parent's current context.
+    pub participation: Option<crate::ParticipationKind>,
     pub dependency_generation: u64,
     pub generation: u64,
     pub source: LayoutResultSource,
@@ -173,6 +189,7 @@ impl LayoutResult {
             containing_block: None,
             dependencies: Arc::from([]),
             formatting_context: None,
+            participation: None,
             dependency_generation: 0,
             generation: 0,
             source: LayoutResultSource::CompatibilityWrite,
@@ -196,6 +213,7 @@ impl LayoutResult {
             && self.containing_block == other.containing_block
             && self.dependencies == other.dependencies
             && self.formatting_context == other.formatting_context
+            && self.participation == other.participation
     }
 
     /// Classify the externally visible result change for dependency-aware
@@ -306,7 +324,10 @@ impl LayoutResult {
                 .iter()
                 .zip(other.fragments.iter())
                 .any(|(left, right)| {
-                    left.kind != right.kind || left.node != right.node || left.index != right.index
+                    left.kind != right.kind
+                        || left.node != right.node
+                        || left.index != right.index
+                        || left.source != right.source
                 });
         let part_topology_changed = self.parts.len() != other.parts.len()
             || self
@@ -314,7 +335,8 @@ impl LayoutResult {
                 .iter()
                 .zip(other.parts.iter())
                 .any(|(left, right)| left.kind != right.kind || left.node != right.node);
-        if self.clip != other.clip
+        if self.participation != other.participation
+            || self.clip != other.clip
             || self.containing_block != other.containing_block
             || self.dependencies != other.dependencies
             || child_topology_changed

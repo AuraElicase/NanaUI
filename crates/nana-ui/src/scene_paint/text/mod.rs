@@ -4126,12 +4126,16 @@ fn text_box_origin(
     vertical: TextVerticalAlignment,
     laid_out_height: f32,
 ) -> [f32; 2] {
-    let top = match vertical {
-        TextVerticalAlignment::Top => bounds.y,
-        TextVerticalAlignment::Center => bounds.y + (bounds.height - laid_out_height) * 0.5,
-        TextVerticalAlignment::Bottom => bounds.y + bounds.height - laid_out_height,
-    };
-    [bounds.x, top]
+    nana_ui_runtime::text_layout_origin(
+        nana_ui_runtime::LayoutBox {
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+        },
+        vertical,
+        laid_out_height,
+    )
 }
 
 fn opentype_disc(word_break: nana_ui_core::WordBreakSpec) -> u8 {

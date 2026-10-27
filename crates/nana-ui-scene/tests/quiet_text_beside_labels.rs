@@ -101,3 +101,81 @@ fn a_long_select_menu_keeps_every_row_and_its_hints() {
         "the field's hint and its menu row's: {texts:?}"
     );
 }
+
+/// The fill spans painted over `text` for `node`.
+fn spans_of(
+    document: &RuntimeDocument,
+    node: StableNodeId,
+    text: &str,
+) -> Vec<nana_ui_scene::SceneTextSpan> {
+    document
+        .scene()
+        .primitives()
+        .filter(|primitive| primitive.node == node)
+        .find_map(|primitive| match &primitive.kind {
+            ScenePrimitiveKind::Text { content, spans, .. } if content.as_ref() == text => {
+                Some(spans.clone())
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{text} in {:?}", texts(document, node)))
+}
+
+#[test]
+fn styled_option_rows_paint_their_fill_spans_beside_their_hints() {
+    use nana_ui_core::{PaintColor, RichSpanStyle, RichText};
+    let red = PaintColor::Srgb {
+        rgba: [1.0, 0.0, 0.0, 1.0],
+    };
+    let styled = RichText::new("Red one").with_span(0..3, RichSpanStyle::new().color(red));
+
+    let mut document = RuntimeDocument::new(DocumentId::new(1).unwrap());
+    let mut select = Select::new(Some("plain")).size(ControlSize::Small);
+    select.options = vec![
+        SelectOption::new("plain", "Plain"),
+        SelectOption::new("red", "ignored")
+            .content(styled.clone())
+            .hint("H"),
+    ];
+    assert_eq!(select.options[1].label.as_ref(), "Red one");
+    let select = mount(&mut document, select);
+    document.context_mut().toggle_select(select).unwrap();
+    flush(&mut document);
+    let spans = spans_of(&document, select.stable_id(), "Red one");
+    assert!(
+        spans
+            .iter()
+            .any(|span| (span.start, span.end, span.color) == (0, 3, red)),
+        "{spans:?}"
+    );
+    assert!(texts(&document, select.stable_id()).contains(&"H".to_owned()));
+
+    let menu = mount(
+        &mut document,
+        nana_ui_runtime::ContextMenu::new(24.0, 36.0)
+            .items([nana_ui_runtime::ContextMenuItem::new("red", "ignored")
+                .content(styled)
+                .hint("Ctrl+R")])
+            .open(true),
+    );
+    let spans = spans_of(&document, menu.stable_id(), "Red one");
+    assert!(
+        spans
+            .iter()
+            .any(|span| (span.start, span.end, span.color) == (0, 3, red)),
+        "{spans:?}"
+    );
+    // The hint is its own quieter text, not folded into the label.
+    let texts = texts(&document, menu.stable_id());
+    assert!(texts.contains(&"Ctrl+R".to_owned()), "{texts:?}");
+    assert!(!texts.iter().any(|text| text.contains('·')), "{texts:?}");
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "option rows paint fill colour only")]
+fn option_rows_refuse_spans_they_cannot_shape() {
+    use nana_ui_core::{RichSpanStyle, RichText};
+    let _ = SelectOption::new("big", "Big")
+        .content(RichText::new("Big").with_span(0..3, RichSpanStyle::new().size(20.0)));
+}

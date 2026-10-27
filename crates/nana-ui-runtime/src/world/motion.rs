@@ -396,12 +396,12 @@ impl UiWorld {
     }
 
     pub(crate) fn motion_blocks_input(&self, id: StableNodeId) -> bool {
-        if self.closing_surfaces.is_empty() {
+        if self.closing_surfaces.is_empty() && !self.nodes.has_inline_content() {
             return false;
         }
         let mut current = Some(id);
         while let Some(id) = current {
-            if self.surface_closing(id) {
+            if self.surface_closing(id) || self.inline_box_omitted(id) {
                 return true;
             }
             current = self.parent_id(id);

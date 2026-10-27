@@ -936,9 +936,9 @@ pub enum StandardVisual {
         leading: Option<StableNodeId>,
         content: Option<StableNodeId>,
         trailing: Option<StableNodeId>,
-        /// 紧跟主文本的次要文字；几何端在主文本之后生成小字号 muted 文本区。
+        /// 紧跟主文本的次要文字；Foundation Note part 提供位置。
         note: Option<Arc<str>>,
-        /// 单行补充信息；几何端生成右对齐的小字号 muted 文本区。
+        /// 单行补充信息；Foundation Detail part 提供行尾位置。
         detail: Option<Arc<str>>,
     },
     StatusBadge {
@@ -1238,9 +1238,13 @@ impl MenuItemMark {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SelectOptionData {
     pub label: Arc<str>,
+    /// Fill-colour spans over [`Self::label`], whose text it repeats. Rows
+    /// are data, not retained paragraphs: layout budgets `label`, and spans
+    /// that shape, decorate or embed children do not apply here.
+    pub content: Option<Arc<crate::InlineContent>>,
     pub hint: Option<Arc<str>>,
     pub disabled: bool,
     pub checked: bool,
@@ -1930,6 +1934,19 @@ pub enum ComponentGeometry {
     },
 }
 
+impl ComponentGeometry {
+    /// Indexed access shared by select and context-menu row projections.
+    pub fn menu_option(&self, index: usize) -> Option<&SelectOptionGeometry> {
+        match self {
+            Self::Select {
+                menu: Some(menu), ..
+            } => menu.option(index),
+            Self::MenuSurface { options, .. } => options.get(index),
+            _ => None,
+        }
+    }
+}
+
 /// An open Select, Dropdown or SearchDropdown menu.
 ///
 /// Its rows keep their places in `options`, one per option the menu lists,
@@ -1953,6 +1970,14 @@ pub struct SelectMenuGeometry {
     pub background: [f32; 4],
     pub border: [f32; 4],
     pub options: Vec<SelectOptionGeometry>,
+}
+
+impl SelectMenuGeometry {
+    /// Returns the retained row at its logical option index. Rows keep their
+    /// option order even while their bounds move with scrolling or menu fit.
+    pub fn option(&self, index: usize) -> Option<&SelectOptionGeometry> {
+        self.options.get(index)
+    }
 }
 
 /// How an open Select, Dropdown or SearchDropdown menu is scrolled and how
@@ -2006,6 +2031,8 @@ pub struct SelectMenuDrag {
 pub struct SelectOptionGeometry {
     pub bounds: LayoutBox,
     pub label: ComponentTextRegion,
+    /// Canonical rich label content; row chrome stays independent of its paint.
+    pub rich_content: Option<Arc<crate::InlineContent>>,
     /// The option's hint at the row's end, quieter than the label. A select
     /// menu's row scrolled out of sight has none: nothing draws it.
     pub hint: Option<ComponentTextRegion>,
@@ -4611,6 +4638,9 @@ pub struct RichEditorMarks {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtractedNode {
+    /// Shared canonical geometry, including content/viewport/scroll extents.
+    /// Scrolling keeps the logical layout snapshot and its generation intact.
+    pub layout_result: Option<Arc<crate::LayoutResult>>,
     pub id: StableNodeId,
     /// Shared with `UiWorld` so idle extract is an Arc bump, not a `NodeKind` clone.
     pub kind: Arc<NodeKind>,

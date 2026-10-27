@@ -7612,3 +7612,51 @@ fn flex_line_replay_takes_every_change_an_item_brings() {
         );
     }
 }
+
+#[test]
+fn issue199_inline_span_keeps_atomic_descendants_and_unboxes_only_real_blocks() {
+    let atomic = StyleLayoutNode {
+        id: "atom".into(),
+        style: LayoutStyle {
+            display: Some(DisplaySpec::InlineBlock),
+            width: Some(LengthSpec::Px(40.0)),
+            height: Some(LengthSpec::Px(20.0)),
+            ..Default::default()
+        },
+        children: Vec::new(),
+        text: None,
+    };
+    let span = |id: &str, child| StyleLayoutNode {
+        id: id.into(),
+        style: LayoutStyle {
+            display: Some(DisplaySpec::Inline),
+            ..Default::default()
+        },
+        children: vec![child],
+        text: None,
+    };
+    let root = |child| StyleLayoutNode {
+        id: "root".into(),
+        style: LayoutStyle {
+            display: Some(DisplaySpec::Block),
+            width: Some(LengthSpec::Px(200.0)),
+            ..Default::default()
+        },
+        children: vec![child],
+        text: None,
+    };
+    let boxes = box_map(&root(span("span", atomic.clone())), 200.0, 100.0);
+    assert_eq!(
+        boxes["span"].width, 40.0,
+        "an atomic inline child is not a block to hoist"
+    );
+    let mut block = atomic;
+    block.id = "block".into();
+    block.style.display = Some(DisplaySpec::Block);
+    let boxes = box_map(&root(span("outer", span("inner", block))), 200.0, 100.0);
+    assert_eq!(boxes["block"].width, 40.0);
+    assert_eq!(
+        boxes["root"].height, 20.0,
+        "a block nested through spans remains in its outer flow"
+    );
+}

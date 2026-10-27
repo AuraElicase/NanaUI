@@ -10,7 +10,7 @@ use super::node::{El, widget};
 use super::prop::{FieldWrite, IntoProp};
 use super::reactive::Signal;
 use crate::{
-    ActionMenu, ActionMenuItem, ColorChanged, ColorField, ListItemRole, SizeField,
+    ActionMenu, ActionMenuItem, ColorChanged, ColorField, InlineContent, ListItemRole, SizeField,
     SizeFieldChanged, SizePreset, TabsEvent, TextSelection, ThumbnailState, TreeNode, TreeView,
 };
 use crate::{
@@ -249,6 +249,12 @@ macro_rules! controls {
             }
         }
     )*};
+    (@write inline $target:ident, $value:ident, $field:ident) => {
+        *$target=$target.clone().content($value)
+    };
+    (@differs inline $target:ident, $value:ident, $field:ident) => {
+        *$target != $target.clone().content($value.clone())
+    };
     (@write set $target:ident, $value:ident, $field:ident) => {
         $target.$field = $value
     };
@@ -818,6 +824,12 @@ trait FieldText: Sized {
     fn parse(text: &str) -> Result<Self, String>;
 }
 
+impl FieldText for InlineContent {
+    fn parse(text: &str) -> Result<Self, String> {
+        Ok(text.into())
+    }
+}
+
 impl FieldText for String {
     fn parse(text: &str) -> Result<Self, String> {
         Ok(text.to_owned())
@@ -987,6 +999,7 @@ pub(crate) fn inspect_control(
                 ));
             }
         )*};
+        (@read inline $control:ident, $field:ident) => { &$control.content };
         (@read set $control:ident, $field:ident) => { &$control.$field };
         (@read text_state $control:ident, $field:ident) => { &$control.state.value };
         (@read assign $control:ident, $field:ident) => { $control.$field() };

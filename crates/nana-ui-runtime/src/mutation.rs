@@ -64,6 +64,10 @@ pub enum UiMutation {
         id: StableNodeId,
         rich: Option<nana_ui_core::RichText>,
     },
+    SetInlineContent {
+        id: StableNodeId,
+        content: crate::InlineContent,
+    },
     /// The language a node names for itself (`lang`). Its subtree inherits
     /// it; see [`MutationQueue::set_language`].
     SetLanguage {
@@ -359,6 +363,20 @@ impl MutationQueue {
 
     pub fn set_text(&mut self, id: StableNodeId, text: TextContent) {
         self.mutations.push(UiMutation::SetText { id, text });
+    }
+
+    /// Sets canonical inline content. Atomic ids must be direct retained
+    /// children after this batch. This low-level mutation does not create or
+    /// destroy components; AppContext's content reconciliation owns lifetime.
+    pub fn set_inline_content(
+        &mut self,
+        id: StableNodeId,
+        content: impl Into<crate::InlineContent>,
+    ) {
+        self.mutations.push(UiMutation::SetInlineContent {
+            id,
+            content: content.into().normalized(),
+        });
     }
 
     /// Give `id` rich text: the node's text becomes `rich`'s, and its spans

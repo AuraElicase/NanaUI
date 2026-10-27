@@ -1017,6 +1017,25 @@ def validate_all_scenarios(root: Path | None = None) -> list[str]:
     errors.extend(_validate_theme_ids(catalog, base))
     errors.extend(_validate_named_id_list(catalog, base, key="nana_output_ids", must_stay_out_of_harness=True))
     errors.extend(_validate_named_id_list(catalog, base, key="nana_transport_ids", must_stay_out_of_harness=True))
+    # Layout's structural gates share WorkCounters and the existing cargo
+    # fixtures. They are not synthetic timing scenarios or cross-toolkit rows.
+    layout_gates = catalog.get("nana_layout_gates")
+    if not isinstance(layout_gates, list) or not layout_gates:
+        errors.append("catalog must register nana_layout_gates")
+    else:
+        seen_layout_gates: set[str] = set()
+        for gate in layout_gates:
+            gate_id = gate.get("id")
+            if not gate_id or gate_id in seen_layout_gates:
+                errors.append(f"invalid or duplicate layout gate: {gate_id}")
+            seen_layout_gates.add(gate_id)
+            source = (root or REPO_ROOT) / gate.get("source", "")
+            test_filter = gate.get("filter", "")
+            if not source.is_file() or not test_filter or f"fn {test_filter}" not in source.read_text(encoding="utf-8"):
+                errors.append(f"layout gate {gate_id} has no matching test source")
+            for counter in gate.get("counters", []):
+                if counter not in WORK_COUNTER_KEYS:
+                    errors.append(f"layout gate {gate_id} uses unknown WorkCounters field: {counter}")
     issue12 = catalog.get("issue12") if isinstance(catalog.get("issue12"), Mapping) else {}
     same = list(issue12.get("same_scenario_ids") or [])
     unsupported = list(issue12.get("unsupported_ids") or [])
@@ -1067,6 +1086,8 @@ WORK_COUNTER_KEYS = (
     "layout_full_document_fallbacks",
     "layout_suffixes_replayed",
     "layout_children_measured",
+    "inline_reflows",
+    "inline_atomic_measure_requests",
     "layout_containers_uncacheable",
     "layout_result_children_visited",
     "layout_placement_plans_reused",
@@ -1076,6 +1097,13 @@ WORK_COUNTER_KEYS = (
     "layout_scratch_entries",
     "layout_scratch_bytes",
     "intrinsic_measure_requests",
+    "layout_context_transitions",
+    "intrinsic_measure_cache_hits",
+    "intrinsic_measure_cache_misses",
+    "intrinsic_generation_bumps",
+    "baseline_queries",
+    "cross_context_measure_hits",
+    "cross_context_measure_misses",
     "intrinsic_measure_full_subtrees",
     "constraint_change_seeds",
     "constraint_dependents_considered",

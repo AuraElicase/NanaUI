@@ -752,4 +752,8 @@ impl LayoutFrontier {
     pub(crate) fn note_full_document_fallback(&mut self) {
         self.full_document_fallbacks = self.full_document_fallbacks.saturating_add(1);
     }
+
+    pub(crate) fn note_dependency_walk(&mut self, edges: usize) {
+        self.dependency_edges_visited = self.dependency_edges_visited.saturating_add(edges);
+    }
 }

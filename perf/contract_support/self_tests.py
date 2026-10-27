@@ -1551,4 +1551,6 @@ def self_test(root: Path | None = None) -> list[str]:
         if "busy_probe_frames" not in key_error_reason(exc):
             errors.append(f"stuffed idle-0 KeyError should name busy_probe_frames: {exc}")
     errors.extend(_self_test_section_8_1_runner_invariants(root))
+    from .inline_cost_tests import self_test_inline_cost
+    errors.extend(self_test_inline_cost())
     return errors

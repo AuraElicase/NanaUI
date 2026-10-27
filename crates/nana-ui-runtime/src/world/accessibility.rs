@@ -57,7 +57,7 @@ impl UiWorld {
             if record.scroll_offset != ScrollOffset::default()
                 || style.transform.is_some()
                 || style.transform_3d.is_some()
-                || style.position == PositionSpec::Fixed
+                || matches!(style.position, PositionSpec::Fixed | PositionSpec::Sticky)
                 || style.css_perspective.is_some()
                 || style.preserve_3d
             {
@@ -184,7 +184,7 @@ impl UiWorld {
                 blocks_3d = false;
             }
             let local = self.input_local_scene_transform(node, &layout, bounds, blocks_3d);
-            cumulative = then_hit(cumulative, local);
+            cumulative = then_hit(cumulative, self.with_sticky_translation(node, local));
             let own = cumulative;
             let scroll = record.scroll_offset;
             cumulative = then_hit(
@@ -266,7 +266,7 @@ impl UiWorld {
             memo.hidden.insert(id, false);
             return false;
         };
-        if node.accessibility.hidden {
+        if node.accessibility.hidden || self.inline_box_omitted(id) {
             memo.hidden.insert(id, true);
             return true;
         }
@@ -285,7 +285,8 @@ impl UiWorld {
             .clone()
             .filter(|label| !label.is_empty())
             .or_else(|| {
-                (!node.text.value.is_empty()).then(|| Arc::<str>::from(node.text.value.as_str()))
+                (!node.text.value.is_empty())
+                    .then(|| self.inline_text(id, true).unwrap_or_default().into())
             })
     }
 
@@ -300,6 +301,7 @@ impl UiWorld {
             || self.nodes.has_visuals()
             || !self.overlay_host_nodes.is_empty()
             || self.clip_visuals != 0
+            || self.nodes.has_inline_content()
             || !self.detached_mounted.is_empty()
         {
             return false;
@@ -410,7 +412,13 @@ impl UiWorld {
                 .or_else(|| self.accessible_text(source)),
             // A password field's text is its secret, not a name for it.
             _ => state.label.clone().or_else(|| {
-                (!secure && !text_value.is_empty()).then(|| Arc::<str>::from(text_value.as_str()))
+                (!secure && !text_value.is_empty()).then(|| {
+                    if self.inline_record(id).is_some() {
+                        self.inline_text(id, true).unwrap_or_default().into()
+                    } else {
+                        Arc::<str>::from(text_value.as_str())
+                    }
+                })
             }),
         };
         let bounds = if plain && self.layout_results.is_empty() {

@@ -1,0 +1,260 @@
+# Issue #196：当前分支推进与关闭缺口
+
+日期：2026-10-26。基于 `main`，起始 HEAD `1f91962c744d7c0f3d8c99cf2ae10b94ad0a60dc`。本轮未创建分支、worktree、提交或修改远端 Issue 状态；工作区同时存在其他任务的 GPU/output/window 改动，本记录仅归属下述 Layout Foundation 工作。
+
+## 按依赖顺序推进的结果
+
+1. **#200 Sticky 产品缺陷已修复。** 原先正常流 y=20 的节点滚动 70 后落到 -50，声明 `top: 0` 没有生效。现在 Runtime Hit/A11y 与 Scene 使用同一个 Sticky projection，包含最近 scrollport、包含块边界、嵌套 Sticky、百分比 inset、RTL/vertical 和 reparent。滚动不改 LayoutBox 或 layout generation。依赖索引只访问当前 scrollport 的 Sticky 分支；1k/10k 无关 Sticky 对照保持同样的命中更新量。GPU 测试覆盖实际 RuntimeDocument 的滚动像素。
+2. **#199/#204 执行与投影收口。** Flow / Inline 的 child 分类消费 `ParticipationKind`，atomic inline-block 不再因为内部块而被拆开；Overlay slot placement 移入自己的执行模块。正常流与 Absolute/Fixed 切换正确失效父 contribution / placement plan。Row/Column preset 明确声明 Flex，`from_layout` 保留调用者 intent。Rust、模板与显式 CSS 对照 LayoutNode、bounds、baseline、overflow、fragments；默认值等价由现有 Style authority 比较。
+3. **跨 context intrinsic facts 复用修复。** 仅由父 context/constraint 变化触及的节点不再被无条件排除缓存复用；直接 metric mutation 及其 measure 祖先仍失效。缓存按实际 Flow/Flex/Grid/Inline/Overlay 标记来源。1k 实际组件矩阵得到 3000 次跨 context 命中、0 次 miss；状态、焦点、事件所属组件与 CustomRender resource Arc 身份保持。新增祖先访问计入现有 dependency counter，#259 的百种子 union closure 和 100k scaling 门禁保持通过。
+4. **#205 首批几何迁移完成。** Button、Chip、ActionMenuItem 声明 lightweight Flex parts；主轴分配、收缩、对齐复用 Foundation Flex。布局一次发布 TextContent / leading / trailing / hint / spinner，ComponentGeometry 只消费已发布盒子并附加绘制数据。纯文字 Button 保持一个实体、两个原有 parts。hint/loading 变化正确更新，hover 保持布局结果身份。另修复“原先空 label 后来增加文字”复用旧 child-only snapshot、漏发文本片段的历史路径问题。
+5. **#206 门禁接入现有目录。** `perf/scenarios/catalog.json.nana_layout_gates` 统一登记 #199/#200/#201/#205 与既有 #214/#259/#261/#262/#263；schema 校验测试来源和 WorkCounters 名称。Runtime/framework/dirty-frame/card-update 四个 benchmark 补齐实际 context transitions、intrinsic cache、baseline、cross-context 计数；CI 加入新结构测试及 authoring parity。没有另建 profiler 或伪造未测 counter。
+
+## 第一阶段验证记录
+
+以下针对 InlineContent 迁移前的第一阶段源码；日志保存在本机 `/tmp/nanaui-196-*.log`。截图在 `target/performance/issue196/`，不作为签入的历史基线。
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo test --locked -p nana-ui-runtime --lib -- --quiet` | 2217 passed，0 failed；1 个固定机器 timing 测试默认 ignored |
+| `cargo test --release --locked -p nana-ui-runtime --lib issue259_local_frame_time -- --ignored --nocapture` | 本机单次观察通过：1k / 10k / 100k 的 p95 为 49.875 / 35.084 / 47.334 µs，100k/1k = 0.95，门槛 ≤1.75；不是改动前后基线 |
+| `cargo test --locked -p nana-ui-scene --lib --test issue200_sticky -- --quiet` | Scene 236 passed，Sticky 集成 10 passed |
+| `cargo test --locked -p nana-ui-runtime --features view-macro --test view_macro -- --quiet` | 43 passed |
+| `cargo test --locked -p nana-ui-sfc -p nana-ui-view-codegen -- --quiet` | SFC 33、codegen 12 passed |
+| `cargo clippy --locked -p nana-ui-runtime -p nana-ui-scene --all-targets --no-deps -- -D warnings` | passed |
+| `cargo check --locked -p nana-ui-runtime --all-features --all-targets` | passed |
+| `cargo check --locked -p nana-ui-runtime --features benchmark --bins` | passed |
+| `cargo check --locked -p nana-ui-scene --features benchmark --bins` | passed |
+| `python3 perf/contract.py --check-schema` / `--self-test` | passed |
+| `python3 scripts/validate-runtime-performance.py --self-test` | passed |
+| `python3 scripts/check-engine-boundary.py` / `check-package-boundary.py` | passed |
+| `cargo test --locked -p nana-package -p nana-packager -- --quiet` | package 31、packager 35、Steam delta 6、CLI 2 passed |
+| `cargo fmt --all -- --check` / `git diff --check` | passed |
+
+GPU 命令使用 `NANA_STICKY_REQUIRE_GPU=1`、`NANA_COMPONENT_REQUIRE_GPU=1`，执行 `cargo test --locked -p nana-ui-devtools --features runtime-agent --test issue200_sticky_pixels --test issue205_component_pixels -- --nocapture`，2 passed。Sticky 和迁移组件分别要求真实 GPU pixels；组件在真实指针输入后推进颜色动画时钟再比较 hover 像素。
+
+按 CI 的临时 key 流程重新构建 `package-fixture --release --locked`，打包后执行 `nana-packager validate <app> --trust-key <public> --run --tamper-suite`。签名、布局/文件/身份、三个 pack、异目录启动、control 和六种篡改检查全部通过。原生 splash、首帧 handoff、installer round-trip、StaticAppPlan 明确报告未执行，不能从该 headless 自检宣称窗口验收。
+
+## 继续推进：Inline specialization
+
+本轮继续在当前分支接入 canonical `InlineContent`，没有另建布局树或文本引擎。Plain/Styled/Mixed 共用既有字符串、RichText range 和稀疏 atomic 引用；range edit 与直接构造归一，移除最后一个 span 回到 plain。InlineFlow、Text/Button/Chip/ActionMenuItem 的内容 API、Rust `view::inline`、模板 `<Inline>/<Span>` 与 Vue 插值共用该投影；普通子项仍是原 ComponentView/StableNodeId。
+
+Atomic metrics 经共享 intrinsic cache 进入 nana-text object layout，包含 physical margins、baseline、RTL/vertical、wrap、clamp/ellipsis 与动态尺寸变化；Fragment 发布真实 source range，Scene/hit/a11y 消费同一结果。批量校验拒绝错误引用、脱流/float atomic 和控件内嵌套的 interactive role/focusable 后代。复制和 a11y 使用独立文本语义覆盖，不复制显示占位符。
+
+Review 和真实 pixels 检查修复了以下额外路径：plain rich normalization 导致编辑器重复投影打断 smooth scroll；控件 tight label 与 native paragraph 的居中偏移被叠加；Scene 的旧重复 label 规则误吞独立 atomic Text。高级控件文字现在直接复用 retained text layout，atomic 自己绘制。Context 切换但 child border box 不变时，额外发布 child participation，保证结果与冷重算相同。Button 原先从自身 tight text width 反推 paragraph budget，会在 glyph 变化后漏发约束失效；现改为与内容模式无关的 chrome 预算。Menu hint/槽宽变化同步 TextDirty::CONSTRAINT，纯颜色 span 往返验证 native layout identity 和零 measure/placement。仅尺寸估计的宿主 shaper 在控件预算内裁短 no-wrap run 时，单独保留自然宽度，避免新增图标后 auto width 无法扩展；原有增减图标回归断言保留。小高度控件的图标预算与 parts 共用同一缩放函数。
+
+新增 `inline_reflows`、`inline_atomic_measure_requests` 接入同一个 WorkCounters、四个 benchmark 输出、catalog/schema 与 CI。固定 metric atomic 作为现有局部 layout island，文字变化保持外部 metric 时父段落零 reflow；paint-only 零 measure/placement。64/1024 atomic fixture 约束线性工作量，冷对照检查全部 LayoutResult geometry 和 focus。
+
+详细合同和命令见 [inline-content.md](../../docs/reference/inline-content.md)。当前机器原始报告、前后 executable 和 GPU PNG 在 `target/performance/issue196-inline/`；没有把生成输出作为源码基线签入。
+
+## Inline 阶段最终功能验证
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo test --locked -p nana-ui-runtime --lib -- --quiet` | 2219 passed、0 failed、1 ignored；`/tmp/nanaui-inline-runtime-final-v8.log` |
+| `cargo test --locked -p nana-ui-scene --test inline_content -- --quiet` | 16 passed；包括 real-font/native objects、RTL resize、source map、secure a11y/copy、paint-only 往返、loading/hint 与短高度图标预算 |
+| `cargo test --locked -p nana-ui-scene --lib --test issue200_sticky -- --quiet` | Scene 236、Sticky 集成 10 passed |
+| `cargo test --locked -p nana-ui-runtime --features view-macro --test view_macro -- --quiet` | 45 passed |
+| `cargo test --locked -p nana-ui-sfc -p nana-ui-view-codegen -- --quiet` | SFC 34、codegen 12 passed |
+| `cargo clippy --locked -p nana-ui-runtime -p nana-ui-scene --all-targets --no-deps -- -D warnings` | passed；`/tmp/nanaui-inline-clippy-final-v9.log` |
+| `cargo check --locked -p nana-ui-runtime --all-features --all-targets` | passed；`/tmp/nanaui-inline-allfeatures-v7.log` |
+
+GPU 使用 `NANA_STICKY_REQUIRE_GPU=1 NANA_COMPONENT_REQUIRE_GPU=1 cargo test --locked -p nana-ui-devtools --features runtime-agent --test inline_content_pixels --test issue200_sticky_pixels --test issue205_component_pixels -- --nocapture`：3 passed。日志 `/tmp/nanaui-inline-gpu-final-v4.log`；复核 `target/performance/issue196-inline/inline-content.png` 中混排、CJK 和控件内独立星形子项。opacity 变化实际改变 child pixels，hover 保持零布局工作。
+
+`python3 perf/contract.py --check-schema` / `python3 perf/contract.py --self-test`、`validate-runtime-performance.py --self-test`、engine/package boundary 检查均通过。重新编译 `package-fixture --release --locked` 并按 CI 流程打包、执行 `nana-packager validate <app> --trust-key <public> --run --tamper-suite`：启动、签名、pack、control 与六种篡改验证通过，详见 `/tmp/nanaui-inline-package-final-v2.log`。原生 splash/handoff、installer、StaticAppPlan 仍明确 not-executed。
+
+此前缺约束失效、兼容 shaper 图标扩宽失败和 timing 比例失败的原始日志保留；最终结果只引用修复后对应日志，不删除失败观察。
+
+## 最终固定机器成本观察
+
+最终源码预编译 release test executable 后停止本轮编译/功能测试，独立运行 `runtime-timing-final issue259_local_frame_time --ignored --nocapture`：1k / 10k / 100k 的 p95 分别为 31.584 / 38.750 / 50.750 µs，100k/1k=1.61，通过 ≤1.75 门槛。日志 `/tmp/nanaui-inline-local-timing-final.log`。此前 6.83 的失败与 0.78 的复测原始日志保留；这些是本机观察，不作为性能根因证明。
+
+再将原有 `inline-cost-before` 与最终 `inline-cost-after-final` 交错运行九组，交替前后顺序。两者均执行 `--exact inline_plain_text_fixed_machine_cost --nocapture`，用 `NANA_INLINE_COST_OUTPUT` 输出独立 JSON。执行 `python3 perf/contract.py --evaluate-inline-cost target/performance/issue196-inline/validated-cost-manifest.json`，四项全部通过，未更改 p95 ≤1.05 / memory ≤1.08 门槛：
+
+| workload | idle p95 after/before | retained bytes after/before | entity / allocation |
+| --- | --- | --- | --- |
+| Button 1k | 0.878 | 1.00660 | passed / passed |
+| Button 10k | 0.930 | 1.00734 | passed / passed |
+| Text 1k | 0.900 | 1.00977 | passed / passed |
+| Text 10k | 0.914 | 1.01180 | passed / passed |
+
+报告、manifest、executable SHA-256 与 `validated-cost-verdict.json` 保留在 `target/performance/issue196-inline/`。RSS 只作观察，不能从 allocator 复用的 RSS 推导 live-byte 增量。测量时系统索引服务和其他项目测试/编译仍在运行，前后 process context 已保存；不能由这些小于 1 的 idle 比例声称普遍 CPU 提速或已完成完整 Foundation 性能验收。
+
+## 后续组件迁移：ListItem / SidebarRow / FileTab
+
+ListItem 的 fallback label/note/detail 不再由 `ComponentGeometry` 计算位置，Foundation 用 shared Flex parts 发布 TextContent/Note/Detail；绘制层只消费结果。普通 leading/content/trailing slots 继续读取同一棵 retained tree 的 child placements。SidebarRow、FileTab 共用这条路径。RTL 对齐与隐藏 slot 的预算更新有回归；纯 label 直接发布文字槽，不额外测量 secondary strings。
+
+本批 review 检查了 typed invalidation、primary paragraph budget、隐藏 child、无文字 slot、paint-only、source fragments 与 snapshot reuse。验证结果：
+
+- `cargo test --locked -p nana-ui-runtime --lib issue205 -- --nocapture`：7 passed，覆盖 cold/full oracle、Flex/Grid/Inline 切换、selected/focus 保持、RTL/隐藏 slot，以及 1k/10k 单实体/4 parts 和 idle 零工作。
+- Runtime 全量：2222 passed、0 failed、1 ignored（`/tmp/nanaui-row-runtime-full.log`）；其后纯 label 等价快路径由最终 7 项回归和 clippy/all-features 再验证。
+- `issue205_row_pixels` 宽/中/窄三行与保存的迁移前 RGBA 逐字节一致；`inline_content_pixels`、`issue205_component_pixels` 一并通过。PNG/RGBA 在 `target/performance/issue196-inline/rows-before.*` / `rows-after.*`。
+- Runtime/Scene clippy `--all-targets --no-deps -- -D warnings`、Runtime all-features/all-targets、perf schema/self-test 均通过。
+- 独立运行前后 release executable，交错九组 `list_item_fixed_machine_cost`：1k / 10k 的 idle p95 比例 1.03872 / 1.03607，retained allocator bytes 比例 1.00353 / 1.00401；entity 和 allocation 门禁通过。保持原来的 1.05 / 1.08 门槛。manifest 设置 `workload_family: "list_item"`，原始报告和 executable SHA 在 `rows-cost-manifest.json`，结果在 `rows-cost-verdict.json`。这仍只覆盖 idle CPU 与 retained bytes。
+
+## 后续组件迁移：LabeledValue
+
+label/value 的自然宽度与可读性优先级进入 shared Flex parts，LayoutResult 发布 Label/Value，Geometry 只附加文本与 paint；path 中间省略只消费已发布宽度，存储、tooltip 与 a11y 继续保留真实路径。显式 padding 与 RTL 生效，普通 action child 放在 inline end，修复此前单 child 的 SpaceBetween 把 action 放到行首、挤掉 label/value 的问题。
+
+字段更新只重排部件，不重新测量外部盒子。cold oracle 暴露并修复了旧的视觉更新粗清理：内容变更已有 typed seed，不再额外清掉未变化的 child LayoutResult。action 复用位置时继续保留同一结果、焦点和身份。
+
+- Issue #205 最终 10 项通过；包含 value 动态更新 measure=0、RTL、action、cold/full、padding/path raw value、paint-only 与 1k/10k 单实体/3 parts。
+- Runtime 全量 2225 passed、0 failed、1 ignored；Scene 236、mixed inline 16、Sticky 10 passed。Runtime/Scene clippy 和 Runtime all-features/all-targets 通过。
+- 实际 GPU 四项通过（`/tmp/nanaui-value-gpu-final.log`）。value/Card fixture 对照保留的迁移前图像，action 区与预留 spinner 修正区域外保持逐字节相同；Card 此时尚未改动。`42 → 43` 实际改变 glyph pixels，action 的 LayoutResult 和位置保留。图像为 `surfaces-before.*` / `surfaces-values-after.*`。
+- 交错九组 release 成本：LabeledValue 1k / 10k idle p95 比例 1.00555 / 0.99683，retained bytes 比例 1.00488 / 1.00586；entity/allocation 全通过。manifest/verdict 为 `values-cost-manifest.json` / `values-cost-verdict.json`，仍用同一 1.05 / 1.08 门槛。
+
+## 2026-10-27 追加：Card Header
+
+Card 的 Header/Spinner 由 shared Flex parts 计算，Geometry 只投影盒子和 elevation/文字 paint。Runtime 以标题专属字号、字重、单行约束生成 retained paragraph，Scene 复用它；body 字体继承保持原样。所有 context 的 intrinsic baseline 与 LayoutResult 从同一 Header/native layout 读取。LayoutInput 只保留标题的 inline contribution，block 空间已计入 title band；auto/hug 不再重复计入标题高度，spinner reserve 只约束 header。
+
+Review 发现并修复了极窄标题的 ellipsis 外溢：只有溢出的标题（或无 retained layout 的兼容路径）增加 Header clip，正常宽度保留原 clip 链。真实 GPU 验证了宽度 0/4/16/32/60/120 不画出卡片外，ellipsis 不进入 spinner 间隔；正常标题/body 与保存的迁移前图像逐字节相同，spinner 的字体对齐/居中修正区域单独排除历史对照。
+
+- Issue #205 14 项全部通过，含 header baseline 与相邻粗体 Text 对齐、body 字号继承、phase-only 零布局、RTL/窄宽度/空标题动态切换 cold oracle、hugging height 单计与 spinner reserve、1k/10k 单实体/4 parts。
+- 全量 Runtime 2229 passed、0 failed、1 ignored；Scene 236、mixed inline 16、Sticky 10 passed。Runtime/Scene clippy、Runtime all-features/all-targets 及 no-default-features 通过。
+- 九组 release 交错对照：Card 1k / 10k 的 idle p95 比例 0.99724 / 1.02944，retained bytes 比例 1.00229 / 1.00295，entity/allocation 全通过。保留 `cards-cost-manifest.json` / `cards-cost-verdict.json` 与前后 executable SHA。该 workload 冻结动画时钟，不能代表动画活动帧 CPU；auto size 的纠正也可能改变 Scene 空间索引的分布，不能把 retained 比例解释成单个新字段的成本。
+
+## 2026-10-27 追加：FormField、Select 与菜单行 helper
+
+FormField 的 label、support 和错误指示器现在由 shared Flex parts 发布为 `Label`、`Hint`、`LeadingContent`；control 继续是普通 retained child。Select trigger 发布 `TextContent`、`Hint`、`TrailingContent`，fit-options 的最宽选项和 RTL handle 位置保持原语义。SelectMenuGeometry 与 ComponentGeometry 增加逻辑 index 查询；select/context option 的 label/hint 分割共用 `menu_option_text_boxes`，不产生 wrapper 节点。
+
+本批 review 还发现 ActionMenuItem 的 rich content 虽然已经进入 Runtime，但 Scene 组件文本路径此前只读取普通 `text_spans`，会吞掉 option span 的颜色。现在 Scene 将 canonical rich spans 合并到组件 text primitive；单个 row 继续共享 chrome/layout，paint-only span 更新保留 layout generation。真实 GPU 测试覆盖了 span 到达和 paint-only 不重排。
+
+随后又删除了 Select trigger 的旧 fallback 几何：label/handle 不再从 outer box 和 authored padding 重算，生产路径只读取 `LayoutResult.parts`；动态 popup row 仍由 viewport/scroll 投影计算，并通过共享 text-box helper 处理 label/hint。
+
+- Issue #205 新增 FormField/Select 冷布局、控件结果保持、RTL、highlight paint-only、1k/10k bounded-parts 检查；完整 Runtime lib 当前 2232 passed、0 failed、1 ignored。
+- `NANA_COMPONENT_REQUIRE_GPU=1 cargo test --locked -p nana-ui-devtools --features runtime-agent --test issue205_component_pixels -- --nocapture`：2 项通过，包含 FormField/Select 的真实 GPU scene 路径。
+- release executable 的 FormField/Select 10k 组合测试：1 项通过，测试体 0.83s（`/tmp/nanaui-form-select-release-focused-time.log`）；这是本机绝对观察，没有本批改动前的同一 executable 对照，不能解释为回归比例。
+- 完整 CPU 基线已在 rich paint 修正后重新生成：`target/performance/issue196-final/baseline-manifest.json`，包含 Runtime initial/steady/idle、dirty-frame 350 cells（100 samples/20 warmup）和 Scene initial/local/idle/construction；manifest 固定 machine、HEAD 与 executable/report SHA256。它是当前最终工作区的基线快照，不冒充 Foundation 迁移前的前后比例。
+
+## 2026-10-27 最终交付检查
+
+当前工作区源码的最终结果：
+
+| 检查 | 结果与日志 |
+| --- | --- |
+| Runtime 全量 lib | 2232 passed、0 failed、1 ignored；`/tmp/nanaui-196-final-runtime-full.log` |
+| Scene lib / inline_content / Sticky | 236 / 16 / 10 passed；`/tmp/nanaui-card-scene-full.log` |
+| Rust authoring / SFC / codegen | 45 / 34 / 12 passed；`/tmp/nanaui-196-delivery-authoring.log`、`/tmp/nanaui-196-delivery-sfc.log` |
+| macOS 真实 GPU | 原有 5 个 test executable 共 6 项，加上 FormField/Select component pixels 2 项通过；强制 GPU 不可用时失败 |
+| Runtime/Scene clippy / Runtime features | `--all-targets --no-deps -- -D warnings`、all-features/all-targets、no-default-features 通过 |
+| package / packager / Steam delta / CLI | 31 / 35 / 6 / 2 passed；`/tmp/nanaui-196-delivery-packager-tests.log` |
+| 最终 signed package | 重新编译 fixture、签名、独立目录启动、control 和 tamper suite 通过；`/tmp/nanaui-196-delivery-package.log` |
+| schema / self-test / engine/package boundary | 全通过 |
+| fmt / diff whitespace | `cargo fmt --all -- --check`、`git diff --check` 通过 |
+
+对最终 release executable 独立运行 #259：1k / 10k / 100k p95 为 48.625 / 33.417 / 43.750 µs，100k/1k=0.90，通过 ≤1.75；`/tmp/nanaui-196-delivery-timing.log`。保留全部先前 timing 结果，不将某一轮比例解释成根因或普遍提速。
+
+最终程序再与保存的 InlineContent 迁移前程序交错九组，普通 Button 1k / 10k idle p95 比例 0.92782 / 0.94395，普通 Text 为 0.93038 / 0.90482；retained bytes 比例仍为 1.00660 / 1.00734 / 1.00977 / 1.01180，entity 和 idle allocation 均通过。结果在 `delivery-cost-manifest.json` / `delivery-cost-verdict.json`，before 包含第一阶段 Foundation 改动，不能倒推全部 Foundation 的最初成本。
+
+只读检查 NanaLive / NanaType 未发现这些新增 LayoutResult/Fragment/Part/ExtractedNode 的直接 struct literal；本轮没有执行其完整构建或运行，不能把这项源码检查称为 consumer 验收。
+
+本轮没有提交、推送或改动远端 Issue。`main` 的当前 HEAD 为其他并发工作的 `49f0cac68`，本记录所述改动仍在当前工作区。最终读取 #196 为 OPEN。
+
+## 2026-10-27 追加：option row 的 canonical 内容（review 收口）
+
+上一轮在最终交付检查之后开始为 Select/Dropdown/SearchDropdown/ContextMenu option 接入 `content(...)` 与 `SelectOptionData::content`，在 Scene 测试初始化器未补字段处中断（`nana-ui-scene` lib test 编译失败）。本轮 review 后补齐并修正：
+
+- **合同收紧。** option row 是数据行而不是 retained paragraph，Scene 只能把 fill colour 合并进行文本。四处重复的 builder 改为共用 `select::option_content`：`label` 保留纯文本承担布局预算、typeahead 和 a11y，`content` 只保留 fill-colour span；atomic child、ruby/object 与改变 shaping/装饰/标注的 span 在 debug 构建拒绝，release 只保留文本（不再把 U+FFFC 占位符带进 label）。ActionMenuItem 仍走完整的 retained control content 路径，不受影响。
+- **ContextMenu hint 回归。** geometry 已把 hint 从 `label · hint` 拆成独立区域，但 Scene overlays 只画 label，带 hint 的 ContextMenu 行在画面上丢了 hint。现在以独立 collection 命名空间 `CONTEXT_MENU_HINTS` 绘制行尾 hint（固定 row slot 已被背景/label/icon 共用）。
+- **测宽来源。** ContextMenu 的 label/hint 分割原本用 `estimated_text_width`，现改为 owner 的 `chrome_text_measure`，与 Select menu 行同一来源；无 hint 行几何保持原样。
+
+新增 `quiet_text_beside_labels` 两项：styled option 在 Select 行与 ContextMenu 行都画出 fill span，ContextMenu hint 独立成文本且不再出现 `·` 拼接（修复 Scene hint 前该项失败）；debug 构建拒绝改字号的 option span。
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo test --locked -p nana-ui-runtime --lib -- --quiet` | 2232 passed、0 failed、1 ignored |
+| `cargo test --locked -p nana-ui-scene -- --quiet` | lib 236 及全部集成测试通过（含 quiet_text 4、inline_content 16、Sticky 10） |
+| `cargo clippy --locked -p nana-ui-runtime -p nana-ui-scene --all-targets --no-deps -- -D warnings` | passed |
+| `cargo check --locked -p nana-ui-runtime --all-features --all-targets`、`cargo check --locked -p nana-ui -p component-gallery` | passed |
+| `NANA_COMPONENT_REQUIRE_GPU=1 cargo test --locked -p nana-ui-devtools --features runtime-agent --test issue205_component_pixels --test inline_content_pixels` | 3 passed（macOS 真实 GPU） |
+| `cargo fmt --all -- --check` | passed |
+
+公开 API 变化：四个 option 类型与 `SelectOptionData` 新增 `content` 字段并去掉 `Eq`。只读检查 NanaLive / NanaType 只经 builder 使用这些类型、没有结构体字面量或 `Eq` 依赖；未构建这两个 consumer。未跑 `--features snapshots` 套件；gallery 快照中没有带 hint 的 ContextMenu。
+
+## 2026-10-27 追加：#201 / #202 远端验收清单的本地核对
+
+只读核对当前工作区，未改源码、未写远端 Issue。判定分三档：**可勾**（有直接测试）、**证据不足**（实现在，缺对应测试）、**不可勾**（实现本身有缺口）。
+
+### #201 Viewport
+
+| 验收项 | 判定 | 证据 / 缺口 |
+| --- | --- | --- |
+| Scroll 与 child FormattingContext 解耦 | 可勾 | `ScrollView::projected_style` 只写 overflow，没有 ScrollFlex/ScrollGrid；`issue201_scroll_is_orthogonal_...` 在 Block/Flex/Grid 下滚动保持 established context、LayoutBox、generation |
+| ScrollView 不拥有第二 layout engine | 可勾 | ScrollView 只持交互/scrollbar 状态，无 measure/placement；注意公开的 `AppContext::set_scroll_metrics` 可注入非布局来源的 metrics |
+| content extent 来自 authoritative LayoutResult | 可勾（附注） | `ContentBoundsIndex` 增量读取已提交的 layout 盒子，由 WriteLayout 驱动失效，`LayoutResult.scroll_extent` 同源；`scroll_bounds` 9 项含与全遍历对照。文本编辑器另有 `text_scroll_metrics` |
+| scroll-only 不重做 intrinsic/content layout | 可勾 | issue201 measure/placement/shape/spawn 全 0；Sticky 集成与 GPU pixels；Scene `scroll_offset_delta_updates_...` |
+| clip chain 供 Scene/Hit/A11y 一致消费 | **不可勾** | 三处各自推导 clip；A11y 只裁 EmptyState/ModalFrame，不读 overflow/scroll clip，也不导出 clips-children；`LayoutResult.clip` 只参与相等比较、无消费者；没有比较三方 clip 矩形的测试 |
+| virtualization 与 scroll layout 语义分离 | 可勾 | `virtualize_retained` 按业务 key 物化、只读 scroll offset/metrics；`sync_virtual_list_skips_mutation_...`、issue262 a–e、`virtual_retention` GPU |
+| Grid/Inline/CustomRender 自然放入 scroll viewport | **证据不足** | Grid 由 issue201 覆盖；Inline 只有 inline-block 子项，无原生混排段落；CustomRender 在 ScrollView 下没有布局/clip/hit 测试（现有的是 host-texture Thumbnail 与纯 paint 数学） |
+
+性能段要求的 `scroll_viewport_updates`、`scroll_content_extent_recomputes`、`scroll_layout_reflows`、`scroll_clip_updates`、`virtualization_despawned` 不在 WorkCounters；extent 刷新计数只在 test/benchmark cfg 下存在，`virtual_rows_materialized_from_layout` 仅列表。
+
+### #202 Replaced Content
+
+| 验收项 | 判定 | 证据 / 缺口 |
+| --- | --- | --- |
+| 共用 intrinsic/aspect/fit contract | **不可勾** | intrinsic/aspect 共用 `world/replaced.rs` 与 measure；fit 有两套数学：HostTexture/Video/CustomRender 用 `ContentFit::fitted`，Image object-fit 走 `BackgroundImageFit` + `url_dest_rect`，另有只认 contain/fill 的 `parse_content_fit`；Canvas 不是 `ReplacedResource` |
+| Flex/Grid/Inline/Absolute 均可参与 | 证据不足 | URL 图片 Flex→Grid→Inline（issue197）、CustomRender Grid/Inline/Flex 与 Absolute/Fixed（issue199）；缺 natural size 图片在 Absolute/Grid/Inline 的尺寸断言，HostTexture/Video 未在真实布局中断言 AtomicInline |
+| context 切换不重建 GPU/resource identity | 证据不足 | Runtime 侧 `Arc::ptr_eq` 与 0 spawn（issue199，fixture renderer）；GPU 侧 rebind 只看 handle/generation，key 不含布局位置，但没有 host-texture 跨 context 无 rebind 的测试 |
+| frame/texture 更新不触发布局 | 可勾 | `issue263_video_frames_lay_nothing_out`、`issue263_fit_and_sampling_lay_nothing_out`、`issue259_replaced_content_costs_the_same_at_any_size`、`texture_content_reuses_prepared_ui_and_replacement_rebinds` |
+| intrinsic metadata change 精确失效 | 可勾（附注） | issue263 unknown→known 单 seed、共享图片经索引 100 通知/50 seed、显式尺寸下分辨率风暴 0 seed、逐轮冷对照；nana-ui natural size 端到端。缺"相同 metadata 重报 0 工作"的 Runtime 测试；HostTexture/Video 分辨率须应用自行上报 |
+| Inline baseline 有正式 policy | 证据不足 | `baseline_metrics` 对 replaced 明确用 border-box 底边，属布局侧规则；判定谓词在 `baseline_metrics` 与 `baseline` 两处重复，没有断言 replaced atomic 底边基线的测试 |
+| CustomRender 保持 presentation anchor | 可勾 | `CustomRenderNode` 只含 renderer/resource/revision/fit/params 等呈现字段，params 不被 Runtime 解释；`custom_render_extension_requires_nonempty_backend_neutral_keys`、hit 顺序跟随文档 |
+
+### 本轮运行
+
+| 命令 | 结果 |
+| --- | --- |
+| Runtime lib：issue201 / 262 / 263 / 199 / 261 | 1 / 6 / 7 / 2 / 7 passed |
+| Runtime lib 引用项（scroll_bounds、virtualize_retained、viewport_tests、issue197、participation、issue259_replaced、custom_render、natural_sizes 等 18 个过滤） | 51 passed |
+| `nana-ui-core` geometry（ContentFit） | 18 passed |
+| Scene lib 引用项（scroll/clip/hit/a11y 一致性、虚拟列表审计、custom render） | 7 passed；Sticky 10、inline_content 16 |
+| `nana-ui --features hosted,gpu` natural size / texture identity / scroll paint | 14 passed |
+| devtools `hidden_hit`、`host_texture_paint`、`issue200_sticky_pixels`（强制 GPU）、`virtual_retention` | 2 / 6 / 1 / 3 passed（macOS；除 Sticky 外无强制 GPU 开关，同机强制 GPU 的测试可用 adapter） |
+
+结论：#201 可勾 5/7，#202 可勾 3/7。#201 的 clip chain 与 #202 的 fit 统一需要实现改动；其余缺口是补测试。
+
+## 2026-10-27 追加：#201 / #202 补测试，以及测试揭出的三处布局缺陷
+
+按上一节"证据不足"的四项补测试。新测试在 layout verify（每趟对照全量布局）开启下跑，揭出三处产品缺陷，一并修复：
+
+1. **跨 context intrinsic facts 复用路径漏掉自然宽高比换算。** `measure_node` 命中 cross-context intrinsic cache 时直接用缓存的 preferred facts 求 used size，只写了宽的替换盒得到自然高度（120×80 图片宽 60 时高 80 而非 40）；结果依赖缓存路径，Grid 中由 verify 发现。换算抽成 `transfer_natural_ratio`，两条路径共用。
+2. **Grid `stretch` 不认自然宽高比。** `ratio_filled_height` 只看样式 `aspect-ratio`，只写了宽的图片被拉到区域高。
+3. **Flex 行 `stretch` 同样不认。** `cross_axis_is_definite` 增加 natural ratio 参数；两处均经 `has_natural_ratio` 判定。
+
+另把 `baseline_metrics` 与 `baseline` 里重复的 replaced 判定合成 `aligns_by_bottom_edge`，语义不变（仍含 gradient content image、skipped canvas、ImageViewer，与 replaced 资源索引的口径不同，未强行合并）。
+
+| 新测试 | 证明 | 变异验证 |
+| --- | --- | --- |
+| `world/issue202.rs` `issue202_a_natural_size_reaches_every_context` | 无尺寸 / 只写宽两张图片在 Flex、拉伸 Flex 行、Grid、拉伸 Grid、Inline、Absolute 下得到 120×80 / 60×40，participation 正确，2 个 replaced seed、0 全文档回退，对照冷布局 | 修复前 Grid（verify）与两种 stretch 失败 |
+| `world/issue202.rs` `issue202_replaced_content_sits_on_the_text_baseline_by_its_bottom_edge` | 图片与 CustomRender 在 baseline flex 行和原生 `InlineFlow` 段落中底边落在文字基线 | 关闭底边规则后失败 |
+| `world/issue201.rs` `issue201_a_paragraph_and_a_custom_renderer_scroll_without_layout` | ScrollView 内原生混排段落（含 atomic）+ host-texture `GpuTextureView`：滚动零 measure/placement/shape/spawn，generation、全部盒子与 CustomRender 描述不变；hit index 只走 scroll patch，命中与 a11y 都在滚动后位置，滚出视口的 atom 不再命中 | — |
+| `nana-ui` `scene_paint/replaced_context_tests.rs` | 真实 RuntimeDocument 中 host texture 在 Flex 列 → Grid → Flex 列 → Flex 行之间移动，同一 painter 逐帧在新位置画出纹理，`gpu_buffer_reallocations == 0`，描述 `Arc` 不变 | 强制 rebind 后失败（reallocations 1） |
+
+发现但未改：普通块级流（Block + inline-block）的行盒把原子项顶部对齐，不做基线对齐，`LayoutStyle` 也没有 `vertical-align`；`LayoutResult` 只为文本发布 baseline，replaced 的底边基线只在布局引擎内部。已写入 `docs/reference/layout.md`。
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo test --locked -p nana-ui-runtime --lib -- --quiet` | 2235 passed、0 failed、1 ignored |
+| `cargo test --locked -p nana-ui-scene -- --quiet` | 全部通过（lib 236） |
+| `cargo test --locked -p nana-ui --features hosted,gpu --lib -- --quiet` | 966 passed、1 ignored |
+| clippy `-D warnings`：runtime/scene `--all-targets`，nana-ui `--features hosted,gpu --all-targets` | passed |
+| runtime `--all-features --all-targets`、`--no-default-features` check；`cargo fmt --all -- --check`；`git diff --check`；engine boundary | passed |
+| devtools（强制 GPU）`issue205_component_pixels`、`inline_content_pixels`、`issue200_sticky_pixels`、`host_texture_paint`、`virtual_retention` | 2 / 1 / 1 / 6 / 3 passed |
+| ui-snapshots A/B（同一 release 二进制，环境变量关闭本轮自然宽高比改动作 before，私有基线在 scratch） | 像素 0 张差异；语义输出逐文件相同 |
+
+语义套件对仓库基线另有 8 个 CHANGED（card / form-field / labeled-value / settings 的 light/dark），开关本轮改动时完全相同，来自此前 #205 迁移，仓库语义基线尚未重录；本轮未 bless。
+
+判定更新：#201 "Grid/Inline/CustomRender 自然放入 scroll viewport" 改为可勾（6/7）。#202 "Flex/Grid/Inline/Absolute 均可参与"、"context 切换不重建 GPU/resource identity" 改为可勾；"Inline baseline 有正式 policy" 在原生段落与 flex 中可勾，但普通块级流行盒无基线对齐，建议附注后勾选或留待行盒补齐（5–6/7）。
+
+## 仍不能记成完成的部分
+
+- **#188/#192/#194 的后续迁移：** 首批 canonical 内容与混排已经落地，但 StandardVisual 的兼容 label/icon 字段仍在。FormField 的 Label/Hint/LeadingContent 与 Select trigger 的 TextContent/Hint/TrailingContent 已进入 LayoutResult；SelectMenuGeometry/ComponentGeometry 提供逻辑 index 查询，select/context option 的 hint 分割共用菜单 helper；ActionMenuItem 多行 rich option 已完成单 text primitive 的 paint/chrome 解耦。Select/ContextMenu option row 现在可携带 fill-colour span，但仍是数据行：不支持 atomic child 与改变 shaping 的 span，不能把首批控件的完整高级内容能力说成这些组件全量完成。
+- **#206 专项比例：** 已有真正 InlineContent 迁移前 executable 的交错前后 allocator/idle-flush fixture；该 before 已包含第一阶段 Foundation 改动，不能用于声称全部 Foundation 的前后成本。1k/10k plain Text/Button 无额外实体和 idle allocation，retained live bytes 增量在约 0.7%–1.2%。最终九组 idle CPU p95 比例门禁通过；固定 5% 门槛保持不变，原始失败测量和 fail verdict 仍保留。当前完整 initial/dirty/idle CPU 基线快照见 `target/performance/issue196-final/baseline-manifest.json`，它补齐观测面但不构成历史 before/after 比例。
+- **#201/#202 收尾：** ScrollView 在 Flow/Inline、Flex、Grid 的真实滚动保持 LayoutBox 与 generation 不变；#263 metadata/content/fit、100k 索引与 #199 resource identity 门禁已过。远端验收清单尚未逐项据证据更新，未写远端 Issue 或关闭 Epic。
+
+## 未覆盖的边界
+
+GPU pixels 来自 macOS。Windows/Linux 真机与外部 consumer 完整构建/运行未执行；这代表没有相应证据，不据此推断失败。packaging 的原生 splash/handoff、installer、StaticAppPlan 明确 not-executed，属于相应窗口/打包工作流边界，不将这些无关功能一概列为 #196 的新增功能阻塞。
+
+当前结论：已继续完成 InlineContent 核心及 Button/Chip/ActionMenuItem、ListItem/SidebarRow/FileTab、LabeledValue、Card 的本批内容/部件收口，并补上真实混排、pixels、冷重算和成本观察；#196 仍保持开放。剩余工作由尚未完成的迁移与未覆盖的性能、平台证据决定，不以远端 OPEN 状态本身推断功能缺失。

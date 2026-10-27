@@ -283,6 +283,7 @@ impl<'a> ValidationPlan<'a> {
                 }
                 UiMutation::SetPresetTheme { .. } | UiMutation::SetThemeTokens { .. } => {}
                 UiMutation::SetText { id, .. }
+                | UiMutation::SetInlineContent { id, .. }
                 | UiMutation::SetRichText { id, .. }
                 | UiMutation::SetRichEditorMarks { id, .. }
                 | UiMutation::SetLanguage { id, .. }
@@ -648,6 +649,7 @@ impl<'a> ValidationPlan<'a> {
             }
         }
         self.validate_overlay_hosts()?;
+        self.validate_inline_content(mutations)?;
         Ok(())
     }
 
@@ -1307,6 +1309,7 @@ impl UiWorld {
                 if old_parent != Some(*parent) {
                     self.responsive_reparented(*child);
                     self.i18n_reparented(*child, old_parent);
+                    self.rebind_sticky_subtree(*child);
                 }
                 let parent_mount = self.record(*parent).mount;
                 if self.record(*child).mount != parent_mount {
@@ -1364,6 +1367,7 @@ impl UiWorld {
                     report.detached += 1;
                 }
                 self.leave_live_document(*id);
+                self.rebind_sticky_subtree(*id);
                 self.refresh_root_membership(*id);
             }
             UiMutation::ParkSubtree { root } => {
@@ -1372,6 +1376,7 @@ impl UiWorld {
                 self.unlink_from_parent(*root);
                 self.set_subtree_mount_state(*root, MountState::Parked);
                 self.leave_live_document(*root);
+                self.rebind_sticky_subtree(*root);
                 self.refresh_root_membership(*root);
             }
             UiMutation::DespawnSubtree { root } => {
@@ -1449,6 +1454,7 @@ impl UiWorld {
                     self.hover_transitions.remove(&id);
                     self.intent_nodes.remove(&id);
                     self.forget_replaced(id);
+                    self.sticky_nodes.remove(id);
                     self.forget_responsive(id);
                     self.forget_i18n(id, snapshot.document);
                     self.clear_overlay_references(id);
@@ -1484,7 +1490,10 @@ impl UiWorld {
                 self.set_localized_text(*id, None);
                 // Re-setting the same text is not a content change: nothing
                 // about the node's shaping or layout moved.
-                if self.record(*id).text != *text {
+                if self.record(*id).text != *text
+                    || self.nodes.rich_text(*id).is_some()
+                    || self.inline_record(*id).is_some()
+                {
                     self.replace_text_content(*id, text.clone());
                 }
                 self.mark(
@@ -1501,7 +1510,11 @@ impl UiWorld {
             UiMutation::SetLocalizedText { id, text } => {
                 self.set_localized_text(*id, text.clone());
             }
-            UiMutation::SetRichText { id, rich } => self.apply_rich_text(*id, rich.as_ref()),
+            UiMutation::SetRichText { id, rich } => {
+                self.nodes.set_inline_atoms(*id, Arc::from([]));
+                self.apply_rich_text(*id, rich.as_ref());
+            }
+            UiMutation::SetInlineContent { id, content } => self.apply_inline_content(*id, content),
             UiMutation::SetLanguage { id, language } => {
                 self.nodes.set_language(*id, language.clone());
                 // The subtree resolves its styles again and its text is
@@ -1542,7 +1555,16 @@ impl UiWorld {
                     || record.layout.height.to_bits() != layout.height.to_bits();
                 let moved = record.layout.x.to_bits() != layout.x.to_bits()
                     || record.layout.y.to_bits() != layout.y.to_bits();
+                let omission_changed = (record.layout.width <= 0.0 || record.layout.height <= 0.0)
+                    != (layout.width <= 0.0 || layout.height <= 0.0);
                 record.layout = *layout;
+                if omission_changed && self.inline_parent(*id).is_some() {
+                    self.mark_subtree(
+                        *id,
+                        DirtyMask::RENDER | DirtyMask::ACCESSIBILITY | DirtyMask::INPUT,
+                    );
+                }
+
                 // A parent that sizes its surface from this box (a modal
                 // frame's body, a popover's items): when the box changes, the
                 // parent's clip, hit area and paint change with it although
@@ -1736,7 +1758,7 @@ impl UiWorld {
                     self.sync_scrollbar_motion(*id, previous, next);
                 }
 
-                let button_layout_changed = match (self.nodes.visual(*id), visual.as_ref()) {
+                let content_layout_changed = match (self.nodes.visual(*id), visual.as_ref()) {
                     (
                         Some(StandardVisual::Button {
                             icon: a,
@@ -1744,6 +1766,7 @@ impl UiWorld {
                             icon_size: sa,
                             icon_gap: ga,
                             loading: la,
+                            content_align: aa,
                             ..
                         }),
                         Some(StandardVisual::Button {
@@ -1752,14 +1775,109 @@ impl UiWorld {
                             icon_size: sb,
                             icon_gap: gb,
                             loading: lb,
+                            content_align: ab,
                             ..
                         }),
                     ) => {
-                        (a.is_some(), ta.is_some(), sa, ga, la)
-                            != (b.is_some(), tb.is_some(), sb, gb, lb)
+                        (a.is_some(), ta.is_some(), sa, ga, la, aa)
+                            != (b.is_some(), tb.is_some(), sb, gb, lb, ab)
                     }
                     (_, Some(StandardVisual::Button { .. }))
                     | (Some(StandardVisual::Button { .. }), _) => true,
+                    (
+                        Some(StandardVisual::ActionMenuItem {
+                            hint: a,
+                            icon: ia,
+                            size: sa,
+                            ..
+                        }),
+                        Some(StandardVisual::ActionMenuItem {
+                            hint: b,
+                            icon: ib,
+                            size: sb,
+                            ..
+                        }),
+                    ) => (a, ia.is_some(), sa) != (b, ib.is_some(), sb),
+                    (_, Some(StandardVisual::ActionMenuItem { .. }))
+                    | (Some(StandardVisual::ActionMenuItem { .. }), _) => true,
+                    (
+                        Some(a @ StandardVisual::ListItem { .. }),
+                        Some(b @ StandardVisual::ListItem { .. }),
+                    ) => a != b,
+                    (_, Some(StandardVisual::ListItem { .. }))
+                    | (Some(StandardVisual::ListItem { .. }), _) => true,
+                    (
+                        Some(StandardVisual::LabeledValue {
+                            label: a,
+                            value: va,
+                            value_weight: wa,
+                            compact: ca,
+                            action: aa,
+                            ..
+                        }),
+                        Some(StandardVisual::LabeledValue {
+                            label: b,
+                            value: vb,
+                            value_weight: wb,
+                            compact: cb,
+                            action: ab,
+                            ..
+                        }),
+                    ) => (a, va, wa, ca, aa) != (b, vb, wb, cb, ab),
+                    (_, Some(StandardVisual::LabeledValue { .. }))
+                    | (Some(StandardVisual::LabeledValue { .. }), _) => true,
+                    (
+                        Some(StandardVisual::Card {
+                            title: a,
+                            loading: la,
+                            ..
+                        }),
+                        Some(StandardVisual::Card {
+                            title: b,
+                            loading: lb,
+                            ..
+                        }),
+                    ) => (a, la) != (b, lb),
+                    (_, Some(StandardVisual::Card { .. }))
+                    | (Some(StandardVisual::Card { .. }), _) => true,
+                    (
+                        Some(StandardVisual::Select {
+                            label: la,
+                            hint: ha,
+                            placeholder: pa,
+                            size: sa,
+                            options: oa,
+                            fit_options: fa,
+                            ..
+                        }),
+                        Some(StandardVisual::Select {
+                            label: lb,
+                            hint: hb,
+                            placeholder: pb,
+                            size: sb,
+                            options: ob,
+                            fit_options: fb,
+                            ..
+                        }),
+                    ) => (la, ha, pa, sa, oa, fa) != (lb, hb, pb, sb, ob, fb),
+                    (_, Some(StandardVisual::Select { .. }))
+                    | (Some(StandardVisual::Select { .. }), _) => true,
+                    (
+                        Some(StandardVisual::FormField {
+                            size: sa,
+                            hint: ha,
+                            error: ea,
+                            ..
+                        }),
+                        Some(StandardVisual::FormField {
+                            size: sb,
+                            hint: hb,
+                            error: eb,
+                            ..
+                        }),
+                    ) => (sa, ha.is_some(), ea.is_some()) != (sb, hb.is_some(), eb.is_some()),
+                    (_, Some(StandardVisual::FormField { .. }))
+                    | (Some(StandardVisual::FormField { .. }), _) => true,
                     _ => false,
                 };
                 let (
@@ -1812,6 +1930,16 @@ impl UiWorld {
                         text_folds_changed,
                     )
                 };
+                let card_text_style_changed =
+                    matches!(self.nodes.visual(*id), Some(StandardVisual::Card { .. }))
+                        != matches!(visual, Some(StandardVisual::Card { .. }));
+                let labeled_parts_only = matches!(
+                    (self.nodes.visual(*id), visual.as_ref()),
+                    (
+                        Some(StandardVisual::LabeledValue { .. }),
+                        Some(StandardVisual::LabeledValue { .. })
+                    )
+                );
                 let tree_accessibility_changed =
                     super::tree_view_accessibility_changed(self.nodes.visual(*id), visual.as_ref());
                 let text_path_changed = super::text_visual_key(self.nodes.visual(*id))
@@ -1821,6 +1949,19 @@ impl UiWorld {
                 let markdown_changed =
                     markdown_blocks_changed(self.nodes.visual(*id), visual.as_ref());
                 self.nodes.set_visual(*id, visual.clone());
+                if card_text_style_changed {
+                    self.nodes
+                        .invalidate_text(*id, crate::text_node::TextDirty::SHAPE_STYLE);
+                    self.mark(*id, DirtyMask::TEXT);
+                }
+
+                if content_layout_changed
+                    && !matches!(visual, Some(StandardVisual::LabeledValue { .. }))
+                {
+                    self.nodes
+                        .invalidate_text(*id, crate::text_node::TextDirty::CONSTRAINT);
+                    self.mark(*id, DirtyMask::TEXT);
+                }
                 if text_path_changed {
                     // The text path or a leading indicator's inset changed; the
                     // box may not move, so schedule the text explicitly.
@@ -1853,21 +1994,38 @@ impl UiWorld {
                     };
                     self.reconcile_text_fold_offered(*id, offered);
                 }
-                let visual_layout_changed = button_layout_changed
+                let visual_layout_changed = content_layout_changed
                     || select_fit_changed
                     || text_input_presentation_changed
                     || empty_state_presentation_changed
                     || modal_presentation_changed
                     || markdown_changed;
                 if visual_layout_changed {
+                    let (kind, fields, footprint) = if labeled_parts_only {
+                        (
+                            InvalidationKind::PLACEMENT,
+                            LayoutFieldMask::FLOW,
+                            LayoutDependencyFootprint::NONE,
+                        )
+                    } else {
+                        (
+                            InvalidationKind::MEASURE.union(InvalidationKind::PLACEMENT),
+                            LayoutFieldMask::INTRINSIC.union(LayoutFieldMask::FLOW),
+                            LayoutDependencyFootprint::intrinsic_container(),
+                        )
+                    };
                     self.record_layout_invalidation(
                         *id,
                         LayoutInvalidation::new(
                             LayoutInvalidationSource::Component,
-                            InvalidationReason::CONTEXT,
-                            InvalidationKind::MEASURE.union(InvalidationKind::PLACEMENT),
-                            LayoutFieldMask::INTRINSIC.union(LayoutFieldMask::FLOW),
-                            LayoutDependencyFootprint::intrinsic_container(),
+                            if labeled_parts_only {
+                                InvalidationReason::TEXT
+                            } else {
+                                InvalidationReason::CONTEXT
+                            },
+                            kind,
+                            fields,
+                            footprint,
                         ),
                     );
                 }
@@ -1904,8 +2062,10 @@ impl UiWorld {
                             0
                         },
                 );
-                if button_layout_changed
-                    || select_fit_changed
+                // Typed content-part invalidation above suppresses the owner
+                // and its dependency chain. Unchanged children retain their
+                // results even when their placements are reused by the pass.
+                if select_fit_changed
                     || text_input_presentation_changed
                     || empty_state_presentation_changed
                     || modal_presentation_changed
@@ -1970,6 +2130,7 @@ impl UiWorld {
                     || previous.numeric_minimum != accessibility.numeric_minimum
                     || previous.numeric_maximum != accessibility.numeric_maximum;
                 self.record_mut(*id).accessibility = accessibility.clone();
+                self.mark_inline_text_owners(*id);
                 if hidden_changed {
                     // `aria-hidden` changes the projected structure for the
                     // whole subtree. Dirty descendants so an incremental
@@ -2563,6 +2724,10 @@ impl UiWorld {
     /// case; skipping these is what makes it free.
     fn is_structural_noop(&self, mutation: &UiMutation) -> bool {
         match mutation {
+            UiMutation::SetInlineContent { id, content } => {
+                self.inline_content(*id).as_ref() == Some(content)
+                    && self.localized_text(*id).is_none()
+            }
             UiMutation::Insert {
                 parent,
                 child,
@@ -3185,6 +3350,12 @@ impl UiWorld {
         let next_authored = self.authored_style(id).clone();
         let next_presentation = self.record(id).style.clone();
         let resolved = Arc::clone(&self.record(id).resolved_layout);
+        if previous_resolved.position != resolved.position
+            || previous_resolved.overflow_x != resolved.overflow_x
+            || previous_resolved.overflow_y != resolved.overflow_y
+        {
+            self.rebind_sticky_subtree(id);
+        }
         self.track_scroll_style(id, &previous_effective, &next_presentation.layout);
         let previous = NodeStyle {
             layout: Arc::clone(&previous_resolved),
@@ -3286,6 +3457,24 @@ impl UiWorld {
 
         // An empty classification is counted there and queues nothing.
         self.record_layout_invalidation(id, style_layout_invalidation);
+        // Flow membership is an input of the parent, even when the child's
+        // exported size is unchanged. Once it becomes positioned, its new
+        // dependency graph deliberately has no child-metrics edge back to
+        // the flow: seed that context explicitly, as for a child-list edit.
+        if let Some(parent) = self.parent_id(id) {
+            let context = self
+                .established_layout_context(parent)
+                .unwrap_or(crate::FormattingContextKind::Flow);
+            let content = self
+                .layout_content_kind(id)
+                .unwrap_or(crate::LayoutContentKind::Empty);
+            let participation = |style: &nana_ui_core::LayoutStyle| {
+                crate::ParticipationKind::classify(context, style, content)
+            };
+            if participation(&previous_resolved) != participation(&resolved) {
+                self.record_child_list_invalidation(parent);
+            }
+        }
         if omits_box_changed {
             self.record_layout_invalidation(
                 id,
@@ -3402,6 +3591,8 @@ impl UiWorld {
     /// Replace `id`'s text with `text`: its spans go, its shaped text is
     /// stale, and a document selection in it is dropped. The caller marks.
     pub(super) fn replace_text_content(&mut self, id: StableNodeId, text: TextContent) {
+        self.mark_inline_text_owners(id);
+        self.nodes.set_inline_atoms(id, Arc::from([]));
         self.record_mut(id).text = text;
         // Spans over the old text would style the wrong bytes.
         self.nodes.set_rich_text(id, None);

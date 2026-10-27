@@ -8,6 +8,7 @@ pub use compositor::{
     CompositorLayer, CompositorLayerId, CompositorLayerKind, CompositorMotionBinding,
     CompositorPaintEncode, LAYER_DEMOTE_HOLD, LAYER_PROMOTE_HOLD,
 };
+mod sticky;
 mod visibility;
 pub use composition::FramePlan;
 use visibility::VisibilityIndex;
@@ -181,6 +182,9 @@ const SELECT_MENU_HINTS: u32 = 12;
 /// An open select menu's scrollbar over its rows: the track (0), the thumb
 /// (1).
 const SELECT_MENU_SCROLLBAR: u32 = 13;
+/// A context menu row's hint at its end, one slot per row. Fixed row slots
+/// below 256 are already shared by backgrounds, labels and icons.
+const CONTEXT_MENU_HINTS: u32 = 14;
 /// An open select menu's surface, under its rows. Slots 3..=6 are the
 /// field's arrow and 7 its hint: the surface used to take slot 4 and hid an
 /// arrow stroke for as long as the menu was open.
@@ -1526,6 +1530,7 @@ pub struct UiScene {
     /// Projections that cannot be adjusted by an inverse delta. Usually empty;
     /// ordinary scrolling must not scan every retained descendant.
     unadjustable_projections: NodeSet,
+    sticky_nodes: nana_ui_runtime::StickyDependencies,
     draw_attributes: std::sync::Mutex<NodeMap<DrawAttributes>>,
     /// Dest groups per node, stamped with the scene instance they were read
     /// at. See [`UiScene::opacity_groups`].
@@ -1604,6 +1609,7 @@ impl Default for UiScene {
             attribute_epoch: 0,
             projections: NodeMap::default(),
             unadjustable_projections: NodeSet::default(),
+            sticky_nodes: nana_ui_runtime::StickyDependencies::default(),
             draw_attributes: std::sync::Mutex::new(NodeMap::default()),
             opacity_group_cache: std::sync::Mutex::new(OpacityGroupCache::default()),
             layer_factor_cache: std::sync::Mutex::new(LayerFactorCache::default()),
@@ -1637,6 +1643,7 @@ impl Clone for UiScene {
             attribute_epoch: self.attribute_epoch,
             projections: self.projections.clone(),
             unadjustable_projections: self.unadjustable_projections.clone(),
+            sticky_nodes: self.sticky_nodes.clone(),
             draw_attributes: std::sync::Mutex::new(
                 self.draw_attributes
                     .lock()
@@ -1925,12 +1932,15 @@ impl UiScene {
         let mut hierarchy_changed = false;
         let mut inherited_roots = HashSet::new();
         let mut custom_paint_changed = false;
+        let mut rebind_sticky = Vec::new();
         for id in removals {
             if let Some(old) = self.nodes.remove(&id) {
                 self.dest_group_candidates -= usize::from(may_be_dest_group(&old));
                 delta.removed.push(id);
                 self.projections.remove(&id);
                 self.unadjustable_projections.remove(&id);
+                rebind_sticky.extend(self.sticky_nodes.affected(id));
+                self.sticky_nodes.remove(id);
                 if !old.children.is_empty() {
                     self.attribute_epoch = self.attribute_epoch.wrapping_add(1);
                     inherited_roots.insert(id);
@@ -1965,6 +1975,15 @@ impl UiScene {
         let mut inherited_geometry_changed = !inherited_roots.is_empty();
         for node in extracted {
             let previous = self.nodes.get(&node.id);
+            if previous.is_none_or(|old| {
+                old.parent != node.parent
+                    || old.source_style.layout.position != node.source_style.layout.position
+                    || old.source_style.layout.overflow_x != node.source_style.layout.overflow_x
+                    || old.source_style.layout.overflow_y != node.source_style.layout.overflow_y
+            }) {
+                rebind_sticky.extend(self.sticky_nodes.affected(node.id));
+                rebind_sticky.push(node.id);
+            }
             // Gaining or losing a painter changes which primitives a node
             // owns without necessarily touching the frame plan, so the
             // retained index's slots for it cannot be trusted. A new
@@ -1973,8 +1992,18 @@ impl UiScene {
             // the new primitives, keeping the index for everything else.
             custom_paint_changed |= previous
                 .is_some_and(|old| old.custom_paint.is_some() != node.custom_paint.is_some());
+            let sticky_geometry_changed = self.sticky_nodes.has_dependents(node.id)
+                && previous.is_some_and(|old| {
+                    let facts = |node: &ExtractedNode| {
+                        node.layout_result.as_ref().map(|result| {
+                            (result.content_box, result.padding_box, result.scroll_extent)
+                        })
+                    };
+                    facts(old) != facts(&node)
+                });
             let inherited_changed = previous.map_or(!node.children.is_empty(), |old| {
-                old.parent != node.parent
+                sticky_geometry_changed
+                    || old.parent != node.parent
                     || old.layout != node.layout
                     || inherited_layout_changed(&old.source_style.layout, &node.source_style.layout)
                     || inherited_component_clip(old) != inherited_component_clip(&node)
@@ -1984,8 +2013,8 @@ impl UiScene {
                 // clip or transform changes. Refresh their inherited projection
                 // without rebuilding invertible retained geometry.
                 self.attribute_epoch = self.attribute_epoch.wrapping_add(1);
-                inherited_geometry_changed |=
-                    previous.is_none_or(|old| inherited_transform_changed(old, &node));
+                inherited_geometry_changed |= sticky_geometry_changed
+                    || previous.is_none_or(|old| inherited_transform_changed(old, &node));
                 inherited_roots.insert(node.id);
             }
             if previous.is_none() {
@@ -2062,6 +2091,33 @@ impl UiScene {
             self.dest_group_candidates += usize::from(candidate);
             updated_nodes += 1;
         }
+        rebind_sticky.sort_unstable();
+        rebind_sticky.dedup();
+        for id in rebind_sticky {
+            if self.nodes.get(&id).is_some_and(|node| {
+                node.source_style.layout.position == nana_ui_core::PositionSpec::Sticky
+            }) {
+                let mut cursor = self.nodes.get(&id).and_then(|node| node.parent);
+                let parents: Vec<_> = std::iter::from_fn(|| {
+                    let id = cursor?;
+                    let node = self.nodes.get(&id)?;
+                    let style = &node.source_style.layout;
+                    cursor = if style.overflow_x.clips()
+                        || style.overflow_y.clips()
+                        || style.position == nana_ui_core::PositionSpec::Fixed
+                    {
+                        None
+                    } else {
+                        node.parent
+                    };
+                    Some(id)
+                })
+                .collect();
+                self.sticky_nodes.bind(id, parents.into_iter());
+            } else {
+                self.sticky_nodes.remove(id);
+            }
+        }
         let order_rebuilt = (updated_nodes != 0 || removed_nodes != 0)
             && (hierarchy_changed || self.node_order.len() != self.nodes.len());
         let mut rebuilt_primitives = 0;
@@ -2125,6 +2181,15 @@ impl UiScene {
             if let Some(mut visibility) = self.visibility.take() {
                 for &(root, offset) in &scroll_translations {
                     visibility.translate_subtree(root, offset);
+                }
+                // Sticky branches do not follow the ancestor's uniform shift.
+                // Refresh their retained culling bounds, leaving unrelated
+                // primitives and the compiled frame plan in place.
+                for &(root, _) in &scroll_translations {
+                    for id in self.sticky_nodes.affected(root) {
+                        visibility.update(self, &[id]);
+                        visibility.refresh_subtree(self, id);
+                    }
                 }
                 if inherited_geometry_changed {
                     // An ancestor's projection moved, and its retained
@@ -2340,6 +2405,12 @@ impl UiScene {
     /// string. Independent element children, such as list rows inside a Card,
     /// keep their own labels.
     fn parent_already_paints_text(&self, node: &ExtractedNode) -> bool {
+        if node.layout_result.as_ref().is_some_and(|result| {
+            result.participation == Some(nana_ui_runtime::ParticipationKind::AtomicInline)
+        }) {
+            return false;
+        }
+
         if !matches!(&*node.kind, NodeKind::Text) {
             return false;
         }
@@ -2571,7 +2642,7 @@ impl UiScene {
             let local = if visual {
                 self.resolved_local_transform(ancestor, blocks_3d)
             } else {
-                node_scene_transform(ancestor.source_style.layout.as_ref(), layout, blocks_3d)
+                self.logical_local_transform(ancestor, blocks_3d)
             };
             transform = transform.then(local);
             if ancestor.source_style.layout.fails_closed_3d_context() {
@@ -3045,6 +3116,29 @@ fn inherited_transform_changed(old: &ExtractedNode, node: &ExtractedNode) -> boo
             != node.source_style.layout.fails_closed_3d_context()
     {
         return true;
+    }
+    if node.source_style.layout.position == nana_ui_core::PositionSpec::Sticky {
+        let before = &old.source_style.layout;
+        let after = &node.source_style.layout;
+        if (
+            before.offset_top,
+            before.offset_right,
+            before.offset_bottom,
+            before.offset_left,
+            before.dir,
+            before.writing_mode,
+            old.style.font_size,
+        ) != (
+            after.offset_top,
+            after.offset_right,
+            after.offset_bottom,
+            after.offset_left,
+            after.dir,
+            after.writing_mode,
+            node.style.font_size,
+        ) {
+            return true;
+        }
     }
     [false, true].into_iter().any(|blocks_3d| {
         node_scene_transform(old.source_style.layout.as_ref(), old.layout, blocks_3d)
@@ -3892,7 +3986,10 @@ fn component_text_primitive(
         node.standard_visual,
         Some(StandardVisual::ValidationMessage { .. })
     );
-    let (ellipsis, max_lines) = if validation {
+    let card_title = matches!(node.standard_visual, Some(StandardVisual::Card { .. }));
+    let (ellipsis, max_lines) = if card_title {
+        (true, Some(1))
+    } else if validation {
         (
             node.source_style.layout.uses_text_ellipsis(),
             node.source_style.layout.resolved_line_clamp(),
@@ -3909,10 +4006,53 @@ fn component_text_primitive(
             ComponentGeometry::NativeMarkdown { .. } | ComponentGeometry::SelectableRichText { .. }
         )
     ) || (validation && node.source_style.layout.text_wraps());
+    let advanced_content = slot == 2
+        && matches!(
+            node.standard_visual,
+            Some(
+                StandardVisual::Button { .. }
+                    | StandardVisual::ActionMenuItem { .. }
+                    | StandardVisual::Card { .. }
+            )
+        )
+        && (card_title || node.rich_text.is_some() || !node.children.is_empty())
+        && node
+            .text
+            .as_ref()
+            .is_some_and(|text| text.value.as_str() == region.content.as_ref());
+    let retained = advanced_content
+        .then_some(node.text_layout.as_ref())
+        .flatten();
+    let mut text_bounds = scene_rect(region.bounds);
+    if let Some(retained) = retained
+        && !retained.layout.is_vertical()
+        && retained.layout.constraints.max_width_px != Some(region.bounds.width)
+    {
+        text_bounds.x -= retained.layout.bounds.x;
+        text_bounds.width = retained
+            .layout
+            .constraints
+            .max_width_px
+            .unwrap_or(text_bounds.width);
+    }
+    // An ellipsis can be wider than a tiny title budget. Keep that glyph and
+    // its coverage inside the published Header part, clear of the spinner.
+    let clips = if card_title
+        && retained.is_none_or(|retained| retained.layout.overflow != Default::default())
+    {
+        let mut title_clips = clips.to_vec();
+        title_clips.push(ClipRegion::axis_aligned(
+            scene_rect(region.bounds),
+            transform,
+        ));
+        title_clips.into()
+    } else {
+        clips
+    };
     ScenePrimitive {
         id: PrimitiveId { node: id, slot },
         node: id,
-        bounds: scene_rect(region.bounds),
+        bounds: text_bounds,
         transform,
         clips,
         opacity,
@@ -3935,10 +4075,11 @@ fn component_text_primitive(
             size: region.font_size,
             weight: region.font_weight,
             family: node.style.font_family.as_deref().map(str::to_owned),
-            line_height: if matches!(
-                node.component_geometry.as_deref(),
-                Some(ComponentGeometry::Switch { .. } | ComponentGeometry::ListItem { .. })
-            ) {
+            line_height: if card_title
+                || matches!(
+                    node.component_geometry.as_deref(),
+                    Some(ComponentGeometry::Switch { .. } | ComponentGeometry::ListItem { .. })
+                ) {
                 Some(LineHeightSpec::Absolute(region.bounds.height))
             } else {
                 node.style.line_height
@@ -3983,11 +4124,18 @@ fn component_text_primitive(
                 // the newlines the user typed whatever `white-space` says, and
                 // a renderer that folds them paints one line where six were
                 // measured.
-                preserve_lines: node.text_preserve_lines,
+                preserve_lines: !card_title && node.text_preserve_lines,
                 ..SceneTextOpenType::from_computed(&node.style)
             },
-            layout: None,
-            rich: None,
+            layout: retained.cloned(),
+            rich: advanced_content
+                .then(|| {
+                    SceneRichPaint::from_base(
+                        css_text_effects(&node.source_style.layout),
+                        node.rich_text.as_ref(),
+                    )
+                })
+                .flatten(),
             presentation: None,
         },
     }
@@ -4009,7 +4157,7 @@ fn scene_text_spans(
     region: Option<&ComponentTextRegion>,
     content: &str,
 ) -> Vec<SceneTextSpan> {
-    if node.text_spans.is_empty() {
+    if node.text_spans.is_empty() && node.rich_text.is_none() {
         return Vec::new();
     }
     // TextInput 主文本区域：span 由 extraction 按 TextInput 呈现内容
@@ -4031,7 +4179,8 @@ fn scene_text_spans(
             return Vec::new();
         }
     }
-    node.text_spans
+    let spans = node
+        .text_spans
         .iter()
         .filter(|span| {
             span.start < span.end
@@ -4045,7 +4194,8 @@ fn scene_text_spans(
             color: slot_color(span.paint_color, Some(span.color))
                 .expect("a span has a resolved colour"),
         })
-        .collect()
+        .collect();
+    rich_fill_spans(content, node.rich_text.as_ref(), spans)
 }
 
 struct VisualPrimitiveContext<'a> {

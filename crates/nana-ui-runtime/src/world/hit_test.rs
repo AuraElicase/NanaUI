@@ -939,7 +939,7 @@ impl UiWorld {
             let style = self.hit_motion_layout(id);
             let b = self.component_layout_box(id)?;
             let local = self.input_local_scene_transform(id, &style, b, blocks_3d);
-            transform = then_hit(transform, local);
+            transform = then_hit(transform, self.with_sticky_translation(id, local));
             blocks_3d |= style.fails_closed_3d_context();
             if id != target {
                 transform = then_hit(
@@ -1263,7 +1263,7 @@ impl UiWorld {
         let Some(indexed) = index.entries.get(&id) else {
             return false;
         };
-        if self.motion_blocks_input(id) {
+        if self.motion_blocks_input(id) || self.inline_box_omitted(id) {
             return false;
         }
         let Some(record) = self.nodes.get(id) else {
@@ -1279,7 +1279,7 @@ impl UiWorld {
             return false;
         };
         let local = self.input_local_scene_transform(id, &style, layout, parent_blocks_3d);
-        let (transform, persp) = then_hit(parent_hit, local);
+        let (transform, persp) = then_hit(parent_hit, self.with_sticky_translation(id, local));
         let node = &indexed.entry;
         if !node
             .self_clips
@@ -1537,6 +1537,19 @@ impl UiWorld {
         node.shift[0] += a * delta[0] + c * delta[1];
         node.shift[1] += b * delta[0] + d * delta[1];
         index.refresh_bounds(scroller);
+        // Ordinary descendants share one lazy scroll shift. Sticky branches
+        // additionally change their local placement, so rebase just those
+        // branches against current layout instead of translating them twice.
+        let mut sticky = self.sticky_nodes.affected(scroller);
+        sticky.sort_by_key(|id| {
+            std::iter::successors(self.parent_id(*id), |id| self.parent_id(*id)).count()
+        });
+        for id in sticky {
+            if !self.patch_hit_subtree(document, id) {
+                self.rebuild_hit_test(document);
+                break;
+            }
+        }
     }
 }
 
@@ -1645,7 +1658,7 @@ impl UiWorld {
         while let Some((id, parent_hit, parent, position, parent_used_pe, parent_blocks_3d)) =
             stack.pop()
         {
-            if self.motion_blocks_input(id) {
+            if self.motion_blocks_input(id) || self.inline_box_omitted(id) {
                 continue;
             }
             let (
@@ -1759,7 +1772,7 @@ impl UiWorld {
                     .world_scene_transform(layout.x, layout.y, layout.width, layout.height)
                     .unwrap_or((IDENTITY_AFFINE, [0.0, 0.0]))
             };
-            let (transform, persp) = then_hit(parent_hit, local);
+            let (transform, persp) = then_hit(parent_hit, self.with_sticky_translation(id, local));
             let child_transform = then_hit(
                 (transform, persp),
                 ([1.0, 0.0, 0.0, 1.0, -scroll.x, -scroll.y], [0.0, 0.0]),

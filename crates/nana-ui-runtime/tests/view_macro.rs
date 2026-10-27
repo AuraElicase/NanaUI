@@ -2141,3 +2141,227 @@ fn localized_text_and_locale_scopes_mount_like_their_function_calls() {
         "a scope of its own keeps it: {switched}"
     );
 }
+
+/// Layout authoring has one canonical contract: constructors, the template
+/// facade and explicit build-time CSS preserve the same context and results.
+#[test]
+fn issue204_row_column_and_css_share_structured_layout_results() {
+    use nana_ui_runtime::{FormattingContextKind, LayoutViewport, MeasureTextShaper, css};
+    let document = DocumentId::new(1).unwrap();
+    for column_axis in [false, true] {
+        let mut outputs = Vec::new();
+        for author in 0..3 {
+            let mut cx = AppContext::new();
+            let _mounted = cx
+                .mount_view_root(document, || match (column_axis, author) {
+                    (false, 0) => widget(Stack::row(8.0))
+                        .children((text("first"), text("second")))
+                        .into_any(),
+                    (true, 0) => widget(Stack::column(8.0))
+                        .children((text("first"), text("second")))
+                        .into_any(),
+                    (false, 1) => {
+                        view! { <Row gap=8><Text>"first"</Text><Text>"second"</Text></Row> }
+                            .into_any()
+                    }
+                    (true, 1) => {
+                        view! { <Column gap=8><Text>"first"</Text><Text>"second"</Text></Column> }
+                            .into_any()
+                    }
+                    (false, _) => widget(Stack::row(8.0))
+                        .css(css! {display:flex;flex-direction:row;gap:8px;align-items:center;})
+                        .children((text("first"), text("second")))
+                        .into_any(),
+                    (true, _) => widget(Stack::column(8.0))
+                        .css(css! {display:flex;flex-direction:column;gap:8px;align-items:stretch;})
+                        .children((text("first"), text("second")))
+                        .into_any(),
+                })
+                .unwrap();
+            for _ in 0..4 {
+                let work = cx.take_system_work();
+                cx.resolve_styles(&work.style).unwrap();
+                cx.shape_text(&work.text, &mut MeasureTextShaper).unwrap();
+                cx.layout_document(document, LayoutViewport::new(800.0, 600.0))
+                    .unwrap();
+            }
+            let world = cx.world();
+            let snapshot: Vec<_> = world
+                .document_order(document)
+                .into_iter()
+                .map(|id| {
+                    let node = world.layout_node(id).unwrap();
+                    let result = world.layout_result(id).unwrap();
+                    (
+                        node.intent,
+                        node.established,
+                        node.participation,
+                        result.bounds,
+                        result.first_baseline,
+                        result.last_baseline,
+                        result.overflow,
+                        result.formatting_context,
+                        result.fragments.clone(),
+                    )
+                })
+                .collect();
+            assert_eq!(snapshot[0].1, Some(FormattingContextKind::Flex));
+            outputs.push(snapshot);
+        }
+        assert_eq!(outputs[0], outputs[1], "Rust/template parity");
+        assert_eq!(outputs[0], outputs[2], "Rust/CSS parity");
+    }
+}
+
+#[test]
+fn issue204_grid_css_and_rust_share_tracks_participation_and_fragments() {
+    use nana_ui_core::{DisplaySpec, GridTrack, LengthSpec};
+    use nana_ui_runtime::{
+        FormattingContextKind, LayoutStyle, LayoutViewport, MeasureTextShaper, ParticipationKind,
+        css,
+    };
+    let document = DocumentId::new(1).unwrap();
+    let mut outputs = Vec::new();
+    for css_path in [false, true] {
+        let mut cx = AppContext::new();
+        let _view=cx.mount_view_root(document,|| {
+            let grid=if css_path {
+                widget(Stack::from_layout(LayoutStyle::default())).css(css! {display:grid;grid-template-columns:80px 120px;width:240px;align-items:flex-start;flex-direction:column;})
+            } else {
+                widget(Stack::from_layout(LayoutStyle {display:Some(DisplaySpec::Grid),grid_columns:Some(vec![GridTrack::Px(80.0),GridTrack::Px(120.0)]),width:Some(LengthSpec::Px(240.0)),..Default::default()}))
+            };
+            grid.children((text("first"),text("second"))).into_any()
+        }).unwrap();
+        for _ in 0..4 {
+            let work = cx.take_system_work();
+            cx.resolve_styles(&work.style).unwrap();
+            cx.shape_text(&work.text, &mut MeasureTextShaper).unwrap();
+            cx.layout_document(document, LayoutViewport::new(800.0, 600.0))
+                .unwrap();
+        }
+        let world = cx.world();
+        let snapshot: Vec<_> = world
+            .document_order(document)
+            .into_iter()
+            .map(|id| {
+                let node = world.layout_node(id).unwrap();
+                let result = world.layout_result(id).unwrap();
+                (
+                    node.intent,
+                    node.established,
+                    node.participation,
+                    result.bounds,
+                    result.first_baseline,
+                    result.last_baseline,
+                    result.overflow,
+                    result.fragments.clone(),
+                )
+            })
+            .collect();
+        assert_eq!(snapshot[0].1, Some(FormattingContextKind::Grid));
+        assert_eq!(snapshot[1].2, Some(ParticipationKind::GridItem));
+        outputs.push(snapshot);
+    }
+    for (rust, css) in outputs[0].iter().zip(&outputs[1]) {
+        // The style authority treats an omitted direction as Column.
+        assert!(
+            rust.0.changed_fields(&css.0).is_empty(),
+            "grid intent differs"
+        );
+        assert_eq!(
+            (
+                &rust.1, &rust.2, &rust.3, &rust.4, &rust.5, &rust.6, &rust.7
+            ),
+            (&css.1, &css.2, &css.3, &css.4, &css.5, &css.6, &css.7),
+            "grid result differs"
+        );
+    }
+}
+
+#[test]
+fn inline_template_and_rust_project_one_paragraph_without_text_wrappers() {
+    fn mount(template: bool) -> (AppContext, nana_ui_runtime::MountedView, Signal<String>) {
+        let mut cx = AppContext::new();
+        let mut state = None;
+        let mount = cx
+            .mount_view_root(DocumentId::new(1).unwrap(), || {
+                let suffix = signal("suffix".to_owned());
+                state = Some(suffix);
+                if template {
+                    view! {<Inline>"prefix " <Button>"Details"</Button> {suffix}</Inline>}
+                        .into_any()
+                } else {
+                    nana_ui_runtime::view::inline()
+                        .text("prefix ")
+                        .child(button("Details"))
+                        .text(suffix)
+                        .into_any()
+                }
+            })
+            .unwrap();
+        (cx, mount, state.unwrap())
+    }
+    let (mut a, ma, sa) = mount(true);
+    let (mut b, mb, sb) = mount(false);
+    let root = ma.roots()[0];
+    assert_eq!(dump(&a, root), dump(&b, mb.roots()[0]));
+    assert_eq!(a.world().len(), 2);
+    let child = a.world().node(root).unwrap().children[0];
+    assert_eq!(
+        a.world().inline_content(root).unwrap().atoms()[0].node,
+        child
+    );
+    sa.set("changed".to_owned());
+    sb.set("changed".to_owned());
+    a.flush_reactive().unwrap();
+    b.flush_reactive().unwrap();
+    assert_eq!(dump(&a, root), dump(&b, mb.roots()[0]));
+    assert_eq!(a.world().node(root).unwrap().children[0], child);
+    assert_eq!(
+        a.world().inline_text(root, false).as_deref(),
+        Some("prefix Detailschanged")
+    );
+}
+
+#[test]
+fn inline_spans_are_lightweight_and_static_atomic_entries_stay_in_source_order() {
+    let mut cx = AppContext::new();
+    let mut text_state = None;
+    let mounted=cx.mount_view_root(DocumentId::new(1).unwrap(),|| {
+        let suffix=signal("styled".to_owned());text_state=Some(suffix);
+        view! {<Inline>"before " <Span style={nana_ui_core::RichSpanStyle::new().size(20.0)}>{suffix}</Span> <Button>"one"</Button>" after " <Button>"two"</Button></Inline>}
+    }).unwrap();
+    let paragraph = mounted.roots()[0];
+    assert_eq!(cx.world().len(), 3);
+    assert_eq!(
+        cx.world().inline_content(paragraph).unwrap().atoms().len(),
+        2
+    );
+    text_state.unwrap().set("updated".into());
+    cx.flush_reactive().unwrap();
+    assert!(
+        cx.world()
+            .inline_text(paragraph, false)
+            .unwrap()
+            .contains("updatedone after two")
+    );
+    let second = cx
+        .mount_view_root(DocumentId::new(2).unwrap(), || {
+            nana_ui_runtime::view::inline()
+                .text("a")
+                .child(button("one"))
+                .text("b")
+                .child(button("two"))
+        })
+        .unwrap();
+    assert_eq!(
+        cx.world()
+            .inline_content(second.roots()[0])
+            .unwrap()
+            .atoms()
+            .iter()
+            .map(|atom| atom.offset)
+            .collect::<Vec<_>>(),
+        vec![1, 5]
+    );
+}

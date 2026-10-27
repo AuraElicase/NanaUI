@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 fn quad(layout: LayoutStyle) -> ExtractedNode {
     ExtractedNode {
+        layout_result: None,
         custom_paint: None,
         chrome_radii: Default::default(),
         id: StableNodeId::new(1).unwrap(),

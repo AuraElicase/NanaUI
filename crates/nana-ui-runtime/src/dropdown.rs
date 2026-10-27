@@ -13,10 +13,11 @@ use crate::{
 };
 
 /// Option identity stays application-owned. Disabled options remain visible.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DropdownOption {
     pub value: Arc<str>,
     pub label: Arc<str>,
+    pub content: Option<Arc<crate::InlineContent>>,
     pub hint: Option<Arc<str>>,
     pub disabled: bool,
 }
@@ -26,6 +27,7 @@ impl DropdownOption {
         Self {
             value: value.into(),
             label: label.into(),
+            content: None,
             hint: None,
             disabled: false,
         }
@@ -34,6 +36,12 @@ impl DropdownOption {
     pub fn hint(mut self, hint: impl Into<Arc<str>>) -> Self {
         let hint = hint.into();
         self.hint = (!hint.is_empty()).then_some(hint);
+        self
+    }
+
+    /// Fill-colour spans over the label; see [`crate::SelectOptionData::content`].
+    pub fn content(mut self, content: impl Into<crate::InlineContent>) -> Self {
+        (self.label, self.content) = crate::select::option_content(content.into());
         self
     }
 
@@ -46,6 +54,7 @@ impl DropdownOption {
         menu_option_label(&SelectOptionData {
             key: None,
             label: Arc::clone(&self.label),
+            content: self.content.clone(),
             hint: self.hint.clone(),
             disabled: self.disabled,
             checked: false,
@@ -304,6 +313,7 @@ impl Dropdown {
             .map(|option| SelectOptionData {
                 key: None,
                 label: Arc::clone(&option.label),
+                content: option.content.clone(),
                 hint: option.hint.clone(),
                 disabled: option.disabled,
                 checked: match &self.selection {

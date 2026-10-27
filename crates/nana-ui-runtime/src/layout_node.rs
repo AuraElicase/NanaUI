@@ -43,6 +43,15 @@ pub enum FormattingContextKind {
 }
 
 impl FormattingContextKind {
+    pub(crate) const fn cache_id(self) -> crate::FormattingContextId {
+        crate::FormattingContextId::new(match self {
+            Self::Flow => 0,
+            Self::Flex => 1,
+            Self::Grid => 2,
+            Self::Inline => 3,
+            Self::Overlay => 4,
+        })
+    }
     /// The context a style alone selects, before layout has run. Layout
     /// records the context it actually ran; this is the provisional answer
     /// for a node it has not reached yet.

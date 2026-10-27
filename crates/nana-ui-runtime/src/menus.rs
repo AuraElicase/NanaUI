@@ -26,6 +26,8 @@ const MENU_MIN_HEIGHT: f32 = nana_ui_core::ControlSize::Medium.height_in(nana_ui
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActionMenuItem {
     pub label: Arc<str>,
+    /// Canonical styled or mixed content. `None` uses the plain label.
+    pub content: Option<Arc<crate::InlineContent>>,
     /// Spoken name when [`Self::label`] is ambiguous. Empty keeps the label.
     pub accessible_name: Arc<str>,
     pub hint: Option<Arc<str>>,
@@ -39,6 +41,18 @@ pub struct ActionMenuItem {
 }
 
 impl ActionMenuItem {
+    /// Text, spans and retained children share the label's content box.
+    /// A plain value returns to the allocation-light string representation.
+    pub fn content(mut self, content: impl Into<crate::InlineContent>) -> Self {
+        let content = content.into().normalized();
+        self.label = Arc::from(content.text());
+        self.content = if matches!(content, crate::InlineContent::PlainText(_)) {
+            None
+        } else {
+            Some(Arc::new(content))
+        };
+        self
+    }
     /// Replaces the node style wholesale.
     ///
     /// Builders that derive layout from other props (such as `size`) overwrite
@@ -51,6 +65,7 @@ impl ActionMenuItem {
         let size = ControlSize::Small;
         Self {
             label: label.into(),
+            content: None,
             accessible_name: Arc::from(""),
             hint: None,
             leading: None,
@@ -164,8 +179,12 @@ impl crate::ComponentView for ActionMenuItem {
     }
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
+        let label = self
+            .content
+            .as_deref()
+            .map_or(&self.label, crate::InlineContent::shared_text);
         let visual = StandardVisual::ActionMenuItem {
-            label: Arc::clone(&self.label),
+            label: Arc::clone(label),
             hint: self.hint.clone(),
             icon: self.leading,
             danger: self.danger,
@@ -176,15 +195,22 @@ impl crate::ComponentView for ActionMenuItem {
         if world.standard_visual(id) != Some(visual.clone()) {
             mutations.set_standard_visual(id, Some(visual));
         }
-        if world.text(id) != Some(self.label.as_ref()) {
+        if !crate::world::inline_content::project_control_content(
+            id,
+            world,
+            &self.label,
+            self.content.as_deref(),
+            mutations,
+        ) && world.text(id) != Some(label.as_ref())
+        {
             mutations.set_text(
                 id,
                 TextContent {
-                    value: self.label.to_string().into(),
+                    value: label.to_string().into(),
                 },
             );
         }
-        let spoken = menu_spoken_name(&self.label, Some(&self.accessible_name));
+        let spoken = menu_spoken_name(label, Some(&self.accessible_name));
         project_common(
             id,
             world,
@@ -196,7 +222,11 @@ impl crate::ComponentView for ActionMenuItem {
             },
             AccessibilityState {
                 role: self.mark.role(),
-                label: Some(spoken),
+                label: if self.content.is_some() && self.accessible_name.is_empty() {
+                    None
+                } else {
+                    Some(spoken)
+                },
                 description: self.hint.clone(),
                 disabled: self.disabled,
                 checked: self.mark.checked(),
@@ -330,10 +360,11 @@ fn menu_item_key(value: &str) -> u64 {
     hasher.finish()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ContextMenuItem {
     pub value: Arc<str>,
     pub label: Arc<str>,
+    pub content: Option<Arc<crate::InlineContent>>,
     /// Spoken name when [`Self::label`] is too short to stand alone.
     pub accessible_name: Option<Arc<str>>,
     pub hint: Option<Arc<str>>,
@@ -348,6 +379,7 @@ impl ContextMenuItem {
         Self {
             value: value.into(),
             label: label.into(),
+            content: None,
             accessible_name: None,
             hint: None,
             icon: None,
@@ -361,6 +393,12 @@ impl ContextMenuItem {
     pub fn named(mut self, name: impl Into<Arc<str>>) -> Self {
         let name = name.into();
         self.accessible_name = (!name.is_empty()).then_some(name);
+        self
+    }
+
+    /// Fill-colour spans over the label; see [`crate::SelectOptionData::content`].
+    pub fn content(mut self, content: impl Into<crate::InlineContent>) -> Self {
+        (self.label, self.content) = crate::select::option_content(content.into());
         self
     }
 
@@ -696,6 +734,7 @@ impl crate::ComponentView for ContextMenu {
             .map(|item| SelectOptionData {
                 key: Some(menu_item_key(&item.value)),
                 label: item.label,
+                content: item.content,
                 hint: item.hint,
                 disabled: item.disabled,
                 checked: item.mark.shows_mark(),
@@ -829,10 +868,12 @@ pub(crate) fn context_menu_geometry(
         palette,
         metrics,
         search_placeholder,
+        crate::text_width::ChromeTextMeasure::ESTIMATE,
         nana_ui_core::builtin_theme(nana_ui_core::ThemeAppearance::Dark),
     )
 }
 
+#[cfg(test)]
 pub(crate) fn action_menu_item_geometry_in(
     bounds: LayoutBox,
     label: &Arc<str>,
@@ -847,7 +888,34 @@ pub(crate) fn action_menu_item_geometry_in(
     measure: crate::text_width::ChromeTextMeasure<'_>,
     theme: &nana_ui_core::CompiledTheme,
 ) -> ComponentGeometry {
-    let pad = size.padding_x_in(metrics);
+    use crate::layout_engine::parts::menu_content_parts;
+    let parts = menu_content_parts(
+        bounds,
+        size.padding_x_in(metrics),
+        theme.spacing().md,
+        icon.map(|_| size.text_size_in(theme.typography())),
+        hint.map(|hint| measure.width(hint, theme.typography().hint, None)),
+    );
+    action_menu_item_geometry_from_parts(
+        label, hint, icon, danger, disabled, size, style, palette, theme, &parts,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn action_menu_item_geometry_from_parts(
+    label: &Arc<str>,
+    hint: Option<&Arc<str>>,
+    icon: Option<Icon>,
+    danger: bool,
+    disabled: bool,
+    size: ControlSize,
+    style: &ComputedStyle,
+    palette: &SemanticPalette,
+    theme: &nana_ui_core::CompiledTheme,
+    parts: &crate::layout_engine::parts::ContentParts,
+) -> ComponentGeometry {
+    use crate::LayoutPartKind;
+    use crate::layout_engine::parts::part_bounds;
     let icon_color = if disabled {
         palette.faint.as_rgba_array()
     } else if danger {
@@ -855,16 +923,9 @@ pub(crate) fn action_menu_item_geometry_in(
     } else {
         palette.muted.as_rgba_array()
     };
-    let (cursor, icon) = menu_option_icon(bounds, icon, size, icon_color, metrics, theme);
-    let hint_width = hint
-        .map(|hint| measure.width(hint, theme.typography().hint, None))
-        .unwrap_or(0.0);
-    let hint_gap = if hint.is_some() {
-        theme.spacing().md
-    } else {
-        0.0
-    };
-    let label_right = bounds.x + bounds.width - pad - hint_width - hint_gap;
+    let icon = icon
+        .zip(part_bounds(parts, LayoutPartKind::LeadingContent))
+        .map(|(icon, bounds)| (icon, bounds, icon_color));
     let foreground = if disabled {
         palette.faint.as_rgba_array()
     } else if danger {
@@ -875,24 +936,14 @@ pub(crate) fn action_menu_item_geometry_in(
     ComponentGeometry::ActionMenuItem {
         icon,
         label: ComponentTextRegion {
-            bounds: LayoutBox {
-                x: cursor,
-                y: bounds.y,
-                width: (label_right - cursor).max(0.0),
-                height: bounds.height,
-            },
+            bounds: part_bounds(parts, LayoutPartKind::TextContent).unwrap_or_default(),
             content: Arc::clone(label).into(),
             color: Some(foreground),
             font_size: size.text_size_in(theme.typography()),
             font_weight: Some(theme.typography().medium),
         },
         hint: hint.map(|hint| ComponentTextRegion {
-            bounds: LayoutBox {
-                x: label_right + hint_gap,
-                y: bounds.y,
-                width: hint_width,
-                height: bounds.height,
-            },
+            bounds: part_bounds(parts, LayoutPartKind::Hint).unwrap_or_default(),
             content: Arc::clone(hint).into(),
             color: Some(palette.muted.as_rgba_array()),
             font_size: theme.typography().hint,
@@ -978,6 +1029,7 @@ pub(crate) fn context_menu_geometry_in(
     palette: &SemanticPalette,
     metrics: ThemeMetrics,
     search_placeholder: &Arc<str>,
+    measure: crate::text_width::ChromeTextMeasure<'_>,
     theme: &nana_ui_core::CompiledTheme,
 ) -> ComponentGeometry {
     let is_light = palette.background.as_rgba_array()[0] > 0.5;
@@ -1044,16 +1096,27 @@ pub(crate) fn context_menu_geometry_in(
             let (label_x, icon) =
                 menu_option_icon(content, option.icon, size, icon_color, metrics, theme);
             let label_right = row.x + row.width - size.padding_x_in(metrics);
+            let label_box = LayoutBox {
+                x: label_x,
+                y: row.y,
+                width: (label_right - label_x).max(0.0),
+                height: row.height,
+            };
+            let (label_box, hint_box) = crate::layout_engine::parts::menu_option_text_boxes(
+                label_box,
+                &option.label,
+                option.hint.as_deref(),
+                size.text_size_in(theme.typography()),
+                size.caption_size(),
+                crate::select::HINT_GAP,
+                theme.spacing().xxxl,
+                |text, size| measure.width(text, size, None),
+            );
             crate::SelectOptionGeometry {
                 bounds: row,
                 label: ComponentTextRegion {
-                    bounds: LayoutBox {
-                        x: label_x,
-                        y: row.y,
-                        width: (label_right - label_x).max(0.0),
-                        height: row.height,
-                    },
-                    content: crate::select::menu_option_label(option).into(),
+                    bounds: label_box,
+                    content: Arc::clone(&option.label).into(),
                     color: Some(if option.disabled {
                         palette.faint.as_rgba_array()
                     } else {
@@ -1062,7 +1125,18 @@ pub(crate) fn context_menu_geometry_in(
                     font_size: size.text_size_in(theme.typography()),
                     font_weight: Some(theme.typography().medium),
                 },
-                hint: None,
+                rich_content: option.content.clone(),
+                hint: hint_box.map(|bounds| ComponentTextRegion {
+                    bounds,
+                    content: option.hint.clone().unwrap_or_default().into(),
+                    color: Some(if option.disabled {
+                        palette.faint.as_rgba_array()
+                    } else {
+                        palette.muted.as_rgba_array()
+                    }),
+                    font_size: size.caption_size(),
+                    font_weight: None,
+                }),
                 selected,
                 checked: option.checked,
                 disabled: option.disabled,
@@ -1789,6 +1863,7 @@ mod tests {
             SelectOptionData {
                 key: None,
                 label: Arc::from("Add"),
+                content: None,
                 hint: None,
                 disabled: false,
                 checked: false,
@@ -1799,6 +1874,7 @@ mod tests {
             SelectOptionData {
                 key: None,
                 label: Arc::from("Rename"),
+                content: None,
                 hint: None,
                 disabled: false,
                 checked: false,

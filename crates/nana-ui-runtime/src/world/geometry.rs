@@ -380,68 +380,23 @@ impl UiWorld {
                 loading,
                 icon,
                 trailing_icon,
-                icon_size,
-                icon_gap,
-                content_align,
                 ..
             } => {
-                // One group: [leading glyph] label [trailing glyph], centred
-                // unless the button asks for an edge.
-                // The label gives up width first; the glyphs keep theirs.
-                let glyph = icon_size.min(content.height).min(content.width).max(0.0);
-                let has_leading = *loading || icon.is_some();
-                let extent = if has_leading { glyph } else { 0.0 };
-                let trailing_extent = if trailing_icon.is_some() { glyph } else { 0.0 };
-                let gap = if has_leading && (!label.is_empty() || trailing_icon.is_some()) {
-                    icon_gap.min((content.width - extent).max(0.0))
-                } else {
-                    0.0
-                };
-                let trailing_gap = if trailing_icon.is_some() && !label.is_empty() {
-                    *icon_gap
-                } else {
-                    0.0
-                };
-                let reserved = extent + gap + trailing_gap + trailing_extent;
-                let label_width = self.text_metrics(id).map_or(0.0, |metrics| {
-                    metrics.width.min((content.width - reserved).max(0.0))
-                });
-                let group_width = (label_width + reserved).min(content.width);
-                let group_x = match content_align {
-                    crate::TextHorizontalAlignment::Start => content.x,
-                    crate::TextHorizontalAlignment::Center => {
-                        content.x + (content.width - group_width) / 2.0
-                    }
-                    crate::TextHorizontalAlignment::End => content.x + content.width - group_width,
-                };
-                let glyph_box = |x: f32, size: f32| LayoutBox {
-                    x,
-                    y: content.y + (content.height - size) / 2.0,
-                    width: size,
-                    height: size,
-                };
-                let leading = glyph_box(group_x, extent);
-                let spinner = (*loading).then_some(leading);
-                let label_x = group_x + extent + gap;
-                let trailing = glyph_box(group_x + group_width - trailing_extent, trailing_extent);
+                use crate::LayoutPartKind;
+                let leading = self.content_part_box(id, LayoutPartKind::LeadingContent);
+                let trailing = self.content_part_box(id, LayoutPartKind::TrailingContent);
+                let spinner = self.content_part_box(id, LayoutPartKind::Spinner);
+                let label_bounds = self
+                    .content_part_box(id, LayoutPartKind::TextContent)
+                    .unwrap_or(LayoutBox {
+                        width: 0.0,
+                        ..content
+                    });
                 Some(crate::ComponentGeometry::Button {
-                    icon: if *loading {
-                        None
-                    } else {
-                        icon.map(|icon| (icon, leading))
-                    },
-                    trailing_icon: trailing_icon.map(|icon| (icon, trailing)),
+                    icon: if *loading { None } else { icon.zip(leading) },
+                    trailing_icon: trailing_icon.zip(trailing),
                     label: text_region(
-                        LayoutBox {
-                            x: label_x,
-                            y: content.y,
-                            width: (group_x + group_width
-                                - trailing_extent
-                                - trailing_gap
-                                - label_x)
-                                .max(0.0),
-                            height: content.height,
-                        },
+                        label_bounds,
                         Arc::clone(label),
                         false,
                         style.font_size,
@@ -1768,34 +1723,14 @@ impl UiWorld {
                         .then(|| crate::ContrastRing::from_effects(self.theme.effects())),
                 })
             }
-            StandardVisual::Card {
-                title,
-                kind,
-                loading,
-                ..
-            } => {
-                let shaped_title_width = self
-                    .text_metrics(id)
-                    .map_or(0.0, |metrics| metrics.width.min(content.width));
-                let title_width = (content.width
-                    - if *loading {
-                        crate::view_components::CARD_LOADING_RESERVE
-                    } else {
-                        0.0
-                    })
-                .max(0.0);
-                let title_y = bounds.y
-                    + border
-                    + (padding.top - crate::view_components::CARD_TITLE_BAND).max(0.0);
+            StandardVisual::Card { title, kind, .. } => {
+                let parts = self.component_content_parts(id);
+                let header =
+                    crate::layout_engine::parts::part_bounds(&parts, crate::LayoutPartKind::Header);
                 Some(crate::ComponentGeometry::Card {
-                    title: title.as_ref().map(|title| {
+                    title: title.as_ref().zip(header).map(|(title, bounds)| {
                         text_region(
-                            LayoutBox {
-                                x: bounds.x + border + padding.left,
-                                y: title_y,
-                                width: title_width,
-                                height: crate::view_components::CARD_TITLE_LINE,
-                            },
+                            bounds,
                             Arc::clone(title),
                             false,
                             crate::view_components::CARD_TITLE_SIZE,
@@ -1808,13 +1743,10 @@ impl UiWorld {
                             self.theme.shadow(nana_ui_core::ElevationRole::Surface),
                         ),
                     ),
-                    spinner: (*loading).then_some(LayoutBox {
-                        x: (bounds.x + border + padding.left + shaped_title_width + 8.0)
-                            .min(content.x + content.width - 14.0),
-                        y: title_y + 2.0,
-                        width: 14.0,
-                        height: 14.0,
-                    }),
+                    spinner: crate::layout_engine::parts::part_bounds(
+                        &parts,
+                        crate::LayoutPartKind::Spinner,
+                    ),
                 })
             }
             StandardVisual::ListItem {
@@ -1824,8 +1756,6 @@ impl UiWorld {
                 note,
                 detail,
             } => {
-                // 隐藏的槽位子节点已退出 flex 流，其盒几何是陈旧的，不得
-                // 参与行文本区间的兜底计算。
                 let slot_box = |id: StableNodeId| -> Option<LayoutBox> {
                     if self
                         .node_style(id)
@@ -1835,129 +1765,28 @@ impl UiWorld {
                     }
                     self.component_layout_box(id)
                 };
-                let leading = leading.and_then(slot_box);
-                let trailing = trailing.and_then(slot_box);
-                let fallback_x = leading.map_or(content.x, |leading| {
-                    leading.x
-                        + leading.width
-                        + source.layout.main_gap_against(
-                            nana_ui_core::FlexDirection::Row,
-                            nana_ui_core::ParentBox::from_viewport(content.width, content.height),
-                        )
-                });
-                let fallback_right = trailing.map_or(content.x + content.width, |trailing| {
-                    trailing.x
-                        - source.layout.main_gap_against(
-                            nana_ui_core::FlexDirection::Row,
-                            nana_ui_core::ParentBox::from_viewport(content.width, content.height),
-                        )
-                });
-                let mut label_rect = content_slot.and_then(slot_box).unwrap_or(LayoutBox {
-                    x: fallback_x,
-                    y: content.y,
-                    width: (fallback_right - fallback_x).max(0.0),
-                    height: content.height,
-                });
-                // 单行 detail：小字号 muted 文本右对齐；label 测宽避让，
-                // 放不下时 detail 占剩余宽度、超出交给省略号（与 LabeledValue
-                // 的值侧同款规则）。
-                let detail_region =
-                    detail
-                        .clone()
-                        .filter(|detail| !detail.is_empty())
-                        .map(|detail| {
-                            let label_size = style.font_size;
-                            let detail_size = self.theme.typography().meta;
-                            let gap = self.theme.spacing().md;
-                            let measure = self.chrome_text_measure(id);
-                            let label_natural = measure.width(
-                                self.text(id).unwrap_or_default(),
-                                label_size,
-                                style.font_weight,
-                            );
-                            let detail_natural = measure.width(
-                                &detail,
-                                detail_size,
-                                Some(self.theme.typography().regular),
-                            );
-                            let min_detail_visible = self.theme.spacing().xxxl;
-                            let detail_width =
-                                if label_natural + gap + detail_natural <= label_rect.width {
-                                    detail_natural
-                                } else {
-                                    (label_rect.width - label_natural - gap)
-                                        .max(min_detail_visible)
-                                        .min(label_rect.width)
-                                };
-                            let detail_x =
-                                (label_rect.x + label_rect.width - detail_width).max(label_rect.x);
-                            let detail_height = (detail_size * self.theme.typography().line
-                                / self.theme.typography().body)
-                                .min(label_rect.height.max(detail_size));
-                            let detail_y =
-                                label_rect.y + (label_rect.height - detail_height).max(0.0) / 2.0;
-                            label_rect.width = ((detail_x - gap) - label_rect.x).max(0.0);
-                            crate::ComponentTextRegion {
-                                bounds: LayoutBox {
-                                    x: detail_x,
-                                    y: detail_y,
-                                    width: detail_width,
-                                    height: detail_height,
-                                },
-                                content: detail.into(),
-                                color: Some(secondary),
-                                font_size: detail_size,
-                                font_weight: Some(self.theme.typography().regular),
-                            }
-                        });
-                // 紧跟 label 的 note：与 detail 同字号同取色，只用 label 与
-                // detail 排好后剩下的宽度。label 先按自然宽度收窄，让 note
-                // 贴在字后；剩下的连最小可读宽度都不够时不画 note（label
-                // 照旧省略），没有 note 的行几何与原来逐字相同。
-                let note_region = note
-                    .clone()
-                    .filter(|note| !note.is_empty())
-                    .and_then(|note| {
-                        let label_size = style.font_size;
-                        let note_size = self.theme.typography().meta;
-                        let gap = self.theme.spacing().sm;
-                        let measure = self.chrome_text_measure(id);
-                        let label_natural = measure.width(
-                            self.text(id).unwrap_or_default(),
-                            label_size,
-                            style.font_weight,
-                        );
-                        let note_natural =
-                            measure.width(&note, note_size, Some(self.theme.typography().regular));
-                        let label_width = label_natural.min(label_rect.width);
-                        let note_x = label_rect.x + label_width + gap;
-                        let room = label_rect.x + label_rect.width - note_x;
-                        if room < note_natural.min(self.theme.spacing().xxxl) {
-                            return None;
-                        }
-                        let note_height = (note_size * self.theme.typography().line
-                            / self.theme.typography().body)
-                            .min(label_rect.height.max(note_size));
-                        label_rect.width = label_width;
-                        Some(crate::ComponentTextRegion {
-                            bounds: LayoutBox {
-                                x: note_x,
-                                y: label_rect.y + (label_rect.height - note_height).max(0.0) / 2.0,
-                                width: note_natural.min(room),
-                                height: note_height,
-                            },
-                            content: note.into(),
+                let parts = self.component_content_parts(id);
+                let part = |kind| crate::layout_engine::parts::part_bounds(&parts, kind);
+                let secondary_region = |text: &Option<Arc<str>>, kind| {
+                    text.as_ref()
+                        .zip(part(kind))
+                        .map(|(text, bounds)| crate::ComponentTextRegion {
+                            bounds,
+                            content: Arc::clone(text).into(),
                             color: Some(secondary),
-                            font_size: note_size,
+                            font_size: self.theme.typography().meta,
                             font_weight: Some(self.theme.typography().regular),
                         })
-                    });
+                };
                 Some(crate::ComponentGeometry::ListItem {
-                    leading,
-                    content: Some(label_rect),
-                    trailing,
-                    note: note_region,
-                    detail: detail_region,
+                    leading: leading.and_then(slot_box),
+                    content: content_slot
+                        .and_then(slot_box)
+                        .or_else(|| part(crate::LayoutPartKind::TextContent))
+                        .or(Some(content)),
+                    trailing: trailing.and_then(slot_box),
+                    note: secondary_region(note, crate::LayoutPartKind::Note),
+                    detail: secondary_region(detail, crate::LayoutPartKind::Detail),
                 })
             }
             StandardVisual::StatusBadge {
@@ -2159,71 +1988,32 @@ impl UiWorld {
                 value_is_path,
                 value_role,
                 value_weight,
-                compact,
                 action,
+                ..
             } => {
-                let gap = if *compact {
-                    self.theme.spacing().xs
-                } else {
-                    self.theme.spacing().md
-                };
-                let right = action
-                    .and_then(|action| self.component_layout_box(action))
-                    .map_or(bounds.x + bounds.width, |action| {
-                        (action.x - gap).max(bounds.x)
-                    });
-                let available = (right - bounds.x).max(0.0);
-                let label_size = self.theme.typography().hint;
+                let parts = self.component_content_parts(id);
+                let label_bounds =
+                    crate::layout_engine::parts::part_bounds(&parts, crate::LayoutPartKind::Label)?;
+                let value_bounds =
+                    crate::layout_engine::parts::part_bounds(&parts, crate::LayoutPartKind::Value)?;
                 let value_size = self.theme.typography().meta;
-                let label_height = (label_size * 1.2).min(bounds.height.max(label_size));
-                let value_height = (value_size * 1.2).min(bounds.height.max(value_size));
-                // 属性名按自身文本测宽保底,不再压缩到字号常数;两侧都放得下时各取自然宽度。
-                let measure = self.chrome_text_measure(id);
-                let label_natural = if label.is_empty() {
-                    0.0
-                } else {
-                    measure.width(label, label_size, None)
-                };
-                let value_natural = measure.width(value, value_size, Some(*value_weight));
-                let min_value_visible = self.theme.spacing().xxxl;
-                // 放不下时值侧占满剩余宽度,超出部分由文本图元的省略号收尾;
-                // 仅属性名自身就放不下(剩余为负)才回退最小可见宽度。
-                let value_width = if label_natural + gap + value_natural <= available {
-                    value_natural
-                } else {
-                    (available - label_natural - gap)
-                        .max(min_value_visible)
-                        .min(available)
-                };
-                let value_x = (right - value_width).max(bounds.x);
-                let label_width = ((value_x - gap - bounds.x).max(0.0)).min(label_natural);
-                let center_y = |height: f32| bounds.y + (bounds.height - height).max(0.0) / 2.0;
                 Some(crate::ComponentGeometry::LabeledValue {
                     label: crate::ComponentTextRegion {
-                        bounds: LayoutBox {
-                            x: bounds.x,
-                            y: center_y(label_height),
-                            width: label_width,
-                            height: label_height,
-                        },
+                        bounds: label_bounds,
                         content: Arc::clone(label).into(),
                         color: Some(
                             self.style_model
                                 .color(SemanticColorRole::Faint)
                                 .as_rgba_array(),
                         ),
-                        font_size: label_size,
+                        font_size: self.theme.typography().hint,
                         font_weight: None,
                     },
                     value: crate::ComponentTextRegion {
-                        bounds: LayoutBox {
-                            x: value_x,
-                            y: center_y(value_height),
-                            width: value_width,
-                            height: value_height,
-                        },
+                        bounds: value_bounds,
                         content: if *value_is_path {
-                            crate::path_text::shorten_path(value, value_width, |text| {
+                            let measure = self.chrome_text_measure(id);
+                            crate::path_text::shorten_path(value, value_bounds.width, |text| {
                                 measure.width(text, value_size, Some(*value_weight))
                             })
                             .into()
@@ -2234,7 +2024,12 @@ impl UiWorld {
                         font_size: value_size,
                         font_weight: Some(*value_weight),
                     },
-                    action: action.and_then(|action| self.component_layout_box(action)),
+                    action: action
+                        .filter(|id| {
+                            self.node_style(*id)
+                                .is_none_or(|style| !style.layout.omits_box())
+                        })
+                        .and_then(|action| self.component_layout_box(action)),
                 })
             }
             StandardVisual::SelectionOption {
@@ -2410,16 +2205,20 @@ impl UiWorld {
                 error,
                 size,
                 control,
-            } => form_field_geometry(
-                bounds,
-                *size,
-                label,
-                hint.as_ref(),
-                error.as_ref(),
-                *control,
-                &|id| self.component_layout_box(id),
-                self.style_model,
-            ),
+            } => {
+                let parts = self.component_content_parts(id);
+                form_field_geometry(
+                    bounds,
+                    *size,
+                    label,
+                    hint.as_ref(),
+                    error.as_ref(),
+                    *control,
+                    &parts,
+                    &|id| self.component_layout_box(id),
+                    self.style_model,
+                )
+            }
             StandardVisual::Toast {
                 title,
                 description,
@@ -2595,34 +2394,37 @@ impl UiWorld {
                 checkable,
                 fit_options,
                 ..
-            } => Some(crate::select::select_geometry(
-                bounds,
-                label,
-                hint.as_ref(),
-                *placeholder,
-                *size,
-                *opened,
-                options,
-                *highlighted,
-                *menu_scroll,
-                *menu_room,
-                style,
-                &source,
-                self.style_model,
-                self.theme.recipes().scrollbar(),
-                self.document_viewport_of(id),
-                *checkable,
-                padding,
-                self.chrome_text_measure(id),
-                // The widest option layout measured for the field: its natural
-                // width, or the label it shows when that is the widest.
-                fit_options
-                    .then(|| {
-                        self.text_natural_width(id)
-                            .or_else(|| self.text_metrics(id).map(|metrics| metrics.width))
-                    })
-                    .flatten(),
-            )),
+            } => {
+                let parts = self.component_content_parts(id);
+                Some(crate::select::select_geometry(
+                    bounds,
+                    label,
+                    hint.as_ref(),
+                    *placeholder,
+                    *size,
+                    *opened,
+                    options,
+                    *highlighted,
+                    *menu_scroll,
+                    *menu_room,
+                    style,
+                    &source,
+                    self.style_model,
+                    self.theme.recipes().scrollbar(),
+                    self.document_viewport_of(id),
+                    *checkable,
+                    &parts,
+                    self.chrome_text_measure(id),
+                    // The widest option layout measured for the field: its natural
+                    // width, or the label it shows when that is the widest.
+                    fit_options
+                        .then(|| {
+                            self.text_natural_width(id)
+                                .or_else(|| self.text_metrics(id).map(|metrics| metrics.width))
+                        })
+                        .flatten(),
+                ))
+            }
             StandardVisual::MenuSurface {
                 kind: crate::MenuSurfaceKind::ContextMenu,
                 query,
@@ -2638,6 +2440,7 @@ impl UiWorld {
                     &self.style_model.palette,
                     self.style_model.metrics,
                     &self.framework_strings().menu_search,
+                    self.chrome_text_measure(id),
                     &self.theme,
                 ))
             }
@@ -2678,20 +2481,21 @@ impl UiWorld {
                 disabled,
                 size,
                 ..
-            } => Some(crate::menus::action_menu_item_geometry_in(
-                bounds,
-                label,
-                hint.as_ref(),
-                *icon,
-                *danger,
-                *disabled,
-                *size,
-                style,
-                &self.style_model.palette,
-                self.style_model.metrics,
-                self.chrome_text_measure(id),
-                &self.theme,
-            )),
+            } => {
+                let parts = self.component_content_parts(id);
+                Some(crate::menus::action_menu_item_geometry_from_parts(
+                    label,
+                    hint.as_ref(),
+                    *icon,
+                    *danger,
+                    *disabled,
+                    *size,
+                    style,
+                    &self.style_model.palette,
+                    &self.theme,
+                    &parts,
+                ))
+            }
             StandardVisual::TreeView {
                 rows,
                 size,

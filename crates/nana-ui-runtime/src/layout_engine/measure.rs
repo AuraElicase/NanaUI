@@ -422,6 +422,37 @@ pub(super) fn intrinsic_size_out_of_flow(
     )
 }
 
+/// One axis set and the other not: a replaced box's natural aspect ratio
+/// carries the set one over, content box to content box (Issue #263). Every
+/// path that resolves a replaced box's used size goes through here, so a
+/// reused measurement cannot answer with the natural other axis instead.
+fn transfer_natural_ratio(
+    style: &nana_ui_core::LayoutStyle,
+    natural: Option<crate::ReplacedMetadata>,
+    chrome: Size,
+    size: &mut Size,
+) {
+    let Some(natural) = natural.filter(|natural| natural.width > 0.0 && natural.height > 0.0)
+    else {
+        return;
+    };
+    if style.aspect_ratio.is_some() {
+        return;
+    }
+    let auto = |spec: Option<LengthSpec>| matches!(spec, None | Some(LengthSpec::Auto));
+    match (auto(style.width), auto(style.height)) {
+        (false, true) => {
+            let inner = (size.width - chrome.width).max(0.0);
+            size.height = inner * natural.height / natural.width + chrome.height;
+        }
+        (true, false) => {
+            let inner = (size.height - chrome.height).max(0.0);
+            size.width = inner * natural.width / natural.height + chrome.width;
+        }
+        _ => {}
+    }
+}
+
 /// Whether a flex item's cross size is its content's at its main size, so
 /// a line that gives it another main size than it was measured with must
 /// measure it again ([`intrinsic_size_at_main`]).
@@ -488,27 +519,27 @@ pub(super) struct VisualContent {
 
 fn visual_content(id: StableNodeId, world: &UiWorld) -> VisualContent {
     match world.standard_visual_ref(id) {
-        Some(crate::StandardVisual::Button {
-            label,
-            icon,
-            trailing_icon,
-            icon_size,
-            icon_gap,
-            loading,
-            ..
-        }) => {
-            let leading = *loading || icon.is_some();
-            let trailing = trailing_icon.is_some();
-            // Each glyph brings its own size, and a gap to whatever it stands
-            // beside: the label, or the other glyph when there is no label.
-            let glyphs = usize::from(leading) + usize::from(trailing);
-            let parts = glyphs + usize::from(!label.is_empty());
-            if glyphs == 0 {
-                return VisualContent::default();
-            }
+        Some(crate::StandardVisual::Card { loading, .. }) => VisualContent {
+            width: if *loading {
+                crate::view_components::CARD_LOADING_RESERVE
+            } else {
+                0.0
+            },
+            height: 0.0,
+        },
+        Some(visual @ crate::StandardVisual::Button { .. }) => {
+            let parts = super::parts::button_parts(visual, Size::default()).expect("button");
             VisualContent {
-                width: glyphs as f32 * icon_size + (parts - 1) as f32 * icon_gap,
-                height: *icon_size,
+                width: parts
+                    .iter()
+                    .flatten()
+                    .map(|part| part.preferred.width + part.gap_after)
+                    .sum(),
+                height: parts
+                    .iter()
+                    .flatten()
+                    .map(|part| part.preferred.height)
+                    .fold(0.0, f32::max),
             }
         }
         Some(crate::StandardVisual::Checkbox { size, .. }) => VisualContent {
@@ -653,46 +684,14 @@ fn measure_plain_childless(
 /// A replaced box defers to the shared authority.
 fn plain_leaf_baseline(
     id: StableNodeId,
-    style: &nana_ui_core::LayoutStyle,
-    text_metrics: Option<crate::TextMetrics>,
+    _style: &nana_ui_core::LayoutStyle,
+    _text_metrics: Option<crate::TextMetrics>,
     font_px: f32,
     inline_base: f32,
     used: Size,
     nodes: &LayoutInputMap<'_>,
 ) -> BaselineMetrics {
-    let replaced = style.paint.content_image.is_some()
-        || style.paint.skipped_replaced.is_some()
-        || nodes.world.custom_render(id).is_some()
-        || {
-            #[cfg(feature = "image-viewer")]
-            {
-                matches!(
-                    nodes.world.standard_visual_ref(id),
-                    Some(crate::StandardVisual::ImageViewer { .. })
-                )
-            }
-            #[cfg(not(feature = "image-viewer"))]
-            {
-                false
-            }
-        };
-    if replaced {
-        return nodes.baseline_metrics(id, font_px, Some(inline_base), Some(used));
-    }
-    if let Some((_, layout)) = nodes.world.text_layout(id)
-        && !layout.is_vertical()
-        && !layout.lines.is_empty()
-    {
-        let first = layout.lines.first().map(|line| line.metrics.baseline_y_px);
-        let last = layout.lines.last().map(|line| line.metrics.baseline_y_px);
-        return BaselineMetrics { first, last };
-    }
-    let ascent = text_metrics
-        .and_then(|metrics| metrics.ascent)
-        .filter(|value| value.is_finite() && *value >= 0.0)
-        .unwrap_or(font_px * nana_ui_core::TEXT_APPROX_ASCENT_EM);
-    let first = Some(ascent);
-    BaselineMetrics { first, last: first }
+    nodes.baseline_metrics(id, font_px, Some(inline_base), Some(used))
 }
 
 /// Whether a container whose height follows its content measures the same
@@ -729,6 +728,11 @@ fn measure_node(
 ) -> Result<Size, UiWorldError> {
     let unforced = forced.is_none();
     let world = nodes.world;
+    let parent = world.parent_id(id);
+    let previous_context = parent.and_then(|id| world.established_layout_context(id));
+    let context = parent
+        .and_then(|id| nodes.contexts.get(&id).copied().or(previous_context))
+        .map(crate::FormattingContextKind::cache_id);
     let Some(node) = nodes.get(id)? else {
         return Ok(Size::default());
     };
@@ -773,18 +777,12 @@ fn measure_node(
         measurement_constraint_class(node.style.as_ref(), keyed_available),
         direction_sensitive,
     );
-    let context = parent_direction.map(|direction| {
-        crate::FormattingContextId::new(match direction {
-            FlexDirection::Row => 1,
-            FlexDirection::Column => 2,
-        })
-    });
     // Retained intrinsic facts are shared across formatting contexts. They
     // seed the pass authority for baseline and metrics consumers; the
     // containing-block-specific used size below remains a separate memo.
     if unforced
         && let Some(scope) = scope
-        && !scope.affected.contains(&id)
+        && !scope.metrics_changed.contains(&id)
         && let Some(metrics) = scope
             .retained
             .intrinsic_metrics
@@ -793,7 +791,7 @@ fn measure_node(
         cache.seed_intrinsic(
             PassIntrinsicCache::intrinsic_key(cache_key),
             metrics,
-            context,
+            previous_context.map(crate::FormattingContextKind::cache_id),
         );
     }
     // The used-size memo answers this query. Intrinsic facts are read only
@@ -953,6 +951,15 @@ fn measure_node(
             metrics.preferred.inline,
             metrics.preferred.block,
         );
+        // The facts are the natural ones; the set axis carries over here as
+        // on a fresh measurement, or the box takes its natural other axis.
+        let mut size = size;
+        transfer_natural_ratio(
+            style,
+            nodes.world.replaced_natural_size(id),
+            chrome,
+            &mut size,
+        );
         cache.insert(cache_key, size);
         return Ok(size);
     }
@@ -1006,6 +1013,10 @@ fn measure_node(
     };
     let had_plan = retained_plan.is_some();
     let visual = visual_content(id, nodes.world);
+    let header_chrome = matches!(
+        nodes.world.standard_visual_ref(id),
+        Some(crate::StandardVisual::Card { .. })
+    );
     // A replaced box takes its resource's natural size where nothing else
     // sizes it (Issue #263); with one axis set, the other follows the natural
     // aspect ratio below.
@@ -1037,6 +1048,7 @@ fn measure_node(
         // A box a replaced resource sizes records no plan (see `cacheable`);
         // one recorded before its natural size arrived no longer holds.
         && natural.is_none()
+        && nodes.world.inline_record(id).is_none()
     {
         // The size the plan answers with, and whether it patched what it
         // recorded to get there.
@@ -1112,9 +1124,43 @@ fn measure_node(
         cache.note_measure_cache_miss();
     }
     cache.record_full_subtree();
-    let (mut flow_children, descendant_dependent_flow) =
-        collect_flow_children_reporting(&child_ids, nodes, style.display)?;
-    let context = establish_context(style, &flow_children, nodes);
+    let native_inline = nodes.world.inline_record(id).is_some();
+    let (mut flow_children, descendant_dependent_flow) = if native_inline {
+        for &child in child_ids.iter() {
+            if nodes.world.inline_parent(child) != Some(id) {
+                continue;
+            }
+            if let Some(child_style) = nodes.style(child)
+                && style.height.is_none_or(LengthSpec::is_content_sized)
+                && reads_offered_block_extent(&child_style)
+            {
+                return Err(UiWorldError::InvalidInlineContent(id));
+            }
+            cache.note_child_measured();
+            intrinsic_size_scoped(
+                child,
+                content_available,
+                None,
+                viewport,
+                child_font_px,
+                nodes,
+                cache,
+                scope,
+            )?;
+        }
+        (Vec::new(), false)
+    } else {
+        collect_flow_children_reporting(&child_ids, nodes, style)?
+    };
+    let context = if native_inline {
+        EstablishedContext {
+            kind: crate::FormattingContextKind::Inline,
+            grid_2d: false,
+        }
+    } else {
+        establish_context(style, &flow_children, nodes)
+    };
+    nodes.contexts.insert(id, context.kind);
     let grid_measure = context.grid_2d;
     let ifc = context.inline();
     let direction = used_flow_direction(style, writing, ifc);
@@ -1378,7 +1424,7 @@ fn measure_node(
         text_natural_width,
         text_wrap_limit,
         content_available.width,
-    );
+    ) + if header_chrome { visual.width } else { 0.0 };
     let mut content = Size::new(
         children.width.max(text_width),
         children.height.max(text.height),
@@ -1416,7 +1462,9 @@ fn measure_node(
             .height
             .max(text_line_box_height_px(fs, style.line_height));
     }
-    content.width += visual.width;
+    if !header_chrome {
+        content.width += visual.width;
+    }
     content.height = content.height.max(visual.height);
     let max_content_w = content.width + chrome.width;
     let stacked_min_w = child_sizes
@@ -1459,24 +1507,7 @@ fn measure_node(
         default_width,
         default_height,
     );
-    if let Some(natural) = natural
-        && style.aspect_ratio.is_none()
-    {
-        // One axis set and the other not: the natural aspect ratio carries
-        // the set one over, content box to content box.
-        let auto = |spec: Option<LengthSpec>| matches!(spec, None | Some(LengthSpec::Auto));
-        match (auto(style.width), auto(style.height)) {
-            (false, true) => {
-                let inner = (size.width - chrome.width).max(0.0);
-                size.height = inner * natural.height / natural.width + chrome.height;
-            }
-            (true, false) => {
-                let inner = (size.height - chrome.height).max(0.0);
-                size.width = inner * natural.width / natural.height + chrome.width;
-            }
-            _ => {}
-        }
-    }
+    transfer_natural_ratio(style, natural, chrome, &mut size);
     // Record only on a scoped pass. A full pass rebuilds every container in
     // the document, so recording there costs an `Arc` clone per child and a
     // sort per container across the whole tree -- 1.79 -> 2.55 ms on the
@@ -1793,10 +1824,22 @@ fn sequential_measure_delta(
         {
             continue;
         }
+        let current_style = nodes.style(entry.child);
+        let context = crate::FormattingContextKind::from_display(&plan.style);
+        let participation = |style: &Option<Arc<LayoutStyle>>| {
+            style
+                .as_ref()
+                .map(|style| nodes.participation(entry.child, style, context))
+        };
+        // A size delta cannot express an item entering or leaving the flow.
+        // Its cached contribution (including gaps and cross maxima) must be
+        // rebuilt from the new participation set, even at the same used size.
+        if participation(&current_style) != participation(&entry.style) {
+            return Ok(None);
+        }
         let Some(old) = entry.intrinsic else {
             continue;
         };
-        let current_style = nodes.style(entry.child);
         if !scope.measure.contains(&affected) {
             if !retained_style_matches(&current_style, &entry.style) {
                 return Ok(None);

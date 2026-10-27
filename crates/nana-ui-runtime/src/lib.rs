@@ -59,16 +59,26 @@ mod json_num;
 pub(crate) use json_num::json_u64;
 #[cfg(feature = "image-viewer")]
 mod image_viewer;
+mod inline_content;
+mod inline_flow;
 pub mod intrinsic_cache;
 mod key_layers;
 mod layout_engine;
 mod layout_frontier;
 mod layout_node;
+pub use inline_content::{
+    InlineAtomic, InlineContent, InlineContentBuilder, InlineItem, InlineTextSemantics,
+    MixedInlineContent,
+};
+pub use inline_flow::InlineFlow;
+pub use world::inline_content::text_layout_origin;
 mod layout_result;
+mod sticky;
 /// Benchmark-only coarse phase clocks for `--profile-layout`. How much work
 /// layout did, plan reuse included, is on [`WorkCounters`].
 #[cfg(feature = "benchmark")]
 pub use layout_engine::plan_stats;
+pub use sticky::{StickyAncestor, StickyDependencies, sticky_translation};
 mod browser_view;
 pub mod fold;
 mod menus;

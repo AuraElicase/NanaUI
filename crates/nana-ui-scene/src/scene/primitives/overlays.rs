@@ -513,7 +513,7 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                         },
                     });
                 }
-                emit(component_text_primitive(
+                let mut label = component_text_primitive(
                     id,
                     40u64.saturating_add(index as u64),
                     &option.label,
@@ -524,7 +524,31 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                     clips.clone(),
                     opacity,
                     node_order,
-                ));
+                );
+                if let Some(content) = option.rich_content.as_ref()
+                    && let ScenePrimitiveKind::Text { spans, .. } = &mut label.kind
+                {
+                    *spans = crate::scene::rich_fill_spans(
+                        option.label.content.as_ref(),
+                        content.rich_text(),
+                        std::mem::take(spans),
+                    );
+                }
+                emit(label);
+                if let Some(hint) = &option.hint {
+                    emit(component_text_primitive(
+                        id,
+                        collection_slot(CONTEXT_MENU_HINTS, index),
+                        hint,
+                        TextHorizontalAlignment::End,
+                        true,
+                        node,
+                        transform,
+                        clips.clone(),
+                        opacity,
+                        node_order,
+                    ));
+                }
             }
         }
         _ => {}

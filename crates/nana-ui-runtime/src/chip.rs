@@ -24,6 +24,8 @@ pub struct ChipDismissed;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chip {
     pub label: Arc<str>,
+    /// Canonical styled or mixed content. `None` uses the plain label.
+    pub content: Option<Arc<crate::InlineContent>>,
     pub selected: bool,
     pub disabled: bool,
     pub dismissible: bool,
@@ -36,9 +38,22 @@ pub struct Chip {
 }
 
 impl Chip {
+    /// Text, spans and retained children share the label's content box.
+    /// A plain value returns to the allocation-light string representation.
+    pub fn content(mut self, content: impl Into<crate::InlineContent>) -> Self {
+        let content = content.into().normalized();
+        self.label = Arc::from(content.text());
+        self.content = if matches!(content, crate::InlineContent::PlainText(_)) {
+            None
+        } else {
+            Some(Arc::new(content))
+        };
+        self
+    }
     pub fn new(label: impl Into<Arc<str>>) -> Self {
         Self {
             label: label.into(),
+            content: None,
             selected: false,
             disabled: false,
             dismissible: false,
@@ -166,11 +181,22 @@ impl ComponentView for Chip {
     }
 
     fn project(&self, id: StableNodeId, world: &UiWorld, mutations: &mut MutationQueue) {
-        if world.text(id) != Some(&*self.label) {
+        let label = self
+            .content
+            .as_deref()
+            .map_or(&self.label, crate::InlineContent::shared_text);
+        if !crate::world::inline_content::project_control_content(
+            id,
+            world,
+            &self.label,
+            self.content.as_deref(),
+            mutations,
+        ) && world.text(id) != Some(label.as_ref())
+        {
             mutations.set_text(
                 id,
                 TextContent {
-                    value: Arc::clone(&self.label).into(),
+                    value: Arc::clone(label).into(),
                 },
             );
         }
@@ -179,7 +205,7 @@ impl ComponentView for Chip {
             trailing_icon: None,
             icon_size: self.size.icon_size(),
             icon_gap: nana_ui_core::space::SM,
-            label: Arc::clone(&self.label),
+            label: Arc::clone(label),
             kind: self.kind(),
             size: self.size,
             loading: false,
@@ -201,7 +227,7 @@ impl ComponentView for Chip {
             },
             AccessibilityState {
                 role: AccessibilityRole::Button,
-                label: Some(Arc::clone(&self.label)),
+                label: self.content.is_none().then(|| Arc::clone(label)),
                 disabled: self.disabled,
                 selected: Some(self.selected),
                 ..AccessibilityState::default()

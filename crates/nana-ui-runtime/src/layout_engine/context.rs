@@ -1,9 +1,10 @@
-//! Formatting-context selection (Issue #197).
+//! Static formatting-context dispatch (Issues #197 and #199).
 //!
 //! Measure and placement both ask this one function which context a
 //! container establishes, so the two passes cannot pick different
-//! algorithms for the same node. The algorithms themselves stay where they
-//! are; this only names the choice.
+//! algorithms for the same node. The Flex, Grid, Inline and Overlay modules
+//! keep their specialized algorithms and retained plans. Child membership is
+//! classified by the same Participation contract used by LayoutNode queries.
 
 use super::*;
 use crate::FormattingContextKind;
