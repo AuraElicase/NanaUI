@@ -282,4 +282,6 @@ GPU pixels 来自 macOS。Windows/Linux 真机与外部 consumer 完整构建/�
 | #199：反复切换不增长 | `issue199_repeated_context_switches_keep_the_retained_cache_flat`：100 个子项在 Grid→Layers→Inline→Flex 之间切换 20 轮，每步一次切换。保留缓存（不计 intrinsic）在第一轮后不变，回到 Flex 时等于只排过 Flex 的冷缓存；在 Grid 期间 `plan_entries` 更多，可见比较能区分不同 context |
 | 文档 | `layout.md` 去掉"算法还没拆成独立模块"这句过时说明，改写剩余缺口；`layout_document` 注释改为说明产品帧不走全量 |
 
-仍未做：modal 的 Overlay 由 placement 单独记录，不走 `establish_context`，measure 侧不认识它；`#200` 的 containing block 与 overlay 锚点求解，`#201` 的 clip 链，`#202` 的 fit 统一，`#204` 的跨 facade 工作量对照。
+模态框的 Overlay 随后也改走 `establish_context`：`UiWorld::places_modal_slots` 认出 `ModalFrame`，measure 与 placement 共用这一入口，placement 断言分派结果为 Overlay。探针确认 measure 本来就不会走到模态框的通用子项路径，所以行为不变；只删掉分派里的模态框分支时，模态框测试失败。
+
+仍未做：`#200` 的 containing block 与 overlay 锚点求解，`#201` 的 clip 链，`#202` 的 fit 统一，`#204` 的跨 facade 工作量对照。

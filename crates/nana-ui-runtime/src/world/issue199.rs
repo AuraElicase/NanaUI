@@ -268,7 +268,8 @@ fn issue199_repeated_context_switches_keep_the_retained_cache_flat() {
 }
 
 /// A modal frame establishes the Overlay context through the same
-/// participation contract as Flex and Grid: its slots are `OverlayItem`s,
+/// dispatch and participation contract as Flex and Grid: its slots are
+/// `OverlayItem`s,
 /// placed by the slot contract, and an incremental change to a slot matches a
 /// cold layout of the same dialog.
 #[test]
@@ -327,7 +328,9 @@ fn issue199_a_modal_frame_places_its_slots_as_overlay_items() {
     let mut q = MutationQueue::new();
     q.set_style(body, styled(body_layout(120.0)));
     cx.commit_mutations(q).unwrap();
-    product_frame(&mut cx, document, viewport, &mut shaper);
+    let work = product_frame(&mut cx, document, viewport, &mut shaper);
+    // Relaying the same dialog out is not a context change.
+    assert_eq!(work.layout_context_transitions, 0);
     // The slot contract measures through the surface's float chrome.
     assert!((cx.world().layout_box(body).unwrap().height - 120.0).abs() < 0.01);
 

@@ -26,14 +26,17 @@ impl EstablishedContext {
     }
 }
 
-/// The context `style` establishes over its in-flow children `flow`. A modal
-/// frame's slot placement is decided before flow and recorded by placement.
+/// The context node `id` with `style` establishes over its in-flow children
+/// `flow`. A modal frame establishes Overlay whatever its display: its slot
+/// contract places the children.
 pub(super) fn establish_context(
+    id: StableNodeId,
     style: &LayoutStyle,
     flow: &[StableNodeId],
     nodes: &LayoutInputMap<'_>,
 ) -> EstablishedContext {
     let kind = match style.display {
+        _ if nodes.world.places_modal_slots(id) => FormattingContextKind::Overlay,
         Some(DisplaySpec::Layers) => FormattingContextKind::Layers,
         Some(display) if display.is_grid_container() => FormattingContextKind::Grid,
         Some(display) if display.is_flex_container() => FormattingContextKind::Flex,

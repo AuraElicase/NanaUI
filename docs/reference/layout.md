@@ -123,9 +123,10 @@ context、参与方式，以及 metrics、context 和结果三个 generation。
 
 Flex、Grid、Inline、Overlay 的算法各在 `layout_engine/` 下自己的模块里（`flex.rs`、
 `grid.rs`、`inline.rs`、`overlay.rs`），`Layers` 复用 `grid.rs`；`context.rs` 是两趟共用的
-分派。模态框的 `Overlay` 由 placement 按槽位契约记录，门禁是 `world/issue199.rs` 的
-`issue199_a_modal_frame_places_its_slots_as_overlay_items`（槽位是 `OverlayItem`，增量与
-冷布局相同）。同一容器在 Flex → Grid → Layers → Inline 之间来回切换 20 轮，保留缓存在第
+分派，模态框也在这里认出：带 `ModalFrame` 视觉的节点不论 `display` 都建立 `Overlay`，
+再由 `overlay.rs` 按槽位契约放子项。门禁是 `world/issue199.rs` 的
+`issue199_a_modal_frame_places_its_slots_as_overlay_items`（槽位是 `OverlayItem`，重排不记
+context 切换，增量与冷布局相同；分派不认模态框时 placement 的断言失败）。同一容器在 Flex → Grid → Layers → Inline 之间来回切换 20 轮，保留缓存在第
 一轮后不再变化，回到 Flex 时与只排过 Flex 的冷缓存相同（`issue199_repeated_context_switches_keep_the_retained_cache_flat`）。
 
 还没做的：脱流定位的 containing block 仍取直接父级的内容盒，没有按最近定位祖先解析
