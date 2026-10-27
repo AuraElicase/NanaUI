@@ -285,3 +285,13 @@ GPU pixels 来自 macOS。Windows/Linux 真机与外部 consumer 完整构建/�
 模态框的 Overlay 随后也改走 `establish_context`：`UiWorld::places_modal_slots` 认出 `ModalFrame`，measure 与 placement 共用这一入口，placement 断言分派结果为 Overlay。探针确认 measure 本来就不会走到模态框的通用子项路径，所以行为不变；只删掉分派里的模态框分支时，模态框测试失败。
 
 仍未做：`#200` 的 containing block 与 overlay 锚点求解，`#201` 的 clip 链，`#202` 的 fit 统一，`#204` 的跨 facade 工作量对照。
+
+## 2026-10-27 追加：#204 写法对照
+
+- `issue204_row_column_and_css_share_structured_layout_results` 重写：
+  - 原测试的 CSS 一路是 `Stack::row(8.0).css(...)`，写的值与预设相同，删掉 CSS 也照样通过。现在改为从空布局写 CSS，并补上带意图的 `from_layout`。
+  - 增加一个窄于内容的可用宽度（40px），让内在尺寸参与比较。
+  - 发现预设的 `LengthSpec::Shrink` 没有 CSS 写法：`fit-content` 是 `FitContent`，40px 时结果不同（预设容器 88、子项不收缩；`fit-content` 夹到 40、子项被压缩）。因此按"同一份意图"分两组比较，两组之间只在宽松宽度下比较。
+- 新增 `issue204_facades_share_identity_and_layout_work`：预设、视图函数 `row()`、带预设意图的 `from_layout` 节点数、节点种类、意图相同，首帧、局部修改和空闲帧的 measure/placement/生成/切换计数相同，空闲帧为零。
+- 写法间有意的差别只有命中默认值，已写进 `rust-layout.md`。
+- 未做：`Shrink` 与 `FitContent` 在受约束时的差异是否要统一（例如给 `Shrink` 一个 CSS 写法，或把预设改为 `FitContent`）需要另行决定。
