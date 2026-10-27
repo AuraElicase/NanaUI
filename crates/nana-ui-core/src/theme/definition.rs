@@ -949,7 +949,7 @@ const TYPE_WEIGHT_NAMES: [&str; 4] = [
     "typography.bold",
 ];
 
-const MOTION_NAMES: [&str; 8] = [
+const MOTION_NAMES: [&str; 9] = [
     "motion.hover_color",
     "motion.overlay_fade",
     "motion.menu_opacity",
@@ -958,6 +958,7 @@ const MOTION_NAMES: [&str; 8] = [
     "motion.skeleton_pulse",
     "motion.spinner_rotation",
     "motion.loading_spin",
+    "motion.attention",
 ];
 
 fn palette_fields(palette: &SemanticPalette) -> [(&'static str, SemanticColor); 25] {

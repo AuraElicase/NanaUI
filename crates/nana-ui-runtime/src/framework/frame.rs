@@ -956,6 +956,21 @@ impl AppContext {
                     });
             }
         }
+        let flashes = frame
+            .samples
+            .iter()
+            .filter(|sample| {
+                sample.finished
+                    && crate::component_animation_id(
+                        crate::component_animation_kinds::ATTENTION,
+                        sample.target,
+                    ) == Some(sample.id)
+            })
+            .map(|sample| (sample.target, sample.property))
+            .collect::<Vec<_>>();
+        for (target, property) in flashes {
+            let _ = self.advance_settings_row_flash(target, property, now);
+        }
         let workspace_targets = frame
             .samples
             .iter()

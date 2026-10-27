@@ -80,6 +80,8 @@ pub mod component_animation_kinds {
     pub const REORDER_PREVIEW: u64 = 17;
     /// A reorder list's row making room where a drag would land.
     pub const REORDER_SHIFT: u64 = 18;
+    /// A settings row's attention flash, on the tint it paints under itself.
+    pub const ATTENTION: u64 = 19;
 }
 
 /// Derives the animation ID for one component-owned timeline from the
@@ -97,7 +99,7 @@ pub fn component_animation_id(kind_tag: u64, target: StableNodeId) -> Option<Ani
 /// Whether `id` is one of the built-in component timelines of `target`
 /// ([`component_animation_kinds`]).
 pub(crate) fn is_component_animation(id: AnimationId, target: StableNodeId) -> bool {
-    (component_animation_kinds::SKELETON..=component_animation_kinds::REORDER_SHIFT)
+    (component_animation_kinds::SKELETON..=component_animation_kinds::ATTENTION)
         .any(|kind| component_animation_id(kind, target) == Some(id))
 }
 
@@ -108,7 +110,18 @@ pub fn toast_timeout_animation(
     start: Duration,
     timeout: Duration,
 ) -> Option<AnimationSpec> {
-    let animation = component_animation_id(component_animation_kinds::TOAST, id)?;
+    component_timer(component_animation_kinds::TOAST, id, start, timeout)
+}
+
+/// A one-shot timer on `id`'s `kind` timeline that samples once, at its end:
+/// a zero `timeout` wakes the next frame.
+pub(crate) fn component_timer(
+    kind: u64,
+    id: StableNodeId,
+    start: Duration,
+    timeout: Duration,
+) -> Option<AnimationSpec> {
+    let animation = component_animation_id(kind, id)?;
     let timeout = timeout.max(Duration::from_millis(1));
     Some(AnimationSpec::new(
         animation,

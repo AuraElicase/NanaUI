@@ -724,6 +724,7 @@ mod tests {
             (MotionRole::SkeletonPulse, crate::motion::SKELETON_PULSE),
             (MotionRole::SpinnerRotation, crate::motion::SPINNER_ROTATION),
             (MotionRole::LoadingSpin, crate::motion::LOADING_SPIN),
+            (MotionRole::Attention, crate::motion::ATTENTION),
         ] {
             assert_eq!(
                 motion.duration(role),

@@ -889,6 +889,24 @@ impl AppContext {
         self.arm_toast_timer(id, timeout)
     }
 
+    /// Wake the next frame for `target`'s attention flash, which runs from
+    /// that frame: the clock here may be from long before, when nothing has
+    /// moved for a while. See [`Self::advance_settings_row_flash`].
+    pub(crate) fn arm_attention(&mut self, target: StableNodeId) -> Result<(), FrameworkError> {
+        let Some(spec) = crate::animation::component_timer(
+            crate::component_animation_kinds::ATTENTION,
+            target,
+            self.component_lifecycle.now,
+            Duration::ZERO,
+        ) else {
+            return Ok(());
+        };
+        let mut mutations = MutationQueue::new();
+        mutations.start_animation(spec);
+        self.world.commit(mutations)?;
+        Ok(())
+    }
+
     /// Wake the next frame and count `remaining` from it.
     fn arm_toast_timer(
         &mut self,
