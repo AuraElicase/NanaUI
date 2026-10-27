@@ -1070,6 +1070,11 @@ pub(super) const FIXTURE_REGISTRY: &[Fixture] = &[
         "the curve view: Bezier segments between the keys, the selected Angle X key with its tangent handles",
     ),
     f(
+        Component::TimelineEditor,
+        "clips",
+        "clips on three tracks in accent, success, warning and neutral, one selected with a stronger border, keys drawn over a clip, a narrow clip hiding its label",
+    ),
+    f(
         Component::AreaLayout,
         "rest",
         "four areas meet at two-pixel gaps, each with its header strip and content",

@@ -44,7 +44,7 @@
 
 - **[AreaLayout](../components/area-layout.md)**：将一块矩形递归切分为永不重叠的区域，每个区域展示应用指定的一种编辑器。用户可从区域头部左上/右上角的小方块向内拖拽切分新区域，或向相邻兄弟区域拖拽合并；支持单区域最大化与整套工作区预设（`set_area_layout`）切换。切换预设时，新旧布局共有的区域原地保留子节点（滚动位置与输入状态不丢失），未出现的区域隐藏等待而不销毁。
 - **[PropertyGrid](../components/property-grid.md)** 与 **[ScrubField](../components/scrub-field.md)**：检查器式的两列密集属性网格（支持可折叠分组、全网格同步拖拽的公共标签列宽、多选混合值 `mixed` 与附带禁用原因的行遮罩）以及可左右拖动改值、单击键入的数字属性字段。
-- **[TimelineEditor](../components/timeline-editor.md)**：单节点自绘的可编辑时间底座，内置帧/秒自适应标尺与播放头、左侧可折叠轨道树、关键点框选与整帧吸附拖动，以及三次贝塞尔曲线视图与切线手柄。
+- **[TimelineEditor](../components/timeline-editor.md)**：单节点自绘的可编辑时间底座，内置帧/秒自适应标尺与播放头、左侧可折叠轨道树、关键点框选与整帧吸附拖动、片段的选择移动修剪（吸附到片段边缘与播放头、不重叠），以及三次贝塞尔曲线视图与切线手柄。
 
 ### Workspace、Dock 与 AreaLayout 如何选择
 

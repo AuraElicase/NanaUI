@@ -195,3 +195,95 @@ state: curves
   text #2/18446744004990074977 487.00,22.00 60.00x14.00 opacity=1.00 color=#a3a3a3ff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
   quad-color-batch #2/18446744004990074978 20.00,20.00 521.00x180.00 opacity=1.00 count=9 colors=9 border=none border_width=0.00 radius=0.00/0.00/0.00/0.00
   quad #2/18446744004990074979 303.00,22.00 10.00x18.00 opacity=1.00 bg=#7bb9f0ff border=none border_width=0.00 radius=2.00/2.00/2.00/2.00 shadow=none
+state: clips
+  target: 20.00,20.00 520.00x180.00
+  a11y: role=Generic disabled=false checked=None selected=None mixed=false
+  quad #2/18446744004990074880 20.00,20.00 520.00x180.00 opacity=1.00 bg=#181818ff border=none border_width=0.00 radius=0.00/0.00/0.00/0.00 shadow=none
+  path #2/18446744004990074881 140.00,64.00 400.00x20.00 opacity=1.00 triangles=10 color=#1c1c1cff
+  path #2/18446744004990074882 140.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074883 148.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074884 156.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074885 164.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#2a2a2aff
+  path #2/18446744004990074886 172.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074887 180.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074888 188.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074889 196.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074890 204.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074891 212.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074892 220.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074893 228.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074894 236.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074895 244.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#2a2a2aff
+  path #2/18446744004990074896 252.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074897 260.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074898 268.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074899 276.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074900 284.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074901 292.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074902 300.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074903 308.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074904 316.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074905 324.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#2a2a2aff
+  path #2/18446744004990074906 332.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074907 340.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074908 348.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074909 356.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074910 364.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074911 372.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074912 380.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074913 388.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074914 396.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074915 404.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#2a2a2aff
+  path #2/18446744004990074916 412.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074917 420.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074918 428.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074919 436.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074920 444.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074921 452.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074922 460.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074923 468.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074924 476.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074925 484.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#2a2a2aff
+  path #2/18446744004990074926 492.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074927 500.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074928 508.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074929 516.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074930 524.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074931 532.00,44.00 1.00x156.00 opacity=1.00 triangles=10 color=#232323ff
+  path #2/18446744004990074932 164.00,46.00 108.00x16.00 opacity=1.00 triangles=58 color=#7bb9f03d
+  path #2/18446744004990074933 164.00,46.00 108.00x16.00 opacity=1.00 triangles=111 color=#7bb9f08c
+  text #2/18446744004990074934 170.00,46.00 96.00x16.00 opacity=1.00 color=#ddddddff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  path #2/18446744004990074935 272.00,46.00 144.00x16.00 opacity=1.00 triangles=58 color=#7bb9f06b
+  path #2/18446744004990074936 272.00,46.00 144.00x16.00 opacity=1.00 triangles=96 color=#7bb9f0ff
+  text #2/18446744004990074937 278.00,46.00 132.00x16.00 opacity=1.00 color=#ddddddff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  path #2/18446744004990074938 476.00,46.00 64.00x16.00 opacity=1.00 triangles=34 color=#a3a3a33d
+  path #2/18446744004990074939 476.00,46.00 64.00x16.00 opacity=1.00 triangles=67 color=#a3a3a38c
+  text #2/18446744004990074940 482.00,46.00 56.00x16.00 opacity=1.00 color=#ddddddff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  path #2/18446744004990074941 212.00,66.00 216.00x16.00 opacity=1.00 triangles=58 color=#3fb9503d
+  path #2/18446744004990074942 212.00,66.00 216.00x16.00 opacity=1.00 triangles=111 color=#3fb9508c
+  text #2/18446744004990074943 218.00,66.00 204.00x16.00 opacity=1.00 color=#ddddddff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  path #2/18446744004990074944 464.00,66.00 12.00x16.00 opacity=1.00 triangles=58 color=#3fb9503d
+  path #2/18446744004990074945 464.00,66.00 12.00x16.00 opacity=1.00 triangles=111 color=#3fb9508c
+  path #2/18446744004990074946 308.00,86.00 232.00x16.00 opacity=1.00 triangles=34 color=#d4a85b3d
+  path #2/18446744004990074947 308.00,86.00 232.00x16.00 opacity=1.00 triangles=67 color=#d4a85b8c
+  text #2/18446744004990074948 314.00,86.00 224.00x16.00 opacity=1.00 color=#ddddddff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  path #2/18446744004990074949 339.00,49.00 10.00x10.00 opacity=1.00 triangles=10 color=#ddddddff
+  path #2/18446744004990074950 338.29,48.29 11.41x11.41 opacity=1.00 triangles=24 color=#181818ff
+  path #2/18446744004990074951 387.00,49.00 10.00x10.00 opacity=1.00 triangles=10 color=#ddddddff
+  path #2/18446744004990074952 386.29,48.29 11.41x11.41 opacity=1.00 triangles=24 color=#181818ff
+  quad #2/18446744004990074953 20.00,44.00 120.00x156.00 opacity=1.00 bg=#202020ff border=none border_width=0.00 radius=0.00/0.00/0.00/0.00 shadow=none
+  text #2/18446744004990074954 38.00,44.00 98.00x20.00 opacity=1.00 color=#ddddddff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  text #2/18446744004990074955 38.00,64.00 98.00x20.00 opacity=1.00 color=#ddddddff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  text #2/18446744004990074956 38.00,84.00 98.00x20.00 opacity=1.00 color=#ddddddff size=12.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  quad-color-batch #2/18446744004990074957 20.00,20.00 520.00x204.00 opacity=1.00 count=6 colors=6 border=none border_width=0.00 radius=0.00/0.00/0.00/0.00
+  text #2/18446744004990074958 167.00,22.00 60.00x14.00 opacity=1.00 color=#a3a3a3ff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  quad-color-batch #2/18446744004990074959 172.00,36.00 73.00x8.00 opacity=1.00 count=10 colors=10 border=none border_width=0.00 radius=0.00/0.00/0.00/0.00
+  text #2/18446744004990074960 247.00,22.00 60.00x14.00 opacity=1.00 color=#a3a3a3ff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  quad-color-batch #2/18446744004990074961 252.00,36.00 73.00x8.00 opacity=1.00 count=10 colors=10 border=none border_width=0.00 radius=0.00/0.00/0.00/0.00
+  text #2/18446744004990074962 327.00,22.00 60.00x14.00 opacity=1.00 color=#a3a3a3ff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  quad-color-batch #2/18446744004990074963 332.00,36.00 73.00x8.00 opacity=1.00 count=10 colors=10 border=none border_width=0.00 radius=0.00/0.00/0.00/0.00
+  text #2/18446744004990074964 407.00,22.00 60.00x14.00 opacity=1.00 color=#a3a3a3ff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  quad-color-batch #2/18446744004990074965 412.00,36.00 73.00x8.00 opacity=1.00 count=10 colors=10 border=none border_width=0.00 radius=0.00/0.00/0.00/0.00
+  text #2/18446744004990074966 487.00,22.00 60.00x14.00 opacity=1.00 color=#a3a3a3ff size=11.00 weight=inherit line_height=normal tracking=0.00 italic=false underline=false line_through=false spans=0 shadow=false
+  quad-color-batch #2/18446744004990074967 20.00,20.00 521.00x180.00 opacity=1.00 count=9 colors=9 border=none border_width=0.00 radius=0.00/0.00/0.00/0.00
+  quad #2/18446744004990074968 303.00,22.00 10.00x18.00 opacity=1.00 bg=#7bb9f0ff border=none border_width=0.00 radius=2.00/2.00/2.00/2.00 shadow=none

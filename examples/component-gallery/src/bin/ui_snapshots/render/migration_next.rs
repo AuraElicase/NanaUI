@@ -1124,6 +1124,31 @@ fn runtime_fixture(
             if fixture.state == "curves" {
                 editor = editor.mode(TimelineMode::Curves);
             }
+            if fixture.state == "clips" {
+                use nana_ui::runtime::{TimelineClip, TimelineClipTone};
+                editor.tracks = vec![
+                    TimelineTrack::new("motion", "Motion", [key(0.75, 0.0), key(0.95, 0.0)]).clips(
+                        [
+                            TimelineClip::new("idle", 0.0, 0.45, "Idle"),
+                            TimelineClip::new("wave", 0.45, 0.6, "Wave"),
+                            TimelineClip::new("nod", 1.3, 0.5, "Nod")
+                                .tone(TimelineClipTone::Neutral)
+                                .resizable(false),
+                        ],
+                    ),
+                    TimelineTrack::new("face", "Expression", []).clips([
+                        TimelineClip::new("smile", 0.2, 0.9, "Smile")
+                            .tone(TimelineClipTone::Success),
+                        TimelineClip::new("blink", 1.25, 0.05, "Blink")
+                            .tone(TimelineClipTone::Success),
+                    ]),
+                    TimelineTrack::new("sound", "Sound", [])
+                        .clips([TimelineClip::new("chime", 0.6, 1.0, "Chime")
+                            .tone(TimelineClipTone::Warning)]),
+                ];
+                editor.selection = Vec::new();
+                editor = editor.selected_clips(["wave".into()]);
+            }
             let context = document.context_mut();
             context.create_component(document_id, editor)?.stable_id()
         }
