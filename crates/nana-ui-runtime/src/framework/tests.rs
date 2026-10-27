@@ -1740,6 +1740,83 @@ fn timeline_editor_selects_moves_trims_and_deletes_clips() {
 }
 
 #[test]
+fn timeline_editor_clips_that_are_not_editable_only_select() {
+    use crate::view::widget;
+    use crate::{
+        TIMELINE_ROW, TIMELINE_RULER, TimelineClip, TimelineClipSelectionChanged,
+        TimelineClipTrimmed, TimelineClipsDeleteRequested, TimelineClipsMoved, TimelineEditor,
+        TimelineTrack,
+    };
+    use nana_ui_input::{
+        InputModifiers, InputPayload, KeyInput, KeyState, LogicalKey, PhysicalKey, PointerInput,
+        PointerPhase,
+    };
+
+    static HEARD: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut context = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let root = context
+        .create_component(document, crate::Stack::fill_column(0.0))
+        .unwrap();
+    context
+        .mount_view(root.stable_id(), move || {
+            widget(
+                TimelineEditor::new([TimelineTrack::new("a", "A", [])
+                    .clips([TimelineClip::new("a1", 0.5, 1.0, "One")])])
+                .snap(false)
+                .header_width(100.0)
+                .clips_editable(false),
+            )
+            .on(|e: &TimelineClipSelectionChanged| {
+                HEARD.lock().unwrap().push(format!("select {:?}", e.clips))
+            })
+            .on(|_: &TimelineClipsMoved| HEARD.lock().unwrap().push("move".into()))
+            .on(|_: &TimelineClipTrimmed| HEARD.lock().unwrap().push("trim".into()))
+            .on(|_: &TimelineClipsDeleteRequested| HEARD.lock().unwrap().push("delete".into()))
+        })
+        .unwrap();
+    let editor = Entity::<TimelineEditor>::from_stable_id(
+        context.world().node(root.stable_id()).unwrap().children[0],
+    );
+    context
+        .layout_document(document, crate::LayoutViewport::new(600.0, 200.0))
+        .unwrap();
+    context.rebuild_hit_test(document);
+    let take = || std::mem::take(&mut *HEARD.lock().unwrap());
+    let mut input = crate::HeadlessInput::bind(&mut context, document);
+    let row = TIMELINE_RULER + TIMELINE_ROW / 2.0;
+    let pointer = |phase, x: f32| InputPayload::Pointer(PointerInput::mouse(phase, x, row));
+    // a1 spans 160..280: its body and its end edge select it, nothing more
+    for (from, to) in [(220.0, 120.0), (278.0, 320.0)] {
+        for (phase, at) in [
+            (PointerPhase::Down, from),
+            (PointerPhase::Move, to),
+            (PointerPhase::Up, to),
+        ] {
+            input.route(&mut context, pointer(phase, at)).unwrap();
+        }
+    }
+    assert_eq!(take(), ["select [\"a1\"]"]);
+    input
+        .route(&mut context, pointer(PointerPhase::Move, 278.0))
+        .unwrap();
+    assert_eq!(context.read(editor, |e| e.hover_edge).unwrap(), None);
+    input
+        .route(
+            &mut context,
+            InputPayload::Key(KeyInput {
+                physical: PhysicalKey("Delete".into()),
+                logical: LogicalKey("Delete".into()),
+                state: KeyState::Pressed,
+                repeat: false,
+                modifiers: InputModifiers::empty(),
+            }),
+        )
+        .unwrap();
+    assert!(take().is_empty());
+}
+
+#[test]
 fn tree_view_selects_toggles_drags_and_renames() {
     use crate::{
         TreeDropIntent, TreeDropPosition, TreeDropRequested, TreeRenameRequested,
