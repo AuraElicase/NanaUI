@@ -162,6 +162,11 @@ impl CssLayoutParse for LengthSpec {
         if s.eq_ignore_ascii_case("100%") || s.eq_ignore_ascii_case("fill") {
             return Some(Self::Fill);
         }
+        // NanaUI extension, the counterpart of `fill`: as large as the
+        // content measures at the offer, what the Row/Column presets use.
+        if s.eq_ignore_ascii_case("shrink") {
+            return Some(Self::Shrink);
+        }
         if s.eq_ignore_ascii_case("max-content") {
             return Some(Self::MaxContent);
         }
@@ -7482,6 +7487,17 @@ html[data-theme="dark"], [data-theme="dark"] { --bg: #181818; }
                 max_px: None,
             }
         ));
+    }
+
+    #[test]
+    fn shrink_and_fill_spell_the_preset_lengths() {
+        let mut layout = LayoutStyle::default();
+        layout.apply_css_text("width:shrink;height:SHRINK", Some(400.0), None);
+        assert_eq!(layout.width, Some(LengthSpec::Shrink));
+        assert_eq!(layout.height, Some(LengthSpec::Shrink));
+        // Unlike `fit-content`, which clamps to the offer.
+        layout.apply_css_text("width:fit-content", Some(400.0), None);
+        assert_eq!(layout.width, Some(LengthSpec::FitContent));
     }
 
     #[test]

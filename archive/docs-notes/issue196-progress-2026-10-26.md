@@ -294,4 +294,7 @@ GPU pixels 来自 macOS。Windows/Linux 真机与外部 consumer 完整构建/�
   - 发现预设的 `LengthSpec::Shrink` 没有 CSS 写法：`fit-content` 是 `FitContent`，40px 时结果不同（预设容器 88、子项不收缩；`fit-content` 夹到 40、子项被压缩）。因此按"同一份意图"分两组比较，两组之间只在宽松宽度下比较。
 - 新增 `issue204_facades_share_identity_and_layout_work`：预设、视图函数 `row()`、带预设意图的 `from_layout` 节点数、节点种类、意图相同，首帧、局部修改和空闲帧的 measure/placement/生成/切换计数相同，空闲帧为零。
 - 写法间有意的差别只有命中默认值，已写进 `rust-layout.md`。
-- 未做：`Shrink` 与 `FitContent` 在受约束时的差异是否要统一（例如给 `Shrink` 一个 CSS 写法，或把预设改为 `FitContent`）需要另行决定。
+- 随后给 `Shrink` 加了 CSS 写法：
+  - `width: shrink` / `height: shrink` 是 NanaUI 扩展，与 `fill` 对称。
+  - `Stack::min_width(0)` 像 CSS 的 `min-width: 0` 一样记下 `allow_shrink`（布局引擎不读这个字段，只为两种写法得到同一份意图）。
+  - 两组对照合并成一组：预设、模板、`from_layout` 和纯 CSS 四种写法在 800px 与 40px 下意图逐字段相同、结果相同。

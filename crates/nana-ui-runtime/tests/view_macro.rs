@@ -2142,20 +2142,13 @@ fn localized_text_and_locale_scopes_mount_like_their_function_calls() {
     );
 }
 
-/// Layout authoring has one canonical contract: paths that state the same
-/// intent produce the same context, participation and layout results, at a
-/// wide offer and at one narrower than the content (so the intrinsic
-/// contributions take part, not only the final boxes).
-///
-/// - The Rust preset, the template facade and `Stack::from_layout` with the
-///   preset's intent.
-/// - CSS written from an empty layout and `Stack::from_layout` with the
-///   intent that CSS states.
-///
-/// The presets size with `LengthSpec::Shrink`, which CSS has no spelling for
-/// (`fit-content` is `FitContent`, which clamps to the offer), so the two
-/// groups are compared with each other only where the offer does not
-/// constrain them.
+/// Layout authoring has one canonical contract. The Rust preset, the
+/// template facade, `Stack::from_layout` with the preset's intent and CSS
+/// written from an empty layout state the same intent and produce the same
+/// context, participation and layout results, at a wide offer and at one
+/// narrower than the content (so the intrinsic contributions take part, not
+/// only the final boxes). CSS spells the presets' content-sized length as
+/// `shrink`; `fit-content` is a different length that clamps to the offer.
 #[test]
 fn issue204_row_column_and_css_share_structured_layout_results() {
     use nana_ui_core::{AlignSpec, DisplaySpec, FlexDirection, LengthSpec};
@@ -2163,19 +2156,20 @@ fn issue204_row_column_and_css_share_structured_layout_results() {
         FormattingContextKind, LayoutStyle, LayoutViewport, MeasureTextShaper, ParticipationKind,
         css,
     };
-    let flex = |direction, align, width| LayoutStyle {
-        display: Some(DisplaySpec::Flex),
-        direction: Some(direction),
-        gap: Some(LengthSpec::Px(8.0)),
-        align_items: align,
-        width: Some(width),
-        ..LayoutStyle::default()
-    };
     let preset_intent = |column: bool| {
+        let flex = |direction, align, width| LayoutStyle {
+            display: Some(DisplaySpec::Flex),
+            direction: Some(direction),
+            gap: Some(LengthSpec::Px(8.0)),
+            align_items: align,
+            width: Some(width),
+            ..LayoutStyle::default()
+        };
         if column {
             LayoutStyle {
                 height: Some(LengthSpec::Shrink),
                 min_width: Some(LengthSpec::Px(0.0)),
+                allow_shrink: true,
                 flex_grow: Some(0.0),
                 flex_shrink: Some(0.0),
                 ..flex(FlexDirection::Column, AlignSpec::Stretch, LengthSpec::Fill)
@@ -2184,22 +2178,11 @@ fn issue204_row_column_and_css_share_structured_layout_results() {
             flex(FlexDirection::Row, AlignSpec::Center, LengthSpec::Shrink)
         }
     };
-    let css_intent = |column: bool| {
-        if column {
-            flex(FlexDirection::Column, AlignSpec::Stretch, LengthSpec::Fill)
-        } else {
-            flex(
-                FlexDirection::Row,
-                AlignSpec::Center,
-                LengthSpec::FitContent,
-            )
-        }
-    };
     let document = DocumentId::new(1).unwrap();
     for column in [false, true] {
         for width in [800.0, 40.0] {
             let mut outputs = Vec::new();
-            for author in 0..5 {
+            for author in 0..4 {
                 let mut cx = AppContext::new();
                 let _mounted = cx
                     .mount_view_root(document, || {
@@ -2218,16 +2201,13 @@ fn issue204_row_column_and_css_share_structured_layout_results() {
                             (_, 2) => widget(Stack::from_layout(preset_intent(column)))
                                 .children(children)
                                 .into_any(),
-                            (_, 3) => widget(Stack::from_layout(css_intent(column)))
-                                .children(children)
-                                .into_any(),
                             // CSS from an empty layout: nothing comes from a preset.
                             (false, _) => widget(Stack::from_layout(LayoutStyle::default()))
-                                .css(css! {display:flex;flex-direction:row;gap:8px;align-items:center;width:fit-content;})
+                                .css(css! {display:flex;flex-direction:row;gap:8px;align-items:center;width:shrink;})
                                 .children(children)
                                 .into_any(),
                             (true, _) => widget(Stack::from_layout(LayoutStyle::default()))
-                                .css(css! {display:flex;flex-direction:column;gap:8px;align-items:stretch;width:100%;})
+                                .css(css! {display:flex;flex-direction:column;gap:8px;align-items:stretch;width:100%;height:shrink;min-width:0;flex-grow:0;flex-shrink:0;})
                                 .children(children)
                                 .into_any(),
                         }
@@ -2265,20 +2245,14 @@ fn issue204_row_column_and_css_share_structured_layout_results() {
                 outputs.push((snapshot, intent));
             }
             let at = format!("column {column}, width {width}");
-            for (group, rest) in [(0, 1..3), (3, 4..5)] {
-                let (expected, expected_intent) = &outputs[group];
-                for author in rest {
-                    let (snapshot, intent) = &outputs[author];
-                    assert_eq!(snapshot, expected, "author {author} vs {group} ({at})");
-                    assert!(
-                        expected_intent.changed_fields(intent).is_empty(),
-                        "author {author} intent vs {group} ({at}): {:?}",
-                        expected_intent.changed_fields(intent)
-                    );
-                }
-            }
-            if width > 100.0 {
-                assert_eq!(outputs[0].0, outputs[4].0, "preset vs CSS ({at})");
+            let (preset, preset_intent) = &outputs[0];
+            for (author, (snapshot, intent)) in outputs.iter().enumerate().skip(1) {
+                assert_eq!(snapshot, preset, "author {author} ({at})");
+                assert!(
+                    preset_intent.changed_fields(intent).is_empty(),
+                    "author {author} intent ({at}): {:?}",
+                    preset_intent.changed_fields(intent)
+                );
             }
         }
     }

@@ -638,7 +638,7 @@ CSS 路径只产出数据，不量容器（见下文「`@container`」）。
 
 同单位、可以折叠的嵌套 `min`、`max`、`clamp` 可以用。能并进既有 `Min2`、`Max2`、`Clamp3` 的混单位也可以。例如 `min(10px, max(1px, 50%))` 和 `min(1px, 2%, 3px)`。布局时相对包含块兑现。三路互不可比，仍 fail closed。
 
-还有 `min-content`、`max-content`、`fit-content`。
+还有 `min-content`、`max-content`、`fit-content`，以及两个 NanaUI 扩展关键字：`fill`（`LengthSpec::Fill`，占满可用空间，和 `100%` 同义）和 `shrink`（`LengthSpec::Shrink`，按内容在当前可用空间下量出的大小，Row/Column 预设用的就是它）。`shrink` 不同于 `fit-content`：可用宽比内容窄时，`fit-content` 会夹到可用宽并压缩子项，`shrink` 取子项量出的尺寸之和。
 
 无法折成长度原子的 leftover `calc`，可以走 `LengthSpec::Calc` 这棵 AST。不要假装它已经 flatten。
 

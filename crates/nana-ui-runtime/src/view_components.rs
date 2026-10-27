@@ -5934,7 +5934,13 @@ impl Stack {
     }
 
     pub fn min_width(mut self, min_width: nana_ui_core::LengthSpec) -> Self {
-        Arc::make_mut(&mut self.style.layout).min_width = Some(min_width);
+        let layout = Arc::make_mut(&mut self.style.layout);
+        // Read as CSS reads `min-width: 0`, so both spellings state one intent.
+        layout.allow_shrink |= matches!(
+            min_width,
+            nana_ui_core::LengthSpec::Px(0.0) | nana_ui_core::LengthSpec::Percent(0.0)
+        );
+        layout.min_width = Some(min_width);
         self
     }
 
