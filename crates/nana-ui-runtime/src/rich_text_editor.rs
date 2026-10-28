@@ -88,20 +88,6 @@ pub enum RichEditCommand {
     Redo,
 }
 
-/// Where text typed at a caret takes its attributes from. Attributes the
-/// caret was given (a toolbar's bold with nothing selected) apply under
-/// either; a rich paste keeps the styling it carries under either.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum RichTypingStylePolicy {
-    /// The character before the caret, else the one after: typing continues
-    /// the text it lands in.
-    #[default]
-    Inherit,
-    /// The node's own style: neighbouring spans do not carry over, for an
-    /// editor mostly typed into as plain text.
-    Plain,
-}
-
 /// One attribute of [`RichSelectionAttrs`], as a bit of [`RichAttrMask`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct RichAttrMask(pub u16);

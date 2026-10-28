@@ -13,7 +13,7 @@ impl AppContext {
             return Ok(false);
         }
         self.update_component(entity, |select, cx| {
-            if select.opened == opened {
+            if select.open == opened {
                 false
             } else {
                 if opened {
@@ -21,7 +21,7 @@ impl AppContext {
                 } else {
                     select.close();
                 }
-                cx.emit(crate::SelectOpenedChanged { opened });
+                cx.emit(crate::SelectToggled { open: opened });
                 true
             }
         })
@@ -81,8 +81,8 @@ impl AppContext {
         if self.read(entity, Select::inactive)? {
             return Ok(false);
         }
-        let opened = self.read(entity, |select| select.opened)?;
-        self.set_select_opened(entity, !opened)
+        let open = self.read(entity, |select| select.open)?;
+        self.set_select_opened(entity, !open)
     }
 
     /// Activation at a window point: an option of the open menu, the field,
@@ -98,8 +98,8 @@ impl AppContext {
         }
         // The menu and the field are laid out under any scroll above them.
         let (x, y) = self.menu_point(entity.id, x, y);
-        let opened = self.read(entity, |select| select.opened)?;
-        if opened {
+        let open = self.read(entity, |select| select.open)?;
+        if open {
             if let Some(menu) = self.open_select_menu(entity.id)
                 && let Some(index) = crate::select::select_option_at(&menu, x, y)
             {
@@ -116,7 +116,7 @@ impl AppContext {
                     if let Some(changed) = select.select_index(index) {
                         cx.emit(changed);
                     }
-                    cx.emit(crate::SelectOpenedChanged { opened: false });
+                    cx.emit(crate::SelectToggled { open: false });
                     true
                 });
             }
@@ -150,7 +150,7 @@ impl AppContext {
         if self.read(entity, Select::inactive)? {
             return Ok(false);
         }
-        if !self.read(entity, |select| select.opened)? {
+        if !self.read(entity, |select| select.open)? {
             return self.set_select_opened(entity, true);
         }
         let menu = self.open_select_menu(target);
@@ -247,17 +247,16 @@ impl AppContext {
             return Ok(false);
         }
         self.update_component(Entity::<Select>::from_stable_id(target), |select, cx| {
-            let was_opened = select.opened;
+            let was_opened = select.open;
             if let Some(changed) = select.commit_highlighted() {
                 cx.emit(changed);
             }
-            if was_opened && !select.opened {
-                cx.emit(crate::SelectOpenedChanged { opened: false });
+            if was_opened && !select.open {
+                cx.emit(crate::SelectToggled { open: false });
                 true
             } else {
                 false
             }
-            opened && !select.opened
         })
     }
 

@@ -374,6 +374,7 @@ impl crate::ComponentView for ActionMenu {
             self.popover.trigger_icon,
             self.popover.trigger_content,
             self.popover.open,
+            self.popover.disabled,
             self.popover.width,
             self.popover
                 .padding_theme
@@ -403,6 +404,7 @@ pub(crate) fn project_menu_surface(
     trigger_icon: Option<Icon>,
     trigger_content: Option<StableNodeId>,
     open: bool,
+    disabled: bool,
     width: f32,
     padding: f32,
     gap: f32,
