@@ -1,0 +1,51 @@
+crates/nana-ui/src/scene_host/host_services.rs
+  h_070abd15058824 12,160
+crates/nana-ui-runtime/src/framework/choice.rs
+  h_070abd15058824 84,101
+  h_070abd15058824 24,85,102,119,255
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_070abd15058824 309
+crates/nana-ui-runtime/src/world/geometry.rs
+  h_070abd15058824 2397-2420
+crates/nana-ui-runtime/src/store.rs
+  h_070abd15058824 881-882
+crates/nana-ui-runtime/src/world/reorder_motion.rs
+  h_070abd15058824 11
+  h_070abd15058824 7,10,12
+crates/nana-ui-runtime/src/popover.rs
+  h_070abd15058824 245,378
+  h_070abd15058824 408
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_070abd15058824 111
+crates/nana-ui-runtime/src/world/inline_content.rs
+  h_070abd15058824 294-295
+crates/nana-ui-runtime/src/layout_engine/inline.rs
+  h_070abd15058824 142-143
+PR_DESCRIPTION_CN.md
+  h_070abd15058824 1-144
+crates/nana-text/src/layout/engine.rs
+  h_070abd15058824 461
+crates/nana-text/src/layout/lines.rs
+  h_070abd15058824 366
+crates/nana-ui-core/src/rich_text.rs
+  h_070abd15058824 474-476,504
+crates/nana-ui-runtime/src/framework/choice_select_tests.rs
+  h_070abd15058824 21
+crates/nana-ui-runtime/src/lib.rs
+  h_070abd15058824 407,419
+crates/nana-ui-runtime/src/select.rs
+  h_070abd15058824 78-79
+crates/nana-window/src/file_dialog_windows.rs
+  h_070abd15058824 25-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "30c3a62b701b99c3a9b917f99f1966c202b53851",
+  "prompts": {},
+  "humans": {
+    "h_070abd15058824": {
+      "author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
