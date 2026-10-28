@@ -176,7 +176,25 @@ impl UiWorld {
                 surface_painter,
                 ..
             } => {
-                let presentation = self.nodes.modal_text(id).copied().unwrap_or_default();
+                let mut presentation = self.nodes.modal_text(id).copied().unwrap_or_default();
+                // A title content slot that lays out stands in the title's
+                // place: the row reads its height as it would the title's,
+                // and the title text is not drawn.
+                let title_content = slots
+                    .title_content
+                    .filter(|slot| {
+                        !self
+                            .node_style(*slot)
+                            .is_some_and(|style| style.layout.omits_box())
+                    })
+                    .and_then(|slot| self.component_layout_box(slot));
+                if let Some(content) = title_content {
+                    presentation.title = crate::TextMetrics {
+                        width: content.width,
+                        height: content.height,
+                        ascent: None,
+                    };
+                }
                 let recipe = self.theme.recipes().dialog();
                 let chrome = crate::overlay_surfaces::ModalChrome::measure_in(
                     *kind,
@@ -315,7 +333,11 @@ impl UiWorld {
                                 width: text_width,
                                 height: presentation.title.height,
                             },
-                            Arc::clone(title),
+                            if title_content.is_some() {
+                                Arc::from("")
+                            } else {
+                                Arc::clone(title)
+                            },
                             false,
                             title_type.size,
                             title_type.weight,

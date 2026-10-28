@@ -34,6 +34,14 @@ pub struct ModalBehavior {
 pub struct ModalSlots {
     /// An icon before the title, in the header row.
     pub title_icon: Option<StableNodeId>,
+    /// What the header row shows in place of the title text: a view laid
+    /// out like any other, such as a name followed by a status badge. It
+    /// stands where the title block stands, after the icon and before the
+    /// close button, as wide as the title may run and as tall as its own
+    /// content, centred in the row. The surface's `title` stays its
+    /// accessible name and is no longer drawn. A slot that generates no box
+    /// (`display: none`) gives the row back to the title text.
+    pub title_content: Option<StableNodeId>,
     pub body: Option<StableNodeId>,
     pub footer: Option<StableNodeId>,
     pub close_action: Option<StableNodeId>,
@@ -58,6 +66,7 @@ impl ConfirmSlots {
     pub(crate) fn modal_slots(&self) -> ModalSlots {
         ModalSlots {
             title_icon: self.title_icon,
+            title_content: None,
             body: self.body,
             footer: self.footer,
             close_action: self.close_action,
@@ -80,6 +89,7 @@ impl ModalSlots {
     pub(crate) fn ordered(&self) -> Vec<StableNodeId> {
         self.title_icon
             .into_iter()
+            .chain(self.title_content)
             .chain(self.body)
             .chain(self.footer)
             .chain(self.close_action)
@@ -111,7 +121,9 @@ pub struct ModalSurfaceSections {
     /// one (the divider itself lies just under the band).
     pub header: crate::LayoutBox,
     /// The title block: the title and its description, as wide as the
-    /// recipe lets them run.
+    /// recipe lets them run. With a title content slot
+    /// ([`ModalSlots::title_content`]) it is that slot's box over the
+    /// description.
     pub title: crate::LayoutBox,
     /// The title icon's square, when the dialog has one.
     pub icon: Option<crate::LayoutBox>,
@@ -1646,6 +1658,144 @@ mod tests {
             panic!("confirm geometry")
         };
         assert_eq!(title.color, Some(danger));
+    }
+
+    /// A title content slot takes the title text's place in the header
+    /// row: after the icon and before the close button, as wide as the
+    /// title may run, centred in the row and as tall as it lays out. The
+    /// title stays the dialog's accessible name and is no longer drawn.
+    /// Hiding the slot or taking it away gives the row back to the title,
+    /// exactly as it was.
+    #[test]
+    fn a_title_content_slot_takes_the_titles_place_in_the_header_row() {
+        let mut cx = AppContext::new();
+        let document = DocumentId::new(1).unwrap();
+        let dialog = cx
+            .create_component(document, crate::Dialog::new("资源库"))
+            .unwrap();
+        let icon = cx
+            .create_detached_component(document, crate::Stack::column(0.0))
+            .unwrap()
+            .stable_id();
+        let close = cx
+            .create_detached_component(
+                document,
+                crate::IconButton::new(nana_ui_core::Icon::Close, "Close"),
+            )
+            .unwrap()
+            .stable_id();
+        let text_only = ModalSlots {
+            title_icon: Some(icon),
+            close_action: Some(close),
+            ..Default::default()
+        };
+        cx.set_modal_slots(dialog, text_only.clone()).unwrap();
+        shaped_layout(&mut cx, document, 800.0, 600.0);
+        let plain = modal_geometry(&cx, dialog.stable_id());
+
+        let content = cx
+            .create_detached_component(
+                document,
+                crate::Stack::row(0.0).height(LengthSpec::Px(40.0)),
+            )
+            .unwrap();
+        cx.set_modal_slots(
+            dialog,
+            ModalSlots {
+                title_content: Some(content.stable_id()),
+                ..text_only.clone()
+            },
+        )
+        .unwrap();
+        shaped_layout(&mut cx, document, 800.0, 600.0);
+        assert_eq!(
+            cx.world().node(dialog.stable_id()).unwrap().children,
+            vec![icon, content.stable_id(), close],
+            "the row holds the icon, the content and the close button in order"
+        );
+        let crate::ComponentGeometry::ModalFrame {
+            surface,
+            body,
+            title,
+            ..
+        } = modal_geometry(&cx, dialog.stable_id())
+        else {
+            panic!("dialog geometry")
+        };
+        assert!(title.content.is_empty(), "the title text is not drawn");
+        assert_eq!(
+            cx.world()
+                .accessibility(dialog.stable_id())
+                .and_then(|state| state.label.as_deref()),
+            Some("资源库"),
+            "the title stays the accessible name"
+        );
+        let recipe = nana_ui_core::DialogRecipe::DEFAULT;
+        let icon_box = cx.world().canonical_layout_box(icon).unwrap();
+        let close_box = cx.world().canonical_layout_box(close).unwrap();
+        let content_box = cx
+            .world()
+            .canonical_layout_box(content.stable_id())
+            .unwrap();
+        assert_eq!(
+            content_box.x,
+            icon_box.x + recipe.icon_size + recipe.header_gap
+        );
+        assert!(
+            (content_box.width
+                - (surface.width
+                    - MODAL_PAD_X * 2.0
+                    - recipe.icon_size
+                    - recipe.header_gap * 2.0
+                    - recipe.close_size))
+                .abs()
+                < 0.01,
+            "{content_box:?}"
+        );
+        assert_eq!(content_box.height, 40.0);
+        let middle = content_box.y + content_box.height / 2.0;
+        for square in [icon_box, close_box] {
+            assert!(
+                (square.y + square.height / 2.0 - middle).abs() < 0.01,
+                "{square:?} is centred on {content_box:?}"
+            );
+        }
+        assert_eq!(
+            body.y,
+            surface.y + HEADER.top + 40.0 + HEADER.bottom + BODY.top,
+            "the row is as tall as the content"
+        );
+
+        cx.update_component(content, |stack, _| stack.layout_mut().hidden = true)
+            .unwrap();
+        shaped_layout(&mut cx, document, 800.0, 600.0);
+        assert_eq!(
+            modal_geometry(&cx, dialog.stable_id()),
+            plain,
+            "a hidden slot gives the row back to the title"
+        );
+
+        cx.update_component(content, |stack, _| stack.layout_mut().hidden = false)
+            .unwrap();
+        shaped_layout(&mut cx, document, 800.0, 600.0);
+        let crate::ComponentGeometry::ModalFrame { title, .. } =
+            modal_geometry(&cx, dialog.stable_id())
+        else {
+            panic!("dialog geometry")
+        };
+        assert!(title.content.is_empty(), "shown again, it stands in again");
+
+        cx.set_modal_slots(dialog, text_only).unwrap();
+        shaped_layout(&mut cx, document, 800.0, 600.0);
+        assert_eq!(
+            cx.world().node(dialog.stable_id()).unwrap().children,
+            vec![icon, close]
+        );
+        assert_eq!(
+            modal_geometry(&cx, dialog.stable_id()),
+            plain,
+            "without the slot the header is the text title's again"
+        );
     }
 
     /// A theme whose header row is as tall as its close button states that

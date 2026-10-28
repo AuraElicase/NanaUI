@@ -98,11 +98,12 @@ widget(
 
 ## 插槽
 
-视图槽是 `.title_icon`、`.body`、`.footer`、`.close_action`。
+视图槽是 `.title_icon`、`.title_content`、`.body`、`.footer`、`.close_action`。
 
 | 插槽 | 说明 |
 | --- | --- |
 | `.title_icon` | 标题前的图标，和标题、关闭位在表头里竖直居中 |
+| `.title_content` | 代替标题文字站在表头里的视图，排法见 [Dialog](dialog.md#标题内容)。标题仍是无障碍名 |
 | `.body` | 视图槽。例子里是 `<template #body>` |
 | `.footer` | 视图槽 |
 | `.close_action` | 视图槽 |

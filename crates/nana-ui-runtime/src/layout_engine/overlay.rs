@@ -16,27 +16,60 @@ pub(super) fn place_modal_children(
     output: &mut HashMap<StableNodeId, LayoutBox>,
     scope: Option<&ScopeContext<'_>>,
 ) -> Result<(), UiWorldError> {
-    let recipe = *nodes.world.theme().recipes().dialog();
-    let chrome = crate::overlay_surfaces::ModalChrome::measure_in(
-        modal.kind,
-        modal.title,
-        modal.description,
-        &modal.slots,
-        &recipe,
-        nodes.world.theme().border().hairline,
-        nodes.world.theme(),
-    );
-    let body_copy = modal.body_text.map_or(0.0, |metrics| metrics.height);
-    let body_gap = if body_copy > 0.0 && modal.slots.body.is_some() {
-        nodes.world.theme().spacing().md
-    } else {
-        0.0
+    let world = nodes.world;
+    let recipe = *world.theme().recipes().dialog();
+    let measure = |title: crate::TextMetrics| {
+        crate::overlay_surfaces::ModalChrome::measure_in(
+            modal.kind,
+            title,
+            modal.description,
+            &modal.slots,
+            &recipe,
+            world.theme().border().hairline,
+            world.theme(),
+        )
     };
     let root = LayoutBox {
         x: origin.x,
         y: origin.y,
         width: size.width,
         height: size.height,
+    };
+    // A title content slot stands in the title's place: the row measures
+    // it as it would the title text, as wide as the title may run. How
+    // wide that is reads only the card's width, which its height does not
+    // move.
+    let title_content = match modal.slots.title_content {
+        Some(id) if nodes.get(id)?.is_some_and(|node| !node.style.omits_box()) => {
+            let provisional =
+                crate::overlay_surfaces::modal_surface_bounds(root, modal.kind, None, &recipe);
+            let width = measure(modal.title).text_width(provisional, root);
+            let measured = intrinsic_size_scoped(
+                id,
+                Size::new(width, provisional.height),
+                Some(FlexDirection::Row),
+                viewport,
+                parent_font_px,
+                nodes,
+                intrinsic,
+                scope,
+            )?;
+            Some((id, measured.height.min(provisional.height)))
+        }
+        _ => None,
+    };
+    let chrome = measure(
+        title_content.map_or(modal.title, |(_, height)| crate::TextMetrics {
+            width: 0.0,
+            height,
+            ascent: None,
+        }),
+    );
+    let body_copy = modal.body_text.map_or(0.0, |metrics| metrics.height);
+    let body_gap = if body_copy > 0.0 && modal.slots.body.is_some() {
+        nodes.world.theme().spacing().md
+    } else {
+        0.0
     };
     let surface = match modal.kind {
         crate::ModalSurfaceKind::Dialog(_) | crate::ModalSurfaceKind::Confirm(_) => {
@@ -101,6 +134,22 @@ pub(super) fn place_modal_children(
             },
             Size::new(body.width, slot_height),
             Size::new(body.width, slot_height),
+            viewport,
+            parent_font_px,
+            nodes,
+            intrinsic,
+            output,
+            scope,
+        )?;
+    }
+    if let Some((id, height)) = title_content {
+        let (x, y) = chrome.title_origin(surface);
+        let width = chrome.text_width(surface, root);
+        place_modal_slot(
+            id,
+            Point { x, y },
+            Size::new(width, height),
+            Size::new(width, height),
             viewport,
             parent_font_px,
             nodes,

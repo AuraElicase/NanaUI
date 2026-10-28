@@ -93,6 +93,19 @@ macro_rules! modal_slots {
                 })
             }
 
+            /// What the header row shows in place of the title text, laid
+            /// out like any other view: the name followed by a status
+            /// badge, say. It stands between the icon and the close button,
+            /// as wide as the title may run and centred in the row; its own
+            /// content decides how it fills that width. The surface's title
+            /// stays its accessible name and is no longer drawn.
+            pub fn title_content(self, view: impl IntoView) -> Self {
+                self.slot(view, |mut modal: $surface, id| {
+                    modal.slots_mut().title_content = Some(id);
+                    modal
+                })
+            }
+
             /// The surface's content, under its title.
             pub fn body(self, view: impl IntoView) -> Self {
                 self.slot(view, |mut modal: $surface, id| {

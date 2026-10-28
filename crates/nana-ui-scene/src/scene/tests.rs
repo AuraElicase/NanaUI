@@ -5197,7 +5197,7 @@ fn modal_frame_emits_distinct_scrim_surface_and_intrinsic_text_slots() {
         surface_paint: None,
     }));
     let mut scene = UiScene::default();
-    scene.apply_delta([modal], []);
+    scene.apply_delta([modal.clone()], []);
     assert!(matches!(
         scene
             .primitive(PrimitiveId {
@@ -5253,6 +5253,18 @@ fn modal_frame_emits_distinct_scrim_surface_and_intrinsic_text_slots() {
             })
             .is_some()
     );
+
+    // A title content slot leaves the title text empty: nothing is drawn
+    // for it, and the description stays.
+    if let Some(ComponentGeometry::ModalFrame { title, .. }) =
+        modal.component_geometry.as_deref_mut()
+    {
+        title.content = nana_ui_runtime::TextValue::from("");
+    }
+    scene.apply_delta([modal], []);
+    let slot = |slot| scene.primitive(PrimitiveId { node: id(50), slot });
+    assert!(slot(12).is_none());
+    assert!(slot(13).is_some());
 }
 
 /// A dialog card is rounded and divided as its geometry says: the radius

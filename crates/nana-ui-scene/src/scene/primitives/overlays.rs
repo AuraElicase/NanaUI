@@ -126,18 +126,22 @@ pub(super) fn build(context: &GeometryPaintContext<'_>, emit: &mut impl FnMut(Sc
                     VisualQuadStyle::solid(*color),
                 ));
             }
-            emit(component_text_primitive(
-                id,
-                12,
-                title,
-                TextHorizontalAlignment::Start,
-                true,
-                node,
-                transform,
-                clips.clone(),
-                opacity,
-                node_order,
-            ));
+            // A title content slot leaves the title text empty: the slot is
+            // drawn in its place, as a child.
+            if !title.content.is_empty() {
+                emit(component_text_primitive(
+                    id,
+                    12,
+                    title,
+                    TextHorizontalAlignment::Start,
+                    true,
+                    node,
+                    transform,
+                    clips.clone(),
+                    opacity,
+                    node_order,
+                ));
+            }
             if let Some(description) = description {
                 emit(component_text_primitive(
                     id,

@@ -34,7 +34,7 @@ slot 的根在视图活着的时候不换。里面的内容要变，就在 slot 
 
 ## 对话框没有 `<Dialog>`
 
-`Dialog` 和 `Drawer` 不在控件表里。两种写法都是 `widget(Dialog::new(标题))`，再用 `.body`、`.footer`、`.close_action`。开关换的是这些槽里的界面，不是外层那一行。`Drawer::new(标题)` 的三个方法相同。
+`Dialog` 和 `Drawer` 不在控件表里。两种写法都是 `widget(Dialog::new(标题))`，再用 `.body`、`.footer`、`.close_action`。开关换的是这些槽里的界面，不是外层那一行。`Drawer::new(标题)` 的三个方法相同。标题行还有 `.title_icon` 和 `.title_content`：后者是代替标题文字的一段视图，见 [Dialog](../../components/dialog.md#标题内容)。
 
 :::api
 

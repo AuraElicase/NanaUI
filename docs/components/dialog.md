@@ -3,7 +3,7 @@
 标题加正文和底栏的浮层。只要确认和取消时，用 [ConfirmDialog](confirm-dialog.md)。
 
 ::: info
-控件表里没有 `<Dialog>` 标签。两种写法都调用 `widget(Dialog::new(title))`，再用 `.body`、`.footer`、`.close_action` 放进已经建好的视图。
+控件表里没有 `<Dialog>` 标签。两种写法都调用 `widget(Dialog::new(title))`，再用 `.title_icon`、`.title_content`、`.body`、`.footer`、`.close_action` 放进已经建好的视图。
 :::
 
 ## 基本用法
@@ -108,6 +108,45 @@ widget(Dialog::new("删除资源库").danger(true))
 
 :::
 
+## 标题内容
+
+标题行要摆的不止一行字时——名字后面跟一枚状态徽章，或者别的什么——用 `.title_content(视图)`。这个视图就是普通布局，里面放什么、怎么排都由它自己决定。它站在标题文字的位置上：`[图标] [标题内容] [关闭位]`，在行里竖直居中，宽度是标题文字能走的宽度（让出图标和关闭位，也受配方的 `title_max_width` 限制），高度是它自己排出来的高度。行高照旧取标题块、图标和 `header_min_height` 里最高的那个，关闭位不撑高这一行。有 `.description` 时，说明接在标题内容下面。
+
+给了标题内容，标题文字就不再画了，但 `Dialog::new` 的标题仍是对话框的无障碍名，读屏照旧用它称呼这个对话框；标题内容里的子节点是对话框的普通子节点，各自有自己的无障碍语义。配方的 `title` 字型和 `danger` 的标题色只作用于标题文字，不传给标题内容，里面的字由视图自己定。标题内容不生成盒子（`display: none`）或被拿掉时，标题行回到原来的标题文字，排法和没给过一样。`cx.modal_sections()` 的 `title` 这时是标题内容的框（连同下面的说明）。
+
+`Drawer` 也有 `.title_content`，排法相同。`ConfirmDialog` 没有。
+
+:::api
+
+```rust view
+use nana_ui::runtime::view;
+use nana_ui::runtime::view::widget;
+use nana_ui::runtime::{Dialog, StatusTone};
+
+widget(Dialog::new("资源库"))
+    .title_content(view! {
+        <Row gap=8>
+            <Text>"资源库"</Text>
+            <StatusBadge tone={StatusTone::Success}>"已同步"</StatusBadge>
+        </Row>
+    })
+    .body(view! { <Text>"上次同步在 5 分钟前。"</Text> })
+```
+
+```rust rust
+use nana_ui::runtime::view::{row, status_badge, text, widget};
+use nana_ui::runtime::{Dialog, StatusTone};
+
+widget(Dialog::new("资源库"))
+    .title_content(row().gap(8).children((
+        text("资源库"),
+        status_badge("已同步").tone(StatusTone::Success),
+    )))
+    .body(text("上次同步在 5 分钟前。"))
+```
+
+:::
+
 ## 卡片的分区
 
 卡片分三段：标题行、正文、底栏。每段的内边距、标题行下和底栏上的分隔线、卡片圆角都归主题的 `DialogRecipe`，对话框上不写：
@@ -162,7 +201,7 @@ painter 就是挂在节点上的那种 [`Painter`](../reference/components.md)�
 | 字段 | 是什么 |
 | --- | --- |
 | `header` | 标题行这一段，卡片全宽，从顶边到分隔线为止（有分隔线时，线紧贴在这一段下面） |
-| `title` | 标题块（标题和说明），配方允许它走多宽就多宽 |
+| `title` | 标题块（标题和说明），配方允许它走多宽就多宽；有 `.title_content` 时是标题内容的框连同说明 |
 | `icon` / `close` | 标题图标位、关闭位，有才有 |
 | `body` | 正文的内容盒 |
 | `footer` | 底栏这一段，卡片全宽一直到底边，有按钮或底栏插槽才有 |
@@ -347,6 +386,7 @@ widget(Dialog::new("重命名").close_policy(DialogClosePolicy::requests_only())
 | 插槽 | 说明 |
 | --- | --- |
 | `.title_icon` | 标题前的图标，和标题、关闭位在标题行里竖直居中 |
+| `.title_content` | 代替标题文字站在标题行里的视图，见[标题内容](#标题内容)。标题仍是无障碍名 |
 | `.body` | 标题下面的内容。调用前就要建好 |
 | `.footer` | 底栏，通常是按钮行 |
 | `.close_action` | 关闭位 |

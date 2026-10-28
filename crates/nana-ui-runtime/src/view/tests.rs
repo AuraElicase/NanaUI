@@ -4422,6 +4422,65 @@ fn a_title_icon_view_leads_the_header_of_a_dialog_and_a_confirm_dialog() {
 }
 
 #[test]
+fn a_title_content_view_stands_between_the_icon_and_the_close_action() {
+    use crate::{Dialog, Drawer, ModalSurface};
+    let (mut cx, document, _) = setup();
+    let (_view, (dialog, drawer)) = cx
+        .mount_view_root(document, || {
+            let (dialog, drawer) = (entity_ref::<Dialog>(), entity_ref::<Drawer>());
+            with_refs(
+                (
+                    widget(Dialog::new("资源库"))
+                        .entity_ref(dialog)
+                        .title_icon(text("!"))
+                        .title_content(
+                            row()
+                                .gap(8.0)
+                                .children((text("资源库"), status_badge("已同步"))),
+                        )
+                        .close_action(text("x"))
+                        .body(text("正文")),
+                    widget(Drawer::new("筛选"))
+                        .entity_ref(drawer)
+                        .title_content(text("筛选 · 3")),
+                ),
+                (dialog, drawer),
+            )
+        })
+        .unwrap();
+    let [icon, content, body, close] = children(&cx, dialog.stable_id())[..] else {
+        panic!("the dialog holds its icon, title content, body and close action")
+    };
+    assert_eq!(cx.world().text(icon), Some("!"));
+    assert_eq!(cx.world().text(close), Some("x"));
+    assert_eq!(cx.world().text(body), Some("正文"));
+    let slots = cx.read(dialog, |dialog| dialog.slots().clone()).unwrap();
+    assert_eq!(
+        (slots.title_icon, slots.title_content, slots.close_action),
+        (Some(icon), Some(content), Some(close))
+    );
+    let [name, badge] = children(&cx, content)[..] else {
+        panic!("the title content keeps its own children")
+    };
+    assert_eq!(cx.world().text(name), Some("资源库"));
+    assert!(cx.world().accessibility(badge).is_some());
+    assert_eq!(
+        cx.world()
+            .accessibility(dialog.stable_id())
+            .and_then(|state| state.label.as_deref()),
+        Some("资源库"),
+        "the dialog is still named by its title"
+    );
+    let content = children(&cx, drawer.stable_id())[0];
+    assert_eq!(cx.world().text(content), Some("筛选 · 3"));
+    assert_eq!(
+        cx.read(drawer, |drawer| drawer.slots().title_content)
+            .unwrap(),
+        Some(content)
+    );
+}
+
+#[test]
 fn a_confirm_dialog_places_the_actions_it_is_given_and_makes_the_rest() {
     use crate::{ConfirmDialog, ConfirmSlots};
     let (mut cx, document, _) = setup();
