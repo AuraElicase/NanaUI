@@ -1,0 +1,69 @@
+crates/nana-ui-runtime/src/world/hit_test.rs
+  s_30dfb9f78a63f5::t_494f11fb1025a7 1409-1412,1470-1472,1478-1480
+crates/nana-ui-runtime/src/framework/input.rs
+  s_30dfb9f78a63f5::t_2537b8a7364496 574-575
+crates/nana-ui-runtime/src/world/geometry.rs
+  s_30dfb9f78a63f5::t_aeb667380259ce 2397-2417,2586,2626-2632
+crates/nana-ui-runtime/src/framework.rs
+  s_30dfb9f78a63f5::t_3df0b2e538d7be 2115,4345-4347
+crates/nana-ui-runtime/src/world/reorder_preview.rs
+  s_30dfb9f78a63f5::t_cfbcecbc4d872d 1-83
+crates/nana-ui-runtime/src/framework/lifecycle.rs
+  s_30dfb9f78a63f5::t_fdfcbc5bc96418 647
+crates/nana-ui-input/src/host_services.rs
+  s_30dfb9f78a63f5::t_185ddca3d3a694 112-123,154,178,197-211,274-285
+docs/reference/components.md
+  h_8e6780fc7b4bb1 268
+  s_30dfb9f78a63f5::t_f879eee96e5f6f 267,269
+crates/nana-ui-runtime/src/components.rs
+  s_30dfb9f78a63f5::t_48571eb89edbdb 1136-1137
+PR_SUMMARY.md
+  s_30dfb9f78a63f5::t_44bc12430ef22f 1-66
+crates/nana-ui-core/src/file_dialog.rs
+  h_8e6780fc7b4bb1 206,238-240,265-283
+crates/nana-ui-platform/src/clipboard_tests.rs
+  s_30dfb9f78a63f5::t_8d41b419425da6 1-114
+crates/nana-ui-runtime/src/world/extraction.rs
+  s_30dfb9f78a63f5::t_54b419739e7c8c 4-6,196-197,273-282,682-683
+scripts/check-engine-boundary.py
+  h_8e6780fc7b4bb1 77-78
+crates/nana-ui-runtime/src/world/tests.rs
+  s_30dfb9f78a63f5::t_b0982b25d96885 12454-12456,12481-12482,12485,12488-12491,12493
+crates/nana-ui-core/src/lib.rs
+  h_8e6780fc7b4bb1 155-156
+  s_30dfb9f78a63f5::t_967fdcf5bfc4e9 154
+crates/nana-ui-runtime/src/lib.rs
+  s_f259d9690441aa::t_193e828e65615e 135-136
+  s_30dfb9f78a63f5::t_7e18d2a0881abb 419
+crates/nana-text/src/font/discovery.rs
+  s_30dfb9f78a63f5::t_83f1a1ad5ca0ce 98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ec5373aff5029f357eb2f19ff9a63831492e16fe",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_30dfb9f78a63f5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_30dfb9f78a63f5",
+        "model": "unknown"
+      },
+      "human_author": "AuraElicase <aura.elicase@gmail.com>"
+    },
+    "s_f259d9690441aa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_f259d9690441aa",
+        "model": "unknown"
+      },
+      "human_author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
