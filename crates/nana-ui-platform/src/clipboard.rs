@@ -19,12 +19,12 @@ pub trait ClipboardHost: Send {
     }
     fn read_text(&mut self) -> Option<String>;
     fn write_text(&mut self, text: &str) -> bool;
-    /// A count the platform advances with every write to the clipboard, by
-    /// any process. Read right after a write, it later tells whether the
-    /// clipboard still holds that write. `None` where the platform keeps
-    /// none.
-    fn change_count(&mut self) -> Option<u64> {
+    /// 富文本来源证明；仅有普通文本的后端返回空标记。
+    fn read_token(&mut self) -> Option<String> {
         None
+    }
+    fn write_text_with_token(&mut self, text: &str, _token: &str) -> bool {
+        self.write_text(text)
     }
 }
 
@@ -43,13 +43,14 @@ pub fn default_shared_clipboard() -> SharedClipboardHost {
     {
         shared_clipboard(AndroidClipboard)
     }
-    #[cfg(target_env = "ohos")]
-    {
-        shared_clipboard(UnsupportedClipboard)
-    }
     #[cfg(not(any(target_os = "android", target_env = "ohos")))]
     {
         shared_clipboard(OsClipboard::new())
+    }
+    #[cfg(target_env = "ohos")]
+    {
+        // OHOS 宿主通过 HostServices 注入系统剪贴板。
+        shared_clipboard(UnsupportedClipboard)
     }
 }
 
@@ -75,7 +76,7 @@ impl ClipboardHost for UnsupportedClipboard {
 #[derive(Debug, Default, Clone)]
 pub struct MemoryClipboard {
     text: Option<String>,
-    changes: u64,
+    token: Option<String>,
 }
 
 impl MemoryClipboard {
@@ -91,7 +92,15 @@ impl ClipboardHost for MemoryClipboard {
 
     fn write_text(&mut self, text: &str) -> bool {
         self.text = Some(text.to_owned());
-        self.changes += 1;
+        self.token = None;
+        true
+    }
+    fn read_token(&mut self) -> Option<String> {
+        self.token.clone()
+    }
+    fn write_text_with_token(&mut self, text: &str, token: &str) -> bool {
+        self.write_text(text);
+        self.token = Some(token.to_owned());
         true
     }
 
@@ -101,7 +110,7 @@ impl ClipboardHost for MemoryClipboard {
 }
 
 /// Desktop OS clipboard (`arboard`). Construction never panics; unavailable
-/// backends report failed reads/writes. Not compiled on Android or OHOS.
+/// backends report failed reads/writes. Not compiled on Android.
 #[cfg(not(any(target_os = "android", target_env = "ohos")))]
 pub struct OsClipboard {
     inner: Option<arboard::Clipboard>,
@@ -287,38 +296,67 @@ impl ClipboardHost for OsClipboard {
         }
     }
 
-    fn change_count(&mut self) -> Option<u64> {
-        self.inner.as_ref()?;
-        os_clipboard_change_count()
+    fn read_token(&mut self) -> Option<String> {
+        let html = self.inner.as_mut()?.get().html().ok()?;
+        rich_clipboard_token(&html).map(str::to_owned)
+    }
+
+    fn write_text_with_token(&mut self, text: &str, token: &str) -> bool {
+        let html = rich_clipboard_html(text, token);
+        self.inner
+            .as_mut()
+            .is_some_and(|clipboard| clipboard.set_html(html, Some(text.to_owned())).is_ok())
     }
 }
 
-/// `NSPasteboard.changeCount` of the general pasteboard: it advances each
-/// time an owner clears it to write.
-#[cfg(target_os = "macos")]
-fn os_clipboard_change_count() -> Option<u64> {
-    let count = objc2_app_kit::NSPasteboard::generalPasteboard().changeCount();
-    u64::try_from(count).ok()
+/// 来源标记与转义正文共存，使其他应用仍可作为 HTML 或纯文本粘贴。
+fn rich_clipboard_html(text: &str, token: &str) -> String {
+    let escaped = text
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    format!("<!--nana-ui-rich:{token}--><pre>{escaped}</pre>")
 }
 
-/// `GetClipboardSequenceNumber`: it advances with every change of the
-/// window station's clipboard. Zero means this process cannot see it.
-#[cfg(windows)]
-fn os_clipboard_change_count() -> Option<u64> {
-    // SAFETY: no arguments and no preconditions; it reads a counter.
-    let count = unsafe { windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber() };
-    (count != 0).then_some(u64::from(count))
+fn rich_clipboard_token(html: &str) -> Option<&str> {
+    let start = html.find("<!--nana-ui-rich:")? + "<!--nana-ui-rich:".len();
+    let token = html[start..].split_once("-->")?.0;
+    (!token.is_empty()
+        && token
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() || byte == b'-'))
+    .then_some(token)
 }
 
-/// X11 and Wayland keep no change count the clipboard can be asked for.
-#[cfg(not(any(
-    target_os = "macos",
-    windows,
-    target_os = "android",
-    target_env = "ohos"
-)))]
-fn os_clipboard_change_count() -> Option<u64> {
-    None
+/// 沿用共享后端的非阻塞访问边界读取来源证明。
+pub fn read_shared_clipboard_token(
+    clipboard: &SharedClipboardHost,
+) -> Result<Option<String>, nana_ui_input::HostServiceError> {
+    let mut clipboard = clipboard
+        .try_lock()
+        .map_err(|_| nana_ui_input::HostServiceError::Busy)?;
+    if !clipboard.is_available() {
+        return Err(nana_ui_input::HostServiceError::Unsupported);
+    }
+    Ok(clipboard.read_token())
+}
+
+pub fn write_shared_clipboard_with_token(
+    clipboard: &SharedClipboardHost,
+    text: &str,
+    token: &str,
+) -> Result<(), nana_ui_input::HostServiceError> {
+    let mut clipboard = clipboard
+        .try_lock()
+        .map_err(|_| nana_ui_input::HostServiceError::Busy)?;
+    if !clipboard.is_available() {
+        return Err(nana_ui_input::HostServiceError::Unsupported);
+    }
+    if clipboard.write_text_with_token(text, token) {
+        Ok(())
+    } else {
+        Err(nana_ui_input::HostServiceError::Failed)
+    }
 }
 
 /// Clipboard calls against a shared backend. The lock is tried, never
@@ -370,149 +408,5 @@ pub fn write_shared_clipboard(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn unsupported_clipboard_is_inert() {
-        let mut clip = UnsupportedClipboard;
-        assert!(clip.read_text().is_none());
-        assert!(!clip.write_text("nana"));
-    }
-
-    #[test]
-    fn memory_clipboard_roundtrip() {
-        let mut clip = MemoryClipboard::new();
-        assert!(clip.read_text().is_none());
-        assert!(clip.write_text("hello"));
-        assert_eq!(clip.read_text().as_deref(), Some("hello"));
-        assert!(clip.write_text(""));
-        assert_eq!(clip.read_text().as_deref(), Some(""));
-    }
-
-    #[test]
-    #[cfg(target_os = "android")]
-    fn android_default_clipboard_uses_jni_backend() {
-        let host = default_shared_clipboard();
-        let mut clip = host.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        // Host `cargo test` has no Activity context; JNI must fail closed
-        // rather than report a successful pasteboard round-trip.
-        assert!(clip.read_text().is_none());
-        assert!(!clip.write_text("nana"));
-    }
-
-    #[test]
-    #[cfg(not(any(target_os = "android", target_env = "ohos")))]
-    fn os_clipboard_roundtrip_when_available() {
-        let mut clip = OsClipboard::new();
-        if !clip.is_available() {
-            // Headless / locked-down environments may lack a pasteboard.
-            return;
-        }
-        let marker = format!("nana-ui-clipboard-{}-{}", std::process::id(), "probe");
-        let previous = clip.read_text();
-
-        // The pasteboard is one machine-wide resource, so anything else on the
-        // machine — including a second `cargo test` — can overwrite it between
-        // our write and our read. That is interference, not a broken clipboard,
-        // so the write/read pair is retried as a unit and only a run that never
-        // round-trips is a failure. Asserting on a single attempt made this
-        // test fail whenever two test processes overlapped.
-        let mut observed = None;
-        for _ in 0..8 {
-            assert!(
-                clip.write_text(&marker),
-                "desktop OS clipboard write must succeed when available"
-            );
-            observed = clip.read_text();
-            if observed.as_deref() == Some(marker.as_str()) {
-                break;
-            }
-        }
-        assert_eq!(
-            observed.as_deref(),
-            Some(marker.as_str()),
-            "desktop OS clipboard read must return the written text"
-        );
-
-        // A write advances the change count and a read leaves it, retried
-        // as a unit for the same reason as the round trip.
-        #[cfg(any(target_os = "macos", windows))]
-        {
-            let mut stamped = false;
-            for _ in 0..8 {
-                let before = clip
-                    .change_count()
-                    .expect("the platform keeps a change count");
-                assert!(clip.write_text(&marker));
-                let written = clip.change_count();
-                let _ = clip.read_text();
-                stamped = written != Some(before) && clip.change_count() == written;
-                if stamped {
-                    break;
-                }
-            }
-            assert!(stamped, "a write advances the count and a read does not");
-        }
-
-        if let Some(prev) = previous {
-            let _ = clip.write_text(&prev);
-        }
-    }
-
-    #[test]
-    fn an_uninjected_clipboard_answers_unsupported() {
-        let clipboard = shared_clipboard(UnsupportedClipboard);
-        assert_eq!(
-            read_shared_clipboard(&clipboard),
-            Err(nana_ui_input::HostServiceError::Unsupported)
-        );
-        assert_eq!(
-            write_shared_clipboard(&clipboard, "nana"),
-            Err(nana_ui_input::HostServiceError::Unsupported)
-        );
-    }
-
-    #[test]
-    #[cfg(target_env = "ohos")]
-    fn ohos_default_clipboard_is_unsupported_until_the_host_injects_one() {
-        let clipboard = default_shared_clipboard();
-        assert_eq!(
-            read_shared_clipboard(&clipboard),
-            Err(nana_ui_input::HostServiceError::Unsupported)
-        );
-    }
-
-    #[test]
-    fn a_write_advances_the_change_count_and_a_read_does_not() {
-        let clipboard = shared_clipboard(MemoryClipboard::new());
-        let before = shared_clipboard_change_count(&clipboard).unwrap();
-        write_shared_clipboard(&clipboard, "same").unwrap();
-        let written = shared_clipboard_change_count(&clipboard).unwrap();
-        assert_ne!(written, before);
-        read_shared_clipboard(&clipboard).unwrap();
-        assert_eq!(shared_clipboard_change_count(&clipboard), Ok(written));
-        write_shared_clipboard(&clipboard, "same").unwrap();
-        assert_ne!(
-            shared_clipboard_change_count(&clipboard),
-            Ok(written),
-            "the same text written again is another write"
-        );
-        assert_eq!(
-            shared_clipboard_change_count(&shared_clipboard(UnsupportedClipboard)),
-            Err(nana_ui_input::HostServiceError::Unsupported)
-        );
-    }
-
-    #[test]
-    fn a_busy_shared_clipboard_answers_busy_instead_of_waiting() {
-        let clipboard = shared_clipboard(MemoryClipboard::new());
-        write_shared_clipboard(&clipboard, "hello").unwrap();
-        assert_eq!(read_shared_clipboard(&clipboard), Ok(Some("hello".into())));
-        let _held = clipboard.lock().unwrap();
-        assert_eq!(
-            read_shared_clipboard(&clipboard),
-            Err(nana_ui_input::HostServiceError::Busy)
-        );
-    }
-}
+#[path = "clipboard_tests.rs"]
+mod tests;
