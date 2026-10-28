@@ -1,0 +1,16 @@
+crates/nana-text/src/layout/lines.rs
+  h_070abd15058824 366
+crates/nana-window/src/file_dialog_windows.rs
+  h_070abd15058824 25-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2fe90afd2138146a21e54dd8c44d6dc0deeb3177",
+  "prompts": {},
+  "humans": {
+    "h_070abd15058824": {
+      "author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
