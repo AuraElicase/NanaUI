@@ -1,0 +1,39 @@
+crates/nana-ui-runtime/src/lib.rs
+  s_f259d9690441aa::t_193e828e65615e 135-136
+crates/nana-ui-runtime/src/lib.rs.orig
+  s_f259d9690441aa::t_7776064a704f72 1-493
+crates/nana-ui-runtime/src/rich_ime.rs
+  s_f259d9690441aa::t_9372f51f7b3ae5 1-63
+crates/nana-ui-runtime/src/rich_ime_tests.rs
+  s_f259d9690441aa::t_973e625f2a722b 1-37
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  s_f259d9690441aa::t_54763e193bb5d4 40-43,1317-1321
+crates/nana-ui-runtime/src/rich_text_editor.rs.orig
+  s_f259d9690441aa::t_88755467b6b72e 1-1878
+crates/nana-ui/src/scene_paint/dest.rs
+  s_f259d9690441aa::t_16c32129e16f58 436-437
+crates/nana-ui/src/scene_paint/group_composite_tests.rs
+  s_f259d9690441aa::t_4b898f3145d2d9 1-133
+crates/nana-ui/src/scene_paint/mod.rs
+  s_f259d9690441aa::t_a21926ecac1d18 3317-3318,3325-3328,3332-3339,3380-3381
+crates/nana-ui/src/scene_paint/mod.rs.orig
+  s_f259d9690441aa::t_ed0ee1be901d03 1-3819
+crates/nana-ui/src/scene_paint/tests.rs
+  s_f259d9690441aa::t_e93f75b657ecd3 19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fcc14804fe42ad5056b47fad27f8139d58d7495c",
+  "prompts": {},
+  "sessions": {
+    "s_f259d9690441aa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_f259d9690441aa",
+        "model": "unknown"
+      },
+      "human_author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
