@@ -1,0 +1,90 @@
+crates/nana-ui-scene/tests/rich_stretch_emphasis.rs
+  h_8e6780fc7b4bb1 1-116
+crates/nana-ui-runtime/src/rich_ime_tests.rs
+  s_f259d9690441aa::t_973e625f2a722b 1-37
+crates/nana-ui/src/scene_paint/text/mod.rs
+  h_8e6780fc7b4bb1 33,42-43,2248,5145-5181,5183-5186,5203
+  s_f259d9690441aa::t_2850c3fef7386a 5182,5187-5188
+crates/nana-text/src/layout/lines.rs
+  h_8e6780fc7b4bb1 144,343,352-353,358,364-388
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 44-53,122-123,164-165,167-169,280,315,416,457-462,501,805-811,1686-1709
+  s_f259d9690441aa::t_54763e193bb5d4 40-43,1317-1321
+  s_f259d9690441aa::t_220b82c7165dbe 36,166,238,260-261,378,463-464,804,999,1053-1062,1451,1455-1457,1546-1547,1710-1711
+crates/nana-ui-scene/src/scene/rich_background.rs
+  h_8e6780fc7b4bb1 1-152
+crates/nana-ui/src/scene_paint/text/stacked_effects_tests.rs
+  h_8e6780fc7b4bb1 1-196
+crates/nana-text/tests/line_decision.rs
+  h_8e6780fc7b4bb1 443-444
+crates/nana-ui-core/src/rich_text.rs
+  h_8e6780fc7b4bb1 357,377,380-381,468,474-479,516-518,612,696-700,720,722,830,836
+  s_f259d9690441aa::t_0d093ad2fe2cc6 519-521,707
+crates/nana-text/src/font/discovery.rs
+  s_30dfb9f78a63f5::t_063e77f3d7b098 98-99
+crates/nana-ui/src/scene_paint/text/raster_dwrite.rs
+  h_8e6780fc7b4bb1 467,469,472-487,490-511,524-525,529-530,545,575-576,596-597
+crates/nana-ui-runtime/src/rich_ime.rs
+  s_f259d9690441aa::t_9372f51f7b3ae5 1-63
+crates/nana-ui-runtime/src/text_node.rs
+  h_8e6780fc7b4bb1 398,429,526,534-549,616-617,672-677,717-720,1014-1047
+  s_f259d9690441aa::t_25e7039b484065 1048-1049
+crates/nana-ui-scene/tests/rich_background_contrast.rs
+  h_8e6780fc7b4bb1 1-266
+crates/nana-text/src/layout/engine.rs
+  h_8e6780fc7b4bb1 285,310,455,505,517-533,1001,1053-1057
+  s_f259d9690441aa::t_abfb29eaff73c3 286-294
+crates/nana-text/tests/block_objects.rs
+  h_8e6780fc7b4bb1 1,7-8,10,17,21,31-32,36,38-43,47,52-66,70,80-81,83-84,86-87,94,96-97,103-117,123-124,129,131,134,141-142,147,149-150,156-159,161,164-169,171,175-182,184,188-194,196,200-204,209-213
+crates/nana-text/tests/inline_objects.rs
+  h_8e6780fc7b4bb1 34-35
+crates/nana-text/tests/object_labels.rs
+  h_8e6780fc7b4bb1 39-40
+crates/nana-text/src/layout/key.rs
+  h_8e6780fc7b4bb1 181,255-256,289
+crates/nana-text/src/source.rs
+  h_8e6780fc7b4bb1 99-102
+crates/nana-ui/src/scene_paint/text/emphasis.rs
+  h_8e6780fc7b4bb1 1-206
+crates/nana-ui-runtime/src/rich_clipboard.rs
+  s_f259d9690441aa::t_2c94a9d4dab848 1-108
+crates/nana-ui-scene/src/scene/text_shader_input.rs
+  s_f259d9690441aa::t_2d878d163174ae 1-130
+crates/nana-ui-scene/tests/rich_editor_caret.rs
+  s_f259d9690441aa::t_c896b6682d23ae 1-298
+crates/nana-ui-scene/tests/rich_preedit_pointer.rs
+  s_f259d9690441aa::t_06bc89c9ad3cd4 1,16,151,163
+crates/nana-ui-scene/tests/rich_typing_background.rs
+  s_f259d9690441aa::t_b02279e68a9fdc 1-439
+crates/nana-ui-scene/tests/text_shader_input.rs
+  s_f259d9690441aa::t_33549c7be05751 1-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "cc8109474ca22e423351887478a43446957f1b21",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_30dfb9f78a63f5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_30dfb9f78a63f5",
+        "model": "unknown"
+      },
+      "human_author": "AuraElicase <aura.elicase@gmail.com>"
+    },
+    "s_f259d9690441aa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_f259d9690441aa",
+        "model": "unknown"
+      },
+      "human_author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
