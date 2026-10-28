@@ -1,0 +1,32 @@
+crates/nana-ui-runtime/src/framework/choice.rs
+  h_070abd15058824 16,84,101,153,250,254
+crates/nana-ui-runtime/src/layout_engine/inline.rs
+  h_070abd15058824 142-143
+crates/nana-ui-runtime/src/popover.rs
+  h_070abd15058824 245,378
+crates/nana-ui-runtime/src/reorder_list.rs
+  h_070abd15058824 309
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_070abd15058824 111
+crates/nana-ui-runtime/src/store.rs
+  h_070abd15058824 881-882
+crates/nana-ui-runtime/src/world/geometry.rs
+  h_070abd15058824 2397-2420
+crates/nana-ui-runtime/src/world/inline_content.rs
+  h_070abd15058824 294-295
+crates/nana-ui-runtime/src/world/reorder_motion.rs
+  h_070abd15058824 11
+crates/nana-ui/src/scene_host/host_services.rs
+  h_070abd15058824 12,160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "829a90fe006938bb1584f71ca7b98263402fd9e9",
+  "prompts": {},
+  "humans": {
+    "h_070abd15058824": {
+      "author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
