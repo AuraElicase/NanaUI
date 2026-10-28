@@ -4,21 +4,26 @@
 //! [`ControlSize`] height × aspect (default 1:1). Empty, loading, ready, and
 //! unavailable share that geometry. Ready samples `"nana.host-texture"` with
 //! configurable fit (Contain by default); empty identities omit the Scene node.
+//!
+//! A [`Thumbnail::pickable`] one also reports where on its picture the
+//! pointer is ([`ThumbnailPick`]), in coordinates of the picture itself, so a
+//! host can map a hover or a press onto its own image data.
 
 use std::sync::Arc;
 
 use nana_ui_core::{
-    AlignSpec, ContentFit, ControlHeight, ControlSize, ImageSampling, LengthSpec, OverflowSpec,
-    PointerEventsSpec, PositionSpec, RadiusTier, SemanticColorRole, SquareSize, ThemeMetrics,
-    space,
+    AlignSpec, ContentFit, ControlHeight, ControlSize, ImageSampling, LengthSpec, LogicalRect,
+    OverflowSpec, PointerEventsSpec, PositionSpec, RadiusTier, SemanticColorRole, SquareSize,
+    ThemeMetrics, space,
 };
+use nana_ui_input::InputModifiers;
 
 use crate::gpu_slots::TextureSlotName;
 use crate::view_components::project_common;
 use crate::{
-    AccessibilityRole, AccessibilityState, ComponentView, CustomRenderNode, HOST_TEXTURE_RENDERER,
-    InteractionState, MutationQueue, NodeKind, NodeStyle, StableNodeId, Stack, StandardVisual,
-    TextContent, UiWorld,
+    AccessibilityRole, AccessibilityState, AppContext, ComponentView, CustomRenderNode, Entity,
+    FrameworkError, HOST_TEXTURE_RENDERER, InteractionState, MutationQueue, NodeKind, NodePointer,
+    NodePointerHooks, NodeStyle, StableNodeId, Stack, StandardVisual, TextContent, UiWorld,
 };
 
 /// Width ÷ height when the host does not declare an aspect.
@@ -37,10 +42,37 @@ pub enum ThumbnailState {
     Unavailable,
 }
 
+/// A point on a [`Thumbnail`]'s picture: `0, 0` is its top-left corner and
+/// `1, 1` its bottom-right, whatever the box's size and fit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThumbnailPoint {
+    pub x: f32,
+    pub y: f32,
+}
+
+/// What the pointer does on a [`Thumbnail::pickable`] thumbnail's picture.
+///
+/// Only the picture counts: the bands [`ContentFit::Contain`] leaves around
+/// it are not part of it. The control does not take focus; a host that picks
+/// from the picture offers the same choices in a keyboard-reachable list.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ThumbnailPick {
+    /// The pointer moved on the picture (`Some`), or off it (`None`: into a
+    /// band, out of the box, or the press it held was cancelled). `None`
+    /// is said once per time it leaves.
+    Hover(Option<ThumbnailPoint>),
+    /// A primary press on the picture, with the modifier keys held.
+    Press {
+        point: ThumbnailPoint,
+        modifiers: InputModifiers,
+    },
+}
+
 /// Compact image control for [`crate::ListItem`] leading slots.
 ///
-/// Pointer events stay off so the parent row owns hit-testing. Overlay children
-/// (see [`Self::badge`]) are clipped to this box's radius.
+/// Pointer events stay off so the parent row owns hit-testing, unless the
+/// thumbnail is [`Self::pickable`]. Overlay children (see [`Self::badge`])
+/// are clipped to this box's radius.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Thumbnail {
     /// The registry slot shown. Re-registering it is all a host does to show
@@ -57,7 +89,17 @@ pub struct Thumbnail {
     /// Paint the thumbnail while omitting it from the accessibility tree.
     /// Useful for repeated/decorative layers such as a collection cover.
     pub decorative: bool,
+    /// Report the pointer's place on the picture as [`ThumbnailPick`]
+    /// instead of leaving hit-testing to the parent.
+    pub pickable: bool,
+    /// The slot's texture size in pixels, which places the picture inside
+    /// the box for `fit`. Without it the whole box is taken as the picture,
+    /// which is exact only for [`ContentFit::Fill`] or a box of the
+    /// texture's aspect.
+    pub intrinsic_size: Option<(u32, u32)>,
     pub style: NodeStyle,
+    /// Whether the last [`ThumbnailPick::Hover`] was on the picture.
+    hovering: bool,
 }
 
 impl Thumbnail {
@@ -78,7 +120,10 @@ impl Thumbnail {
             sampling: ImageSampling::Resample,
             label: Arc::from(""),
             decorative: false,
+            pickable: false,
+            intrinsic_size: None,
             style: NodeStyle::default(),
+            hovering: false,
         }
     }
 
@@ -136,6 +181,51 @@ impl Thumbnail {
     pub fn style(mut self, style: NodeStyle) -> Self {
         self.style = style;
         self
+    }
+
+    /// Report hovers and presses on the picture as [`ThumbnailPick`].
+    pub const fn pickable(mut self) -> Self {
+        self.pickable = true;
+        self
+    }
+
+    /// The slot's texture size in pixels; see [`Self::intrinsic_size`].
+    /// A zero side clears it.
+    pub fn intrinsic_size(mut self, width: u32, height: u32) -> Self {
+        self.intrinsic_size = (width > 0 && height > 0).then_some((width, height));
+        self
+    }
+
+    /// Where the picture sits in a `width × height` box: the box itself
+    /// unless [`Self::intrinsic_size`] is known, then that size under `fit`.
+    pub fn picture_rect(&self, width: f32, height: f32) -> LogicalRect {
+        let frame = LogicalRect::new(0.0, 0.0, width, height);
+        match self.intrinsic_size {
+            Some((w, h)) => frame.fitted(w as f32, h as f32, self.fit),
+            None => frame,
+        }
+    }
+
+    /// The point on the picture under `x, y` (px from the box's top-left in
+    /// a `width × height` box), or `None` off the picture.
+    pub fn picture_point(&self, width: f32, height: f32, x: f32, y: f32) -> Option<ThumbnailPoint> {
+        let picture = self.picture_rect(width, height);
+        let frame = LogicalRect::new(0.0, 0.0, width, height);
+        let on = |v: f32, start: f32, len: f32| v >= start && v <= start + len;
+        // the box clips a covering picture: only what shows can be picked
+        if picture.width <= 0.0
+            || picture.height <= 0.0
+            || !on(x, picture.x, picture.width)
+            || !on(y, picture.y, picture.height)
+            || !on(x, frame.x, frame.width)
+            || !on(y, frame.y, frame.height)
+        {
+            return None;
+        }
+        Some(ThumbnailPoint {
+            x: (x - picture.x) / picture.width,
+            y: (y - picture.y) / picture.height,
+        })
     }
 
     /// Corner overlay chrome for duration, viewer counts, and similar cover
@@ -235,7 +325,76 @@ impl Default for Thumbnail {
     }
 }
 
+const THUMBNAIL_POINTER: NodePointerHooks<Thumbnail> = NodePointerHooks {
+    moved: |cx, thumbnail, pointer| {
+        let Some(point) = pointer_point(cx, thumbnail, &pointer)? else {
+            return Ok(false);
+        };
+        hover(cx, thumbnail, point)?;
+        Ok(true)
+    },
+    left: |cx, thumbnail| hover(cx, thumbnail, None),
+    pressed: |cx, thumbnail, pointer| {
+        if pointer.button != 0 {
+            return Ok(false);
+        }
+        let Some(Some(point)) = pointer_point(cx, thumbnail, &pointer)? else {
+            return Ok(false);
+        };
+        let modifiers = pointer.modifiers;
+        cx.update_component(thumbnail, |_, view| {
+            view.emit(ThumbnailPick::Press { point, modifiers })
+        })?;
+        Ok(true)
+    },
+    released: |_, _, _| Ok(true),
+    wheel: |_, _, _| Ok(false),
+};
+
+/// The picture point under `pointer`: `None` when the thumbnail does not
+/// pick, `Some(None)` off its picture.
+fn pointer_point(
+    cx: &AppContext,
+    thumbnail: Entity<Thumbnail>,
+    pointer: &NodePointer,
+) -> Result<Option<Option<ThumbnailPoint>>, FrameworkError> {
+    let Some(bounds) = cx.world().component_layout_box(thumbnail.stable_id()) else {
+        return Ok(None);
+    };
+    cx.read(thumbnail, |thumbnail| {
+        thumbnail
+            .pickable
+            .then(|| thumbnail.picture_point(bounds.width, bounds.height, pointer.x, pointer.y))
+    })
+}
+
+/// Say the pointer is at `point`, and that it left only once.
+fn hover(
+    cx: &mut AppContext,
+    thumbnail: Entity<Thumbnail>,
+    point: Option<ThumbnailPoint>,
+) -> Result<(), FrameworkError> {
+    if point.is_none() && !cx.read(thumbnail, |thumbnail| thumbnail.hovering)? {
+        return Ok(());
+    }
+    cx.update_component(thumbnail, |thumbnail, view| {
+        thumbnail.hovering = point.is_some();
+        view.emit(ThumbnailPick::Hover(point));
+    })
+}
+
 impl ComponentView for Thumbnail {
+    const BEHAVIOR: crate::TypeBehavior<Self> = crate::TypeBehavior {
+        pointer: Some(&THUMBNAIL_POINTER),
+        ..crate::TypeBehavior::NONE
+    };
+
+    fn reconcile(&mut self, next: Self) {
+        let hovering = self.hovering && next.pickable;
+        *self = next;
+        self.hovering = hovering;
+    }
+
     fn share_layouts(
         &mut self,
         share: &mut dyn FnMut(&mut std::sync::Arc<nana_ui_core::LayoutStyle>),
@@ -276,7 +435,7 @@ impl ComponentView for Thumbnail {
             mutations,
             &self.effective_style(world),
             InteractionState {
-                pointer_events: false,
+                pointer_events: self.pickable,
                 focusable: false,
             },
             AccessibilityState {
@@ -400,6 +559,130 @@ mod tests {
         }
         let (world, id) = mount(Thumbnail::unavailable());
         assert!(world.accessibility(id).unwrap().invalid);
+        assert_eq!(
+            world.interaction(id),
+            Some(InteractionState {
+                pointer_events: false,
+                focusable: false,
+            })
+        );
+    }
+
+    #[test]
+    fn picture_point_skips_the_contain_bands() {
+        // a square picture in a 200×100 box: x 50..150 is the picture
+        let thumb = Thumbnail::new("sheet").intrinsic_size(512, 512);
+        assert_eq!(
+            thumb.picture_point(200.0, 100.0, 100.0, 25.0),
+            Some(ThumbnailPoint { x: 0.5, y: 0.25 })
+        );
+        assert_eq!(
+            thumb.picture_point(200.0, 100.0, 50.0, 0.0),
+            Some(ThumbnailPoint { x: 0.0, y: 0.0 })
+        );
+        assert_eq!(thumb.picture_point(200.0, 100.0, 49.0, 50.0), None);
+        assert_eq!(thumb.picture_point(200.0, 100.0, 151.0, 50.0), None);
+        // without a size the box is the picture
+        assert_eq!(
+            Thumbnail::new("sheet").picture_point(200.0, 100.0, 20.0, 50.0),
+            Some(ThumbnailPoint { x: 0.1, y: 0.5 })
+        );
+        // a covering picture can only be picked where the box shows it
+        let cover = thumb.clone().fit(ContentFit::Cover);
+        assert_eq!(
+            cover.picture_point(200.0, 100.0, 100.0, 50.0),
+            Some(ThumbnailPoint { x: 0.5, y: 0.5 })
+        );
+        assert_eq!(cover.picture_point(200.0, 100.0, 100.0, 120.0), None);
+        assert_eq!(
+            Thumbnail::new("sheet").intrinsic_size(0, 4).intrinsic_size,
+            None
+        );
+    }
+
+    #[test]
+    fn pickable_thumbnail_reports_hover_and_press_on_its_picture() {
+        use nana_ui_input::{InputPayload, PointerInput, PointerPhase};
+        use std::sync::Mutex;
+
+        let mut context = AppContext::new();
+        let mut style = NodeStyle::default();
+        let layout = Arc::make_mut(&mut style.layout);
+        layout.width = Some(LengthSpec::Px(200.0));
+        layout.height = Some(LengthSpec::Px(100.0));
+        let thumbnail = context
+            .create_component(
+                document(),
+                Thumbnail::new("sheet")
+                    .intrinsic_size(64, 64)
+                    .pickable()
+                    .style(style),
+            )
+            .unwrap();
+        assert_eq!(
+            context.world().interaction(thumbnail.stable_id()),
+            Some(InteractionState {
+                pointer_events: true,
+                focusable: false,
+            })
+        );
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&heard);
+        context
+            .on(thumbnail, move |_, pick: &ThumbnailPick, _| {
+                sink.lock().unwrap().push(*pick)
+            })
+            .unwrap();
+        context
+            .layout_document(document(), LayoutViewport::new(240.0, 120.0))
+            .unwrap();
+        let origin = context
+            .world()
+            .canonical_layout_box(thumbnail.stable_id())
+            .unwrap();
+        context.rebuild_hit_test(document());
+        let mut input = crate::HeadlessInput::bind(&mut context, document());
+        let mut route = |context: &mut AppContext, phase, x: f32, y: f32| {
+            input
+                .route(
+                    context,
+                    InputPayload::Pointer(PointerInput::mouse(phase, origin.x + x, origin.y + y)),
+                )
+                .unwrap();
+        };
+        let take = || std::mem::take(&mut *heard.lock().unwrap());
+
+        route(&mut context, PointerPhase::Move, 100.0, 50.0);
+        let point = ThumbnailPoint { x: 0.5, y: 0.5 };
+        assert_eq!(take(), [ThumbnailPick::Hover(Some(point))]);
+        // into the band: said once
+        route(&mut context, PointerPhase::Move, 20.0, 50.0);
+        route(&mut context, PointerPhase::Move, 10.0, 50.0);
+        assert_eq!(take(), [ThumbnailPick::Hover(None)]);
+        // a press on the band picks nothing
+        route(&mut context, PointerPhase::Down, 20.0, 50.0);
+        route(&mut context, PointerPhase::Up, 20.0, 50.0);
+        assert_eq!(take(), []);
+        route(&mut context, PointerPhase::Move, 75.0, 25.0);
+        route(&mut context, PointerPhase::Down, 75.0, 25.0);
+        route(&mut context, PointerPhase::Up, 75.0, 25.0);
+        let point = ThumbnailPoint { x: 0.25, y: 0.25 };
+        let heard_now = take();
+        assert_eq!(heard_now.first(), Some(&ThumbnailPick::Hover(Some(point))));
+        assert!(
+            heard_now
+                .iter()
+                .any(|pick| matches!(pick, ThumbnailPick::Press { point: at, .. } if *at == point)),
+            "{heard_now:?}"
+        );
+        // leaving the box
+        route(&mut context, PointerPhase::Move, 230.0, 50.0);
+        assert_eq!(take().last(), Some(&ThumbnailPick::Hover(None)));
+    }
+
+    #[test]
+    fn a_thumbnail_that_does_not_pick_stays_out_of_hit_testing() {
+        let (world, id) = mount(Thumbnail::new("sheet").intrinsic_size(64, 64));
         assert_eq!(
             world.interaction(id),
             Some(InteractionState {

@@ -307,7 +307,7 @@ IME 预编辑存在 world 的 `ime` 槽里，不在编辑器的 `value` 里。�
 
 `GpuTextureView`、`Thumbnail` 与 `Avatar` 默认只采样宿主纹理的第 0 层。宿主应按 `HostTextureRegistry::painted_extent` 准备尺寸。纹理带 mip 链时用 `.sampling(ImageSampling::Mipmap)` 切到三线性采样。`url()` 图片的默认重采样与 mip 选项见 [应用 API · 图片采样](application-api.md#图片采样)。
 
-`Thumbnail` 默认维持控件高度 × aspect。显式 style 的宽高、约束与圆角（`style.radius` 档位或 `border_radius` 像素）优先。可用于响应式卡片封面。都没写时才取 `Xs`。`fit(ContentFit::Cover)` 保留封面裁切。默认仍是 Contain。空、加载、就绪与不可用共享布局尺寸。Loading 态的 spinner 居中绘制。边长 28（紧凑 `Spinner` 的两倍）。带标签的独立 `Spinner` 仍贴左，作为文字的前置槽。封面角标挂成 Thumbnail 的子节点。控件是 containing block（`position: relative`）并裁剪圆角。`Thumbnail::badge()` 给出右下角、不命中的实底徽章。
+`Thumbnail` 默认维持控件高度 × aspect。显式 style 的宽高、约束与圆角（`style.radius` 档位或 `border_radius` 像素）优先。可用于响应式卡片封面。都没写时才取 `Xs`。`fit(ContentFit::Cover)` 保留封面裁切。默认仍是 Contain。空、加载、就绪与不可用共享布局尺寸。Loading 态的 spinner 居中绘制。边长 28（紧凑 `Spinner` 的两倍）。带标签的独立 `Spinner` 仍贴左，作为文字的前置槽。封面角标挂成 Thumbnail 的子节点。控件是 containing block（`position: relative`）并裁剪圆角。`Thumbnail::badge()` 给出右下角、不命中的实底徽章。`Thumbnail::pickable()`（模板 `pickable=true`）让控件自己接指针，以 `ThumbnailPick` 报图片坐标（`0..=1`）的悬停、离开与主键按下；`intrinsic_size` 给出纹理像素尺寸，Contain 的留边与 Cover 裁掉的部分不报。控件不取焦点，键盘替代由宿主另给列表。见 [Thumbnail](../components/thumbnail.md#在图片上拾取)。
 
 ### 图表与带图标按钮
 

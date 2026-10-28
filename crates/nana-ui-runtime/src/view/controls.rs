@@ -19,7 +19,7 @@ use crate::{
     RangeChanged, RangeField, RangeInput, RangeSpanChanged, RangeSpanField, RangeSpanInput,
     RangeSpanOrientation, RangeSpanThumb, ScrollView, Select, SelectChanged, SelectOption,
     SelectToggled, Spinner, StableNodeId, Stack, StatusBadge, Switch, Text, TextArea, TextChanged,
-    TextInput, TextSubmitted, TextureSlotName, Thumbnail, ToggleChanged,
+    TextInput, TextSubmitted, TextureSlotName, Thumbnail, ThumbnailPick, ToggleChanged,
 };
 use crate::{
     AppTitleBar, Breadcrumb, Dialog, Drawer, FormField, GpuView, IconGlyph, InteractiveCard,
@@ -504,8 +504,9 @@ pub fn divider() -> El<Divider> {
     widget(Divider::horizontal())
 }
 
-/// A host-texture image at its aspect ratio; bind `.resource(..)` and move
-/// `.generation(..)` when the host fills the slot.
+/// A host-texture image at its aspect ratio; bind `.resource(..)` and
+/// re-register the slot when the host has new pixels. `.pickable(true)` with
+/// `.on_pick(..)` reports where on the picture the pointer is.
 #[track_caller]
 pub fn thumbnail() -> El<Thumbnail> {
     widget(Thumbnail::new(""))
@@ -910,6 +911,23 @@ impl FieldText for Option<f32> {
             return Ok(None);
         }
         f32::parse(text).map(Some)
+    }
+}
+
+impl FieldText for Option<(u32, u32)> {
+    /// A pixel size as `width×height` (or `x`, `,`); empty text is `None`.
+    fn parse(text: &str) -> Result<Self, String> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Ok(None);
+        }
+        let mut sides = text
+            .split(['×', 'x', ','])
+            .map(|side| side.trim().parse::<u32>());
+        match (sides.next(), sides.next(), sides.next()) {
+            (Some(Ok(width)), Some(Ok(height)), None) => Ok(Some((width, height))),
+            _ => Err(format!("`{text}` is not a size such as 512×512")),
+        }
     }
 }
 

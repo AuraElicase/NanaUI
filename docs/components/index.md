@@ -68,7 +68,7 @@
 - [StatusBadge](status-badge.md) — 状态徽章。只描述状态，不拥有动作。
 - [Chip](chip.md) — 芯片。激活不自己改 `selected`。
 - [Avatar](avatar.md) — 圆形头像。默认不参与命中。
-- [Thumbnail](thumbnail.md) — 按宽高比显示的宿主纹理。命中归父行。
+- [Thumbnail](thumbnail.md) — 按宽高比显示的宿主纹理。命中归父行；`pickable` 时报图片内的指针位置。
 - [Texture](texture.md) — 铺满自己盒子的宿主纹理。
 - [Tooltip](tooltip.md) — 提示。角色是 tooltip，标签就是显示的文字。
 - [ValidationMessage](validation-message.md) — 校验文案。和控件上的 `invalid`、`FormField` 上的 `error` 是三份显示。

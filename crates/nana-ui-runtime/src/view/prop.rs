@@ -298,6 +298,8 @@ const_props! {
     // An unsuffixed literal settles on `f64`: `.thickness(3.0)`.
     f64 => Option<f32>, |v| Some(v as f32);
     (f64, f64) => (f64, f64), |v| v;
+    Option<(u32, u32)> => Option<(u32, u32)>, |v| v;
+    (u32, u32) => Option<(u32, u32)>, |v| Some(v);
     [f32; 4] => [f32; 4], |v| v;
     Vec<nana_ui_core::TreeNode<Arc<str>>> => Vec<nana_ui_core::TreeNode<Arc<str>>>, |v| v;
     crate::LocalizedText => crate::LocalizedText, |v| v;

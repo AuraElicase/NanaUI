@@ -169,7 +169,10 @@ macro_rules! for_each_control {
                 aspect: f32 = set,
                 label: Arc<str> = set,
                 decorative: bool = set,
-            };
+                pickable: bool = set,
+                intrinsic_size: Option<(u32, u32)> = set,
+            }
+            with { on_pick: ThumbnailPick };
             Avatar => avatar(size: f32) for Avatar {
                 resource: TextureSlotName = set,
                 size: f32 = set,

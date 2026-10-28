@@ -451,7 +451,10 @@ pub use text_engine_shaper::NanaTextEngineShaper;
 pub use text_node::{
     RetainedTextLayout, TextDirty, TextRevisions, TextWork, apply_used_typography, nana_font_family,
 };
-pub use thumbnail::{DEFAULT_ASPECT as THUMBNAIL_DEFAULT_ASPECT, Thumbnail, ThumbnailState};
+pub use thumbnail::{
+    DEFAULT_ASPECT as THUMBNAIL_DEFAULT_ASPECT, Thumbnail, ThumbnailPick, ThumbnailPoint,
+    ThumbnailState,
+};
 pub use timeline::{
     TIMELINE_ROW, TIMELINE_RULER, TimelineClip, TimelineClipEdge, TimelineClipSelectionChanged,
     TimelineClipTone, TimelineClipTrimmed, TimelineClipsDeleteRequested, TimelineClipsMoved,

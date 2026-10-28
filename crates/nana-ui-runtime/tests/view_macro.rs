@@ -2618,3 +2618,41 @@ fn inline_spans_are_lightweight_and_static_atomic_entries_stay_in_source_order()
         vec![1, 5]
     );
 }
+
+#[test]
+fn a_pickable_thumbnail_binds_from_a_template() {
+    use nana_ui_runtime::{Thumbnail, ThumbnailPick};
+    let mut cx = AppContext::new();
+    let document = DocumentId::new(1).unwrap();
+    let parent = cx.create_component(document, Stack::column(0.0)).unwrap();
+    let picks = std::sync::Arc::new(std::sync::Mutex::new(Vec::<ThumbnailPick>::new()));
+    let sink = std::sync::Arc::clone(&picks);
+    let mounted = cx
+        .mount_view(parent.stable_id(), move || {
+            let sink = std::sync::Arc::clone(&sink);
+            view! {
+                <Thumbnail resource="sheet:0" pickable=true intrinsic_size={Some((512, 256))}
+                    @pick={move |pick: &ThumbnailPick| sink.lock().unwrap().push(*pick)} />
+            }
+        })
+        .unwrap();
+    let thumbnail = Entity::<Thumbnail>::from_stable_id(mounted.roots()[0]);
+    assert_eq!(
+        cx.read(thumbnail, |t| (t.pickable, t.intrinsic_size))
+            .unwrap(),
+        (true, Some((512, 256)))
+    );
+    assert!(
+        cx.world()
+            .interaction(thumbnail.stable_id())
+            .unwrap()
+            .pointer_events
+    );
+    assert!(picks.lock().unwrap().is_empty());
+    // the hand-written form takes the same fields
+    let _ = nana_ui_runtime::view::thumbnail()
+        .resource("sheet:0")
+        .pickable(true)
+        .intrinsic_size(Some((512, 256)))
+        .on_pick(|_: &ThumbnailPick| {});
+}
