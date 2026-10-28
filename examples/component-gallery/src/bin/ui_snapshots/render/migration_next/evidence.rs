@@ -414,16 +414,18 @@ pub(super) fn write_evidence(
         Some(nana_ui::runtime::ComponentGeometry::ValidationMessage {
             indicator, label, ..
         }) if fixture.component == Component::ValidationMessage => {
+            // The message leaves its weight to the theme; geometry and scene
+            // carry the theme's resolved regular weight.
             label.content.as_ref() == validation_message(fixture.state)
                 && (label.font_size - nana_ui::theme::type_scale::HINT).abs() < 0.01
-                && label.font_weight.is_none()
+                && label.font_weight == Some(nana_ui::theme::type_scale::REGULAR)
                 && label.bounds.x - (indicator.x + indicator.width) >= 4.9
                 && primitive(2).is_some_and(|primitive| {
                     matches!(
                         &primitive.kind,
                         ScenePrimitiveKind::Text {
                             size,
-                            weight: None,
+                            weight: Some(nana_ui::theme::type_scale::REGULAR),
                             ..
                         } if (*size - nana_ui::theme::type_scale::HINT).abs() < 0.01
                     )
