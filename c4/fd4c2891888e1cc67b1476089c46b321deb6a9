@@ -1,0 +1,90 @@
+Cargo.lock
+  h_8e6780fc7b4bb1 2632
+Cargo.toml
+  h_8e6780fc7b4bb1 36-40
+platform/winit-win32/Cargo.toml
+  h_8e6780fc7b4bb1 1-65
+platform/winit-win32/LICENSE
+  h_8e6780fc7b4bb1 1-201
+platform/winit-win32/README.md
+  h_8e6780fc7b4bb1 1-12
+platform/winit-win32/rustfmt.toml
+  h_8e6780fc7b4bb1 1-20
+platform/winit-win32/src/dark_mode.rs
+  h_8e6780fc7b4bb1 1-164
+platform/winit-win32/src/definitions.rs
+  h_8e6780fc7b4bb1 1-246
+platform/winit-win32/src/dnd.rs
+  h_8e6780fc7b4bb1 1-1617
+platform/winit-win32/src/dpi.rs
+  h_8e6780fc7b4bb1 1-115
+platform/winit-win32/src/event_loop.rs
+  h_8e6780fc7b4bb1 1-2853
+platform/winit-win32/src/event_loop/runner.rs
+  h_8e6780fc7b4bb1 1-626
+platform/winit-win32/src/icon.rs
+  h_8e6780fc7b4bb1 1-263
+platform/winit-win32/src/ime.rs
+  h_8e6780fc7b4bb1 1-161
+platform/winit-win32/src/keyboard.rs
+  h_8e6780fc7b4bb1 1-1264
+platform/winit-win32/src/keyboard_layout.rs
+  h_8e6780fc7b4bb1 1-984
+platform/winit-win32/src/lib.rs
+  h_8e6780fc7b4bb1 1-779
+platform/winit-win32/src/minimal_ime.rs
+  h_8e6780fc7b4bb1 1-67
+platform/winit-win32/src/monitor.rs
+  h_8e6780fc7b4bb1 1-208
+platform/winit-win32/src/raw_input.rs
+  h_8e6780fc7b4bb1 1-301
+platform/winit-win32/src/util.rs
+  h_8e6780fc7b4bb1 1-367
+platform/winit-win32/src/window.rs
+  h_8e6780fc7b4bb1 1-1704
+platform/winit-win32/src/window_owner_tests.rs
+  h_8e6780fc7b4bb1 1-127
+platform/winit-win32/src/window_state.rs
+  h_8e6780fc7b4bb1 1-566
+crates/nana-ui-core/src/file_dialog.rs
+  h_8e6780fc7b4bb1 209,218,227,236,243-245
+crates/nana-window/Cargo.toml
+  h_8e6780fc7b4bb1 36
+crates/nana-window/src/contrast_preference.rs
+  h_8e6780fc7b4bb1 65-67,118-134
+crates/nana-window/src/file_dialog_windows.rs
+  h_8e6780fc7b4bb1 22-24,166-169,173-175,417-418
+crates/nana-window/src/file_dialog_windows_tests.rs
+  h_8e6780fc7b4bb1 1-161
+crates/nana-window/src/file_dialog_windows_types.rs
+  h_8e6780fc7b4bb1 1-193
+crates/nana-text/src/layout/lines.rs
+  h_8e6780fc7b4bb1 352
+crates/nana-text/src/source.rs
+  h_8e6780fc7b4bb1 125,133-134
+crates/nana-text/tests/block_objects.rs
+  h_8e6780fc7b4bb1 4-6,9-10,14,16-17,21-24,26-28,39-47,48-50,59,62-64,75-78,86-88,90-93,96-99,101,104,112,116-118,129-131,133,164-168,190-194,197-200,202,204-205,208-212,215,263-266,268,280-284,343,345-346,357,359-361,363,365-367,369,371-373,434-437,449
+crates/nana-ui-core/src/rich_text.rs
+  h_8e6780fc7b4bb1 359,380,469-473,587,598,685,687-688,692-694,709,715,727-728,742-743,755-756,772-773,789-790,819-821,823-827,829-830
+crates/nana-ui-runtime/src/text_node.rs
+  h_8e6780fc7b4bb1 665,739-740
+crates/nana-ui/src/runtime.rs
+  h_8e6780fc7b4bb1 33
+crates/nana-ui-scene/src/scene/primitives.rs
+  h_8e6780fc7b4bb1 455-467,470-471
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_8e6780fc7b4bb1 110,148-150,262,279,296-300,778-781,1605,1645-1646
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 1979,1983,1986
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c4fd4c2891888e1cc67b1476089c46b321deb6a9",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  }
+}
