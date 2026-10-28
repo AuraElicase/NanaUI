@@ -1,0 +1,56 @@
+crates/nana-ui-runtime/src/framework/choice.rs
+  s_7c0b30248a8cfa::t_32d9631286a48b 6,15,19-24,84-85,109-115,119-120,129,153-155,250,254-259
+crates/nana-ui-runtime/src/framework/choice_select_tests.rs
+  s_7c0b30248a8cfa::t_747994b6db4969 1-83
+crates/nana-ui-runtime/src/framework/input/blink.rs
+  s_7c0b30248a8cfa::t_8cbf8c0e51436c 24-33,47,64-146,152-165,171-183,186-188,204
+crates/nana-ui-runtime/src/framework/input/dispatch.rs
+  s_7c0b30248a8cfa::t_a23851e091a7ec 903
+crates/nana-ui-runtime/src/framework/input/tests/dispatch.rs
+  s_7c0b30248a8cfa::t_2994ae5e812a10 3845,3860
+crates/nana-ui-runtime/src/framework/input/tests/mod.rs
+  s_7c0b30248a8cfa::t_95f19a66e8698e 51
+crates/nana-ui-runtime/src/framework/input/tests/text_pointer_selection.rs
+  s_7c0b30248a8cfa::t_7ef07dc24fe18a 1-101
+crates/nana-ui-runtime/src/framework/text_edit.rs
+  s_7c0b30248a8cfa::t_4181b844e8675f 1938-1940,2084-2090,2094-2100
+crates/nana-ui-runtime/src/popover.rs
+  s_7c0b30248a8cfa::t_60881edbc119d9 86,118,484-488,947
+crates/nana-ui-runtime/src/reorder_list.rs
+  s_7c0b30248a8cfa::t_5c38d0861c35aa 27,230-233,287-289,671-674,691-692,735-746,855-859,1047,1192,1268,1290,1295,1297,1301,1495-1498,1557-1558,2215,2362
+crates/nana-ui-runtime/src/reorder_list_escape_tests.rs
+  s_7c0b30248a8cfa::t_31cbe064f17d78 1-80
+crates/nana-ui-runtime/src/reorder_list_gap.rs
+  s_7c0b30248a8cfa::t_768bd2d7533d3c 1-75
+crates/nana-ui-runtime/src/reorder_list_gap_tests.rs
+  s_7c0b30248a8cfa::t_6e0d4220335dca 1-187
+crates/nana-ui-runtime/src/select.rs
+  s_7c0b30248a8cfa::t_6dcaffa8a17167 76,78-79,167-168,376,517,539-540,598-599,609,611-614,616-617,619,658-660,1086
+crates/nana-ui-runtime/tests/fixtures/popover_trigger_style.rs
+  s_7c0b30248a8cfa::t_624fff75adb3df 1-35
+crates/nana-ui-runtime/tests/fixtures/reorder_pointer_coordinates.rs
+  s_7c0b30248a8cfa::t_e5e8c0bae2374b 1-183
+crates/nana-ui-runtime/tests/fixtures/select_fitted_menu.rs
+  s_7c0b30248a8cfa::t_e86b35cfd14b6f 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d4266d95c4b1d00a2c9b3540e1720a03847d4d23",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_7c0b30248a8cfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_7c0b30248a8cfa",
+        "model": "unknown"
+      },
+      "human_author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
