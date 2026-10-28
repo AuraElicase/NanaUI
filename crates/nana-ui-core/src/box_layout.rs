@@ -3167,6 +3167,16 @@ impl LogicalEdges {
             || self.block_end.is_some()
     }
 
+    /// Physical records and no logical edge: nothing for them to order
+    /// against (see [`LayoutStyle::has_inert_physical_edges`]).
+    pub fn has_only_physical(&self) -> bool {
+        !self.has_logical()
+            && (self.phys_top.is_some()
+                || self.phys_right.is_some()
+                || self.phys_bottom.is_some()
+                || self.phys_left.is_some())
+    }
+
     fn stamp(&mut self, slot: usize) {
         self.next_gen = self.next_gen.saturating_add(1);
         self.generations[slot] = self.next_gen;
@@ -4457,6 +4467,31 @@ impl LayoutStyle {
         self.logical_padding.has_logical()
             || self.logical_margin.has_logical()
             || self.logical_inset.has_logical()
+    }
+
+    /// Whether a logical edge group holds physical records and no logical
+    /// edge. CSS `top` or `padding-left` keeps such a record so that a
+    /// logical declaration can be ordered against it. With no logical edge in
+    /// the group, the record decides nothing: the physical field holds the
+    /// value.
+    pub fn has_inert_physical_edges(&self) -> bool {
+        self.logical_padding.has_only_physical()
+            || self.logical_margin.has_only_physical()
+            || self.logical_inset.has_only_physical()
+    }
+
+    /// Drop the records [`Self::has_inert_physical_edges`] finds, so the
+    /// same box states one intent whether CSS or Rust wrote its edges.
+    pub fn drop_inert_physical_edges(&mut self) {
+        for group in [
+            &mut self.logical_padding,
+            &mut self.logical_margin,
+            &mut self.logical_inset,
+        ] {
+            if group.has_only_physical() {
+                *group = Default::default();
+            }
+        }
     }
 
     /// [`Self::resolve_logical_box_edges`] against an explicit context: the

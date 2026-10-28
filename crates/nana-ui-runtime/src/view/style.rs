@@ -623,7 +623,13 @@ fn apply<'a>(base: &LayoutStyle, patches: impl Iterator<Item = &'a Value>) -> La
             *field_mut(&mut value, path) = field.clone();
         }
     }
-    serde_json::from_value(value).expect("a patched layout deserializes")
+    let mut layout: LayoutStyle =
+        serde_json::from_value(value).expect("a patched layout deserializes");
+    // Every patch is in, so the cascade is settled: a physical edge record
+    // with no logical edge to order against decides nothing, and dropping it
+    // gives the box the intent Rust states for the same edges.
+    layout.drop_inert_physical_edges();
+    layout
 }
 
 /// The field a patch key names: a dotted path through the Style Model's

@@ -13,6 +13,12 @@ Row/Column 预设直接写入 `display: flex` 与方向，进入同一个 Flex f
 - Row/Column 预设用 `LengthSpec::Shrink` 定尺寸，CSS 写作 `width: shrink` / `height: shrink`（NanaUI 扩展，与 `fill` 对称）。`fit-content` 是另一种长度：可用宽度比内容窄时，它会夹到可用宽度，`shrink` 不会。
 - `Stack::min_width(0)` 和 CSS 的 `min-width: 0` 一样，会记下 `allow_shrink`。这样同一个声明不论怎么写，得到的都是同一份意图。
 
+定位和滚动同样只是 Foundation 能力的投影（`issue204_position_and_scroll_css_and_rust_share_structured_results`）。在 ScrollView、Rust 里写了 `overflow-y: scroll` 的普通盒子、CSS 写的同一个盒子这三种滚动容器里，各放一个 sticky 头、一个 absolute 角标和一段正文，三种写法得到的意图和结果都相同。结果比较的是参与方式、包含块、clip、滚动范围和 fragments。ScrollView 只是写入 overflow，不另外带一套布局。
+
+- CSS 写 `top`、`padding-left` 这类物理边时，会额外记一条物理边记录，用来和 `inset-inline-start` 这类逻辑边排先后。
+- 同一组里没有逻辑边时，这条记录不起作用。所以 CSS 补丁全部套完后（`view/style.rs` 的 `apply`），会用 `LayoutStyle::drop_inert_physical_edges` 丢掉它，让 CSS 和 Rust 写同一条边时得到同一份意图。
+- 同一组里有逻辑边时，记录保留，层叠先后不变。
+
 预设构造器、视图函数 `row()` 和带预设意图的 `from_layout` 挂上同一种组件、同样的节点和意图，首帧、局部修改和空闲帧的布局工作量相同（`world/issue204.rs` 的 `issue204_facades_share_identity_and_layout_work`）。CSS 在构建期降为 `from_layout` 加样式数据，走同一条路径。写法之间唯一有意的差别在命中：Rust 预设默认不参与命中，`from_layout` 和 CSS 布局盒默认可点。
 
 ```rust

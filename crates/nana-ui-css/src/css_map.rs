@@ -7490,6 +7490,28 @@ html[data-theme="dark"], [data-theme="dark"] { --bg: #181818; }
     }
 
     #[test]
+    fn physical_edge_records_are_inert_without_a_logical_edge() {
+        let mut layout = LayoutStyle::default();
+        layout.apply_css_text("position:sticky;top:0;padding-left:4px", Some(400.0), None);
+        assert!(layout.has_inert_physical_edges());
+        layout.drop_inert_physical_edges();
+        assert!(!layout.has_inert_physical_edges());
+        assert!(layout.logical_inset.is_shared_default());
+        assert!(layout.logical_padding.is_shared_default());
+        // The physical fields keep the values.
+        assert_eq!(layout.offset_top, Some(LengthSpec::Px(0.0)));
+        assert_eq!(layout.padding_left, Some(LengthSpec::Px(4.0)));
+
+        // Beside a logical edge the record orders the cascade: it stays.
+        let mut mixed = LayoutStyle::default();
+        mixed.apply_css_text("left:5px;inset-inline-start:10px", Some(400.0), None);
+        let before = mixed.clone();
+        assert!(!mixed.has_inert_physical_edges());
+        mixed.drop_inert_physical_edges();
+        assert_eq!(mixed, before);
+    }
+
+    #[test]
     fn shrink_and_fill_spell_the_preset_lengths() {
         let mut layout = LayoutStyle::default();
         layout.apply_css_text("width:shrink;height:SHRINK", Some(400.0), None);
