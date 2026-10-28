@@ -1,0 +1,28 @@
+crates/nana-text/src/layout/engine.rs
+  h_070abd15058824 394
+crates/nana-text/src/layout/key.rs
+  h_070abd15058824 210
+crates/nana-ui-runtime/src/rich_text_editor.rs
+  h_070abd15058824 1527
+crates/nana-ui-runtime/src/select.rs
+  h_070abd15058824 996
+crates/nana-ui-runtime/src/text_node.rs
+  h_070abd15058824 399
+crates/nana-ui-scene/src/scene.rs
+  h_070abd15058824 1055
+crates/nana-window/src/file_dialog_windows.rs
+  h_070abd15058824 216
+crates/nana-window/src/file_dialog_windows_events.rs
+  h_070abd15058824 25,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2d609bf2c143838bbebdec0116825b826a4132fe",
+  "prompts": {},
+  "humans": {
+    "h_070abd15058824": {
+      "author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
