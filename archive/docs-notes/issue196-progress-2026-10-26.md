@@ -298,3 +298,13 @@ GPU pixels 来自 macOS。Windows/Linux 真机与外部 consumer 完整构建/�
   - `width: shrink` / `height: shrink` 是 NanaUI 扩展，与 `fill` 对称。
   - `Stack::min_width(0)` 像 CSS 的 `min-width: 0` 一样记下 `allow_shrink`（布局引擎不读这个字段，只为两种写法得到同一份意图）。
   - 两组对照合并成一组：预设、模板、`from_layout` 和纯 CSS 四种写法在 800px 与 40px 下意图逐字段相同、结果相同。
+
+## 2026-10-28 追加：#204 第 5 条（定位与滚动只是投影）
+
+- 新增 `issue204_position_and_scroll_css_and_rust_share_structured_results`：ScrollView、Rust 的 overflow 盒、纯 CSS 三种滚动容器，各放 sticky 头、absolute 角标和正文。三种写法的意图逐节点相同；参与方式、盒子、内容盒、溢出、滚动范围与偏移、clip 与包含块（按文档顺序比较）、fragments 都相同。
+- 对照揭出：CSS 写 `top` / `left` / `padding-*` 时，会在 `logical_*` 组里额外留一条物理边记录（用于和逻辑边排先后），Rust 直接写字段时没有。
+  - 新增 `LogicalEdges::has_only_physical`、`LayoutStyle::has_inert_physical_edges` / `drop_inert_physical_edges`。
+  - 在 `view/style.rs::apply` 套完全部 CSS 补丁后丢掉这条记录。
+  - 最初放在 `resolve_layout_intent`，但那会让每个带这种记录的 CSS 节点多复制一份布局，所以改在补丁应用处做。
+  - CSS 单测确认：只有物理边时记录被丢掉、物理字段保值；有逻辑边时原样保留。
+- #204 的 7 条验收项现在都有本地测试证据。

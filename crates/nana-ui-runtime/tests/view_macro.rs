@@ -2323,6 +2323,145 @@ fn issue204_grid_css_and_rust_share_tracks_participation_and_fragments() {
     }
 }
 
+/// Position and scroll are projections of Foundation capabilities, not
+/// layout universes of their own. A ScrollView, a plain box with `overflow`
+/// in Rust and the same box in CSS give one scrollport. In each, a sticky
+/// header, an absolutely positioned badge and flow content state the same
+/// intent and get the same participation, containing block, clip, scroll
+/// extent and fragments.
+#[test]
+fn issue204_position_and_scroll_css_and_rust_share_structured_results() {
+    use nana_ui_core::{LengthSpec, OverflowSpec, PositionSpec};
+    use nana_ui_runtime::view::El;
+    use nana_ui_runtime::{
+        LayoutStyle, LayoutViewport, MeasureTextShaper, ParticipationKind, ScrollAxes, ScrollView,
+        css,
+    };
+    let px = |v: f32| Some(LengthSpec::Px(v));
+    let scrollport = || LayoutStyle {
+        width: px(300.0),
+        height: px(200.0),
+        ..LayoutStyle::default()
+    };
+    let content = || LayoutStyle {
+        position: PositionSpec::Relative,
+        height: px(600.0),
+        ..LayoutStyle::default()
+    };
+    let header = || LayoutStyle {
+        position: PositionSpec::Sticky,
+        offset_top: px(0.0),
+        height: px(24.0),
+        ..LayoutStyle::default()
+    };
+    let badge = || LayoutStyle {
+        position: PositionSpec::Absolute,
+        offset_top: px(10.0),
+        offset_left: px(20.0),
+        width: px(50.0),
+        height: px(30.0),
+        ..LayoutStyle::default()
+    };
+    let document = DocumentId::new(1).unwrap();
+    let mut outputs = Vec::new();
+    for author in 0..3 {
+        let mut cx = AppContext::new();
+        let _mounted = cx
+            .mount_view_root(document, || {
+                let inner = |content: El<Stack>, header: El<Stack>, badge: El<Stack>| {
+                    content.children((header, text("body"), badge))
+                };
+                match author {
+                    0 => widget(ScrollView::new(ScrollAxes::Vertical).with_layout(|l| {
+                        *l = scrollport();
+                    }))
+                    .children(inner(
+                        widget(Stack::from_layout(content())),
+                        widget(Stack::from_layout(header())),
+                        widget(Stack::from_layout(badge())),
+                    ))
+                    .into_any(),
+                    1 => widget(Stack::from_layout(LayoutStyle {
+                        overflow_y: OverflowSpec::Scroll,
+                        ..scrollport()
+                    }))
+                    .children(inner(
+                        widget(Stack::from_layout(content())),
+                        widget(Stack::from_layout(header())),
+                        widget(Stack::from_layout(badge())),
+                    ))
+                    .into_any(),
+                    // CSS from empty layouts throughout.
+                    _ => widget(Stack::from_layout(LayoutStyle::default()))
+                        .css(css! {width:300px;height:200px;overflow-y:scroll;})
+                        .children(inner(
+                            widget(Stack::from_layout(LayoutStyle::default()))
+                                .css(css! {position:relative;height:600px;}),
+                            widget(Stack::from_layout(LayoutStyle::default()))
+                                .css(css! {position:sticky;top:0;height:24px;}),
+                            widget(Stack::from_layout(LayoutStyle::default())).css(
+                                css! {position:absolute;top:10px;left:20px;width:50px;height:30px;},
+                            ),
+                        ))
+                        .into_any(),
+                }
+            })
+            .unwrap();
+        for _ in 0..4 {
+            let work = cx.take_system_work();
+            cx.resolve_styles(&work.style).unwrap();
+            cx.shape_text(&work.text, &mut MeasureTextShaper).unwrap();
+            cx.layout_document(document, LayoutViewport::new(800.0, 600.0))
+                .unwrap();
+        }
+        let world = cx.world();
+        let order = world.document_order(document);
+        let snapshot: Vec<_> = order
+            .iter()
+            .map(|&id| {
+                let node = world.layout_node(id).unwrap();
+                let result = world.layout_result(id).unwrap();
+                // Ids differ between mounts only by position in this order.
+                let index = |other: Option<StableNodeId>| {
+                    other.map(|other| order.iter().position(|id| *id == other))
+                };
+                (
+                    (node.established, node.participation),
+                    (result.bounds, result.content_box, result.overflow),
+                    (result.scroll_extent, result.scroll_offset),
+                    (index(result.clip), index(result.containing_block)),
+                    result.formatting_context,
+                    result.fragments.clone(),
+                )
+            })
+            .collect();
+        let intents: Vec<_> = order
+            .iter()
+            .map(|&id| world.layout_node(id).unwrap().intent)
+            .collect();
+        // scrollport, content, header, body, badge
+        let part = |i: usize| snapshot[i].0.1;
+        assert_eq!(part(2), Some(ParticipationKind::FlowItem));
+        assert_eq!(part(4), Some(ParticipationKind::Absolute));
+        assert_eq!(
+            snapshot[0].2.0.height, 600.0,
+            "content scrolls past the port"
+        );
+        outputs.push((snapshot, intents));
+    }
+    let (expected, expected_intents) = &outputs[0];
+    for (author, (snapshot, intents)) in outputs.iter().enumerate().skip(1) {
+        assert_eq!(snapshot, expected, "author {author}");
+        for (node, (want, got)) in expected_intents.iter().zip(intents).enumerate() {
+            assert!(
+                want.changed_fields(got).is_empty(),
+                "author {author}, node {node}: {:?}",
+                want.changed_fields(got)
+            );
+        }
+    }
+}
+
 #[test]
 fn issue204_layers_css_and_rust_share_one_overlay_context() {
     use nana_ui_core::{AlignSpec, JustifySpec, LengthSpec};
