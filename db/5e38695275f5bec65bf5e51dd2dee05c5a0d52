@@ -1,0 +1,65 @@
+crates/nana-ui/src/scene_paint/tests.rs
+  s_f259d9690441aa::t_e93f75b657ecd3 19-21
+crates/nana-ui-scene/src/scene/primitives.rs
+  h_8e6780fc7b4bb1 451-452,466-467,614-616
+crates/nana-ui/src/scene_paint/mod.rs
+  s_f259d9690441aa::t_a21926ecac1d18 3317-3318,3325-3328,3332-3339,3380-3381
+crates/nana-ui-scene/src/scene.rs
+  h_8e6780fc7b4bb1 24,180-181,622-623,638,666,888-889,912-913,939,1021,1348-1353,1357,1367,1503-1504,1618-1619,1661,1703,1963,2010,2012-2013,2015,2017-2020,2171-2179,2777,3796,3866-3870
+  s_f259d9690441aa::t_cfebfa2504e415 19-23,1354-1356,2016
+crates/nana-ui-scene/Cargo.toml
+  h_8e6780fc7b4bb1 19,30-31
+crates/nana-ui/src/scene_paint/group_composite_tests.rs
+  s_f259d9690441aa::t_4b898f3145d2d9 1-133
+crates/nana-ui/src/scene_paint/dest.rs
+  s_f259d9690441aa::t_16c32129e16f58 436-437
+crates/nana-ui-scene/src/lib.rs
+  s_f259d9690441aa::t_a7590621e25ceb 29
+crates/nana-ui-scene/src/scene/attributes.rs
+  s_f259d9690441aa::t_e0017e31caa3d2 108-110
+crates/nana-ui-scene/src/scene/compositor.rs
+  s_f259d9690441aa::t_ed1c7874fb0642 1188-1190
+crates/nana-ui-scene/src/scene/compositor_delta_tests.rs
+  s_f259d9690441aa::t_aa20ba12e82977 1-237
+crates/nana-ui-scene/src/scene/popover_trigger_radii_tests.rs
+  s_f259d9690441aa::t_005d275d37410d 1-73
+crates/nana-ui-scene/src/scene/primitives/overlays.rs
+  s_f259d9690441aa::t_0b10dbd9e67a1d 330,332,334-335,352
+crates/nana-ui-scene/src/scene/tests.rs
+  s_f259d9690441aa::t_247743db3f100a 9
+crates/nana-ui-scene/tests/select_popup_hit.rs
+  s_f259d9690441aa::t_692600e7e537a2 1,4-5,7,322-488
+crates/nana-ui/src/application.rs
+  s_f259d9690441aa::t_ab91cb0514381c 159,162,271,278-281,463-466
+crates/nana-ui/src/gpu_view.rs
+  s_f259d9690441aa::t_d14c4e082525b1 62-72
+crates/nana-ui/src/scene_host/host_services.rs
+  s_f259d9690441aa::t_27eff5a43e061b 12-13,161-170
+crates/nana-ui/src/scene_paint/url_texture_cache.rs
+  s_f259d9690441aa::t_cfce24e745b6c4 174,978,1352-1355
+crates/nana-ui/src/scene_paint/url_texture_cache_budget_tests.rs
+  s_f259d9690441aa::t_3356a582b14d40 1-45
+crates/nana-ui/tests/fixtures/application_animation.rs
+  s_f259d9690441aa::t_21600340300072 1-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "db5e38695275f5bec65bf5e51dd2dee05c5a0d52",
+  "prompts": {},
+  "humans": {
+    "h_8e6780fc7b4bb1": {
+      "author": "AuraElicase <auraelicase@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_f259d9690441aa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_f259d9690441aa",
+        "model": "unknown"
+      },
+      "human_author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
