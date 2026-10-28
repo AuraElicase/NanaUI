@@ -22,6 +22,7 @@ pub(super) fn selected_filter(dialog: &IFileDialog, count: usize) -> Option<usiz
 }
 
 /// Unadvises on drop, before the dialog is released.
+#[allow(dead_code)]
 pub(super) struct Subscription {
     dialog: IFileDialog,
     cookie: u32,
@@ -34,6 +35,7 @@ impl Drop for Subscription {
 }
 
 /// Only a save dialog with types to switch between needs the events.
+#[allow(dead_code)]
 pub(super) fn subscribe(
     dialog: &IFileDialog,
     request: &FileDialogRequest,

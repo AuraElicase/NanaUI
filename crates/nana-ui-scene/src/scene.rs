@@ -1052,6 +1052,7 @@ fn text_frame(
 /// A rich text's span backgrounds, from the very layout its text is drawn
 /// from: each span fills its run on every line it reaches, as CSS paints an
 /// inline box's `background-color`. Under any selection and the glyphs.
+#[allow(dead_code)]
 fn rich_span_background_primitives(
     context: &VisualPrimitiveContext<'_>,
     bounds: SceneRect,

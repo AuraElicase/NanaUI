@@ -391,6 +391,7 @@ impl Layouter {
 
 /// What size an object that fits its line's room takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 enum ObjectSizing {
     /// Its own: `max-content`.
     Own,

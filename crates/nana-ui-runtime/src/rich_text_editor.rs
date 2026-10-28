@@ -1524,7 +1524,7 @@ impl AppContext {
     ) -> Result<bool, FrameworkError> {
         self.update_component(entity, |view, cx| {
             let before = view.snapshot();
-            let preedit = view.state.preedit.clone();
+            let _preedit = view.state.preedit.clone();
             let attrs = view.selection_attrs();
             let changed = edit(view, cx);
             if changed {

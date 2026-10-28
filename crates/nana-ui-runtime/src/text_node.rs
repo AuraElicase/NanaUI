@@ -396,6 +396,7 @@ impl TextNodeState {
     /// that moves the node's own font restyles every span that does not
     /// override it. Such a source is also rebuilt when the shape revision
     /// moves. 着重号的行高随形状 revision 更新，其余绘制属性与呈现属性保持独立。
+    #[allow(dead_code)]
     pub fn source_for(
         &mut self,
         text: &str,

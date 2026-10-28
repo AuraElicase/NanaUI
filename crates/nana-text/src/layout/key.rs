@@ -207,7 +207,7 @@ impl LayoutKey {
         run_line_heights: &[f32],
         empty_line_height: f32,
         objects: &[crate::source::InlineObject],
-        placements: &[crate::source::ObjectPlacement],
+        _placements: &[crate::source::ObjectPlacement],
         paragraph_alignments: &[(usize, Option<TextAlignSpec>)],
         rubies: Vec<(std::ops::Range<usize>, Arc<ShapedText>)>,
         labels: Vec<(usize, [u32; 5], Arc<ShapedText>)>,

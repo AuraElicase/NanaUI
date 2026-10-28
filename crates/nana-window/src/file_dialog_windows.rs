@@ -213,6 +213,7 @@ fn configure(dialog: &NativeDialog, request: &FileDialogRequest) -> Result<(), F
 }
 
 /// Folder kinds never apply the request's types, so they report none.
+#[allow(dead_code)]
 fn selected_type(dialog: &IFileDialog, request: &FileDialogRequest) -> Option<usize> {
     if matches!(
         request.kind,

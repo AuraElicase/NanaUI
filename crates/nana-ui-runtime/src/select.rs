@@ -993,6 +993,7 @@ fn resolve_menu_vertical(
 /// fits its options and that is wider. A menu wider than its field starts
 /// where the field does and moves left as far as it must to end inside the
 /// room; one wider than the room is cut to it.
+#[allow(dead_code)]
 fn resolve_menu_horizontal(
     field: LayoutBox,
     fitted_width: Option<f32>,
