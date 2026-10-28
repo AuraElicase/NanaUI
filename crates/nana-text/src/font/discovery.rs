@@ -95,8 +95,7 @@ pub fn system_faces() -> Vec<(DiscoveredSource, FaceMeta)> {
     load_ohos_fonts(&mut db, Path::new("/"));
     #[cfg(not(target_env = "ohos"))]
     db.load_system_fonts();
-    // Android 和 HarmonyOS 均从标准系统目录提供中文字体。
-    #[cfg(any(target_os = "android", target_env = "ohos"))]
+    #[cfg(target_os = "android")]
     db.load_fonts_dir("/system/fonts");
     faces(&db)
 }
