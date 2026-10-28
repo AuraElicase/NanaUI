@@ -1,0 +1,18 @@
+PR_DESCRIPTION_CN.md
+  h_070abd15058824 1-144
+crates/nana-text/src/layout/engine.rs
+  h_070abd15058824 461
+crates/nana-ui-core/src/rich_text.rs
+  h_070abd15058824 474-476,504
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "68ce4eac265a0e4790d96ea5c16973f7c5d1b80c",
+  "prompts": {},
+  "humans": {
+    "h_070abd15058824": {
+      "author": "AuraElicase <aura.elicase@gmail.com>"
+    }
+  }
+}
