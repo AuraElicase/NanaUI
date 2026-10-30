@@ -5201,6 +5201,7 @@ mod tests {
             },
             decoration_color: None,
             emphasis: false,
+            emphasis_color: None,
             stroke: Some(nana_ui_core::RichTextStroke::new(
                 2.0,
                 paint([0.0, 0.0, 0.0, 1.0]),

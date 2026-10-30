@@ -1136,6 +1136,14 @@ mod tests {
     }
 
     #[test]
+    fn production_atlas_limits_have_an_explicit_memory_ceiling() {
+        let limits = GlyphAtlasLimits::default();
+        assert_eq!(limits.byte_budget, BYTE_BUDGET);
+        assert!(limits.page_edge > PLACEHOLDER_EDGE);
+        assert!(limits.byte_budget >= limits.page_edge as usize * limits.page_edge as usize);
+    }
+
+    #[test]
     fn a_page_churned_by_short_glyphs_still_serves_a_tall_one() {
         let (device, _queue) = crate::test_gpu::device();
         let (mut atlas, mut raster, mut uploads) = small_atlas(&device);

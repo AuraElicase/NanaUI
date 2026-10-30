@@ -280,6 +280,28 @@ mod tests {
     }
 
     #[test]
+    fn the_default_cache_stays_within_entry_and_byte_budgets() {
+        let mut cache = GlyphRasterCache::default();
+        let mut rasterizer = CountingRasterizer::default();
+        for glyph in 0..(DEFAULT_ENTRY_CAP as u32 + 128) {
+            cache.get_or_rasterize(&mut rasterizer, key(glyph));
+        }
+
+        assert!(
+            cache.len() <= DEFAULT_ENTRY_CAP,
+            "default glyph cache exceeded its entry ceiling"
+        );
+        assert!(
+            cache.bytes() <= DEFAULT_BYTE_BUDGET,
+            "default glyph cache exceeded its byte ceiling"
+        );
+        assert!(
+            cache.counters().evictions > 0,
+            "crossing the default entry ceiling must evict cold entries"
+        );
+    }
+
+    #[test]
     fn a_new_epoch_drops_every_bitmap_and_is_observable() {
         let mut cache = GlyphRasterCache::default();
         let mut rasterizer = CountingRasterizer::default();
