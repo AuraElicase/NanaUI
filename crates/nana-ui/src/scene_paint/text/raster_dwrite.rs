@@ -57,12 +57,20 @@ struct DWrite {
     factory: IDWriteFactory5,
     loader: IDWriteInMemoryFontFileLoader,
     params: IDWriteRenderingParams,
-    /// One in-memory file per face, so the bytes are copied to DirectWrite
-    /// once however many instances of the face are drawn.
-    files: HashMap<nana_text::FontId, Option<IDWriteFontFile>>,
+    /// One in-memory file per shared font blob. A collection's faces all point
+    /// at the same bytes, so registering by `FontId` would copy the TTC once
+    /// for every face.
+    files: HashMap<(usize, usize), FontFileEntry>,
     /// A face instance DirectWrite can draw, or `None` for one it cannot, so
     /// that is asked once.
     faces: HashMap<(GlyphFontId, GlyphVariationId, GlyphSynthesis), Option<IDWriteFontFace>>,
+}
+
+struct FontFileEntry {
+    // Keeps the allocation address used as the map key alive, preventing a
+    // later allocation from reusing that address while DirectWrite is cached.
+    _data: nana_text::font::FontData,
+    file: Option<IDWriteFontFile>,
 }
 
 impl DWriteGlyphRasterizer {
@@ -308,31 +316,35 @@ impl DWrite {
         coords: &[AxisCoord],
         synthesis: GlyphSynthesis,
     ) -> Option<IDWriteFontFace> {
-        let (id, data) = swash.face_data(font)?;
+        let (_, data) = swash.face_data(font)?;
         let Self {
             factory,
             loader,
             files,
             ..
         } = self;
-        let file = files
-            .entry(id)
-            .or_insert_with(|| {
-                let bytes = data.bytes();
-                // SAFETY: with no owner object the loader copies the bytes, so
-                // nothing here has to outlive the call.
-                unsafe {
-                    loader
-                        .CreateInMemoryFontFileReference(
-                            &*factory,
-                            bytes.as_ptr().cast(),
-                            u32::try_from(bytes.len()).ok()?,
-                            None,
-                        )
-                        .ok()
-                }
-            })
-            .clone()?;
+        let bytes = data.bytes();
+        let file_key = (bytes.as_ptr() as *const () as usize, bytes.len());
+        let byte_len = u32::try_from(bytes.len()).ok()?;
+        let entry = files.entry(file_key).or_insert_with(|| {
+            // SAFETY: with no owner object the loader copies the bytes, so
+            // nothing here has to outlive the call.
+            let file = unsafe {
+                loader
+                    .CreateInMemoryFontFileReference(
+                        &*factory,
+                        bytes.as_ptr().cast(),
+                        byte_len,
+                        None,
+                    )
+                    .ok()
+            };
+            FontFileEntry {
+                _data: data.clone(),
+                file,
+            }
+        });
+        let file = entry.file.clone()?;
         let mut simulations = DWRITE_FONT_SIMULATIONS_NONE;
         if synthesis.contains(GlyphSynthesis::FAKE_BOLD) {
             simulations |= DWRITE_FONT_SIMULATIONS_BOLD;

@@ -244,7 +244,7 @@ pub struct FontCounters {
 
 enum FaceBytes {
     Loaded(FontBlob),
-    File(PathBuf, OnceLock<Option<FontBlob>>),
+    File(PathBuf, Arc<OnceLock<Option<FontBlob>>>),
 }
 
 struct FaceRecord {
@@ -314,39 +314,38 @@ impl FaceRecord {
         self.descriptor.style.unwrap_or(self.meta.style)
     }
 
-    fn styles(&self) -> StyleSupport {
-        let mut styles = StyleSupport::default();
-        match self.static_style() {
-            FontStyle::Normal => styles.normal = true,
-            FontStyle::Italic => styles.italic = true,
-            FontStyle::Oblique => styles.oblique = true,
-        }
-        if self.descriptor.style.is_none() {
-            let details = self.details();
-            if details
-                .axis(ITAL)
-                .is_some_and(|axis| axis.min <= 0.0 && axis.max >= 1.0)
-            {
-                styles.normal = true;
-                styles.italic = true;
-            }
-            if details
-                .axis(SLNT)
-                .is_some_and(|axis| axis.min < 0.0 && axis.max >= 0.0)
-            {
-                styles.normal = true;
-                styles.oblique = true;
-            }
-        }
-        styles
-    }
-
-    fn match_face(&self) -> MatchFace {
+    /// Matches the discovery metadata without forcing a system font file to
+    /// be read. Detailed variation axes are loaded only after a face is used.
+    fn match_face_lazy(&self) -> MatchFace {
+        let details = self.details.get();
+        let style = self.static_style();
+        let variable_italic = self.descriptor.style.is_none()
+            && details
+                .and_then(|details| details.axis(ITAL))
+                .is_some_and(|axis| axis.min <= 0.0 && axis.max >= 1.0);
+        let variable_oblique = self.descriptor.style.is_none()
+            && details
+                .and_then(|details| details.axis(SLNT))
+                .is_some_and(|axis| axis.min < 0.0 && axis.max >= 0.0);
         MatchFace {
             id: self.id,
-            weight: self.weight_range(),
-            stretch: self.stretch_range(),
-            styles: self.styles(),
+            weight: self
+                .descriptor
+                .weight
+                .map(ordered)
+                .or_else(|| details.and_then(|details| details.axis(WGHT).map(|a| (a.min, a.max))))
+                .unwrap_or((self.meta.weight, self.meta.weight)),
+            stretch: self
+                .descriptor
+                .stretch
+                .map(ordered)
+                .or_else(|| details.and_then(|details| details.axis(WDTH).map(|a| (a.min, a.max))))
+                .unwrap_or((self.meta.stretch, self.meta.stretch)),
+            styles: StyleSupport {
+                normal: style == FontStyle::Normal || variable_italic || variable_oblique,
+                italic: style == FontStyle::Italic || variable_italic,
+                oblique: style == FontStyle::Oblique || variable_oblique,
+            },
             origin_rank: self.origin.rank(),
             registration: self.registration,
         }
@@ -473,6 +472,7 @@ pub struct FontSystem {
     scanned: HashMap<char, Option<FontId>>,
     counters: FontCounters,
     retired: Vec<Weak<dyn AsRef<[u8]> + Send + Sync>>,
+    file_blobs: HashMap<PathBuf, Weak<OnceLock<Option<FontBlob>>>>,
 }
 
 impl Default for FontSystem {
@@ -502,6 +502,7 @@ impl FontSystem {
             scanned: HashMap::new(),
             counters: FontCounters::default(),
             retired: Vec::new(),
+            file_blobs: HashMap::new(),
         }
     }
 
@@ -619,6 +620,22 @@ impl FontSystem {
         registration
     }
 
+    fn file_blob_cell(&mut self, path: &Path) -> Arc<OnceLock<Option<FontBlob>>> {
+        let normalized = std::fs::canonicalize(path).unwrap_or_else(|_| {
+            if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                std::env::current_dir().unwrap_or_default().join(path)
+            }
+        });
+        if let Some(cell) = self.file_blobs.get(&normalized).and_then(Weak::upgrade) {
+            return cell;
+        }
+        let cell = Arc::new(OnceLock::new());
+        self.file_blobs.insert(normalized, Arc::downgrade(&cell));
+        cell
+    }
+
     /// Registers every face in `data`.
     pub fn register_bytes(
         &mut self,
@@ -649,16 +666,14 @@ impl FontSystem {
         let bytes = std::fs::read(path).map_err(|error| FontError::Io(error.to_string()))?;
         let blob = font_blob(bytes);
         let metas = Self::parse_blob(&blob)?;
+        let loaded = self.file_blob_cell(path);
+        let _ = loaded.set(Some(Arc::clone(&blob)));
         let faces = metas
             .into_iter()
-            .map(|meta| {
-                let loaded = OnceLock::new();
-                let _ = loaded.set(Some(Arc::clone(&blob)));
-                NewFace {
-                    meta,
-                    bytes: FaceBytes::File(path.to_path_buf(), loaded),
-                    origin: FontOrigin::File,
-                }
+            .map(|meta| NewFace {
+                meta,
+                bytes: FaceBytes::File(path.to_path_buf(), Arc::clone(&loaded)),
+                origin: FontOrigin::File,
             })
             .collect();
         let registration = self.insert_faces(faces, descriptor);
@@ -668,17 +683,20 @@ impl FontSystem {
     /// Scans the platform font directories as one source. Bytes are read
     /// lazily, the first time a face's details or coverage are needed.
     pub fn load_system_fonts(&mut self) -> FontRegistration {
-        let faces = discovery::system_faces()
-            .into_iter()
-            .map(|(source, meta)| NewFace {
+        let mut faces = Vec::new();
+        for (source, meta) in discovery::system_faces() {
+            let bytes = match source {
+                DiscoveredSource::File(path) => {
+                    FaceBytes::File(path.clone(), self.file_blob_cell(&path))
+                }
+                DiscoveredSource::Blob(blob) => FaceBytes::Loaded(blob),
+            };
+            faces.push(NewFace {
                 meta,
-                bytes: match source {
-                    DiscoveredSource::File(path) => FaceBytes::File(path, OnceLock::new()),
-                    DiscoveredSource::Blob(blob) => FaceBytes::Loaded(blob),
-                },
+                bytes,
                 origin: FontOrigin::System,
-            })
-            .collect();
+            });
+        }
         let registration = self.insert_faces(faces, &FaceDescriptor::default());
         self.registered(registration)
     }
@@ -710,6 +728,7 @@ impl FontSystem {
                 self.retired.push(weak);
             }
         }
+        self.file_blobs.retain(|_, cell| cell.strong_count() > 0);
         Ok(())
     }
 
@@ -793,7 +812,7 @@ impl FontSystem {
         let candidates: Vec<MatchFace> = ids
             .iter()
             .filter_map(|id| self.record(*id))
-            .map(|face| face.match_face())
+            .map(|face| face.match_face_lazy())
             .collect();
         matching::best_face(&candidates, query.weight, query.stretch, query.style)
     }
@@ -1298,6 +1317,21 @@ impl FontSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_blob_cells_share_normalized_paths_and_expire_with_their_faces() {
+        let mut system = FontSystem::hermetic();
+        let path = std::env::current_dir().unwrap().join("font.ttf");
+
+        let first = system.file_blob_cell(&path);
+        let second = system.file_blob_cell(&path);
+        assert!(Arc::ptr_eq(&first, &second));
+
+        drop((first, second));
+        let replacement = system.file_blob_cell(&path);
+        assert_eq!(system.file_blobs.len(), 1);
+        drop(replacement);
+    }
 
     /// A `wght` animation selects with a new weight every frame. The cache
     /// keeps its ceiling instead of every weight it was ever asked for.
